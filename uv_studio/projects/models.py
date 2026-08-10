@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 PROJECT_SCHEMA_VERSION = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 _ALLOWED_REFERENCE_KINDS = {
     "source",
     "asset",
@@ -50,7 +51,7 @@ def validate_project_relative_path(value: str) -> str:
         raise ProjectValidationError("reference path must be a non-empty string")
     normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
-    if path.is_absolute() or ".." in path.parts:
+    if path.is_absolute() or _WINDOWS_DRIVE_RE.match(normalized) or ".." in path.parts:
         raise ProjectValidationError(f"reference path must stay inside the project: {value!r}")
     if any(part in {"", "."} for part in path.parts):
         raise ProjectValidationError(f"reference path is not canonical: {value!r}")
