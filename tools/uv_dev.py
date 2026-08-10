@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """UV Studio development launcher.
 
-This module is owned by UV Studio and deliberately sits above vendored source.
-It provides stable repository-root commands without changing upstream VideoClaw
-business logic.
+This module is owned by UV Studio and provides stable repository-root commands.
+The backend wraps the pinned VideoClaw runtime, while the user-facing frontend
+is UV Studio-owned derived source under top-level `frontend/`.
 """
 
 from __future__ import annotations
@@ -22,10 +22,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VENDOR_APP = ROOT / "vendor" / "videoclaw-app"
 BACKEND = VENDOR_APP / "backend"
-FRONTEND = VENDOR_APP / "frontend"
+VENDOR_FRONTEND = VENDOR_APP / "frontend"
+FRONTEND = ROOT / "frontend"
 UPSTREAM_BACKEND_ENTRYPOINT = BACKEND / "api_server.py"
 UV_SERVER_ENTRYPOINT = ROOT / "uv_studio" / "server.py"
 FRONTEND_PACKAGE = FRONTEND / "package.json"
+FRONTEND_PROVENANCE = FRONTEND / ".uv-derived.json"
 DEFAULT_HEALTH_URL = "http://127.0.0.1:8000/api/health"
 
 
@@ -34,13 +36,20 @@ class DevError(RuntimeError):
 
 
 def validate_layout() -> None:
-    required = [UPSTREAM_BACKEND_ENTRYPOINT, UV_SERVER_ENTRYPOINT, FRONTEND_PACKAGE]
+    required = [
+        UPSTREAM_BACKEND_ENTRYPOINT,
+        UV_SERVER_ENTRYPOINT,
+        FRONTEND_PACKAGE,
+        FRONTEND_PROVENANCE,
+    ]
     missing = [path for path in required if not path.exists()]
     if missing:
         formatted = "\n".join(f"- {path.relative_to(ROOT)}" for path in missing)
         raise DevError(
             "UV Studio development layout is incomplete. Missing:\n"
-            f"{formatted}\nIf vendor files are missing, run: python tools/vendor_videoclaw.py"
+            f"{formatted}\n"
+            "If vendor files are missing, run: python tools/vendor_videoclaw.py\n"
+            "If frontend files are missing, run: python tools/promote_frontend.py"
         )
 
 
@@ -147,6 +156,7 @@ def print_paths() -> int:
         "uv_server": str(UV_SERVER_ENTRYPOINT),
         "vendor_app": str(VENDOR_APP),
         "upstream_backend": str(BACKEND),
+        "vendor_frontend_snapshot": str(VENDOR_FRONTEND),
         "frontend": str(FRONTEND),
     }
     print(json.dumps(data, indent=2))
