@@ -2,12 +2,17 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $VenvDir = Join-Path $RepoRoot ".venv"
 $BackendRequirements = Join-Path $RepoRoot "vendor/videoclaw-app/backend/requirements.txt"
-$FrontendDir = Join-Path $RepoRoot "vendor/videoclaw-app/frontend"
+$FrontendDir = Join-Path $RepoRoot "frontend"
+$FrontendPackage = Join-Path $FrontendDir "package.json"
 
 Set-Location $RepoRoot
 
 if (-not (Test-Path $BackendRequirements)) {
     throw "Vendored runtime is missing. Run: python tools/vendor_videoclaw.py"
+}
+
+if (-not (Test-Path $FrontendPackage)) {
+    throw "UV Studio frontend is missing. Run: python tools/promote_frontend.py"
 }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
@@ -28,7 +33,7 @@ Write-Host "[uv-studio] Installing backend dependencies"
 & $Python -m pip install --upgrade pip
 & $Python -m pip install -r $BackendRequirements
 
-Write-Host "[uv-studio] Installing frontend dependencies"
+Write-Host "[uv-studio] Installing UV Studio frontend dependencies"
 Push-Location $FrontendDir
 try {
     npm ci
