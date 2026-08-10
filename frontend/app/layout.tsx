@@ -3,8 +3,8 @@ import AppShell from "@/components/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Video-Claw",
-  description: "AI视频生成工具",
+  title: "UV Studio",
+  description: "Универсальная студия создания и изменения видео",
 };
 
 export default function RootLayout({
@@ -13,10 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body
-        className="antialiased"
-      >
+    <html lang="ru">
+      <body className="antialiased">
         <AppShell>{children}</AppShell>
       </body>
     </html>
