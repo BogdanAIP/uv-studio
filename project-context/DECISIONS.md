@@ -95,3 +95,15 @@ Decision: ordinary UV Studio features should be implemented outside `vendor/vide
 Reason: direct product development inside vendored source makes upstream provenance, comparison and future pin updates increasingly difficult.
 
 Consequences: Stage 0 adds a root-owned launcher above the vendor tree. A direct vendored-code modification requires an explicit reason and should be isolated/documented rather than becoming the default development style.
+
+---
+
+## D-009 — Project Store is file-first and product-owned
+Status: accepted  
+Date: 2026-08-10
+
+Decision: canonical UV Studio project metadata uses a versioned local `project.json` stored by UV Studio-owned code. SQLite, cloud databases and upstream VideoClaw session files are not canonical project state.
+
+Reason: the initial product is single-user/local-first, projects must survive runtime/chat changes, and a small atomic file format is easier to inspect, migrate, export and recover than an unnecessary database layer.
+
+Consequences: schema v1 stays small and general; specialized workflow state remains optional through extensions/dedicated files. SQLite may be introduced only after a measured need such as indexing scale or multi-process coordination.

@@ -1,66 +1,51 @@
 # Next Task
 
-**Primary target:** begin Stage 1 with a minimal, versioned UV Studio Project Store schema and atomic local persistence.
+**Primary target:** expose the canonical Project Store through an UV Studio-owned FastAPI layer without modifying vendored upstream routers.
 
 ## Do first
 
-1. Create UV Studio-owned project models outside `vendor/`.
-2. Define `project.json` schema version 1 with stable project ID, title, recipe ID, timestamps, settings, source references, artifact references and extension namespace.
-3. Implement atomic create/read/update operations using a temporary file + replace strategy.
-4. Reject invalid project IDs and path traversal.
-5. Add explicit schema-version validation and a migration boundary even though only version 1 exists initially.
-6. Add unit tests for create/read/update, atomic replacement behavior, malformed JSON, unsupported schema versions and path safety.
-7. Do not add SQLite unless file-based persistence proves insufficient.
+1. Add an UV Studio FastAPI application/wrapper that imports the pinned upstream app and mounts UV Studio-owned routers.
+2. Add `/api/uv/projects` endpoints for:
+   - list projects;
+   - create project;
+   - get project;
+   - update universal metadata.
+3. Configure the project root from an UV Studio-owned setting/environment variable with a safe local default.
+4. Make `tools/uv_dev.py backend` and `health-smoke` start the UV Studio server wrapper rather than the raw upstream entrypoint.
+5. Preserve the existing upstream `/api/health` route and all existing routes.
+6. Add API tests using a temporary project root; tests must not write to real user directories.
+7. Keep router/business logic thin: API handlers call `ProjectStore` rather than reimplementing persistence rules.
 
-## Expected files
+## Suggested files
 
-Suggested:
-
-- `uv_studio/__init__.py`
-- `uv_studio/projects/__init__.py`
-- `uv_studio/projects/models.py`
-- `uv_studio/projects/store.py`
-- `uv_studio/projects/migrations.py`
-- `tests/test_project_store.py`
-- `docs/PROJECT_STORE.md`
-
-## Initial on-disk shape
-
-```text
-projects/
-└── <project-id>/
-    ├── project.json
-    ├── sources/
-    ├── assets/
-    ├── tasks/
-    ├── artifacts/
-    ├── timeline/
-    ├── reviews/
-    └── exports/
-```
-
-Directories may be created lazily where that reduces empty scaffolding, but `project.json` is canonical project metadata.
+- `uv_studio/server.py`
+- `uv_studio/config.py`
+- `uv_studio/api/__init__.py`
+- `uv_studio/api/projects.py`
+- `tests/test_projects_api.py`
+- updates to `tools/uv_dev.py`
+- updates to `docs/PROJECT_STORE.md` / `docs/DEVELOPMENT.md`
 
 ## Acceptance criteria
 
-- project creation generates a stable ID and valid `project.json`;
-- project data can be loaded after process restart;
-- updates are atomic and do not rewrite vendored upstream state;
-- invalid IDs/path traversal cannot escape the configured project root;
-- unsupported schema versions fail explicitly rather than being silently interpreted;
-- tests pass on Linux and Windows;
-- no VideoClaw session JSON is used as canonical UV Studio project state;
-- no cloud/database service is required.
+- existing upstream health route still returns success through the UV Studio server;
+- `POST /api/uv/projects` creates a real project in the configured temporary root;
+- `GET /api/uv/projects` lists it;
+- `GET /api/uv/projects/{id}` returns canonical v1 metadata;
+- metadata update persists across a fresh `ProjectStore` instance;
+- invalid project IDs and validation errors return explicit 4xx responses;
+- no files under `vendor/videoclaw-app` are modified;
+- CI remains green on Windows and Linux.
 
 ## Explicitly out of scope for this slice
 
 - Projects frontend UI;
+- delete project;
 - ZIP import/export;
 - backup rotation;
-- Recipe Registry implementation;
+- Recipe Registry;
+- media upload API;
 - OpenClaw integration;
-- video/music/dubbing features;
-- migration of existing VideoClaw sessions;
-- SQLite or multi-user storage.
+- authentication/multi-user support.
 
-Keep the first Stage 1 slice deliberately small and durable: establish the canonical local project file and safe persistence boundary first.
+The purpose of this slice is to make UV Studio, rather than VideoClaw session storage, the authoritative project API boundary.
