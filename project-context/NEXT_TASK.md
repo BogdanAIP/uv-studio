@@ -1,42 +1,46 @@
 # Next Task
 
-**Primary target:** create a reproducible upstream import baseline for the modern VideoClaw application.
+**Primary target:** finish Stage 0 by creating the first UV Studio-owned startup/smoke layer above the vendored VideoClaw baseline.
 
 ## Do first
 
-1. Add a machine-readable lock/manifest for upstream VideoClaw commit `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`.
-2. Add a deterministic vendoring/import tool that downloads that exact source revision and extracts only `video-claw/video-claw` into a controlled destination.
-3. Preserve upstream MIT license/provenance next to imported source.
-4. Add automated tests for path filtering, lock parsing and safe destination handling.
-5. Add CI that runs the import-tool tests without requiring paid API credentials.
+1. Add a top-level development setup/run path so contributors do not work from inside `vendor/videoclaw-app` manually.
+2. Start the imported FastAPI server in CI and probe its `/api/health` endpoint over HTTP.
+3. Add a minimal UV Studio wrapper/config boundary that locates the vendored backend/frontend without modifying upstream business logic.
+4. Document Windows developer startup from repository root.
+5. Keep the vendored subtree behavior unchanged in this slice.
 
 ## Expected files
 
-- `UPSTREAM.md`
-- `upstream/video-claw.lock.json`
-- `tools/vendor_videoclaw.py`
-- `tests/test_vendor_videoclaw.py`
-- `.github/workflows/ci.yml`
-- `THIRD_PARTY_NOTICES.md`
+Likely:
+
+- `scripts/setup-dev.ps1`
+- `scripts/run-backend.ps1`
+- `scripts/run-frontend.ps1`
+- Linux equivalents or cross-platform Python launch helpers where useful;
+- `docs/DEVELOPMENT.md`
+- CI smoke-test updates;
+- small UV Studio-owned bootstrap/config module outside `vendor/` if needed.
 
 ## Acceptance criteria
 
-- upstream revision is pinned by SHA, never `main`;
-- importer cannot write outside its requested destination;
-- importer extracts only the modern app subtree;
-- repeated import produces the same logical file set for the same pin;
-- tests run without any model/API key;
-- CI executes the tests on Windows and Linux;
-- repository context files are updated after completion.
+- a developer can start backend/frontend from repository root without knowing upstream internal paths;
+- backend health endpoint is exercised over real HTTP in CI;
+- Linux and Windows CI remain green;
+- no provider/API credentials are needed for startup smoke tests;
+- no feature logic is added to the vendored film orchestrator;
+- vendored upstream provenance remains untouched;
+- `PROJECT_STATE.md` is updated to the verified state.
 
 ## Explicitly out of scope for this slice
 
-- Project Store implementation;
-- Recipe Registry implementation;
+- Stage 1 Project Store;
+- Recipe Registry;
 - OpenClaw integration;
-- music-video logic;
-- UI redesign;
-- provider migrations;
-- cleanup/refactor of imported VideoClaw code before baseline is captured.
+- music-video functionality;
+- dubbing;
+- range editing;
+- UI redesign/rebranding beyond what is needed for startup boundaries;
+- provider refactoring.
 
-Keep this task narrow: establish reproducible provenance and baseline first.
+Complete the baseline/startup boundary first. Stage 1 begins only after the application can be launched and smoke-tested as UV Studio from repository root.
