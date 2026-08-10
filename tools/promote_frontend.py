@@ -4,6 +4,9 @@
 The untouched vendored frontend remains the upstream comparison snapshot. This
 tool creates a reproducible starting copy at top-level `frontend/`, records the
 exact upstream pin and source-tree digest, and preserves the MIT license.
+
+Once UV Studio has product changes in `frontend/`, replacing that directory is
+intentionally destructive and therefore always requires explicit `--force`.
 """
 
 from __future__ import annotations
@@ -87,35 +90,30 @@ def copy_frontend(source: Path, staging: Path) -> list[Path]:
     return written
 
 
-def existing_destination_is_managed(destination: Path) -> bool:
-    if not destination.exists():
-        return True
-    marker = destination / PROVENANCE_FILE
-    if not marker.is_file():
-        return False
-    try:
-        data = json.loads(marker.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    return data.get("managed_by") == "tools/promote_frontend.py"
-
-
 def promote(destination: Path = DEFAULT_DESTINATION, *, force: bool = False) -> dict[str, object]:
     destination = safe_destination(destination)
     pin = load_upstream_pin()
     digest, source_files = source_digest(SOURCE)
 
-    if destination.exists() and not force and not existing_destination_is_managed(destination):
+    if destination.exists() and not force:
         raise PromotionError(
-            f"Destination exists but is not a managed promoted frontend: {destination}"
+            f"Destination already exists: {destination}. "
+            "Refusing to replace UV Studio frontend changes without explicit --force."
         )
     if not UPSTREAM_LICENSE.is_file():
         raise PromotionError(f"Upstream license is missing: {UPSTREAM_LICENSE}")
 
-    with tempfile.TemporaryDirectory(prefix="uv-frontend-") as temp:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # Create staging on the destination filesystem so the final rename works on
+    # Windows runners where the system temporary directory may be on C: while
+    # the checkout is on D:.
+    with tempfile.TemporaryDirectory(
+        prefix=".uv-frontend-",
+        dir=destination.parent,
+    ) as temp:
         staging = Path(temp) / "frontend"
         staging.mkdir()
-        written = copy_frontend(SOURCE, staging)
+        copy_frontend(SOURCE, staging)
         shutil.copy2(UPSTREAM_LICENSE, staging / "UPSTREAM_LICENSE")
 
         provenance: dict[str, object] = {
@@ -136,7 +134,6 @@ def promote(destination: Path = DEFAULT_DESTINATION, *, force: bool = False) -> 
 
         if destination.exists():
             shutil.rmtree(destination)
-        destination.parent.mkdir(parents=True, exist_ok=True)
         os.replace(staging, destination)
 
     return provenance
@@ -148,12 +145,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Replace an existing destination even if it is not marked as managed.",
+        help="Explicitly replace an existing frontend directory. This deletes UV Studio frontend changes.",
     )
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Only print source digest/count and do not create frontend.",
+        help="Only print source digest/count and do not create or replace frontend files.",
     )
     return parser.parse_args()
 
