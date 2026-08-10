@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "stage-*/**", "fix/**", "chore/**"]
+  pull_request:
+
+jobs:
+  bootstrap:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile bootstrap Python
+        run: python -m compileall tools tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate vendor CLI loads
+        run: python tools/vendor_videoclaw.py --help
+
+      - name: Validate upstream lock
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          data = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
+          assert data["schema_version"] == 1
+          assert len(data["commit"]) == 40
+          assert data["subtree"] == "video-claw/video-claw"
+
+  app-baseline:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: vendor/videoclaw-app/frontend/package-lock.json
+
+      - name: Compile imported backend
+        run: python -m compileall vendor/videoclaw-app/backend
+
+      - name: Install imported backend dependencies
+        run: python -m pip install -r vendor/videoclaw-app/backend/requirements.txt
+
+      - name: Import backend server without credentials
+        shell: python
+        run: |
+          import sys
+          from pathlib import Path
+          backend = Path("vendor/videoclaw-app/backend").resolve()
+          sys.path.insert(0, str(backend))
+          import api_server
+          print("api_server import ok")
+
+      - name: Install frontend dependencies
+        working-directory: vendor/videoclaw-app/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: vendor/videoclaw-app/frontend
+        run: npm run build
