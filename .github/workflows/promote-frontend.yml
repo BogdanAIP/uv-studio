@@ -1,23 +1,17 @@
-name: Promote pinned frontend
+name: Reset frontend to pinned baseline
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["stage-1/frontend-shell"]
-    paths:
-      - "tools/promote_frontend.py"
-      - "upstream/video-claw.lock.json"
-      - ".github/workflows/promote-frontend.yml"
 
 permissions:
   contents: write
 
 jobs:
-  promote:
+  reset:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout active branch
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
@@ -27,8 +21,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Promote exact pinned frontend baseline
-        run: python tools/promote_frontend.py
+      - name: Reset frontend from exact pinned baseline
+        run: python tools/promote_frontend.py --force
 
       - name: Verify derived frontend provenance
         shell: python
@@ -44,7 +38,7 @@ jobs:
           assert Path("frontend/package.json").is_file()
           assert Path("frontend/package-lock.json").is_file()
 
-      - name: Commit promoted baseline when changed
+      - name: Commit explicit reset when changed
         shell: bash
         run: |
           set -euo pipefail
@@ -52,9 +46,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend
           if git diff --cached --quiet; then
-            echo "Frontend baseline already matches the pinned source."
+            echo "Frontend already matches the pinned source."
             exit 0
           fi
           PIN=$(python -c 'import json; print(json.load(open("upstream/video-claw.lock.json"))["commit"][:12])')
-          git commit -m "frontend: promote VideoClaw ${PIN} baseline"
+          git commit -m "frontend: reset to VideoClaw ${PIN} baseline"
           git push origin "HEAD:${GITHUB_REF_NAME}"
