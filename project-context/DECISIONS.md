@@ -83,3 +83,15 @@ Decision: development and CI must continuously preserve Windows compatibility.
 Reason: the intended local usage environment includes Windows desktop.
 
 Consequences: baseline tooling and tests should run on Windows and Linux; packaging is a planned final-stage deliverable.
+
+---
+
+## D-008 — Vendored upstream is a compatibility boundary
+Status: accepted  
+Date: 2026-08-10
+
+Decision: ordinary UV Studio features should be implemented outside `vendor/videoclaw-app` and interact with the pinned runtime through wrappers, APIs or adapters whenever practical.
+
+Reason: direct product development inside vendored source makes upstream provenance, comparison and future pin updates increasingly difficult.
+
+Consequences: Stage 0 adds a root-owned launcher above the vendor tree. A direct vendored-code modification requires an explicit reason and should be isolated/documented rather than becoming the default development style.
