@@ -22,14 +22,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Compile bootstrap Python
+      - name: Compile UV Studio Python
         run: python -m compileall tools tests
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
-      - name: Validate vendor CLI loads
-        run: python tools/vendor_videoclaw.py --help
+      - name: Validate root launchers load
+        run: |
+          python tools/vendor_videoclaw.py --help
+          python tools/uv_dev.py --help
+          python tools/uv_dev.py paths
 
       - name: Validate upstream lock
         shell: python
@@ -78,6 +81,9 @@ jobs:
           sys.path.insert(0, str(backend))
           import api_server
           print("api_server import ok")
+
+      - name: Probe backend through UV Studio over real HTTP
+        run: python tools/uv_dev.py health-smoke --startup-timeout 45
 
       - name: Install frontend dependencies
         working-directory: vendor/videoclaw-app/frontend

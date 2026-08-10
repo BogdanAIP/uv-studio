@@ -1,46 +1,66 @@
 # Next Task
 
-**Primary target:** finish Stage 0 by creating the first UV Studio-owned startup/smoke layer above the vendored VideoClaw baseline.
+**Primary target:** begin Stage 1 with a minimal, versioned UV Studio Project Store schema and atomic local persistence.
 
 ## Do first
 
-1. Add a top-level development setup/run path so contributors do not work from inside `vendor/videoclaw-app` manually.
-2. Start the imported FastAPI server in CI and probe its `/api/health` endpoint over HTTP.
-3. Add a minimal UV Studio wrapper/config boundary that locates the vendored backend/frontend without modifying upstream business logic.
-4. Document Windows developer startup from repository root.
-5. Keep the vendored subtree behavior unchanged in this slice.
+1. Create UV Studio-owned project models outside `vendor/`.
+2. Define `project.json` schema version 1 with stable project ID, title, recipe ID, timestamps, settings, source references, artifact references and extension namespace.
+3. Implement atomic create/read/update operations using a temporary file + replace strategy.
+4. Reject invalid project IDs and path traversal.
+5. Add explicit schema-version validation and a migration boundary even though only version 1 exists initially.
+6. Add unit tests for create/read/update, atomic replacement behavior, malformed JSON, unsupported schema versions and path safety.
+7. Do not add SQLite unless file-based persistence proves insufficient.
 
 ## Expected files
 
-Likely:
+Suggested:
 
-- `scripts/setup-dev.ps1`
-- `scripts/run-backend.ps1`
-- `scripts/run-frontend.ps1`
-- Linux equivalents or cross-platform Python launch helpers where useful;
-- `docs/DEVELOPMENT.md`
-- CI smoke-test updates;
-- small UV Studio-owned bootstrap/config module outside `vendor/` if needed.
+- `uv_studio/__init__.py`
+- `uv_studio/projects/__init__.py`
+- `uv_studio/projects/models.py`
+- `uv_studio/projects/store.py`
+- `uv_studio/projects/migrations.py`
+- `tests/test_project_store.py`
+- `docs/PROJECT_STORE.md`
+
+## Initial on-disk shape
+
+```text
+projects/
+└── <project-id>/
+    ├── project.json
+    ├── sources/
+    ├── assets/
+    ├── tasks/
+    ├── artifacts/
+    ├── timeline/
+    ├── reviews/
+    └── exports/
+```
+
+Directories may be created lazily where that reduces empty scaffolding, but `project.json` is canonical project metadata.
 
 ## Acceptance criteria
 
-- a developer can start backend/frontend from repository root without knowing upstream internal paths;
-- backend health endpoint is exercised over real HTTP in CI;
-- Linux and Windows CI remain green;
-- no provider/API credentials are needed for startup smoke tests;
-- no feature logic is added to the vendored film orchestrator;
-- vendored upstream provenance remains untouched;
-- `PROJECT_STATE.md` is updated to the verified state.
+- project creation generates a stable ID and valid `project.json`;
+- project data can be loaded after process restart;
+- updates are atomic and do not rewrite vendored upstream state;
+- invalid IDs/path traversal cannot escape the configured project root;
+- unsupported schema versions fail explicitly rather than being silently interpreted;
+- tests pass on Linux and Windows;
+- no VideoClaw session JSON is used as canonical UV Studio project state;
+- no cloud/database service is required.
 
 ## Explicitly out of scope for this slice
 
-- Stage 1 Project Store;
-- Recipe Registry;
+- Projects frontend UI;
+- ZIP import/export;
+- backup rotation;
+- Recipe Registry implementation;
 - OpenClaw integration;
-- music-video functionality;
-- dubbing;
-- range editing;
-- UI redesign/rebranding beyond what is needed for startup boundaries;
-- provider refactoring.
+- video/music/dubbing features;
+- migration of existing VideoClaw sessions;
+- SQLite or multi-user storage.
 
-Complete the baseline/startup boundary first. Stage 1 begins only after the application can be launched and smoke-tested as UV Studio from repository root.
+Keep the first Stage 1 slice deliberately small and durable: establish the canonical local project file and safe persistence boundary first.
