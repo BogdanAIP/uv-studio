@@ -4,6 +4,7 @@ __pycache__/
 .DS_Store
 
 # Local runtime/project state created during development.
+data/
 code/data/
 results/
 logs/
