@@ -38,6 +38,19 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def validate_timestamp(value: str, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ProjectValidationError(f"{field_name} is required")
+    candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise ProjectValidationError(f"{field_name} must be ISO-8601: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise ProjectValidationError(f"{field_name} must include a timezone")
+    return value
+
+
 def validate_identifier(value: str, *, field_name: str) -> str:
     if not isinstance(value, str) or not _ID_RE.fullmatch(value):
         raise ProjectValidationError(
@@ -131,10 +144,12 @@ class ProjectDocument:
         if not isinstance(self.title, str) or not self.title.strip():
             raise ProjectValidationError("title must be a non-empty string")
         object.__setattr__(self, "title", self.title.strip())
-        if not isinstance(self.created_at, str) or not self.created_at:
-            raise ProjectValidationError("created_at is required")
-        if not isinstance(self.updated_at, str) or not self.updated_at:
-            raise ProjectValidationError("updated_at is required")
+        object.__setattr__(
+            self, "created_at", validate_timestamp(self.created_at, field_name="created_at")
+        )
+        object.__setattr__(
+            self, "updated_at", validate_timestamp(self.updated_at, field_name="updated_at")
+        )
         object.__setattr__(self, "settings", _json_object(self.settings, field_name="settings"))
         object.__setattr__(self, "extensions", _json_object(self.extensions, field_name="extensions"))
         object.__setattr__(self, "sources", tuple(self.sources))
