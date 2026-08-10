@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Compile UV Studio Python
-        run: python -m compileall tools tests
+        run: python -m compileall tools tests uv_studio
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
@@ -72,7 +72,7 @@ jobs:
       - name: Install imported backend dependencies
         run: python -m pip install -r vendor/videoclaw-app/backend/requirements.txt
 
-      - name: Import backend server without credentials
+      - name: Import upstream and UV Studio servers without credentials
         shell: python
         run: |
           import sys
@@ -80,7 +80,11 @@ jobs:
           backend = Path("vendor/videoclaw-app/backend").resolve()
           sys.path.insert(0, str(backend))
           import api_server
-          print("api_server import ok")
+          import uv_studio.server
+          print("upstream and UV Studio server imports ok")
+
+      - name: Run UV Studio API integration tests
+        run: python -m unittest discover -s tests_api -v
 
       - name: Probe backend through UV Studio over real HTTP
         run: python tools/uv_dev.py health-smoke --startup-timeout 45
