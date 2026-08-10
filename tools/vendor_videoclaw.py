@@ -3,8 +3,9 @@
 
 The tool intentionally uses only Python's standard library so it can run before
 project dependencies are installed. It downloads an exact Git commit archive,
-selects only the configured subtree, rejects links/path traversal, stages files
-in a temporary directory, and replaces the destination only after validation.
+selects only the configured subtree, rejects links/path traversal, preserves the
+upstream license, stages files in a temporary directory, and replaces the
+destination only after validation.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ class VendorError(RuntimeError):
 
 
 def safe_destination(path: Path, root: Path = ROOT) -> Path:
-    """Resolve a destination and reject dangerous repository roots."""
+    """Resolve a destination and reject writes outside the repository root."""
     resolved = path.resolve()
     root_resolved = root.resolve()
     if resolved == root_resolved:
@@ -73,11 +74,7 @@ def safe_destination(path: Path, root: Path = ROOT) -> Path:
 
 
 def member_relative_path(member_name: str, archive_root: str, subtree: str) -> Path | None:
-    """Map one archive member to its destination-relative path.
-
-    GitHub archives are rooted at `<repo>-<sha>/`. Only members under the
-    configured subtree are accepted.
-    """
+    """Map one archive member to its destination-relative path."""
     member = PurePosixPath(member_name)
     prefix = PurePosixPath(archive_root) / PurePosixPath(subtree)
     try:
@@ -105,6 +102,7 @@ def download_archive(url: str, destination: Path) -> None:
 def stage_subtree(archive_path: Path, lock: UpstreamLock, staging_dir: Path) -> list[Path]:
     root_name = archive_root_name(lock.repository, lock.commit)
     written: list[Path] = []
+    staging_resolved = staging_dir.resolve()
     with tarfile.open(archive_path, "r:gz") as archive:
         for member in archive.getmembers():
             relative = member_relative_path(member.name, root_name, lock.subtree)
@@ -113,7 +111,7 @@ def stage_subtree(archive_path: Path, lock: UpstreamLock, staging_dir: Path) -> 
             if member.issym() or member.islnk():
                 raise VendorError(f"Links are not allowed in vendored subtree: {member.name}")
             target = (staging_dir / relative).resolve()
-            if staging_dir.resolve() not in target.parents and target != staging_dir.resolve():
+            if staging_resolved not in target.parents and target != staging_resolved:
                 raise VendorError(f"Archive member escapes staging directory: {member.name}")
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
@@ -132,12 +130,32 @@ def stage_subtree(archive_path: Path, lock: UpstreamLock, staging_dir: Path) -> 
     return sorted(written)
 
 
+def stage_license(archive_path: Path, lock: UpstreamLock, staging_dir: Path) -> Path:
+    root_name = archive_root_name(lock.repository, lock.commit)
+    expected = str(PurePosixPath(root_name) / PurePosixPath(lock.license_path))
+    with tarfile.open(archive_path, "r:gz") as archive:
+        try:
+            member = archive.getmember(expected)
+        except KeyError as exc:
+            raise VendorError(f"Upstream license not found in archive: {lock.license_path}") from exc
+        if not member.isfile() or member.issym() or member.islnk():
+            raise VendorError("Upstream license must be a regular file")
+        source = archive.extractfile(member)
+        if source is None:
+            raise VendorError("Could not read upstream license")
+        target = staging_dir / "UPSTREAM_LICENSE"
+        with source, target.open("wb") as out:
+            shutil.copyfileobj(source, out)
+        return target
+
+
 def write_provenance(staging_dir: Path, lock: UpstreamLock, files: list[Path]) -> None:
     provenance = {
         "repository": lock.repository,
         "commit": lock.commit,
         "subtree": lock.subtree,
         "license": lock.license,
+        "license_file": "UPSTREAM_LICENSE",
         "file_count": len(files),
     }
     (staging_dir / ".uv-upstream.json").write_text(
@@ -158,6 +176,7 @@ def vendor(lock_path: Path, destination: Path, *, dry_run: bool = False) -> list
 
         download_archive(lock.archive_url, archive_path)
         files = stage_subtree(archive_path, lock, staging_dir)
+        stage_license(archive_path, lock, staging_dir)
         write_provenance(staging_dir, lock, files)
 
         if dry_run:
