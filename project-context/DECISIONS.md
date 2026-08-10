@@ -107,3 +107,15 @@ Decision: canonical UV Studio project metadata uses a versioned local `project.j
 Reason: the initial product is single-user/local-first, projects must survive runtime/chat changes, and a small atomic file format is easier to inspect, migrate, export and recover than an unnecessary database layer.
 
 Consequences: schema v1 stays small and general; specialized workflow state remains optional through extensions/dedicated files. SQLite may be introduced only after a measured need such as indexing scale or multi-process coordination.
+
+---
+
+## D-010 — User-facing frontend becomes UV Studio-owned derived code
+Status: accepted  
+Date: 2026-08-10
+
+Decision: the pinned VideoClaw frontend is used as the starting UI implementation, but substantial UV Studio frontend development will occur in a top-level UV Studio-owned derived frontend rather than by continuously patching `vendor/videoclaw-app/frontend`.
+
+Reason: the user-facing product surface requires extensive navigation, terminology and workflow changes. Treating that evolving surface as immutable vendor code would either block product development or create an unmaintainable patch set inside the upstream compatibility snapshot.
+
+Consequences: preserve VideoClaw MIT attribution and record the exact source baseline used to promote the frontend. Keep the untouched vendored snapshot for upstream comparison while the product frontend evolves independently. Existing useful screens should be retained/migrated rather than rebuilt from scratch.
