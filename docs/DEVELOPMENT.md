@@ -31,10 +31,38 @@ Start the frontend in another PowerShell window:
 .\scripts\run-frontend.ps1
 ```
 
-Default development URLs inherited from the pinned baseline:
+The backend command starts **UV Studio's own server entrypoint** (`uv_studio.server`). That server mounts UV Studio-owned APIs on top of the pinned VideoClaw FastAPI application, so existing upstream routes remain available without editing vendored router files.
+
+Default development URLs:
 
 - backend health: `http://127.0.0.1:8000/api/health`
+- UV Studio projects API: `http://127.0.0.1:8000/api/uv/projects`
 - frontend: `http://localhost:3000`
+
+## Project data location
+
+By default, UV Studio project metadata is stored under:
+
+```text
+data/projects/
+```
+
+from the repository root during development.
+
+Override the location with:
+
+```text
+UV_STUDIO_PROJECTS_DIR
+```
+
+PowerShell example:
+
+```powershell
+$env:UV_STUDIO_PROJECTS_DIR = "D:\UVStudioProjects"
+.\scripts\run-backend.ps1
+```
+
+Tests always override the Project Store dependency to a temporary directory and do not write into the normal project root.
 
 ## Cross-platform launcher
 
@@ -69,11 +97,14 @@ python tools/uv_dev.py frontend --mode dev
 
 ## Health smoke
 
-`health-smoke` starts the pinned FastAPI backend as a subprocess, repeatedly probes the real `/api/health` HTTP route until it returns `{"status":"ok", ...}`, then terminates the backend.
+`health-smoke` starts the UV Studio FastAPI server as a subprocess, repeatedly probes the existing `/api/health` HTTP route until it returns `{"status":"ok", ...}`, then terminates the server.
 
 It requires backend dependencies to be installed but does **not** require model/API credentials.
 
-This is intentionally stronger than merely importing `api_server`: it proves that the selected baseline can bind a port and serve a real request through UV Studio's root-level launcher.
+The smoke test proves two compatibility properties at once:
+
+1. the pinned upstream FastAPI routes still function;
+2. UV Studio can own the backend entrypoint without modifying the vendored application.
 
 ## Vendored upstream
 

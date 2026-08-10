@@ -1,51 +1,57 @@
 # Next Task
 
-**Primary target:** expose the canonical Project Store through an UV Studio-owned FastAPI layer without modifying vendored upstream routers.
+**Primary target:** establish an UV Studio-owned frontend derived from the pinned VideoClaw frontend baseline, then add the first Projects screen against `/api/uv/projects`.
+
+## Why this comes next
+
+The current user-facing Next.js application still lives under `vendor/videoclaw-app/frontend`. UV Studio will need substantial product-specific navigation, terminology and workflow changes. Repeatedly patching the vendored snapshot would blur upstream provenance and make future upstream comparisons difficult.
+
+Therefore the next slice should promote the pinned frontend baseline into an explicitly UV Studio-owned derived frontend while preserving MIT attribution.
 
 ## Do first
 
-1. Add an UV Studio FastAPI application/wrapper that imports the pinned upstream app and mounts UV Studio-owned routers.
-2. Add `/api/uv/projects` endpoints for:
-   - list projects;
-   - create project;
-   - get project;
-   - update universal metadata.
-3. Configure the project root from an UV Studio-owned setting/environment variable with a safe local default.
-4. Make `tools/uv_dev.py backend` and `health-smoke` start the UV Studio server wrapper rather than the raw upstream entrypoint.
-5. Preserve the existing upstream `/api/health` route and all existing routes.
-6. Add API tests using a temporary project root; tests must not write to real user directories.
-7. Keep router/business logic thin: API handlers call `ProjectStore` rather than reimplementing persistence rules.
+1. Create a reproducible one-time/front-end promotion script or documented copy manifest from the pinned `vendor/videoclaw-app/frontend` baseline into a top-level UV Studio frontend directory.
+2. Preserve upstream MIT attribution/provenance for the derived frontend.
+3. Update `tools/uv_dev.py`, Windows launch scripts and CI so the product frontend builds/runs from the UV Studio-owned directory.
+4. Prove build parity before product changes.
+5. Add a minimal Projects entry screen that:
+   - lists projects from `GET /api/uv/projects`;
+   - creates a project with `POST /api/uv/projects`;
+   - opens/selects a project shell by stable project ID.
+6. Keep existing upstream screens reachable during migration instead of rewriting all UI at once.
+7. Add frontend tests where practical and at minimum keep production build green on Windows/Linux CI.
 
-## Suggested files
+## Expected areas
 
-- `uv_studio/server.py`
-- `uv_studio/config.py`
-- `uv_studio/api/__init__.py`
-- `uv_studio/api/projects.py`
-- `tests/test_projects_api.py`
-- updates to `tools/uv_dev.py`
-- updates to `docs/PROJECT_STORE.md` / `docs/DEVELOPMENT.md`
+Likely:
+
+- `frontend/` — UV Studio-owned Next.js application derived from pinned baseline;
+- `tools/promote_frontend.py` or equivalent provenance/manifest tooling;
+- frontend provenance/license notice;
+- updates to `tools/uv_dev.py`;
+- updates to `scripts/setup-dev.ps1` / `scripts/run-frontend.ps1`;
+- Projects page/components/client helpers;
+- `docs/FRONTEND.md`.
 
 ## Acceptance criteria
 
-- existing upstream health route still returns success through the UV Studio server;
-- `POST /api/uv/projects` creates a real project in the configured temporary root;
-- `GET /api/uv/projects` lists it;
-- `GET /api/uv/projects/{id}` returns canonical v1 metadata;
-- metadata update persists across a fresh `ProjectStore` instance;
-- invalid project IDs and validation errors return explicit 4xx responses;
-- no files under `vendor/videoclaw-app` are modified;
+- UV Studio frontend no longer runs directly from `vendor/videoclaw-app/frontend`;
+- the promoted baseline can be reproduced from the current pinned upstream snapshot;
+- upstream attribution is preserved;
+- existing baseline UI still production-builds before/after promotion;
+- Projects screen successfully lists and creates canonical UV Studio projects through `/api/uv/projects`;
+- opening a project uses its stable project ID, not upstream chat/session identity;
+- no Project Store filesystem logic is duplicated in frontend;
 - CI remains green on Windows and Linux.
 
 ## Explicitly out of scope for this slice
 
-- Projects frontend UI;
-- delete project;
-- ZIP import/export;
-- backup rotation;
-- Recipe Registry;
-- media upload API;
+- complete visual redesign/rebranding;
+- Recipe Registry implementation;
+- project delete/archive/import/export;
+- media upload;
+- music-video UI;
 - OpenClaw integration;
-- authentication/multi-user support.
+- rewriting all existing VideoClaw pages.
 
-The purpose of this slice is to make UV Studio, rather than VideoClaw session storage, the authoritative project API boundary.
+The goal is to establish ownership of the user-facing product surface and make canonical UV Studio projects visible without throwing away the usable upstream interface.

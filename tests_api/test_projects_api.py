@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from uv_studio.api.projects import get_project_store
+from uv_studio.projects.store import ProjectStore
+from uv_studio.server import app
+
+
+class ProjectsApiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.project_root = Path(self.tmp.name) / "projects"
+        self.store = ProjectStore(self.project_root)
+        app.dependency_overrides[get_project_store] = lambda: self.store
+        self.client = TestClient(app)
+
+    def tearDown(self) -> None:
+        app.dependency_overrides.clear()
+        self.client.close()
+        self.tmp.cleanup()
+
+    def test_upstream_health_route_remains_available(self) -> None:
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
+
+    def test_create_list_get_and_update_project(self) -> None:
+        create = self.client.post(
+            "/api/uv/projects",
+            json={
+                "title": "API Project",
+                "recipe_id": "general_video",
+                "settings": {"aspect_ratio": "16:9"},
+            },
+        )
+        self.assertEqual(create.status_code, 201, create.text)
+        created = create.json()
+        project_id = created["project_id"]
+        self.assertEqual(created["schema_version"], 1)
+        self.assertEqual(created["title"], "API Project")
+
+        listed = self.client.get("/api/uv/projects")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([item["project_id"] for item in listed.json()], [project_id])
+
+        fetched = self.client.get(f"/api/uv/projects/{project_id}")
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.json()["settings"]["aspect_ratio"], "16:9")
+
+        updated = self.client.patch(
+            f"/api/uv/projects/{project_id}",
+            json={"title": "Updated API Project", "extensions": {"demo": {"enabled": True}}},
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["title"], "Updated API Project")
+
+        fresh_store = ProjectStore(self.project_root)
+        persisted = fresh_store.load_project(project_id)
+        self.assertEqual(persisted.title, "Updated API Project")
+        self.assertTrue(persisted.extensions["demo"]["enabled"])
+
+    def test_missing_project_is_404(self) -> None:
+        response = self.client.get("/api/uv/projects/prj_missing")
+        self.assertEqual(response.status_code, 404)
+
+    def test_invalid_project_id_is_422(self) -> None:
+        response = self.client.get("/api/uv/projects/bad$id")
+        self.assertEqual(response.status_code, 422)
+
+    def test_invalid_recipe_is_422(self) -> None:
+        response = self.client.post(
+            "/api/uv/projects",
+            json={"title": "Bad Recipe", "recipe_id": "../escape"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_rejects_explicit_null(self) -> None:
+        created = self.client.post("/api/uv/projects", json={"title": "Null Test"}).json()
+        response = self.client.patch(
+            f"/api/uv/projects/{created['project_id']}",
+            json={"title": None},
+        )
+        self.assertEqual(response.status_code, 422)
+
+
+if __name__ == "__main__":
+    unittest.main()

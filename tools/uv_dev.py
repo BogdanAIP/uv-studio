@@ -23,7 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VENDOR_APP = ROOT / "vendor" / "videoclaw-app"
 BACKEND = VENDOR_APP / "backend"
 FRONTEND = VENDOR_APP / "frontend"
-BACKEND_ENTRYPOINT = BACKEND / "api_server.py"
+UPSTREAM_BACKEND_ENTRYPOINT = BACKEND / "api_server.py"
+UV_SERVER_ENTRYPOINT = ROOT / "uv_studio" / "server.py"
 FRONTEND_PACKAGE = FRONTEND / "package.json"
 DEFAULT_HEALTH_URL = "http://127.0.0.1:8000/api/health"
 
@@ -33,13 +34,13 @@ class DevError(RuntimeError):
 
 
 def validate_layout() -> None:
-    required = [BACKEND_ENTRYPOINT, FRONTEND_PACKAGE]
+    required = [UPSTREAM_BACKEND_ENTRYPOINT, UV_SERVER_ENTRYPOINT, FRONTEND_PACKAGE]
     missing = [path for path in required if not path.exists()]
     if missing:
         formatted = "\n".join(f"- {path.relative_to(ROOT)}" for path in missing)
         raise DevError(
-            "Vendored VideoClaw baseline is incomplete. Missing:\n"
-            f"{formatted}\nRun: python tools/vendor_videoclaw.py"
+            "UV Studio development layout is incomplete. Missing:\n"
+            f"{formatted}\nIf vendor files are missing, run: python tools/vendor_videoclaw.py"
         )
 
 
@@ -53,7 +54,7 @@ def npm_executable() -> str:
 
 def backend_command() -> list[str]:
     validate_layout()
-    return [sys.executable, str(BACKEND_ENTRYPOINT)]
+    return [sys.executable, "-m", "uv_studio.server"]
 
 
 def frontend_command(mode: str = "dev") -> list[str]:
@@ -66,7 +67,7 @@ def frontend_command(mode: str = "dev") -> list[str]:
 def run_backend() -> int:
     command = backend_command()
     print(f"UV Studio backend: {' '.join(command)}")
-    return subprocess.call(command, cwd=BACKEND)
+    return subprocess.call(command, cwd=ROOT)
 
 
 def run_frontend(mode: str) -> int:
@@ -101,11 +102,11 @@ def health_smoke(
     url: str = DEFAULT_HEALTH_URL,
     startup_timeout: float = 30.0,
 ) -> dict:
-    """Start the vendored backend, probe real HTTP health, then stop it."""
+    """Start the UV Studio server, probe real HTTP health, then stop it."""
     command = backend_command()
     process = subprocess.Popen(
         command,
-        cwd=BACKEND,
+        cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -143,8 +144,9 @@ def print_paths() -> int:
     validate_layout()
     data = {
         "root": str(ROOT),
+        "uv_server": str(UV_SERVER_ENTRYPOINT),
         "vendor_app": str(VENDOR_APP),
-        "backend": str(BACKEND),
+        "upstream_backend": str(BACKEND),
         "frontend": str(FRONTEND),
     }
     print(json.dumps(data, indent=2))
@@ -156,7 +158,7 @@ def parse_args() -> argparse.Namespace:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("paths", help="Print resolved UV Studio source paths.")
-    sub.add_parser("backend", help="Run the development backend.")
+    sub.add_parser("backend", help="Run the UV Studio development backend.")
 
     frontend = sub.add_parser("frontend", help="Run a frontend npm script.")
     frontend.add_argument("--mode", choices=["dev", "start", "build"], default="dev")

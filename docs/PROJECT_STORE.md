@@ -27,7 +27,7 @@ projects/
     └── exports/
 ```
 
-`ProjectStore` accepts an explicit project root. The final application will decide the user-facing default location later; tests use temporary roots.
+`ProjectStore` accepts an explicit project root. During development the default is `data/projects/` under the repository root. It can be overridden with `UV_STUDIO_PROJECTS_DIR`; tests use temporary roots.
 
 ## `project.json` schema v1
 
@@ -97,17 +97,41 @@ If replacement fails, the previous canonical file remains unchanged and the temp
 
 Atomic replacement protects against partial metadata writes; it is not a substitute for future revision/conflict handling if concurrent multi-process editing is added.
 
+## Corruption visibility
+
+Directories without `project.json` are not treated as projects and may be ignored during listing.
+
+A directory that does contain `project.json` but has malformed or invalid canonical metadata is **not silently skipped**. `ProjectStore` surfaces the error so API/UI layers can tell the user the project requires recovery instead of making it appear to disappear.
+
 ## Schema migrations
 
 All reads pass through `migrate_project_data()` before `ProjectDocument` construction.
 
 Version 1 currently has no migration function because it is the first schema. A project created by a newer unsupported UV Studio version fails explicitly instead of being silently interpreted with an older schema.
 
+## HTTP API
+
+UV Studio's server mounts a product-owned router on top of the pinned upstream FastAPI application:
+
+```text
+GET   /api/uv/projects
+POST  /api/uv/projects
+GET   /api/uv/projects/{project_id}
+PATCH /api/uv/projects/{project_id}
+```
+
+The router is intentionally thin. Validation/persistence remains in `ProjectStore`; handlers translate store errors into HTTP status codes instead of duplicating filesystem rules.
+
+Current responses use canonical schema-v1 metadata. Create/update APIs expose only universal metadata in this slice; source/artifact mutation gets separate operations later rather than allowing arbitrary replacement of the whole project document.
+
+The existing upstream routes, including `/api/health`, remain mounted through the UV Studio server wrapper.
+
 ## Not included yet
 
-This first Stage 1 slice does not implement:
+Current Stage 1 work still does not implement:
 
-- Projects UI;
+- Projects frontend UI;
+- source/artifact upload/mutation API;
 - ZIP import/export;
 - backup rotation;
 - SQLite;
