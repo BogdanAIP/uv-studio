@@ -17,7 +17,7 @@ Prepare the local environment once:
 .\scripts\setup-dev.ps1
 ```
 
-This creates `.venv`, installs the pinned backend requirements, and runs `npm ci` for the pinned frontend.
+This creates `.venv`, installs the pinned backend requirements, and runs `npm ci` in the UV Studio-owned top-level `frontend/`.
 
 Start the backend:
 
@@ -33,11 +33,20 @@ Start the frontend in another PowerShell window:
 
 The backend command starts **UV Studio's own server entrypoint** (`uv_studio.server`). That server mounts UV Studio-owned APIs on top of the pinned VideoClaw FastAPI application, so existing upstream routes remain available without editing vendored router files.
 
+The frontend command runs the product-owned derived frontend from:
+
+```text
+frontend/
+```
+
+The untouched pinned frontend snapshot remains at `vendor/videoclaw-app/frontend/` only for provenance/comparison. See `docs/FRONTEND.md` before using the destructive frontend reset tool.
+
 Default development URLs:
 
 - backend health: `http://127.0.0.1:8000/api/health`
 - UV Studio projects API: `http://127.0.0.1:8000/api/uv/projects`
 - frontend: `http://localhost:3000`
+- canonical projects screen: `http://localhost:3000/projects`
 
 ## Project data location
 
@@ -123,6 +132,18 @@ python tools/vendor_videoclaw.py
 ```
 
 If upstream code must change, first decide whether the change belongs in an UV Studio wrapper/adapter. Direct changes to vendored code need an explicit decision because they complicate future upstream comparisons.
+
+## Product frontend provenance
+
+The top-level `frontend/` started as a reproducible derived copy of the pinned upstream frontend but is now normal UV Studio product source.
+
+Safe provenance check:
+
+```text
+python tools/promote_frontend.py --check
+```
+
+Do **not** run a forced frontend reset during normal development. `python tools/promote_frontend.py --force` deliberately deletes product frontend changes and recreates the original pinned baseline.
 
 ## Cross-chat continuation
 
