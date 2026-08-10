@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "name": "VideoClaw modern app",
+  "repository": "HITsz-TMG/VideoClaw",
+  "commit": "5a16ae23a4f1cb6886c44c0205f7b7e52a34c276",
+  "subtree": "video-claw/video-claw",
+  "license": "MIT",
+  "license_path": "LICENSE",
+  "default_destination": "vendor/videoclaw-app"
+}
