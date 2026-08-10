@@ -2,9 +2,9 @@
 
 **Updated:** 2026-08-10  
 **Repository:** `BogdanAIP/uv-studio`  
-**Active roadmap stage:** Stage 0 — Clean baseline  
-**Active branch:** `stage-0/bootstrap`  
-**Main status:** initial README only; Stage 0 bootstrap is ready for PR/merge.
+**Active roadmap stage:** Stage 0 — complete; Stage 1 is next  
+**Active branch:** `stage-0/runtime-smoke`  
+**Main status:** Stage 0 bootstrap baseline is merged; runtime-smoke slice is ready for PR.
 
 ## Product definition
 
@@ -22,70 +22,90 @@ Music, narration, story, characters, continuity, lip-sync and automated review a
 - Future provider expansion should go through a semantic Capability Bridge; OpenClaw remains the preferred replaceable runtime candidate.
 - `musical-mv-storyboard` remains a separate specialized module planned for adapter integration in Stage 7.
 
-## Repository work completed
+## Stage 0 completed work
 
-- initialized `main` with README;
-- created `stage-0/bootstrap` branch;
-- added `DEVELOPMENT_PROTOCOL.md`, `ROADMAP.md`, decisions and persistent handoff files;
-- added UV Studio MIT license and third-party notices;
-- pinned VideoClaw with `upstream/video-claw.lock.json`;
-- implemented deterministic/safe `tools/vendor_videoclaw.py`;
-- added vendoring tests including destination/path safety and upstream-license preservation;
-- added automated GitHub Actions vendoring workflow;
-- vendored exactly 195 files from the modern VideoClaw subtree into `vendor/videoclaw-app`;
-- generated `.uv-upstream.json` provenance and preserved `UPSTREAM_LICENSE`;
-- added Linux + Windows CI for bootstrap tests and imported application baseline.
+### Bootstrap/provenance
 
-## Verified baseline
+- initialized repository and durable cross-chat development protocol;
+- added roadmap, decisions, upstream policy and third-party notices;
+- pinned VideoClaw through `upstream/video-claw.lock.json`;
+- implemented safe deterministic `tools/vendor_videoclaw.py`;
+- vendored exactly 195 files from `video-claw/video-claw`;
+- preserved upstream MIT license and provenance;
+- added automated vendoring workflow;
+- added Linux + Windows CI for bootstrap and imported application builds.
 
-GitHub Actions CI run `31387868725` completed successfully on 2026-08-10.
+### UV Studio-owned runtime boundary
 
-Verified on both Ubuntu and Windows:
+- added `tools/uv_dev.py` as the stable repository-root development launcher;
+- root launcher resolves backend/frontend without requiring contributors to know `vendor/` internals;
+- launcher supports `paths`, `backend`, `frontend` and `health-smoke`;
+- health smoke starts the real FastAPI process, calls `/api/health` over HTTP, validates `status=ok`, and terminates the process;
+- added Windows `.venv` setup and root launch scripts;
+- added `docs/DEVELOPMENT.md`;
+- added launcher/unit tests;
+- kept the vendored application unchanged in this slice.
 
-- bootstrap Python compiles;
-- vendoring unit tests pass;
-- upstream lock validates;
-- imported backend compiles;
+## Verified Stage 0 baseline
+
+### Initial imported application
+
+GitHub Actions CI run `31387868725` succeeded on Ubuntu and Windows:
+
+- bootstrap tests;
+- imported backend compile/install/import;
+- frontend `npm ci`;
+- Next.js production build.
+
+Automated vendoring run `31387677332` succeeded and committed the pinned baseline.
+
+### UV Studio runtime smoke
+
+GitHub Actions run `31388566191` verified on Ubuntu and Windows:
+
+- UV Studio-owned Python launcher compiles;
+- all unit tests pass;
+- root paths resolve correctly;
 - backend requirements install;
-- `api_server` imports without API credentials;
-- frontend dependencies install with `npm ci`;
+- backend imports without API credentials;
+- `python tools/uv_dev.py health-smoke` starts the backend and successfully receives real HTTP health response;
+- frontend dependencies install;
 - Next.js production build succeeds.
-
-Automated vendoring workflow run `31387677332` also completed successfully and committed the pinned baseline.
 
 ## What works now
 
-- repository can reproducibly reconstruct the exact selected VideoClaw baseline;
-- upstream provenance/license are preserved automatically;
-- imported backend/frontend are buildable on Linux and Windows;
-- development state is durable across ChatGPT chat changes;
-- CI catches baseline breakage before architecture changes.
+- exact upstream baseline is reproducible;
+- provenance and licenses are preserved;
+- development can resume from repository state across chats;
+- backend/frontend are buildable on Windows and Linux;
+- UV Studio can start/probe the backend from repository root;
+- Windows developers have root-level setup/backend/frontend scripts;
+- no model/API credentials are required for startup smoke tests.
 
 ## What does not work yet
 
-- there is no UV Studio top-level launcher/setup command yet;
-- baseline CI imports the server but does not yet start it and probe `/api/health` over HTTP;
-- user-facing branding/product terminology still reflects VideoClaw in vendored UI/code;
-- long-lived UV Studio Project Store does not exist yet;
+- there is no UV Studio long-lived Project Store;
+- existing upstream session JSON is not the product project model;
 - Recipe Registry does not exist yet;
 - Capability Bridge/OpenClaw integration does not exist yet;
-- music-video, dubbing and range-edit UV Studio recipes are not implemented yet.
+- music-video, dubbing and range-edit recipes are not implemented yet;
+- product UI/branding still largely comes from the pinned upstream application;
+- final end-user desktop packaging is Stage 9 work.
 
 ## Current risks
 
-1. Avoid editing the large upstream film orchestrator into a universal controller.
-2. Keep future UV Studio code outside/above vendored upstream where practical so upstream provenance remains clear.
-3. The current upstream session storage is insufficient for Stage 1 Project Store.
-4. Provider-specific code must not spread into future domain logic.
-5. Establish a real HTTP smoke/start path before beginning structural cleanup.
+1. Keep product state independent from upstream chat/session persistence.
+2. Avoid editing the large upstream film orchestrator into a universal controller.
+3. Keep new UV Studio code outside/above `vendor/` whenever practical.
+4. Provider-specific code must not spread into product domain logic.
+5. Stage 1 Project Store must remain small/local and not turn into a premature cloud/database platform.
 
 ## Last verified repository facts
 
-- vendored source provenance: `vendor/videoclaw-app/.uv-upstream.json`;
-- imported file count: 195;
-- upstream source SHA: `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`;
-- first successful cross-platform application baseline CI: run `31387868725`;
-- automated vendoring run: `31387677332`.
+- `main` contains Stage 0 bootstrap squash commit `af24ed11d899ee1f459571c5d774b7ac9ad6d1ca`;
+- current Stage 0 runtime-smoke CI: run `31388566191`, successful Ubuntu + Windows HTTP smoke and builds;
+- vendored file count: 195;
+- upstream source SHA: `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`.
 
 ## Development invariant
 
