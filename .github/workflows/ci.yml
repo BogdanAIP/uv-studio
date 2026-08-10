@@ -31,18 +31,23 @@ jobs:
       - name: Validate root launchers load
         run: |
           python tools/vendor_videoclaw.py --help
+          python tools/promote_frontend.py --check
           python tools/uv_dev.py --help
           python tools/uv_dev.py paths
 
-      - name: Validate upstream lock
+      - name: Validate upstream and derived frontend provenance
         shell: python
         run: |
           import json
           from pathlib import Path
-          data = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
-          assert data["schema_version"] == 1
-          assert len(data["commit"]) == 40
-          assert data["subtree"] == "video-claw/video-claw"
+          lock = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
+          marker = json.loads(Path("frontend/.uv-derived.json").read_text(encoding="utf-8"))
+          assert lock["schema_version"] == 1
+          assert len(lock["commit"]) == 40
+          assert lock["subtree"] == "video-claw/video-claw"
+          assert marker["source_commit"] == lock["commit"]
+          assert marker["source_subtree"] == f"{lock['subtree']}/frontend"
+          assert Path("frontend/UPSTREAM_LICENSE").is_file()
 
   app-baseline:
     strategy:
@@ -64,7 +69,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: vendor/videoclaw-app/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Compile imported backend
         run: python -m compileall vendor/videoclaw-app/backend
@@ -91,10 +96,10 @@ jobs:
       - name: Probe backend through UV Studio over real HTTP
         run: python tools/uv_dev.py health-smoke --startup-timeout 45
 
-      - name: Install frontend dependencies
-        working-directory: vendor/videoclaw-app/frontend
+      - name: Install UV Studio frontend dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Build frontend
-        working-directory: vendor/videoclaw-app/frontend
+      - name: Build UV Studio frontend
+        working-directory: frontend
         run: npm run build
