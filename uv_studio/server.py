@@ -1,0 +1,38 @@
+"""UV Studio FastAPI entrypoint.
+
+The pinned VideoClaw application remains available, while UV Studio-owned
+routers are mounted from outside the vendored tree.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+UPSTREAM_BACKEND = ROOT / "vendor" / "videoclaw-app" / "backend"
+
+if str(UPSTREAM_BACKEND) not in sys.path:
+    sys.path.insert(0, str(UPSTREAM_BACKEND))
+
+import uvicorn  # noqa: E402
+from api.app import app as upstream_app  # type: ignore  # noqa: E402
+from config import settings as upstream_settings  # type: ignore  # noqa: E402
+
+from uv_studio.api.projects import router as projects_router  # noqa: E402
+
+app = upstream_app
+app.include_router(projects_router)
+
+
+def main() -> None:
+    uvicorn.run(
+        app,
+        host=upstream_settings.HOST,
+        port=upstream_settings.PORT,
+        access_log=upstream_settings.ACCESS_LOG,
+    )
+
+
+if __name__ == "__main__":
+    main()
