@@ -19,18 +19,19 @@ class LayoutTests(unittest.TestCase):
     def test_expected_paths_stay_under_repository_root(self) -> None:
         self.assertIn(uv_dev.VENDOR_APP, uv_dev.BACKEND.parents)
         self.assertIn(uv_dev.VENDOR_APP, uv_dev.FRONTEND.parents)
-        self.assertEqual(uv_dev.BACKEND_ENTRYPOINT.name, "api_server.py")
+        self.assertEqual(uv_dev.UPSTREAM_BACKEND_ENTRYPOINT.name, "api_server.py")
+        self.assertEqual(uv_dev.UV_SERVER_ENTRYPOINT.name, "server.py")
+        self.assertIn(uv_dev.ROOT, uv_dev.UV_SERVER_ENTRYPOINT.parents)
         self.assertEqual(uv_dev.FRONTEND_PACKAGE.name, "package.json")
 
-    def test_current_vendored_layout_is_valid(self) -> None:
+    def test_current_development_layout_is_valid(self) -> None:
         uv_dev.validate_layout()
 
 
 class CommandTests(unittest.TestCase):
-    def test_backend_uses_current_python(self) -> None:
+    def test_backend_uses_uv_studio_module(self) -> None:
         command = uv_dev.backend_command()
-        self.assertEqual(command[0], sys.executable)
-        self.assertEqual(Path(command[1]), uv_dev.BACKEND_ENTRYPOINT)
+        self.assertEqual(command, [sys.executable, "-m", "uv_studio.server"])
 
     @mock.patch.object(uv_dev, "npm_executable", return_value="npm-test")
     def test_frontend_command_is_repo_wrapper(self, _mock_npm) -> None:
