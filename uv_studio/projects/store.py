@@ -161,8 +161,10 @@ class ProjectStore:
                 continue
             try:
                 projects.append(self.load_project(child.name))
-            except (ProjectValidationError, ProjectStoreError):
-                continue
+            except ProjectValidationError as exc:
+                raise ProjectStoreError(
+                    f"Invalid project directory name for {child / PROJECT_FILENAME}: {exc}"
+                ) from exc
         projects.sort(key=lambda item: item.updated_at, reverse=True)
         return projects
 
@@ -191,7 +193,7 @@ class ProjectStore:
     def _remove_empty_project(directory: Path) -> None:
         if not directory.exists():
             return
-        for child in sorted(directory.rglob("*"), reverse=True):
+        for child in sorted(directory.rglob("*"), key=lambda item: len(item.parts), reverse=True):
             try:
                 if child.is_file():
                     child.unlink()
