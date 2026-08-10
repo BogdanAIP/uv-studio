@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
         source: '/code/:path*',
         destination: 'http://127.0.0.1:8000/code/:path*',
       },
+      // UV Studio-owned APIs.
+      {
+        source: '/api/uv/:path*',
+        destination: 'http://127.0.0.1:8000/api/uv/:path*',
+      },
       {
         source: '/api/sessions',
         destination: 'http://127.0.0.1:8000/api/sessions',
@@ -15,7 +20,7 @@ const nextConfig: NextConfig = {
         source: '/api/sessions/:path*',
         destination: 'http://127.0.0.1:8000/api/sessions/:path*',
       },
-      // 工作流 API
+      // Existing workflow API.
       {
         source: '/api/project/:path*',
         destination: 'http://127.0.0.1:8000/api/project/:path*',
@@ -40,7 +45,7 @@ const nextConfig: NextConfig = {
         source: '/api/cache/:path*',
         destination: 'http://127.0.0.1:8000/api/cache/:path*',
       },
-      // 一键 pipeline API
+      // Existing quick-pipeline API.
       {
         source: '/api/pipelines',
         destination: 'http://127.0.0.1:8000/api/pipelines',
@@ -57,7 +62,6 @@ const nextConfig: NextConfig = {
         source: '/api/tasks/:path*',
         destination: 'http://127.0.0.1:8000/api/tasks/:path*',
       },
-      // 临时工作台 API
       {
         source: '/api/sandbox/:path*',
         destination: 'http://127.0.0.1:8000/api/sandbox/:path*',
