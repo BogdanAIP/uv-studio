@@ -36,6 +36,21 @@ class FrontendPromotionTests(unittest.TestCase):
         with self.assertRaises(promote.PromotionError):
             promote.safe_destination(promote.SOURCE / "nested")
 
+    def test_existing_destination_requires_force_even_when_managed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=promote.ROOT) as tmp:
+            destination = Path(tmp) / "frontend"
+            first = promote.promote(destination)
+            self.assertEqual(first["managed_by"], "tools/promote_frontend.py")
+            (destination / "product-change.txt").write_text("keep me", encoding="utf-8")
+
+            with self.assertRaises(promote.PromotionError):
+                promote.promote(destination)
+
+            self.assertEqual(
+                (destination / "product-change.txt").read_text(encoding="utf-8"),
+                "keep me",
+            )
+
     def test_unmanaged_existing_destination_requires_force(self) -> None:
         with tempfile.TemporaryDirectory(dir=promote.ROOT) as tmp:
             destination = Path(tmp) / "frontend"
@@ -58,12 +73,12 @@ class FrontendPromotionTests(unittest.TestCase):
             self.assertTrue((destination / "package-lock.json").is_file())
             self.assertTrue((destination / "UPSTREAM_LICENSE").is_file())
 
-    def test_managed_destination_can_be_reproduced(self) -> None:
+    def test_force_recreates_promoted_baseline(self) -> None:
         with tempfile.TemporaryDirectory(dir=promote.ROOT) as tmp:
             destination = Path(tmp) / "frontend"
             first = promote.promote(destination)
             (destination / "changed.txt").write_text("product change", encoding="utf-8")
-            second = promote.promote(destination)
+            second = promote.promote(destination, force=True)
             self.assertEqual(first["source_tree_sha256"], second["source_tree_sha256"])
             self.assertFalse((destination / "changed.txt").exists())
 
