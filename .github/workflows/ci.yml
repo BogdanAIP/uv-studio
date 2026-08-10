@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "stage-*", "fix/*", "chore/*"]
+  pull_request:
+
+jobs:
+  baseline:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile bootstrap Python
+        run: python -m compileall tools tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate vendor CLI loads
+        run: python tools/vendor_videoclaw.py --help
+
+      - name: Validate upstream lock
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          data = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
+          assert data["schema_version"] == 1
+          assert len(data["commit"]) == 40
+          assert data["subtree"] == "video-claw/video-claw"
