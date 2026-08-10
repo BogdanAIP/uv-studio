@@ -18,11 +18,14 @@ SPEC.loader.exec_module(uv_dev)
 class LayoutTests(unittest.TestCase):
     def test_expected_paths_stay_under_repository_root(self) -> None:
         self.assertIn(uv_dev.VENDOR_APP, uv_dev.BACKEND.parents)
-        self.assertIn(uv_dev.VENDOR_APP, uv_dev.FRONTEND.parents)
+        self.assertIn(uv_dev.VENDOR_APP, uv_dev.VENDOR_FRONTEND.parents)
+        self.assertIn(uv_dev.ROOT, uv_dev.FRONTEND.parents)
+        self.assertNotIn(uv_dev.VENDOR_APP, uv_dev.FRONTEND.parents)
         self.assertEqual(uv_dev.UPSTREAM_BACKEND_ENTRYPOINT.name, "api_server.py")
         self.assertEqual(uv_dev.UV_SERVER_ENTRYPOINT.name, "server.py")
         self.assertIn(uv_dev.ROOT, uv_dev.UV_SERVER_ENTRYPOINT.parents)
         self.assertEqual(uv_dev.FRONTEND_PACKAGE.name, "package.json")
+        self.assertEqual(uv_dev.FRONTEND_PROVENANCE.name, ".uv-derived.json")
 
     def test_current_development_layout_is_valid(self) -> None:
         uv_dev.validate_layout()
