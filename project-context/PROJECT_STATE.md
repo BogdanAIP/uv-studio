@@ -3,8 +3,8 @@
 **Updated:** 2026-08-10  
 **Repository:** `BogdanAIP/uv-studio`  
 **Active roadmap stage:** Stage 1 — Universal Project Store  
-**Active branch:** `stage-1/project-store-core`  
-**Main status:** Stage 0 complete and merged; first Stage 1 Project Store slice is ready for PR.
+**Active branch:** `stage-1/projects-api`  
+**Main status:** Stage 0 and Project Store core are merged; Projects API slice is ready for PR.
 
 ## Product definition
 
@@ -17,125 +17,124 @@ Music, narration, story, characters, continuity, lip-sync and automated review a
 - pinned modern VideoClaw application is the reusable runtime/UI baseline;
 - pinned upstream SHA: `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`;
 - `vendor/videoclaw-app` is a compatibility boundary, not the preferred location for new product code;
-- UV Studio-owned runtime wrapper exists at `tools/uv_dev.py`;
+- UV Studio owns the backend entrypoint through `uv_studio.server`;
+- upstream FastAPI routes remain mounted through that server;
+- canonical project state is UV Studio's file-first Project Store, not upstream session JSON;
 - future provider growth stays behind a semantic capability boundary;
 - specialized state remains optional instead of inflating every project schema.
 
-## Stage 0 status
-
-Complete and merged into `main`.
-
-Relevant `main` commits:
+## Merged milestones
 
 - `af24ed11d899ee1f459571c5d774b7ac9ad6d1ca` — reproducible VideoClaw baseline;
-- `8d175c2535806841c712582532efea403a2f8599` — UV Studio root runtime/HTTP smoke boundary.
+- `8d175c2535806841c712582532efea403a2f8599` — UV Studio root runtime/HTTP smoke boundary;
+- `2276a854c4109f0039ae1aeb55304650840e1652` — canonical local Project Store v1.
 
 ## Stage 1 work completed in current slice
 
-### Canonical project schema v1
+### UV Studio backend wrapper
 
-Added product-owned package:
+Added `uv_studio/server.py`.
+
+It:
+
+- loads the pinned upstream FastAPI application;
+- preserves existing upstream routes such as `/api/health`;
+- mounts UV Studio-owned routers outside the vendored tree;
+- becomes the target of `tools/uv_dev.py backend` and `health-smoke`.
+
+No files under `vendor/videoclaw-app` were modified for this feature.
+
+### UV Studio projects API
+
+Added product-owned route family:
 
 ```text
-uv_studio/projects/
-├── models.py
-├── migrations.py
-└── store.py
+GET   /api/uv/projects
+POST  /api/uv/projects
+GET   /api/uv/projects/{project_id}
+PATCH /api/uv/projects/{project_id}
 ```
 
-`project.json` contains only universal metadata:
-
-- schema version;
-- stable project ID;
-- title;
-- recipe ID;
-- created/updated timestamps;
-- settings;
-- project-relative source references;
-- artifact references;
-- optional extensions namespace.
-
-Music/story/continuity/review fields are not mandatory project fields.
-
-### Local Project Store
+The API is intentionally thin and delegates canonical validation/persistence to `ProjectStore`.
 
 Implemented:
 
-- project creation;
-- project loading after a new process/store instance;
-- project updates;
 - project listing;
-- canonical directory layout;
-- safe ID validation;
-- project-relative reference validation including Windows absolute-path rejection;
-- atomic `project.json` writes using temp file + flush + `fsync` + `os.replace`;
-- cleanup after failed atomic replace;
-- explicit malformed-document errors;
-- schema migration boundary;
-- explicit rejection of future unsupported schema versions;
-- no SQLite/cloud dependency.
+- project creation;
+- project retrieval;
+- universal metadata update;
+- explicit 404/409/422/500 translation;
+- Pydantic response/request validation;
+- rejection of explicit null updates;
+- configurable project root via `UV_STUDIO_PROJECTS_DIR`;
+- safe local default `data/projects/` during development.
 
-### Tests/documentation
+### Project Store corruption behavior
 
-Added `tests/test_project_store.py` covering:
+`list_projects()` now ignores unrelated directories without `project.json`, but does not silently hide a directory that contains corrupt/invalid canonical project metadata. Such corruption is surfaced as an explicit error for recovery/UI handling.
 
-- create/layout;
-- restart/load;
-- update;
-- duplicate/missing projects;
-- project ID traversal;
-- reference path traversal;
-- malformed JSON;
-- unsupported future schema;
-- directory/document ID mismatch;
-- simulated atomic replace failure preserving previous canonical file;
-- project listing.
+### Integration tests
 
-Added `docs/PROJECT_STORE.md` and D-009 file-first Project Store decision.
+Added `tests_api/test_projects_api.py` using a temporary Project Store root.
+
+Verified through FastAPI TestClient:
+
+- upstream `/api/health` survives the wrapper;
+- create/list/get/update project lifecycle;
+- update persists through a fresh `ProjectStore` instance;
+- missing project returns 404;
+- invalid project ID/recipe returns 422;
+- explicit null update returns 422.
 
 ## Verification
 
-GitHub Actions run `31389343366` succeeded on Ubuntu and Windows.
+GitHub Actions run `31390452201` succeeded on Ubuntu and Windows.
 
-Verified:
+Verified on both OSes:
 
-- all UV Studio unit tests including Project Store pass on both OSes;
-- imported backend still compiles/installs/imports;
-- real HTTP health smoke still succeeds;
-- frontend production build still succeeds.
+- UV Studio unit tests;
+- upstream backend compile/install/import;
+- UV Studio server import without API credentials;
+- Projects API integration tests;
+- real HTTP `/api/health` through the UV Studio server wrapper;
+- frontend `npm ci` and production build.
 
 ## What works now
 
-- reproducible upstream runtime baseline;
+- reproducible pinned upstream runtime;
 - cross-chat repository state/handoff;
-- root-level UV Studio startup and HTTP smoke;
-- independent canonical UV Studio project metadata;
-- durable atomic local project create/read/update/list operations;
-- project state no longer needs upstream session JSON as its future canonical source.
+- UV Studio-owned backend entrypoint;
+- existing upstream backend routes through that entrypoint;
+- independent canonical Project Store;
+- HTTP create/list/get/update project operations;
+- configurable local project storage;
+- cross-platform CI covering project API and backend compatibility.
 
 ## What does not work yet
 
-- Project Store has no UV Studio HTTP API yet;
-- Projects frontend screen does not exist;
+- Projects frontend UI does not exist;
+- the current product frontend is still the pinned VideoClaw frontend inside `vendor/`;
+- source/artifact upload APIs are not implemented;
 - ZIP import/export and backup rotation are not implemented;
 - Recipe Registry does not exist;
 - Capability Bridge/OpenClaw integration does not exist;
 - media-specific recipes are not implemented.
 
-## Current risks
+## Current architectural risks
 
-1. Keep the Project Store schema universal and small.
-2. Do not let API/UI layers duplicate filesystem state rules; they must call ProjectStore.
-3. Do not modify vendored upstream routers just to expose product endpoints; mount UV Studio routers from an owned server layer.
-4. SQLite remains unjustified until measured need appears.
-5. Avoid turning `extensions` into an unversioned dumping ground; large specialized data should get dedicated versioned files later.
+1. The user-facing frontend will require major product changes, so repeatedly patching `vendor/videoclaw-app/frontend` would make upstream provenance/update handling progressively worse.
+2. The next UI slice should establish an UV Studio-owned frontend derived from the pinned MIT frontend baseline before adding substantial product screens.
+3. Keep Project Store schema universal and small.
+4. API/UI must call `ProjectStore` instead of duplicating filesystem rules.
+5. Keep the large upstream film orchestrator specialized rather than central.
+6. SQLite remains unjustified until measured need appears.
 
 ## Last verified repository facts
 
-- active branch: `stage-1/project-store-core`;
-- latest fully successful relevant CI: `31389343366`;
-- Stage 0 merged main head before current slice: `8d175c2535806841c712582532efea403a2f8599`;
-- vendored upstream file count: 195.
+- active branch: `stage-1/projects-api`;
+- fully successful relevant CI: `31390452201`;
+- current merged main before this slice: `2276a854c4109f0039ae1aeb55304650840e1652`;
+- pinned vendored file count: 195.
 
 ## Development invariant
 
