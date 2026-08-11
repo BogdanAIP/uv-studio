@@ -54,12 +54,14 @@ class RangeReinsertionApiTests(unittest.TestCase):
                         "width": 640,
                         "height": 360,
                         "duration": duration,
+                        "start_time": "0.000000",
                         "avg_frame_rate": "0/0",
                     },
                     {
                         "codec_type": "audio",
                         "codec_name": "flac",
                         "duration": duration,
+                        "start_time": "0.000000",
                     },
                 ],
             }
@@ -180,11 +182,16 @@ class RangeReinsertionApiTests(unittest.TestCase):
         ffmpeg_calls = [command for command in self.calls if command[0] == "fake-ffmpeg"]
         self.assertEqual(len(ffprobe_calls), 3)
         self.assertEqual(len(ffmpeg_calls), 1)
-        self.assertIn("concat=n=3:v=1:a=1", ffmpeg_calls[0][ffmpeg_calls[0].index("-filter_complex") + 1])
+        self.assertIn(
+            "concat=n=3:v=1:a=1",
+            ffmpeg_calls[0][ffmpeg_calls[0].index("-filter_complex") + 1],
+        )
 
         artifacts = self.store.load_project(self.project.project_id).artifacts
         self.assertEqual(len(artifacts), 1)
         self.assertEqual(artifacts[0].metadata["composition_mode"], "filter_concat_ffv1_flac_vfr")
+        self.assertEqual(artifacts[0].metadata["source_av_start_delta_us"], 0)
+        self.assertEqual(artifacts[0].metadata["replacement_av_start_delta_us"], 0)
 
 
 if __name__ == "__main__":
