@@ -5,9 +5,6 @@ Selection, consent and execution are deliberately separate:
 - preparation reports locality/cost facts and required acknowledgements;
 - authorization issues only a short-lived one-shot grant for the exact input;
 - execution consumes that grant before any non-local or non-free adapter may run.
-
-The current executable adapter remains local FFmpeg. External adapters become
-eligible for transport work only after passing this product-owned boundary.
 """
 
 from __future__ import annotations
@@ -17,10 +14,16 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 
 from uv_studio.api.capabilities import get_capability_registry
+from uv_studio.api.mcp import get_mcp_manager
 from uv_studio.api.projects import get_project_store
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.adapters.mcp_execution import (
+    MCPExecutionAdapter,
+    MCPExecutionInputRejected,
+)
 from uv_studio.capabilities.authorization import (
     ConsentScope,
     ExecutionAuthorizationInvalid,
@@ -46,6 +49,14 @@ from uv_studio.capabilities.selection import (
     SelectionPolicy,
     select_offer,
 )
+from uv_studio.mcp.client import (
+    MCPCallError,
+    MCPCallTimeout,
+    MCPRequestTooLarge,
+    MCPResponseTooLarge,
+    MCPToolReturnedError,
+)
+from uv_studio.mcp.manager import MCPBindingExecutionRejected, MCPManager
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
@@ -56,6 +67,13 @@ def get_local_ffmpeg_adapter(
     store: ProjectStore = Depends(get_project_store),
 ) -> LocalFFmpegAdapter:
     return LocalFFmpegAdapter(store)
+
+
+def get_mcp_execution_adapter(
+    store: ProjectStore = Depends(get_project_store),
+    manager: MCPManager = Depends(get_mcp_manager),
+) -> MCPExecutionAdapter:
+    return MCPExecutionAdapter(manager, store)
 
 
 @lru_cache(maxsize=1)
@@ -233,6 +251,16 @@ def _consent_required_detail(preparation) -> dict[str, Any]:
     }
 
 
+def _mcp_error(exc: Exception, *, status_code: int) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "code": getattr(exc, "code", "mcp_execution_failed"),
+            "message": str(exc),
+        },
+    )
+
+
 @router.post("/{project_id}/capabilities/{capability_id}/prepare-execution")
 def prepare_project_capability_execution(
     project_id: str,
@@ -295,13 +323,14 @@ def authorize_project_capability_execution(
 
 
 @router.post("/{project_id}/capabilities/{capability_id}/execute")
-def execute_project_capability(
+async def execute_project_capability(
     project_id: str,
     capability_id: str,
     request: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
     registry: CapabilityRegistry = Depends(get_capability_registry),
     local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
+    mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
 ) -> dict[str, Any]:
     decision, preparation, input_payload = _prepare(
@@ -331,24 +360,32 @@ def execute_project_capability(
         ) from exc
 
     offer = decision.offer
-    if offer.adapter_id != LocalFFmpegAdapter.adapter_id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "adapter_not_executable_yet",
-                "message": (
-                    f"offer {offer.offer_id!r} passed selection/authorization, but adapter "
-                    f"{offer.adapter_id!r} has no execution transport in this slice"
-                ),
-            },
-        )
-
     try:
-        result = local_ffmpeg.execute(
-            project_id=project_id,
-            offer=offer,
-            payload=input_payload,
-        )
+        if offer.adapter_id == LocalFFmpegAdapter.adapter_id:
+            result = await run_in_threadpool(
+                local_ffmpeg.execute,
+                project_id=project_id,
+                offer=offer,
+                payload=input_payload,
+            )
+        elif offer.adapter_id.startswith("mcp."):
+            result = await mcp_execution.execute(
+                project_id=project_id,
+                offer=offer,
+                preparation=preparation,
+                payload=input_payload,
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "adapter_not_executable_yet",
+                    "message": (
+                        f"offer {offer.offer_id!r} passed selection/authorization, but adapter "
+                        f"{offer.adapter_id!r} has no execution transport in this slice"
+                    ),
+                },
+            )
     except InvalidCapabilityInput as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -369,5 +406,18 @@ def execute_project_capability(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
         ) from exc
+    except MCPBindingExecutionRejected as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "mcp_binding_rejected", "message": str(exc)},
+        ) from exc
+    except MCPExecutionInputRejected as exc:
+        raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
+    except MCPRequestTooLarge as exc:
+        raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
+    except MCPCallTimeout as exc:
+        raise _mcp_error(exc, status_code=status.HTTP_504_GATEWAY_TIMEOUT) from exc
+    except (MCPToolReturnedError, MCPResponseTooLarge, MCPCallError) as exc:
+        raise _mcp_error(exc, status_code=status.HTTP_502_BAD_GATEWAY) from exc
 
     return CapabilityExecutionEnvelope(selection=decision, result=result).to_dict()

@@ -4,142 +4,93 @@ Updated: 2026-08-11
 
 ## Primary target
 
-Implement **generic authorized MCP `call_tool()` execution plus durable external invocation provenance**.
+Implement **explicit binding-owned project-file argument translation for MCP capabilities**.
 
-The execution consent/cost boundary is now a separate product-owned layer. This slice must consume that boundary rather than re-implementing consent inside MCP or Qwen-specific code.
-
-Test the transport against the repository's local fake MCP server first. **Do not make real paid Qwen/DashScope calls in CI.**
+Generic authorized MCP invocation now exists, but it deliberately rejects raw host paths and does not convert `sources/...`, `assets/...` or other project-relative strings into host filesystem paths. The next slice must add that capability without creating a generic arbitrary-path escape hatch.
 
 ## Required implementation
 
-### 1. Generic MCP call transport
+### 1. Versioned binding file-input contract
 
-Extend the official-SDK stdio client with a bounded `call_tool()` path:
+Extend `MCPToolBinding` with an explicit, backward-compatible project-file argument contract.
 
-- invoke only an exact tool name supplied by an already-configured `MCPToolBinding`;
-- use the profile's bounded process/session timeouts;
-- preserve SDK cancellation and cleanup semantics;
-- never keep a hidden resident MCP child process after the call;
-- keep stderr private in machine-local logs;
-- bound serialized request and response sizes;
-- normalize successful output into JSON-safe product-owned data;
-- surface structured timeout, protocol, tool-error and response-limit failures.
+The contract must identify exactly which MCP argument fields are project file references and which canonical Project Store roots are allowed for each field. Bindings with no such declaration continue to treat arguments as ordinary JSON data and must not receive resolved host paths.
 
-Do not add a generic arbitrary command/tool execution API.
+Prefer a small product-owned model over provider-specific special cases. Do not infer file arguments from names such as `path`, `image`, `video` or `file`.
 
-### 2. Exact offer -> binding resolution
+### 2. Project Store resolution only
 
-Add product-owned execution resolution for `mcp.<binding_id>` offers:
+For every declared project-file argument:
 
-- the offer must map to exactly one configured binding;
-- binding capability ID must equal the selected capability;
-- binding profile must exist and be enabled;
-- the bound tool must still exist in the latest ready discovery snapshot;
-- renamed/missing tools fail closed;
-- unbound discovered tools remain non-executable.
+- accept a project-relative reference only;
+- resolve it through `ProjectStore.resolve_project_file(...)`;
+- constrain resolution to the binding-declared allowed roots;
+- require the referenced file to exist when the tool contract requires an input file;
+- reject traversal, absolute paths, UNC paths and `file://` values;
+- never expose arbitrary host paths supplied by the API caller.
 
-No fuzzy tool-name remapping.
+Resolved host paths may exist only in the short-lived adapter invocation payload. They must not be written back into canonical project metadata or provenance.
 
-### 3. Authorization ordering
+### 3. Digest semantics
 
-MCP invocation may start **only after** the existing execution preparation/authorization layer succeeds.
+Keep D-017 authorization bound to the user-facing normalized input, not to machine-specific resolved absolute paths.
 
-Expected behavior:
+The provenance `input_digest` must therefore remain stable when the same project is moved to another machine/root. Do not recompute authorization or provenance digests from translated host paths.
 
-- local/free MCP: no consent token required;
-- remote/free MCP: explicit `remote_execution` one-shot grant;
-- `potentially_paid` / `paid`: explicit `external_cost` grant;
-- unknown current price: explicit `unknown_cost` acknowledgement too;
-- no local failure -> paid fallback;
-- no global reusable paid permission.
+### 4. Exact binding drift protection
 
-### 4. Durable invocation provenance
+Include the new file-input contract in the existing MCP configuration digest. Any change to declared file fields or allowed roots must require reconnect before execution.
 
-Persist a small versioned JSON run record beneath the canonical project's `tasks/` directory for every external invocation attempt after authorization.
+No fuzzy migration or automatic widening of allowed roots.
 
-Minimum non-secret fields:
+### 5. Fake MCP fixture first
 
-- schema version;
-- `run_id`;
-- `project_id`;
-- semantic `capability_id`;
-- selected `offer_id` / `adapter_id`;
-- MCP `profile_id` / exact `tool_name`;
-- start/end timestamps;
-- authorization fact/scope (never the token itself);
-- cost-class + cost-estimate snapshot;
-- normalized input digest;
-- status (`running`, `succeeded`, `failed`);
-- result references/summary when safe;
-- structured error class/code when failed.
+Add a deterministic fake MCP tool/binding that accepts one declared project file argument and returns safe metadata about the received path/content.
 
-The record must contain no credential values, authorization tokens, resolved secret environment values or raw stderr.
+Tests must prove the translation works without depending on Qwen, WSL, network access or paid APIs.
 
-Write failure provenance too. Use atomic Project Store writes.
+### 6. Qwen core follow-up only after fresh verification
 
-### 5. Project-scoped external file inputs
+After the generic contract is green, re-check the pinned/current Qwen-MM core tool schema before binding any real project-file field. If the pinned `media_info` contract still maps cleanly, enable only the exact required project-file argument for the existing `core.media_info -> media.probe` trusted binding.
 
-Do not expose arbitrary host filesystem paths.
+Do not broaden other Qwen tools in the same slice unless their file contracts are independently verified and covered by tests.
 
-If a binding accepts project file inputs, the binding/adapter must explicitly own which argument fields are file references and resolve them through `ProjectStore.resolve_project_file(...)` with appropriate allowed roots. If no binding currently needs file translation, keep raw host paths unavailable rather than inventing a generic pass-through.
-
-### 6. Fake MCP fixture
-
-Extend `tests/fixtures/mcp_test_server.py` with deterministic `on_call_tool` handlers covering at least:
-
-- successful echo call;
-- delayed call for timeout cleanup;
-- explicit tool failure;
-- oversized response path.
-
-Keep the existing child-process exit marker so cleanup remains observable.
-
-## Tests / acceptance criteria
+## Acceptance criteria
 
 The slice is complete only when tests prove:
 
-1. Existing local FFmpeg/local-free behavior remains unchanged.
-2. `local_free_first` still never widens to remote or paid MCP offers.
-3. Exact bound local/free MCP tool can execute.
-4. Remote/free MCP requires the existing remote one-shot authorization.
-5. Potentially-paid/unknown-cost MCP requires the existing cost + unknown-cost acknowledgement.
-6. A token is consumed before invocation and cannot be replayed.
-7. Mutated input cannot reuse authorization.
-8. Exact bound tool is called with normalized arguments.
-9. Unbound discovered tool cannot execute.
-10. Renamed/missing bound tool fails closed.
-11. Timeout cancels/cleans up the child and writes failed provenance.
-12. MCP tool error writes failed provenance without leaking stderr/secrets.
-13. Oversized response is rejected deterministically.
-14. Success writes durable provenance under `tasks/`.
-15. Provenance contains no secrets or authorization token.
-16. Project archive contains provenance (project history) but no in-memory authorization grants.
-17. Linux and Windows CI remain green.
+1. Existing MCP bindings with no file contract behave exactly as before.
+2. Raw POSIX/Windows/UNC/file-URI host paths remain rejected.
+3. Declared project-relative file input resolves successfully through Project Store.
+4. Undeclared argument fields never receive path translation.
+5. `..` traversal and wrong-root references fail closed.
+6. Missing required project input fails before MCP process invocation.
+7. Authorization digest is computed from portable user input, not resolved host paths.
+8. Provenance contains the portable input digest and no resolved host path.
+9. Changing file-input contract invalidates the READY configuration digest and requires reconnect.
+10. Project archive contains no machine-specific resolved paths.
+11. Fake MCP integration passes on Linux and Windows.
+12. If Qwen core mapping is enabled, no DashScope/network/paid call is made in CI.
 
 ## Expected files
 
 Likely changes:
 
-- `uv_studio/mcp/client.py`
+- `uv_studio/mcp/models.py`
 - `uv_studio/mcp/manager.py`
-- `uv_studio/capabilities/adapters/mcp.py`
-- `uv_studio/capabilities/execution.py` or a new external execution/provenance module
-- `uv_studio/projects/store.py` (only if a small public atomic JSON task-record method is needed)
-- `uv_studio/api/capability_execution.py`
-- `tests/fixtures/mcp_test_server.py`
-- MCP client/binding tests
-- capability execution API tests
-- project/archive tests for provenance and token exclusion
+- `uv_studio/capabilities/adapters/mcp_execution.py`
+- `uv_studio/projects/store.py` only if a small additional safe resolver primitive is genuinely required
+- fake MCP fixture and MCP execution tests
+- optional trusted Qwen pack binding update after upstream verification
 - `project-context/PROJECT_STATE.md`
 - this file
-- architecture decision record if transport/provenance semantics become durable
+- architecture decision record if the file-input contract becomes durable
 
 ## Explicit non-goals
 
-- No real Qwen/DashScope call in tests or CI.
+- No generic host filesystem access.
+- No automatic inference of file arguments from tool schemas or field names.
+- No arbitrary command execution.
+- No paid Qwen/DashScope call in tests or CI.
 - No OpenClaw work in this slice.
-- No WSL bridge.
-- No provider-specific consent implementation.
-- No global paid-provider permission.
-- No arbitrary host-path or arbitrary command execution API.
-- No Stage 4 workflow expansion until generic MCP execution is proven safe.
+- No Stage 4 workflow expansion until Stage 3 external execution boundaries remain green on Linux and Windows.

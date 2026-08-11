@@ -3,40 +3,47 @@
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
 **Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
-**Active branch:** `stage-3/execution-consent-boundary`  
-**Main baseline:** `4108db23f7de67293a53d1005a119a015539c0aa`  
-**Branch status:** execution consent/cost boundary implemented; PR-specific Linux/Windows CI required before merge.
+**Active branch:** `stage-3/mcp-call-tool`  
+**Main baseline:** `416677c4ca758a01b0253c8880b44d44150a8cec`  
+**Open PR:** #14 — authorized MCP `call_tool()` execution and provenance  
+**Branch status:** implementation and tests complete; final Linux/Windows CI for the documentation-updated head is required before merge.
 
 ## Product architecture
 
 ```text
 Canonical Project
-  -> RecipeDefinition
-      -> ProductionPolicy
-      -> RecipeExecutionPlan
-          -> semantic capability IDs
-              -> CapabilityRegistry
-                  -> CapabilityOffer metadata
-                      -> SelectionPolicy
-                          -> ExecutionPreparation
-                              -> one-shot ExecutionAuthorization when required
-                                  -> Execution Adapter
+  -> RecipeDefinition / ProductionPolicy
+  -> RecipeExecutionPlan
+  -> semantic capability IDs
+  -> CapabilityRegistry
+  -> CapabilityOffer
+  -> SelectionPolicy
+  -> ExecutionPreparation
+  -> one-shot authorization when required
+  -> exact execution adapter
+      -> local bounded FFmpeg
+      -> exact MCP binding
+          -> running tasks/run_<id>.json
+          -> bounded short-lived call_tool()
+          -> succeeded/failed provenance
 
 Machine Studio Config
   -> MCPProfile
-      -> bounded stdio discovery
-          -> MCPToolDescriptor
-              -> explicit MCPToolBinding
-                  -> CapabilityOffer
+  -> bounded stdio discovery
+  -> MCPToolDescriptor
+  -> explicit MCPToolBinding
+  -> CapabilityOffer
 ```
 
 Permanent rules:
 
 - discovery/availability is not execution permission;
 - open-source repository license does not imply cloud execution is free;
+- local failure never silently widens into remote or paid execution;
 - machine commands/credential references are not portable project state;
 - Qwen-MM and OpenClaw remain optional peer integrations;
-- native Windows baseline must not require WSL2.
+- native Windows remains a first-class baseline and must not require WSL2;
+- authorization tokens are runtime state, never portable project state.
 
 ## Merged milestones
 
@@ -45,38 +52,21 @@ Permanent rules:
 - `dff8fc14...` — truthful RecipeExecutionPlan;
 - `7fb0ca88...` — semantic Capability Registry;
 - `4cbe383f...` — fail-closed selection + safe local FFprobe/FFmpeg execution;
-- `3e2b60329f7b8aa22fec38c012d703e3a8cca26d` — official-SDK generic direct MCP stdio discovery + explicit semantic bindings;
-- `4108db23f7de67293a53d1005a119a015539c0aa` — optional pinned Qwen-MM profile/binding pack (merged PR #12).
+- `3e2b60329f7b8aa22fec38c012d703e3a8cca26d` — official-SDK direct MCP stdio discovery + explicit semantic bindings;
+- `4108db23f7de67293a53d1005a119a015539c0aa` — optional pinned Qwen-MM profile/binding pack (PR #12);
+- `416677c4ca758a01b0253c8880b44d44150a8cec` — execution consent/cost boundary (PR #13).
 
-## Previous Stage 3 slice — optional Qwen-MM pack
+## Stable Stage 3 context — optional Qwen-MM pack
 
-### Fresh upstream verification
-
-Re-verified current `QwenLM/Qwen-MM-Plugins` on 2026-08-11.
+Verified upstream reference used by UV Studio:
 
 ```text
-commit:  7dfc08b7de8e621fc28bf9814e3d41a59b4595ae
+QwenLM/Qwen-MM-Plugins
+commit: 7dfc08b7de8e621fc28bf9814e3d41a59b4595ae
 license: Apache-2.0
 ```
 
-At verification time that commit was also current `main`.
-
-Current upstream requirements/constraints confirmed:
-
-- Python 3.12+;
-- `uv`;
-- FFmpeg for relevant local media operations;
-- current Windows support documented as WSL2-only, native Windows unsupported;
-- `core` local/basic media tools;
-- `api` Qwen/DashScope-backed multimodal/ASR tools plus separate self-hosted segmentation;
-- `video-edit` local workflow/skill material plus remote generation tools;
-- remote generation tools require `DASHSCOPE_API_KEY`.
-
-UV Studio templates pin the exact SHA rather than `main`.
-
-### Three independent trusted packs
-
-Added `uv_studio/integrations/qwen_mm.py` with:
+Trusted optional packs remain independent:
 
 ```text
 core
@@ -84,140 +74,40 @@ api
 video-edit
 ```
 
-No Qwen package is installed/launched during normal UV Studio startup.
+Profiles use fixed trusted `uvx --from <exact SHA> <entrypoint>` templates. UV Studio does not install or launch Qwen during ordinary startup, and generic arbitrary profile-command creation is absent.
 
-Profiles use fixed trusted `uvx --from <exact SHA> <entrypoint>` templates. Generic arbitrary profile command creation remains absent.
-
-### Core classification
-
-Verified current tools include:
+Important current classifications:
 
 ```text
-read_image
-read_video
-media_info
-visualize
-crop
-draw_bbox
-save_view
-```
+core.media_info -> media.probe
+  locality = local
+  cost     = free
 
-Initially bound only:
+Qwen/DashScope understanding + ASR
+  locality = remote
+  cost     = potentially_paid
 
-```text
-media_info -> media.probe
-locality   = local
-cost       = free
-```
-
-Other core tools remain intentionally unbound rather than being misrepresented as semantic `media.understand` or a not-yet-defined edit operation.
-
-### API classification
-
-Added provider-neutral semantic capability:
-
-```text
-speech.transcribe
-```
-
-Current bound API tools include multimodal understanding/OCR/grounding/Omni analysis and ASR.
-
-All Qwen/DashScope-backed API bindings are explicitly:
-
-```text
-locality = remote
-cost     = potentially_paid
-```
-
-Cloud profile stores only an environment reference to `DASHSCOPE_API_KEY`, never the resolved value.
-
-Current self-hosted `segmentation` remains intentionally unbound because its compute/locality/output semantics differ from the other cloud tools and do not yet map cleanly to an existing UV capability.
-
-### Video-edit generation classification
-
-Current upstream generation tools verified:
-
-```text
-qwen_image
-qwen_tts
-wan_s2v
-wan_t2v
-happyhorse
-```
-
-Bindings:
-
-```text
 qwen_image -> image.generate
 qwen_tts   -> speech.synthesize
 wan_t2v    -> video.generate
 wan_s2v    -> video.digital_human
+  locality = remote
+  cost     = potentially_paid
 ```
 
-All are:
+`happyhorse` and current self-hosted `segmentation` remain intentionally unbound because their contracts do not cleanly map to one current provider-neutral capability.
 
-```text
-locality = remote
-cost     = potentially_paid
-```
+`wan_s2v` remains the semantically correct supplied-audio digital-human candidate, but Qwen cloud execution is never selected implicitly.
 
-`happyhorse` remains unbound because its mixed generate/edit/reference contract does not cleanly map to one current provider-neutral capability.
+Current Qwen upstream documents Windows support through WSL2 rather than native Windows. UV Studio therefore fails closed when configuring that optional integration on native Windows; the native-Windows product baseline remains independent of Qwen/WSL.
 
-### Digital-human gap closed semantically
+Cloud profile persistence stores only an environment-variable reference to `DASHSCOPE_API_KEY`, never its resolved value. Full rationale: D-016 and `docs/integrations/QWEN_MM.md`.
 
-Current Qwen `wan_s2v` explicitly accepts portrait image + supplied audio and generates lip-synced digital-human video. Upstream marks its detection/generation path as billed.
+## Stable Stage 3 context — execution consent/cost boundary
 
-This matches UV Studio `video.digital_human` semantics better than pinned VideoClaw's product-promo workflow, which Stage 2 classified as partial because supplied speech/audio was not accepted.
+D-017 separates offer selection from permission to execute.
 
-Important: this is currently an **offer**, not execution permission. No Qwen/DashScope tool invocation is enabled.
-
-### Trusted Qwen integration API
-
-Added:
-
-```text
-GET  /api/uv/integrations/qwen-mm
-GET  /api/uv/integrations/qwen-mm/{pack_id}
-POST /api/uv/integrations/qwen-mm/{pack_id}/configure
-```
-
-`configure` can persist only a predefined pinned template. A posted arbitrary command cannot replace `uvx`, the pinned source SHA or entrypoint.
-
-On native Windows, trusted configuration fails closed with HTTP 409 because current Qwen upstream documents Windows as WSL2-only. Normal native-Windows UV Studio remains unaffected.
-
-### MCP environment verification
-
-Official MCP SDK v2 `stdio_client` was checked directly: it merges a small safe inherited environment allowlist (`PATH`, home/system variables, Windows executable lookup variables) with explicit `server.env`.
-
-Therefore Qwen's `uvx` remains discoverable through `PATH` while UV Studio passes only explicitly referenced secrets such as `DASHSCOPE_API_KEY`; arbitrary process secrets are not inherited wholesale.
-
-### Tests
-
-Added unit/API coverage for:
-
-- exact Qwen upstream SHA pin; no `.git@main`;
-- core `media_info` local/free classification;
-- cloud API/generation never classified free;
-- `speech.transcribe` provider-neutral capability;
-- `wan_s2v -> video.digital_human`;
-- `happyhorse`/`segmentation` intentional non-binding;
-- env-reference persistence without key values;
-- preserving unrelated MCP profiles;
-- native-Windows Qwen configuration fail-closed;
-- Qwen catalog remains secret-free and tool execution disabled;
-- arbitrary request body cannot replace the trusted profile command.
-
-Docs: `docs/integrations/QWEN_MM.md`. Decision: D-016.
-
-## Current Stage 3 slice — execution consent + cost boundary
-
-### Product-owned authorization contract
-
-Added `uv_studio/capabilities/authorization.py`.
-
-Selection and authorization are separate. `SelectionPolicy` still decides only which available offer is selected; `ExecutionPreparation` then records the exact selected execution intent and tells the caller which consent scopes are required before execution.
-
-Cost estimate states are versioned separately from `CostClass`:
+Cost estimate states are independent from `CostClass`:
 
 ```text
 known
@@ -233,128 +123,215 @@ free offer                    -> not_applicable
 potentially_paid / paid offer -> unknown
 ```
 
-UV Studio does not invent provider pricing. A future adapter may supply a trustworthy current known/bounded estimate without changing selection semantics.
-
 Consent scopes:
 
 ```text
-remote_execution  -> selected locality is remote/hybrid
-external_cost     -> cost_class is potentially_paid/paid
-unknown_cost      -> current estimate state is unknown
+remote_execution  -> locality is remote/hybrid
+external_cost     -> potentially_paid/paid
+unknown_cost      -> current price estimate is unknown
 ```
 
-Therefore free/remote requires remote permission but no payment consent, while a remote/potentially-paid offer with unknown current price requires all three acknowledgements.
+`OneShotAuthorizationStore` grants are:
 
-### Exact one-shot grant
+- random opaque tokens;
+- process-local;
+- short-lived;
+- one-shot;
+- bound to exact project + capability + offer + selection policy + canonical JSON input SHA-256;
+- consumed on replay/mismatch attempts;
+- never persisted to project files or archives.
 
-`OneShotAuthorizationStore` is deliberately process-local and in-memory.
-
-Each grant:
-
-- uses a cryptographically random opaque token;
-- expires after a short TTL;
-- is consumed once;
-- binds to exact project + capability + offer + selection policy + canonical JSON SHA-256 input digest;
-- fails closed on replay, expiry or mutated input;
-- is never written to portable project state or archives.
-
-A mismatched execution attempt consumes the token, preventing a rejected mutation from leaving a reusable grant behind.
-
-### Execution API boundary
-
-Added:
+API boundary:
 
 ```text
-POST /api/uv/projects/{project_id}/capabilities/{capability_id}/prepare-execution
-POST /api/uv/projects/{project_id}/capabilities/{capability_id}/authorize-execution
-POST /api/uv/projects/{project_id}/capabilities/{capability_id}/execute
+POST .../prepare-execution
+POST .../authorize-execution
+POST .../execute
 ```
 
-`prepare-execution` returns selection + structured locality/cost/consent facts. `authorize-execution` issues a one-shot token only after every required acknowledgement. `execute` consumes authorization before a non-local/non-free execution path can continue.
+Existing local/free execution stays token-free. There is no global reusable paid permission.
 
-Existing local/free behavior remains backward-compatible and requires no token.
+## Current Stage 3 slice — exact MCP invocation + provenance
 
-This slice intentionally does **not** add external transport invocation. An authorized non-local adapter still stops with `adapter_not_executable_yet`; the next slice can add MCP `call_tool()` behind the already-tested boundary.
+### Official SDK `call_tool()` transport
 
-### Tests
+`uv_studio/mcp/client.py` now supports one exact bounded tool call through the official MCP Python SDK v2.
 
-Added unit/API coverage for:
+Transport constraints:
 
-- local/free execution unchanged;
-- `local_free_first` still never widening to potentially-paid offers;
-- free/remote requiring only `remote_execution`;
-- paid/unknown requiring explicit `external_cost` + `unknown_cost`;
-- incomplete acknowledgements rejected;
+- request JSON limit: 1 MiB;
+- normalized response JSON limit: 4 MiB;
+- bounded by trusted profile startup + call/discovery timeout values;
+- one short-lived stdio child per call;
+- SDK cleanup is exercised on success, MCP tool error and timeout;
+- stderr remains in machine-local MCP log files;
+- returned SDK models are normalized to JSON-safe product data;
+- timeout, protocol, tool-error, request-limit and response-limit failures are structured.
+
+The fake MCP server now exposes deterministic success, slow, explicit-error and oversized-response tools for CI. No network/provider API is involved.
+
+### Exact binding resolution
+
+`MCPManager.resolve_execution_target()` permits execution only when:
+
+- selected offer resolves to exactly one configured `MCPToolBinding`;
+- capability ID still matches;
+- profile still exists and is enabled;
+- offer adapter/locality/cost/asynchronous/features still match binding metadata;
+- profile is READY;
+- exact bound `tool_name` exists exactly once in the READY snapshot;
+- current profile + all profile bindings hash to the same configuration digest captured at discovery.
+
+Changing tool name, cost/locality, profile command, environment references or another binding for that profile therefore requires reconnect before any invocation. No fuzzy remapping exists.
+
+### Authorization ordering
+
+The existing `execute` endpoint consumes D-017 authorization before MCP target resolution/invocation.
+
+Consequences:
+
+- local/free MCP executes without consent token;
+- remote/free still requires `remote_execution`;
+- potentially-paid/paid still requires `external_cost` and, while estimate is unknown, `unknown_cost`;
+- replayed or mutated-input tokens cannot reach MCP invocation;
+- native/non-MCP adapters remain separate.
+
+### Durable external run provenance
+
+Added atomic canonical project records:
+
+```text
+tasks/run_<uuid>.json
+```
+
+A record is written as `running` before MCP invocation and finalized to `succeeded` or `failed`.
+
+Persisted non-secret facts include:
+
+- schema version + run ID;
+- project/capability/offer/adapter IDs;
+- exact MCP profile/tool;
+- start/end timestamps;
+- authorization-required fact + consent scopes, never token;
+- cost class + cost-estimate snapshot;
+- portable normalized input digest;
+- success summary: response JSON byte count + SHA-256 only;
+- failure summary: controlled exception class/code only.
+
+Not persisted:
+
+- authorization token;
+- resolved environment-secret values;
+- raw stderr;
+- raw external error content;
+- raw provider response in provenance.
+
+Because `tasks/` is already canonical Project Store history, normal `.uvproj.zip` export includes provenance automatically while process-local authorization grants remain absent.
+
+### Host-path boundary
+
+Generic MCP argument pass-through does not translate project-relative files into absolute host paths.
+
+Until a binding explicitly declares project-file argument semantics, the MCP adapter rejects raw:
+
+- POSIX absolute paths;
+- Windows drive paths;
+- UNC paths;
+- `file://` URIs.
+
+Relative references such as `sources/clip.mp4` remain opaque JSON data and are not automatically resolved for the MCP child. This prevents the generic executor from becoming an arbitrary host-path bridge. The next slice owns explicit safe translation.
+
+### Tests added
+
+Unit tests cover:
+
+- real stdio `call_tool` success + child cleanup;
+- timeout + cleanup;
+- explicit MCP tool error;
+- oversized request rejection before spawn;
+- oversized response rejection;
+- exact READY binding resolution;
+- config drift requiring reconnect;
+- missing READY snapshot rejection;
+- absolute POSIX/Windows/UNC/file-URI rejection.
+
+API integration tests cover:
+
+- exact local/free MCP execution;
+- remote/potentially-paid authorization;
 - one-shot replay rejection;
-- exact normalized input binding;
-- mismatched input consuming the token;
-- token expiry;
-- structured `consent_required`, `acknowledgement_required` and `authorization_invalid` API behavior.
+- durable success provenance;
+- durable failed provenance on tool error;
+- durable failed provenance on timeout;
+- project archive includes provenance but not authorization token.
 
-Decision: `project-context/decisions/D-017-execution-authorization.md`.
+No test invokes Qwen, DashScope or another paid provider.
+
+Decision: `project-context/decisions/D-018-authorized-mcp-invocation.md`.
 
 ## Verification status
 
-PR #12 is merged into `main` at `4108db23f7de67293a53d1005a119a015539c0aa`.
+PR #13 is merged into `main` at `416677c4ca758a01b0253c8880b44d44150a8cec` after full Ubuntu/Windows green CI.
 
-For the current execution-consent branch, the new Python module, API replacement and tests were syntax-parsed before commit. The ChatGPT container cannot clone GitHub over its outbound network, so the authoritative full verification is the PR-specific GitHub Actions matrix.
+PR #14 is open. A current-head PR matrix is required before merge because documentation/safety commits were added after the initial implementation run.
 
-Required before merge:
+The latest observed current-slice Ubuntu bootstrap/unit job passed, including compilation and unit tests. Final acceptance still requires all four PR jobs on the final head:
 
-- Ubuntu bootstrap/unit success;
-- Windows bootstrap/unit success;
-- Ubuntu API integration/HTTP/frontend checks success;
-- Windows API integration/HTTP smoke success.
+- Ubuntu bootstrap/unit;
+- Windows bootstrap/unit;
+- Ubuntu API integration + HTTP smoke + frontend build;
+- Windows API integration + HTTP smoke + frontend build.
 
-No test in this slice invokes Qwen, DashScope or another paid provider.
+## What works now on this branch
 
-## What works now
-
-- durable portable projects;
+- durable portable projects and archives;
 - provider-neutral recipes/policies/plans;
 - semantic capabilities + explicit cost/locality offers;
-- fail-closed local execution;
+- fail-closed local FFmpeg execution;
 - generic official-SDK MCP discovery;
 - explicit semantic MCP binding;
 - optional pinned Qwen-MM profile/binding templates;
-- auditable local/free vs remote/potentially-paid classification;
-- a semantically correct potential `digital_human` implementation via Wan S2V;
-- provider-neutral execution preparation with explicit cost-estimate state;
-- free/remote and non-free/unknown-cost consent scopes;
-- exact short-lived one-shot authorization bound to normalized input;
-- backward-compatible local/free execution without consent friction;
+- explicit execution preparation/cost/consent;
+- exact short-lived one-shot authorization;
+- generic exact MCP `call_tool()` execution;
+- stale/config-mutated MCP bindings fail closed;
+- durable non-secret success/failure MCP provenance;
+- project archive preservation of external run history;
+- raw host paths rejected at the generic MCP boundary;
 - baseline startup/testing without DashScope, Qwen, WSL or OpenClaw.
 
 ## Not implemented yet
 
-- MCP `call_tool` execution;
-- persistent per-run execution provenance for external tools;
-- MCP binding-owned project file argument translation;
-- Qwen cloud invocation;
-- WSL bridge for Qwen on native Windows;
+- binding-owned project-file argument translation;
+- Qwen core project-file execution through MCP;
+- Qwen/DashScope cloud invocation from UV Studio production workflows;
+- WSL bridge for optional Qwen integration on native Windows;
 - OpenClaw adapter;
-- generic general-video executor;
+- generic general-video executor beyond current semantic offers;
 - Stage 4 range editing, dubbing and music workflows.
 
 ## Current invariants
 
 1. Recipe semantics never name Qwen/provider/runtime.
 2. Discovery/offer metadata never equals execution permission.
-3. `local_free_first` never selects Qwen remote/potentially-paid offers.
+3. `local_free_first` never widens to remote or paid-capable offers.
 4. Qwen configuration is optional machine state, not project state.
 5. Raw API-key values are not persisted or returned.
 6. Qwen templates pin exact upstream SHA/tool names; no fuzzy remapping.
-7. Current native Windows does not claim Qwen support and does not require WSL.
-8. Qwen cloud tool invocation remains disabled.
-9. OpenClaw remains optional and unused in the Qwen path.
-10. Remote/non-free execution must pass the product-owned consent/cost boundary first.
-11. There is no global reusable paid-execution permission.
-12. Unknown provider price stays unknown and requires explicit acknowledgement.
-13. One-shot authorization tokens are runtime state and must never enter portable project state.
+7. Native Windows does not require Qwen or WSL.
+8. OpenClaw remains optional and unused in the MCP/Qwen direct path.
+9. Remote/non-free execution must pass the product-owned consent/cost boundary first.
+10. There is no global reusable paid-execution permission.
+11. Unknown provider price stays unknown and requires explicit acknowledgement.
+12. One-shot authorization tokens never enter portable project state.
+13. An MCP READY snapshot is invalid for execution after profile/binding configuration drift.
+14. Unbound discovered MCP tools are non-executable.
+15. Generic MCP execution never auto-translates arbitrary host paths.
+16. External invocation provenance contains non-secret audit facts, not credentials/tokens/stderr.
 
 ## Next slice
 
-Implement **generic authorized MCP `call_tool()` execution plus durable external invocation provenance**, tested first with the local fake MCP server. Do not make real paid Qwen calls in CI. See `NEXT_TASK.md`.
+Implement **explicit binding-owned project-file argument translation**, tested first against the fake MCP server and only then applied narrowly to a freshly re-verified Qwen core binding if its pinned schema still matches. See `NEXT_TASK.md`.
 
 ## Development invariant
 

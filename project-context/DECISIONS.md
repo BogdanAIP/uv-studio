@@ -211,7 +211,30 @@ Consequences:
 - mixed/mismatched tools such as current `happyhorse` and `segmentation` remain intentionally unbound;
 - cloud profiles persist only `DASHSCOPE_API_KEY` references, never resolved values;
 - current upstream WSL2-only Windows support is fail-closed for native-Windows Qwen configuration;
-- Qwen profile templates pin an exact SHA and never fuzzy-remap tool drift;
-- MCP tool invocation is still disabled.
+- Qwen profile templates pin an exact SHA and never fuzzy-remap tool drift.
 
 Full rationale: `project-context/decisions/D-016-qwen-mm-pack.md`.
+
+---
+
+## D-017 — External execution consent is product-owned, exact and one-shot
+Status: accepted  
+Date: 2026-08-11
+
+Decision: selection and external execution authorization are separate. UV Studio prepares the exact selected execution intent, reports locality/cost-estimate facts, requires semantic acknowledgements (`remote_execution`, `external_cost`, `unknown_cost`) when applicable, and issues only a short-lived one-shot runtime grant bound to the normalized input digest.
+
+Reason: provider-specific consent would fragment safety behavior, while discovery/selection alone never proves permission to contact an external service or incur cost.
+
+Consequences: local/free stays frictionless; remote/non-free execution fails closed without the required acknowledgement; unknown provider price remains explicitly unknown; grants are never portable project state. Full rationale: `project-context/decisions/D-017-execution-authorization.md`.
+
+---
+
+## D-018 — MCP invocation is exact, short-lived and provenance-recorded
+Status: accepted  
+Date: 2026-08-11
+
+Decision: an MCP tool may execute only through an exact configured binding that still matches an unchanged READY configuration digest, after D-017 authorization. Each invocation uses a bounded short-lived official-SDK stdio session and writes durable non-secret running/success/failure provenance under project `tasks/`.
+
+Reason: machine bindings can drift after discovery and external calls may have cost or side effects. Execution must therefore be identity-stable, bounded and auditable without persisting secrets or consent tokens.
+
+Consequences: no fuzzy tool remapping; configuration changes require reconnect; request/response sizes and timeouts are bounded; raw stderr/tool errors are excluded from provenance; generic MCP execution rejects raw host paths until a binding explicitly owns safe Project Store file translation. Full rationale: `project-context/decisions/D-018-authorized-mcp-invocation.md`.
