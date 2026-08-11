@@ -47,6 +47,13 @@ def _parse_optional_float(value: Any) -> float | None:
         return None
 
 
+def _canonical_project_path(value: str) -> str:
+    try:
+        return validate_project_relative_path(value)
+    except ProjectValidationError as exc:
+        raise InvalidCapabilityInput(str(exc)) from exc
+
+
 def _ffconcat_quote(path: Path) -> str:
     # FFmpeg concat files understand forward-slash absolute paths on Windows too.
     # Single quotes are escaped using the concat demuxer's shell-like quoting form.
@@ -126,7 +133,7 @@ class LocalFFmpegAdapter:
         raw_path = payload.get("path")
         if not isinstance(raw_path, str):
             raise InvalidCapabilityInput("media.probe requires string field 'path'")
-        canonical_path = validate_project_relative_path(raw_path)
+        canonical_path = _canonical_project_path(raw_path)
         try:
             source = self.store.resolve_project_file(
                 project_id,
@@ -217,7 +224,7 @@ class LocalFFmpegAdapter:
         for raw_path in raw_inputs:
             if not isinstance(raw_path, str):
                 raise InvalidCapabilityInput("every timeline.assemble input path must be a string")
-            canonical = validate_project_relative_path(raw_path)
+            canonical = _canonical_project_path(raw_path)
             try:
                 resolved = self.store.resolve_project_file(
                     project_id,
@@ -232,7 +239,7 @@ class LocalFFmpegAdapter:
             input_paths.append(resolved)
             canonical_inputs.append(canonical)
 
-        canonical_output = validate_project_relative_path(raw_output)
+        canonical_output = _canonical_project_path(raw_output)
         try:
             output_path = self.store.resolve_project_file(
                 project_id,
