@@ -3,21 +3,37 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { getUVProject, projectArchiveUrl, UVProject } from '@/lib/projectsApi';
+import {
+  getProjectExecutionPlan,
+  getUVProject,
+  ProjectExecutionPlan,
+  projectArchiveUrl,
+  UVProject,
+} from '@/lib/projectsApi';
+
+const compatibilityLabels: Record<ProjectExecutionPlan['compatibility'], string> = {
+  available: 'Совместимый процесс найден',
+  partial: 'Частичная совместимость',
+  unavailable: 'Процесс пока недоступен',
+};
 
 export default function ProjectPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = useMemo(() => decodeURIComponent(params.projectId), [params.projectId]);
   const [project, setProject] = useState<UVProject | null>(null);
+  const [executionPlan, setExecutionPlan] = useState<ProjectExecutionPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setProject(null);
+    setExecutionPlan(null);
     setError(null);
-    getUVProject(projectId)
-      .then(value => {
-        if (active) setProject(value);
+    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])
+      .then(([projectValue, planValue]) => {
+        if (!active) return;
+        setProject(projectValue);
+        setExecutionPlan(planValue);
       })
       .catch(err => {
         if (active) setError(err instanceof Error ? err.message : 'Не удалось загрузить проект');
@@ -34,7 +50,7 @@ export default function ProjectPage() {
 
         {error ? (
           <div className="mt-8 rounded-xl border border-red-900/70 bg-red-950/40 p-5 text-red-200">{error}</div>
-        ) : !project ? (
+        ) : !project || !executionPlan ? (
           <div className="mt-8 text-slate-400">Загрузка проекта…</div>
         ) : (
           <>
@@ -42,7 +58,7 @@ export default function ProjectPage() {
               <p className="font-mono text-xs text-slate-600">{project.project_id}</p>
               <h1 className="mt-3 text-4xl font-semibold tracking-tight">{project.title}</h1>
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">{project.recipe_id}</span>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">{executionPlan.recipe_title}</span>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-slate-500">schema v{project.schema_version}</span>
               </div>
             </header>
@@ -54,10 +70,60 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
+            <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-slate-500">Готовность процесса</p>
+                  <h2 className="mt-2 text-xl font-medium">{compatibilityLabels[executionPlan.compatibility]}</h2>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs ${
+                  executionPlan.compatibility === 'available'
+                    ? 'bg-emerald-950 text-emerald-300'
+                    : executionPlan.compatibility === 'partial'
+                      ? 'bg-amber-950 text-amber-300'
+                      : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {executionPlan.compatibility}
+                </span>
+              </div>
+              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">{executionPlan.reason}</p>
+
+              {executionPlan.input_slots.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-slate-200">Нужные материалы</h3>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {executionPlan.input_slots.map(slot => (
+                      <div key={slot.slot_id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-slate-200">{slot.title}</span>
+                          <span className="text-xs text-slate-600">{slot.kind}</span>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">{slot.required ? 'Обязательно' : 'Необязательно'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {executionPlan.runtime_config_slots.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-slate-200">Настройки выполнения</h3>
+                  <p className="mt-1 text-xs text-slate-500">Здесь указаны типы необходимых возможностей, а не конкретные платные поставщики.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {executionPlan.runtime_config_slots.map(slot => (
+                      <span key={slot.slot_id} className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300">
+                        {slot.title} · {slot.capability_id}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+
             <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-              <h2 className="text-lg font-medium">Рабочая область проекта</h2>
+              <h2 className="text-lg font-medium">Проект и восстановление</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Канонический проект выбран по стабильному UV Studio ID. Его можно сохранить целиком в переносимый архив и восстановить на другой установке UV Studio без зависимости от старых VideoClaw session ID.
+                Проект хранится по стабильному UV Studio ID и может быть перенесён целиком в `.uvproj.zip`. Даже если тип задачи пока нельзя выполнить в этой сборке, данные проекта остаются доступными.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <a
@@ -67,12 +133,14 @@ export default function ProjectPage() {
                 >
                   Скачать архив проекта
                 </a>
-                <Link
-                  href="/"
-                  className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-                >
-                  Открыть существующие производственные инструменты
-                </Link>
+                {executionPlan.can_prepare_native_execution && (
+                  <Link
+                    href="/"
+                    className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                  >
+                    Открыть существующие производственные инструменты
+                  </Link>
+                )}
               </div>
             </section>
           </>
