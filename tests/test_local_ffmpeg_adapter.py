@@ -156,9 +156,10 @@ class LocalFFmpegAdapterTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(len(calls), 4)
-        self.assertEqual(calls[0][0][0], "fake-ffprobe")
-        ffmpeg_calls = [item[0] for item in calls[1:]]
+        ffprobe_calls = [item[0] for item in calls if item[0][0] == "fake-ffprobe"]
+        ffmpeg_calls = [item[0] for item in calls if item[0][0] == "fake-ffmpeg"]
+        self.assertEqual(len(ffprobe_calls), 4)
+        self.assertEqual(len(ffmpeg_calls), 3)
         expected_segments = (
             ("0us", "2000000us"),
             ("2000000us", "2000000us"),
