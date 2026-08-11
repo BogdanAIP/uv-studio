@@ -40,7 +40,13 @@ class MCPStdioDiscoveryClientTests(unittest.TestCase):
                     tools = await client.discover(profile)
                     self.assertEqual(
                         [tool.name for tool in tools],
-                        ["echo_metadata", "cloud_generate"],
+                        [
+                            "echo_metadata",
+                            "cloud_generate",
+                            "slow_tool",
+                            "error_tool",
+                            "large_result",
+                        ],
                     )
                     self.assertTrue(exit_file.is_file())
                     self.assertEqual(exit_file.read_text(encoding="utf-8").strip(), "stopped")
