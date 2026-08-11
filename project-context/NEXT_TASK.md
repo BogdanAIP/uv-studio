@@ -1,272 +1,145 @@
 # Next Task
 
-**Primary target:** after the optional Qwen-MM pack PR merges, implement the **MCP/provider execution consent + cost boundary**. Test execution with the local fake MCP server first. Do not make real paid Qwen/DashScope calls in CI.
+Updated: 2026-08-11
 
-## Why this comes next
+## Primary target
 
-UV Studio now has:
+Implement **generic authorized MCP `call_tool()` execution plus durable external invocation provenance**.
 
-```text
-semantic capability
-  -> capability offers
-      -> fail-closed selection policy
-      -> safe local FFmpeg execution
-      -> generic MCP discovery
-      -> explicit MCP tool binding
-      -> optional pinned Qwen-MM offers
-```
+The execution consent/cost boundary is now a separate product-owned layer. This slice must consume that boundary rather than re-implementing consent inside MCP or Qwen-specific code.
 
-The missing boundary is the one that turns a discovered/bound external offer into a permitted invocation **without allowing implicit spending**.
+Test the transport against the repository's local fake MCP server first. **Do not make real paid Qwen/DashScope calls in CI.**
 
-D-014 already says metadata is not execution permission. This slice implements that rule for MCP/provider calls.
+## Required implementation
 
-## 1. Define external execution authorization
+### 1. Generic MCP call transport
 
-Create a product-owned, versioned authorization/request model. It should distinguish at least:
+Extend the official-SDK stdio client with a bounded `call_tool()` path:
 
-```text
-free/local
-free/remote
-potentially_paid
-paid
-unknown_cost
-```
+- invoke only an exact tool name supplied by an already-configured `MCPToolBinding`;
+- use the profile's bounded process/session timeouts;
+- preserve SDK cancellation and cleanup semantics;
+- never keep a hidden resident MCP child process after the call;
+- keep stderr private in machine-local logs;
+- bound serialized request and response sizes;
+- normalize successful output into JSON-safe product-owned data;
+- surface structured timeout, protocol, tool-error and response-limit failures.
 
-Do not encode Qwen-specific logic into the authorization model.
+Do not add a generic arbitrary command/tool execution API.
 
-A useful shape may include:
+### 2. Exact offer -> binding resolution
 
-```text
-capability_id
-offer_id
-selection_policy
-cost_class
-cost_estimate
-cost_currency
-cost_estimate_state
-consent_mode
-consent_token / one-shot authorization reference
-project_id
-run_id
-```
+Add product-owned execution resolution for `mcp.<binding_id>` offers:
 
-Exact field names may change, but cost knowledge and user consent must be explicit.
+- the offer must map to exactly one configured binding;
+- binding capability ID must equal the selected capability;
+- binding profile must exist and be enabled;
+- the bound tool must still exist in the latest ready discovery snapshot;
+- renamed/missing tools fail closed;
+- unbound discovered tools remain non-executable.
 
-## 2. Fail closed on unknown or paid-capable cost
+No fuzzy tool-name remapping.
 
-Initial policy:
+### 3. Authorization ordering
 
-- local/free remains executable by existing rules;
-- remote/free requires explicit remote-execution permission but no payment consent;
-- `potentially_paid`, `paid` or unknown-cost external tools require an explicit **one-shot** user authorization before invocation;
-- no remembered global "always allow paid" switch in the first version;
-- no automatic fallback from local failure into a paid offer;
-- no invocation when price is unknown unless the authorization explicitly acknowledges unknown cost.
+MCP invocation may start **only after** the existing execution preparation/authorization layer succeeds.
 
-The API must return a structured `consent_required` response rather than silently invoking the tool.
+Expected behavior:
 
-## 3. Cost estimate contract
+- local/free MCP: no consent token required;
+- remote/free MCP: explicit `remote_execution` one-shot grant;
+- `potentially_paid` / `paid`: explicit `external_cost` grant;
+- unknown current price: explicit `unknown_cost` acknowledgement too;
+- no local failure -> paid fallback;
+- no global reusable paid permission.
 
-Do not invent prices.
+### 4. Durable invocation provenance
 
-Support an estimate state such as:
+Persist a small versioned JSON run record beneath the canonical project's `tasks/` directory for every external invocation attempt after authorization.
 
-```text
-known
-bounded
-unknown
-not_applicable
-```
+Minimum non-secret fields:
 
-A provider adapter may later supply:
+- schema version;
+- `run_id`;
+- `project_id`;
+- semantic `capability_id`;
+- selected `offer_id` / `adapter_id`;
+- MCP `profile_id` / exact `tool_name`;
+- start/end timestamps;
+- authorization fact/scope (never the token itself);
+- cost-class + cost-estimate snapshot;
+- normalized input digest;
+- status (`running`, `succeeded`, `failed`);
+- result references/summary when safe;
+- structured error class/code when failed.
 
-- fixed known price;
-- upper bound;
-- estimated range;
-- unknown.
+The record must contain no credential values, authorization tokens, resolved secret environment values or raw stderr.
 
-For the first slice, fake MCP fixtures can expose deterministic test metadata. Qwen cloud offers may remain `unknown` until an auditable current pricing adapter exists.
+Write failure provenance too. Use atomic Project Store writes.
 
-Never treat `potentially_paid` as free merely because no estimate is available.
+### 5. Project-scoped external file inputs
 
-## 4. One-shot authorization store
+Do not expose arbitrary host filesystem paths.
 
-Use UV Studio machine/runtime state, not portable project state, for ephemeral authorization tokens.
+If a binding accepts project file inputs, the binding/adapter must explicitly own which argument fields are file references and resolve them through `ProjectStore.resolve_project_file(...)` with appropriate allowed roots. If no binding currently needs file translation, keep raw host paths unavailable rather than inventing a generic pass-through.
 
-Requirements:
+### 6. Fake MCP fixture
 
-- random opaque token;
-- bound to exact project + capability + offer + normalized input digest;
-- one use only;
-- short expiration;
-- not written into `.uvproj.zip`;
-- cannot authorize a different tool/input after mutation;
-- no raw secret credentials inside token/public API.
+Extend `tests/fixtures/mcp_test_server.py` with deterministic `on_call_tool` handlers covering at least:
 
-If a simpler signed in-memory grant is safer than persistence, prefer it initially.
+- successful echo call;
+- delayed call for timeout cleanup;
+- explicit tool failure;
+- oversized response path.
 
-## 5. Add actual generic MCP tool invocation
+Keep the existing child-process exit marker so cleanup remains observable.
 
-Only after authorization exists, extend the official SDK adapter with a bounded `call_tool` path.
+## Tests / acceptance criteria
 
-Requirements:
+The slice is complete only when tests prove:
 
-- exact discovered/bound tool only;
-- no fuzzy tool resolution;
-- bounded call timeout;
-- official SDK cancellation/cleanup;
-- no resident child process required initially;
-- normalized JSON-serializable arguments;
-- strict maximum request/response sizes;
-- child stderr remains private;
-- structured tool error handling;
-- external invocation provenance recorded.
-
-Use the existing local MCP fixture for all execution tests.
-
-## 6. Project-scoped external inputs/outputs
-
-Do not let MCP tool arguments become arbitrary host filesystem access through UV Studio.
-
-Where a binding accepts project files:
-
-- resolve project-relative paths through Project Store;
-- binding/adapter decides which input fields are file paths;
-- only allowed project roots;
-- do not expose canonical project directory paths to APIs unnecessarily;
-- imported/generated output must be copied/registered into canonical project artifacts before being considered durable.
-
-Do not attempt a universal automatic path-rewriter based on field names.
-
-## 7. Invocation provenance
-
-Every allowed external execution should produce durable run metadata containing at least:
-
-```text
-run_id
-project_id
-capability_id
-offer_id
-adapter/profile/tool identity
-started_at/completed_at
-selection/authorization mode
-cost estimate snapshot
-status
-input digest
-result/artifact references
-error class if failed
-```
-
-Do not persist secret values or full sensitive provider payloads by default.
-
-Reuse Project Store `tasks/` or introduce a small versioned run record only if needed; do not add a database without measured need.
-
-## 8. API shape
-
-Prefer a two-step explicit flow for paid-capable tools:
-
-```text
-POST /api/uv/projects/{project}/capabilities/{capability}/prepare-execution
-  -> selected offer + cost state + consent_required
-
-POST /api/uv/projects/{project}/capabilities/{capability}/authorize-execution
-  -> one-shot grant
-
-POST /api/uv/projects/{project}/capabilities/{capability}/execute
-  -> grant required when policy says so
-```
-
-Exact endpoint split may be simplified, but a single call must not both request and silently assume paid consent.
-
-Existing free/local execution compatibility should remain stable.
-
-## 9. Qwen boundary
-
-Do not make a real DashScope call in this slice unless the user later explicitly requests testing with credentials and understands potential cost.
-
-For current Qwen packs:
-
-```text
-core.media_info             -> local/free metadata offer
-Qwen API tools              -> remote/potentially_paid
-qwen_image/qwen_tts/wan_*   -> remote/potentially_paid
-```
-
-`wan_s2v` may become an executable digital-human offer only after this consent boundary works generically.
-
-Qwen price remains unknown unless separately verified from current official provider pricing; unknown cost must require explicit acknowledgement.
-
-## 10. OpenClaw boundary
-
-Do not add OpenClaw during this slice.
-
-The authorization/cost contract must be reusable by a future OpenClaw adapter without making it mandatory.
-
-## 11. Tests
-
-Use the local official-SDK MCP fixture. Extend it with deterministic tools such as:
-
-```text
-free_echo
-remote_free_echo
-paid_echo
-large_result
-slow_tool
-error_tool
-```
-
-Cover at least:
-
-- free/local existing FFmpeg path still works unchanged;
-- `local_free_first` still never widens to remote/paid;
-- remote/free external invocation requires correct remote permission;
-- potentially-paid/unknown-cost tool returns consent-required before invocation;
-- one-shot authorization works exactly once;
-- expired authorization rejected;
-- grant bound to exact project/offer/input digest;
-- altered input after authorization rejected;
-- unknown-cost requires explicit acknowledgement;
-- MCP `call_tool` success through real local stdio fixture;
-- MCP tool timeout/error cleans process and creates failure provenance;
-- response-size limit enforced;
-- unbound tool cannot be invoked even if discovered;
-- missing/renamed tool fails closed;
-- public execution/run records contain no resolved API keys;
-- project archives do not contain ephemeral consent tokens;
-- Linux + Windows unit/API/HTTP/frontend CI green.
-
-## Architecture decisions to preserve
-
-- D-011: adapters are peers; OpenClaw optional.
-- D-012: Qwen-MM optional; no mandatory DashScope.
-- D-013: semantic capability != offer.
-- D-014: metadata != execution permission.
-- D-015: MCP discovery is explicit and safe.
-- D-016: Qwen pack is pinned, optional, and per-tool cost classified.
-
-## What NOT to do
-
-- no "allow all paid providers" global switch;
-- no implicit spend after selection fallback;
-- no price guessing;
-- no generic arbitrary MCP tool endpoint by raw tool name;
-- no fuzzy binding;
-- no raw host paths from external callers;
-- no secret values in run records/API/projects;
-- no database unless measured need appears;
-- no real paid CI calls;
-- no OpenClaw dependency;
-- no native-Windows Qwen claim while upstream remains WSL2-only.
-
-## Acceptance criteria
-
-- external execution cannot occur without a semantic binding and policy approval;
-- paid-capable/unknown-cost execution cannot occur without explicit one-shot authorization;
-- authorization is bound to exact execution intent and cannot be replayed;
-- real local MCP `call_tool` is cross-platform tested through official SDK;
-- failures/timeouts leave no orphan process;
-- provenance is durable and secret-free;
-- current Qwen cloud offers remain non-executed in CI;
-- all existing local/free behavior remains green on Linux and Windows.
-
-After that, enable individual external capabilities incrementally, beginning with operations whose contracts/costs are well understood, and then move toward Stage 4 existing-video workflows.
+1. Existing local FFmpeg/local-free behavior remains unchanged.
+2. `local_free_first` still never widens to remote or paid MCP offers.
+3. Exact bound local/free MCP tool can execute.
+4. Remote/free MCP requires the existing remote one-shot authorization.
+5. Potentially-paid/unknown-cost MCP requires the existing cost + unknown-cost acknowledgement.
+6. A token is consumed before invocation and cannot be replayed.
+7. Mutated input cannot reuse authorization.
+8. Exact bound tool is called with normalized arguments.
+9. Unbound discovered tool cannot execute.
+10. Renamed/missing bound tool fails closed.
+11. Timeout cancels/cleans up the child and writes failed provenance.
+12. MCP tool error writes failed provenance without leaking stderr/secrets.
+13. Oversized response is rejected deterministically.
+14. Success writes durable provenance under `tasks/`.
+15. Provenance contains no secrets or authorization token.
+16. Project archive contains provenance (project history) but no in-memory authorization grants.
+17. Linux and Windows CI remain green.
+
+## Expected files
+
+Likely changes:
+
+- `uv_studio/mcp/client.py`
+- `uv_studio/mcp/manager.py`
+- `uv_studio/capabilities/adapters/mcp.py`
+- `uv_studio/capabilities/execution.py` or a new external execution/provenance module
+- `uv_studio/projects/store.py` (only if a small public atomic JSON task-record method is needed)
+- `uv_studio/api/capability_execution.py`
+- `tests/fixtures/mcp_test_server.py`
+- MCP client/binding tests
+- capability execution API tests
+- project/archive tests for provenance and token exclusion
+- `project-context/PROJECT_STATE.md`
+- this file
+- architecture decision record if transport/provenance semantics become durable
+
+## Explicit non-goals
+
+- No real Qwen/DashScope call in tests or CI.
+- No OpenClaw work in this slice.
+- No WSL bridge.
+- No provider-specific consent implementation.
+- No global paid-provider permission.
+- No arbitrary host-path or arbitrary command execution API.
+- No Stage 4 workflow expansion until generic MCP execution is proven safe.
