@@ -58,6 +58,8 @@ class MCPStdioDiscoveryClient:
         log_path = self.config_store.stderr_log_path(profile.profile_id)
         log_handle = log_path.open("w", encoding="utf-8", errors="replace")
         session_timeout = profile.startup_timeout_sec + profile.discovery_timeout_sec
+        result = None
+        pending_error: MCPDiscoveryError | None = None
         try:
             try:
                 # Keep only a coarse whole-session fail-safe outside the SDK.
@@ -72,26 +74,39 @@ class MCPStdioDiscoveryClient:
                             result = await client.list_tools()
                         except MCPError as exc:
                             if getattr(exc.error, "code", None) == REQUEST_TIMEOUT:
-                                raise MCPDiscoveryTimeout(
+                                pending_error = MCPDiscoveryTimeout(
                                     f"MCP profile {profile.profile_id!r} timed out while listing tools"
-                                ) from exc
-                            raise MCPDiscoveryError(
+                                )
+                            else:
+                                pending_error = MCPDiscoveryError(
+                                    f"MCP profile {profile.profile_id!r} tool discovery failed "
+                                    f"(MCPError code={getattr(exc.error, 'code', 'unknown')})"
+                                )
+                        except Exception as exc:
+                            # Do not raise through Client.__aexit__: the SDK owns
+                            # nested AnyIO task groups and should unwind them first.
+                            pending_error = MCPDiscoveryError(
                                 f"MCP profile {profile.profile_id!r} tool discovery failed "
-                                f"(MCPError code={getattr(exc.error, 'code', 'unknown')})"
-                            ) from exc
-            except MCPDiscoveryTimeout:
-                raise
-            except MCPDiscoveryError:
-                raise
+                                f"({type(exc).__name__})"
+                            )
             except TimeoutError as exc:
                 raise MCPDiscoveryTimeout(
                     f"MCP profile {profile.profile_id!r} discovery session timed out"
                 ) from exc
+            except MCPDiscoveryError:
+                raise
             except Exception as exc:
                 raise MCPDiscoveryError(
                     f"MCP profile {profile.profile_id!r} could not complete discovery "
                     f"({type(exc).__name__})"
                 ) from exc
+
+            if pending_error is not None:
+                raise pending_error
+            if result is None:
+                raise MCPDiscoveryError(
+                    f"MCP profile {profile.profile_id!r} completed without a tool-list result"
+                )
 
             raw_tools = list(result.tools)
             if len(raw_tools) > MAX_MCP_DISCOVERED_TOOLS:
