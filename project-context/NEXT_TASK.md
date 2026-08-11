@@ -1,22 +1,24 @@
 # Next Task
 
+<!-- uv-next-slice: stage-4-range-continuity-brief -->
+
 Updated: 2026-08-11
 
 ## Gate first
 
-Do not start the next implementation slice until PR #19 — **deterministic exact range reinsertion foundation** — has:
+PR #19 — **deterministic exact range reinsertion foundation** — was independently audited and merged to `main` as `f9d850d6fb2ea5fbd84d071752139e151d494ea4` after its exact final head passed the complete Linux/Windows matrix.
 
-- one frozen final head;
-- Ubuntu bootstrap/unit green;
-- Windows bootstrap/unit green;
-- Ubuntu API integration + real HTTP smoke + frontend build green;
-- Windows API integration + real HTTP smoke + frontend build green;
+Do not start the product slice until the active agent-development guardrail slice in `ACTIVE_SLICE.json` has:
+
+- one coordinator-owned final head;
+- the `development-context` contract green;
+- Ubuntu and Windows bootstrap/unit green;
+- Ubuntu and Windows API + real HTTP smoke + frontend build green;
 - no unresolved review threads;
-- D-022 marked accepted;
-- final diff/security audit complete;
+- D-023 accepted;
 - merge to `main` confirmed.
 
-If PR #19 is not merged, continue/fix PR #19 rather than opening a parallel Stage 4 branch.
+If that process slice is not merged, continue/fix it rather than opening a parallel Stage 4 branch.
 
 ## Primary target after PR #19
 

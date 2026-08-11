@@ -2,6 +2,23 @@
 
 The roadmap targets the full product. Early stages create useful working slices, but the architecture must remain compatible with later stages.
 
+## Initial product completion gate
+
+The initial UV Studio program is complete when Stage 9 produces a distributable Windows release and the release candidate proves all five permanent regression scenarios through user-facing workflows rather than manual API calls.
+
+The completion gate requires:
+
+- clean-machine installation without a separately prepared Python, Node/npm or FFmpeg toolchain;
+- canonical projects that survive restart, export/import, upgrade, backup and recovery;
+- complete UI paths for general video, narrated video, music-video excerpt, dubbing and targeted existing-video range edit;
+- local/free baseline implementations wherever a viable local path exists, with remote/paid providers remaining explicit optional choices;
+- real media fixtures and evidence-based output checks on Windows and Linux;
+- cancellation, diagnostics, migration and rollback behavior suitable for user data;
+- license/security/dependency audit and signed release artifacts;
+- no mandatory dependency on VideoClaw, Qwen, MCP, a particular model vendor or a paid API in canonical project state.
+
+After this gate passes, additional recipes, providers and refinements belong to a versioned post-release backlog. They do not postpone the initial product indefinitely.
+
 ## Permanent architecture rules
 
 - no single mandatory film/music/micro-drama pipeline;

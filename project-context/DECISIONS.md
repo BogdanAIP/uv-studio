@@ -262,3 +262,39 @@ Decision: native VideoClaw compatibility may execute only product-whitelisted ex
 Reason: an `AVAILABLE` compatibility offer must have a real transport, but making VideoClaw a universal execution engine would violate the product-owned capability boundary. Edge TTS is remote/free, so D-017 `remote_execution` authorization still applies.
 
 Consequences: semantic input is bounded to text/voice/speed; UV Studio owns the output artifact path; external provenance remains portable; `edge-tts` stays an optional dependency in `requirements-edge-tts.txt`; all other model-backed native offers stay configuration-required until exact provider/model/credential contracts exist. Full rationale: `project-context/decisions/D-020-native-videoclaw-edge-tts.md`.
+
+---
+
+## D-021 — Existing-video edit ranges use exact microseconds and lossless local intermediates
+Status: accepted
+Date: 2026-08-11
+
+Decision: identify an existing-video edit by a canonical project-relative source path plus integer-microsecond requested and bounded-context intervals. The first mechanical extraction path is local FFmpeg with accurate-seek decode/re-encode into Matroska + FFV1 + FLAC intermediates and explicit VFR passthrough.
+
+Reason: provider/model code must not own or redefine the requested range, and binary floats/frame-only identity are not a portable exact edit contract.
+
+Consequences: extraction freshly probes media, keeps requested identity immutable, allocates project artifacts and rolls back the complete execution if any planned segment fails. Full rationale: `project-context/decisions/D-021-exact-media-range-extraction.md`.
+
+---
+
+## D-022 — Exact range reinsertion is deterministic, duration-bounded and provider-neutral
+Status: accepted
+Date: 2026-08-11
+
+Decision: expose `video.replace_range` as a bounded local/free mechanical operation over source + exact range + prepared replacement. The adapter owns its filtergraph/output policy, rejects incompatible media and hidden retiming, and validates the final artifact before atomic registration.
+
+Reason: replacement generation and continuity interpretation must remain swappable while reinsertion mechanics stay deterministic and provider-neutral.
+
+Consequences: the current contract is intentionally narrow, lossless intermediate output is re-encoded rather than packet-identical, and broader normalization/export requires separate explicit policy. Full rationale: `project-context/decisions/D-022-deterministic-range-reinsertion.md`.
+
+---
+
+## D-023 — Agent development state is explicit, scoped and CI-checked
+Status: accepted
+Date: 2026-08-11
+
+Decision: use `AGENTS.md` as the automatic entrypoint, `ACTIVE_SLICE.json` as machine-readable slice intent, one coordinator for Git/context/PR ownership, disjoint writer scopes, read-only reviewers, one PR template and a stdlib-only CI validator for context and live PR state.
+
+Reason: cross-chat Markdown handoff was strong but manual duplication allowed branch/PR status and descriptions to drift; parallel writers also lacked a repository-owned coordination contract.
+
+Consequences: stale markers, PR identity, draft/review phase or required body sections fail CI; exact head SHA remains a live GitHub fact rather than a self-referential file field. Full rationale: `project-context/decisions/D-023-agent-development-workflow.md`.
