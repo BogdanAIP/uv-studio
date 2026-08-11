@@ -84,9 +84,9 @@ class NativeVideoClawAdapter:
             return self._injected_communicate_factory
         try:
             edge_tts = importlib.import_module("edge_tts")
-        except ImportError as exc:
+        except Exception as exc:
             raise CapabilityToolUnavailable(
-                "edge-tts is not available in this installation"
+                "edge-tts could not be loaded in this installation"
             ) from exc
         factory = getattr(edge_tts, "Communicate", None)
         if not callable(factory):
@@ -175,21 +175,28 @@ class NativeVideoClawAdapter:
         )
         artifact_registered = False
         try:
-            communicate = communicate_factory(
-                text=text,
-                voice=voice,
-                rate=_speed_to_rate(speed),
-            )
-            save = getattr(communicate, "save", None)
-            if not callable(save):
-                raise CapabilityToolUnavailable("edge-tts Communicate.save is unavailable")
             try:
+                communicate = communicate_factory(
+                    text=text,
+                    voice=voice,
+                    rate=_speed_to_rate(speed),
+                )
+                save = getattr(communicate, "save", None)
+                if not callable(save):
+                    raise CapabilityToolUnavailable("edge-tts Communicate.save is unavailable")
                 await save(str(output_path))
+            except CapabilityToolUnavailable:
+                raise
             except Exception as exc:
                 raise CapabilityToolFailed("edge-tts synthesis failed") from exc
-            if not output_path.is_file():
+
+            try:
+                output_size = output_path.stat().st_size if output_path.is_file() else 0
+            except OSError as exc:
+                raise CapabilityToolFailed("edge-tts output could not be validated") from exc
+            if output_size <= 0:
                 raise CapabilityToolFailed(
-                    "edge-tts reported success but output file was not created"
+                    "edge-tts reported success but output file is empty or missing"
                 )
 
             artifact = ProjectReference(
