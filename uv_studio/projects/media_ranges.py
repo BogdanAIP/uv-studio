@@ -9,13 +9,22 @@ from .models import ProjectValidationError, validate_project_relative_path
 
 MEDIA_RANGE_SCHEMA_VERSION = 1
 MICROSECONDS_PER_SECOND = 1_000_000
+MAX_CONTEXT_US = 30 * MICROSECONDS_PER_SECOND
 
 
-def _require_int_microseconds(value: Any, *, field_name: str, minimum: int = 0) -> int:
+def _require_int_microseconds(
+    value: Any,
+    *,
+    field_name: str,
+    minimum: int = 0,
+    maximum: int | None = None,
+) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ProjectValidationError(f"{field_name} must be an integer number of microseconds")
     if value < minimum:
         raise ProjectValidationError(f"{field_name} must be >= {minimum}")
+    if maximum is not None and value > maximum:
+        raise ProjectValidationError(f"{field_name} must be <= {maximum}")
     return value
 
 
@@ -70,6 +79,8 @@ class ProjectMediaRange:
 
     The user's requested interval is immutable. Context is represented separately and
     clamped only when the range is resolved against the actual source duration.
+    Context is intentionally bounded because it is supporting material around one edit,
+    not a second mechanism for extracting an arbitrarily large source interval.
     """
 
     source_path: str
@@ -88,8 +99,16 @@ class ProjectMediaRange:
         object.__setattr__(self, "source_path", canonical)
         start_us = _require_int_microseconds(self.start_us, field_name="start_us")
         end_us = _require_int_microseconds(self.end_us, field_name="end_us")
-        _require_int_microseconds(self.context_before_us, field_name="context_before_us")
-        _require_int_microseconds(self.context_after_us, field_name="context_after_us")
+        _require_int_microseconds(
+            self.context_before_us,
+            field_name="context_before_us",
+            maximum=MAX_CONTEXT_US,
+        )
+        _require_int_microseconds(
+            self.context_after_us,
+            field_name="context_after_us",
+            maximum=MAX_CONTEXT_US,
+        )
         if end_us <= start_us:
             raise ProjectValidationError("end_us must be greater than start_us")
 
