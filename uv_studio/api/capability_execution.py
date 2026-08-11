@@ -19,10 +19,17 @@ from starlette.concurrency import run_in_threadpool
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.mcp import get_mcp_manager
 from uv_studio.api.projects import get_project_store
-from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter, NativeVideoClawAdapter
 from uv_studio.capabilities.adapters.mcp_execution import (
     MCPExecutionAdapter,
     MCPExecutionInputRejected,
+)
+from uv_studio.capabilities.adapters.native_videoclaw import (
+    NativeVideoClawDependencyUnavailable,
+    NativeVideoClawExecutionError,
+    NativeVideoClawInputRejected,
+    NativeVideoClawOutputInvalid,
+    NativeVideoClawRemoteFailed,
 )
 from uv_studio.capabilities.authorization import (
     ConsentScope,
@@ -74,6 +81,12 @@ def get_mcp_execution_adapter(
     manager: MCPManager = Depends(get_mcp_manager),
 ) -> MCPExecutionAdapter:
     return MCPExecutionAdapter(manager, store)
+
+
+def get_native_videoclaw_adapter(
+    store: ProjectStore = Depends(get_project_store),
+) -> NativeVideoClawAdapter:
+    return NativeVideoClawAdapter(store)
 
 
 @lru_cache(maxsize=1)
@@ -251,11 +264,11 @@ def _consent_required_detail(preparation) -> dict[str, Any]:
     }
 
 
-def _mcp_error(exc: Exception, *, status_code: int) -> HTTPException:
+def _external_error(exc: Exception, *, status_code: int, fallback_code: str) -> HTTPException:
     return HTTPException(
         status_code=status_code,
         detail={
-            "code": getattr(exc, "code", "mcp_execution_failed"),
+            "code": getattr(exc, "code", fallback_code),
             "message": str(exc),
         },
     )
@@ -331,6 +344,7 @@ async def execute_project_capability(
     registry: CapabilityRegistry = Depends(get_capability_registry),
     local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
     mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
+    native_videoclaw: NativeVideoClawAdapter = Depends(get_native_videoclaw_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
 ) -> dict[str, Any]:
     decision, preparation, input_payload = _prepare(
@@ -375,6 +389,13 @@ async def execute_project_capability(
                 preparation=preparation,
                 payload=input_payload,
             )
+        elif offer.adapter_id == NativeVideoClawAdapter.adapter_id:
+            result = await native_videoclaw.execute(
+                project_id=project_id,
+                offer=offer,
+                preparation=preparation,
+                payload=input_payload,
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -411,13 +432,47 @@ async def execute_project_capability(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "mcp_binding_rejected", "message": str(exc)},
         ) from exc
-    except MCPExecutionInputRejected as exc:
-        raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
-    except MCPRequestTooLarge as exc:
-        raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
+    except (MCPExecutionInputRejected, MCPRequestTooLarge) as exc:
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            fallback_code="mcp_invalid_input",
+        ) from exc
     except MCPCallTimeout as exc:
-        raise _mcp_error(exc, status_code=status.HTTP_504_GATEWAY_TIMEOUT) from exc
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            fallback_code="mcp_call_timeout",
+        ) from exc
     except (MCPToolReturnedError, MCPResponseTooLarge, MCPCallError) as exc:
-        raise _mcp_error(exc, status_code=status.HTTP_502_BAD_GATEWAY) from exc
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            fallback_code="mcp_execution_failed",
+        ) from exc
+    except NativeVideoClawInputRejected as exc:
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            fallback_code="native_videoclaw_invalid_input",
+        ) from exc
+    except NativeVideoClawDependencyUnavailable as exc:
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            fallback_code="native_videoclaw_dependency_unavailable",
+        ) from exc
+    except (NativeVideoClawRemoteFailed, NativeVideoClawOutputInvalid) as exc:
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            fallback_code="native_videoclaw_execution_failed",
+        ) from exc
+    except NativeVideoClawExecutionError as exc:
+        raise _external_error(
+            exc,
+            status_code=status.HTTP_409_CONFLICT,
+            fallback_code="native_videoclaw_execution_failed",
+        ) from exc
 
     return CapabilityExecutionEnvelope(selection=decision, result=result).to_dict()
