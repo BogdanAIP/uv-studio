@@ -18,26 +18,40 @@ async def handle_list_tools(
     delay = float(os.environ.get("UV_MCP_FIXTURE_LIST_DELAY", "0") or "0")
     if delay:
         await anyio.sleep(delay)
-    return types.ListToolsResult(
-        tools=[
-            types.Tool(
-                name="echo_metadata",
-                title="Echo Metadata",
-                description="Returns deterministic test metadata.",
-                input_schema={
-                    "type": "object",
-                    "properties": {"text": {"type": "string"}},
-                },
-            ),
-            types.Tool(
-                name="cloud_generate",
-                title="Cloud Generate",
-                description="Fixture representing a remote paid-capable operation.",
-                input_schema={
-                    "type": "object",
-                    "properties": {"prompt": {"type": "string"}},
-                },
-            ),
+    tools = [
+        types.Tool(
+            name="echo_metadata",
+            title="Echo Metadata",
+            description="Returns deterministic test metadata.",
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
+        ),
+        types.Tool(
+            name="cloud_generate",
+            title="Cloud Generate",
+            description="Fixture representing a remote paid-capable operation.",
+            input_schema={"type": "object", "properties": {"prompt": {"type": "string"}}},
+        ),
+        types.Tool(
+            name="slow_echo",
+            title="Slow Echo",
+            description="Delays before returning deterministic metadata.",
+            input_schema={"type": "object"},
+        ),
+        types.Tool(
+            name="fail_tool",
+            title="Fail Tool",
+            description="Returns an MCP tool error for tests.",
+            input_schema={"type": "object"},
+        ),
+        types.Tool(
+            name="oversized_response",
+            title="Oversized Response",
+            description="Returns a response beyond the UV Studio response limit.",
+            input_schema={"type": "object"},
+        ),
+    ]
+    if os.environ.get("UV_MCP_FIXTURE_PROJECT_FILE_TOOL") == "1":
+        tools.append(
             types.Tool(
                 name="read_project_file",
                 title="Read Project File",
@@ -47,27 +61,9 @@ async def handle_list_tools(
                     "properties": {"path": {"type": "string"}},
                     "required": ["path"],
                 },
-            ),
-            types.Tool(
-                name="slow_echo",
-                title="Slow Echo",
-                description="Delays before returning deterministic metadata.",
-                input_schema={"type": "object"},
-            ),
-            types.Tool(
-                name="fail_tool",
-                title="Fail Tool",
-                description="Returns an MCP tool error for tests.",
-                input_schema={"type": "object"},
-            ),
-            types.Tool(
-                name="oversized_response",
-                title="Oversized Response",
-                description="Returns a response beyond the UV Studio response limit.",
-                input_schema={"type": "object"},
-            ),
-        ]
-    )
+            )
+        )
+    return types.ListToolsResult(tools=tools)
 
 
 async def handle_call_tool(
