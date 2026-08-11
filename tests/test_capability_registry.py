@@ -27,6 +27,7 @@ class CapabilityRegistryTests(unittest.TestCase):
         registry = build_builtin_capability_registry()
         ids = [item.capability_id for item in registry.list_capabilities()]
         self.assertIn("video.generate", ids)
+        self.assertIn("video.extract_range", ids)
         self.assertIn("timeline.assemble", ids)
         self.assertIn("speech.synthesize", ids)
 
@@ -39,6 +40,34 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(offer.cost_class, CostClass.FREE)
         self.assertEqual(offer.locality, LocalityClass.LOCAL)
         self.assertIn(offer.availability, {OfferAvailability.AVAILABLE, OfferAvailability.UNAVAILABLE})
+
+    def test_range_extract_offer_requires_both_ffmpeg_and_ffprobe(self) -> None:
+        patch_target = "uv_studio.capabilities.builtin.shutil.which"
+
+        with mock.patch(
+            patch_target,
+            side_effect=lambda tool: f"/tools/{tool}" if tool == "ffmpeg" else None,
+        ):
+            missing_probe = next(
+                item
+                for item in build_builtin_capability_registry().offers_for("video.extract_range")
+                if item.offer_id == "local_ffmpeg.video_extract_range"
+            )
+        self.assertEqual(missing_probe.availability, OfferAvailability.UNAVAILABLE)
+        self.assertIn("ffprobe", missing_probe.reason)
+
+        with mock.patch(patch_target, side_effect=lambda tool: f"/tools/{tool}"):
+            available = next(
+                item
+                for item in build_builtin_capability_registry().offers_for("video.extract_range")
+                if item.offer_id == "local_ffmpeg.video_extract_range"
+            )
+        self.assertEqual(available.availability, OfferAvailability.AVAILABLE)
+        self.assertEqual(available.locality, LocalityClass.LOCAL)
+        self.assertEqual(available.cost_class, CostClass.FREE)
+        self.assertIn("video.range", available.features)
+        self.assertIn("video.context", available.features)
+        self.assertIn("video.lossless_intermediate", available.features)
 
     def test_edge_tts_offer_is_optional_remote_and_free(self) -> None:
         patch_target = "uv_studio.capabilities.builtin.importlib.util.find_spec"

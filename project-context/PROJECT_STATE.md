@@ -2,11 +2,11 @@
 
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
-**Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
-**Active branch:** `stage-3/native-videoclaw-edge-tts`  
-**Main baseline:** `b76c25c0e97f9198bbaab848c2b3e6b99421b9d3`  
-**Open PR:** #17 — native VideoClaw Edge TTS execution  
-**PR status:** draft while the exact final Linux/Windows CI head is verified.
+**Active roadmap stage:** Stage 4 — Existing Video / Range Edit  
+**Active branch:** `stage-4/range-edit-foundation`  
+**Main baseline:** `757cd1ca3831fd5f433a609dfca377a371c6b95e`  
+**Open PR:** #18 — exact existing-video range extraction foundation  
+**PR status:** draft while final Linux/Windows CI and final diff audit are completed.
 
 ## Durable architecture snapshot
 
@@ -22,32 +22,36 @@ Canonical Project
   -> D-017 one-shot authorization when required
   -> exact execution adapter
       -> local_ffmpeg
+          -> media.probe
+          -> video.extract_range
+          -> timeline.assemble
       -> mcp.<profile> exact binding
       -> native_videoclaw exact-offer compatibility
   -> canonical artifacts/tasks provenance
 ```
 
-Machine-only integration state remains outside portable projects:
+Existing-video editing now has a product-owned exact time contract:
 
 ```text
-MCPProfile
-  -> trusted command + environment-variable references
-  -> bounded stdio discovery
-  -> exact MCPToolBinding
-      -> optional MCPProjectFileInput
-  -> READY configuration digest
+ProjectMediaRange
+  -> project-relative source_path
+  -> integer start_us / end_us
+  -> bounded context_before_us / context_after_us
+  -> resolve against freshly probed source_duration_us
+  -> requested range remains unchanged
+  -> context clamps to source boundaries
 ```
 
 Permanent rules:
 
 - discovery/availability is not execution permission;
-- open-source license does not imply remote execution is free;
 - local failure never silently widens into remote or paid execution;
+- raw host paths and raw FFmpeg commands are not generic capability inputs;
 - machine commands, resolved secrets and authorization tokens are not portable project state;
-- raw host paths are never generic capability inputs;
 - Qwen-MM and OpenClaw are optional peer integrations;
-- native Windows remains a first-class baseline;
-- native VideoClaw compatibility never means arbitrary vendored function execution.
+- native VideoClaw compatibility never means arbitrary vendored function execution;
+- existing-video edit identity is provider-neutral and must not depend on a generative model;
+- native Windows remains a first-class baseline.
 
 ## Merged milestones on `main`
 
@@ -60,256 +64,263 @@ Permanent rules:
 - `4108db23f7de67293a53d1005a119a015539c0aa` — optional pinned Qwen-MM profile/binding pack (PR #12);
 - `416677c4ca758a01b0253c8880b44d44150a8cec` — product-owned execution consent/cost boundary (PR #13);
 - `bb7929dbbd8e5bd69bc509d98c58f4a56bb033c5` — authorized exact MCP `call_tool()` + durable provenance (PR #14);
-- `b76c25c0e97f9198bbaab848c2b3e6b99421b9d3` — explicit MCP project-file inputs + resolved allowed-root symlink hardening (PR #15).
+- `b76c25c0e97f9198bbaab848c2b3e6b99421b9d3` — explicit MCP project-file inputs + allowed-root symlink hardening (PR #15);
+- `757cd1ca3831fd5f433a609dfca377a371c6b95e` — exact native VideoClaw Edge TTS execution behind D-017 consent (PR #17).
 
-## Stable Stage 3 capabilities
+## Stable Stage 3 boundary
 
 ### Local deterministic execution
 
-`local_ffmpeg` remains the local/free deterministic adapter.
-
-Current executable offers include:
+Stable local/free capabilities before Stage 4:
 
 ```text
 local_ffmpeg.media_probe       -> media.probe
 local_ffmpeg.timeline_assemble -> timeline.assemble
 ```
 
-Project paths are resolved through `ProjectStore`; raw shell/FFmpeg flags and filesystem escape are not exposed.
+### External execution
 
-### D-017 selection/authorization boundary
-
-Consent scopes are semantic and transport-independent:
+D-017 authorization remains transport-independent:
 
 ```text
 remote_execution  -> remote/hybrid locality
 external_cost     -> potentially_paid/paid
-unknown_cost      -> provider price not known to UV Studio
+unknown_cost      -> external price estimate unknown
 ```
 
-`OneShotAuthorizationStore` grants are process-local, short-lived, one-shot and bound to the exact project + capability + offer + selection policy + canonical input digest. A mismatch consumes/fails the grant. Tokens are never archived.
+One-shot grants are process-local, short-lived and exact-input-bound. Tokens are never archived.
 
-Local/free execution remains token-free. Remote/free execution still requires `remote_execution`.
+Direct MCP execution remains exact-binding + READY-configuration-digest-bound. Explicit `MCPProjectFileInput` is the only generic MCP project-file translation mechanism; generic exposable roots are `sources`, `assets`, `artifacts`, `exports`. Resolved symlinks cannot cross a binding's allowed-root boundary.
 
-### Exact MCP execution and provenance
+Native VideoClaw compatibility is exact-offer-only. `native_videoclaw.edge_tts -> speech.synthesize` is the first executable native offer, remains remote/free, requires `remote_execution` consent and is optional through `requirements-edge-tts.txt`.
 
-Official MCP Python SDK v2 is used for bounded stdio discovery and one exact `call_tool()` invocation.
+## Current PR #18 — Stage 4 exact range/context extraction
 
-Execution requires:
+### 1. Exact portable time model
 
-- an exact configured semantic binding;
-- a READY discovery snapshot;
-- unchanged profile/binding configuration digest;
-- exact bound tool identity;
-- D-017 authorization when locality/cost requires it.
+Added `uv_studio/projects/media_ranges.py` with schema-v1 `ProjectMediaRange`.
 
-Each external MCP invocation writes a versioned non-secret record under:
+Canonical fields:
 
 ```text
-tasks/run_<uuid>.json
+source_path
+start_us
+end_us
+context_before_us
+context_after_us
 ```
 
-Persisted facts include project/capability/offer/adapter identity, target identity, timestamps/status, authorization scopes, cost snapshot, portable input digest and safe success/failure summary. Tokens, resolved environment secrets, stderr and raw provider errors are excluded.
+Rules:
 
-### Binding-owned MCP project files
+- integer microseconds only; booleans/floats are rejected;
+- `start_us >= 0`;
+- `end_us > start_us`;
+- source path is canonical project-relative;
+- each context side is bounded to 30 seconds;
+- requested range is preserved exactly;
+- context is clamped only during resolution against the actual source duration;
+- `end_us` must not exceed the freshly probed source duration.
 
-`MCPProjectFileInput` is an explicit versioned contract on an exact binding. Only declared top-level arguments may translate a portable project reference into a short-lived host path.
+Frame number is not the canonical identity because VFR media must remain representable without forcing a constant-frame-rate timeline.
 
-Generic exposable roots are limited to:
+Decision: `project-context/decisions/D-021-exact-media-range-extraction.md`.
+
+### 2. Exact FFprobe duration
+
+`media.probe` keeps compatibility field:
 
 ```text
-sources
-assets
-artifacts
-exports
+duration_sec
 ```
 
-Internal `tasks`, `timeline` and `reviews` are not generic MCP input roots.
-
-`ProjectStore.resolve_project_file()` re-checks the resolved parent and target against the resolved allowed-root boundary. A symlink such as `sources/alias -> ../tasks/private` therefore fails even though the resolved target is still inside the overall project.
-
-The verified Qwen core `media_info(path, raw=False)` binding is the first explicit project-file contract. Qwen cloud bindings do not receive inferred file access.
-
-### Optional Qwen-MM pack
-
-Pinned reference:
+and now also returns:
 
 ```text
-QwenLM/Qwen-MM-Plugins
-commit: 7dfc08b7de8e621fc28bf9814e3d41a59b4595ae
-license: Apache-2.0
+duration_us
 ```
 
-Qwen remains optional. Core `media_info` is classified local/free; DashScope-backed understanding, ASR and generation remain remote/potentially-paid and require exact READY discovery plus D-017 consent/cost acknowledgements. Cloud configuration persists only the `DASHSCOPE_API_KEY` environment-variable reference. Current native-Windows configuration remains fail-closed because the upstream integration is WSL2-oriented.
+`duration_us` is parsed with decimal arithmetic rather than binary floating point. If container-format duration is unavailable, the probe falls back to the maximum valid stream duration.
 
-## Current PR #17 — exact native VideoClaw Edge TTS execution
+Stage 4 validation uses the integer value.
 
-### Problem being closed
+### 3. New semantic capability
 
-The built-in registry advertises:
+Registered:
 
 ```text
-native_videoclaw.edge_tts -> speech.synthesize
-locality = remote
-cost     = free
+capability_id = video.extract_range
+offer_id      = local_ffmpeg.video_extract_range
+adapter_id    = local_ffmpeg
+locality      = local
+cost_class    = free
 ```
 
-as `AVAILABLE` only when `edge_tts` is installed. Before this PR, the project capability API had no native execution transport, so an advertised available offer became a dead end.
+The offer is `AVAILABLE` only when both FFmpeg and FFprobe are present.
 
-### Product-owned exact adapter
+Therefore `local_free_first` may select/execute the operation without an authorization token and cannot widen into a remote model merely because local extraction fails.
 
-Added `NativeVideoClawAdapter` outside `vendor/`.
+### 4. Extraction contract
 
-It executes only:
+Input contains only semantic fields:
 
 ```text
-offer_id      = native_videoclaw.edge_tts
-capability_id = speech.synthesize
-adapter_id    = native_videoclaw
+source_path
+start_us
+end_us
+context_before_us
+context_after_us
 ```
 
-There is no generic module/function/command dispatch and no fallback to arbitrary vendored VideoClaw functions.
+Caller cannot provide:
 
-Supported input is deliberately narrow:
+- output path;
+- raw FFmpeg arguments;
+- codec override;
+- shell command.
+
+Execution:
+
+1. resolves source through Project Store approved readable roots;
+2. probes the concrete source;
+3. requires a video stream and known positive duration;
+4. validates requested end against real duration;
+5. derives non-empty context-before/requested/context-after segments;
+6. allocates UV Studio-owned `artifacts/art_<uuid>.mkv` paths;
+7. extracts each segment with argv + `shell=false` and bounded timeout;
+8. validates each created file is non-empty;
+9. registers all artifacts in one project update only after every planned segment succeeds.
+
+Any segment failure removes every planned output from that execution and registers nothing.
+
+### 5. Truthful precision / intermediate policy
+
+Stage 4 extraction does not use stream copy.
+
+FFmpeg receives input `-ss` and output `-t` expressed with the `us` duration unit and performs decode/re-encode. The truthful precision claim is:
 
 ```text
-text   required, non-empty, <= 20,000 chars
-voice  optional, default zh-CN-YunjianNeural, <= 128 chars
-speed  optional positive finite number, default 1.0
+accurate-seek decode/re-encode to requested media timestamps,
+subject to actual decoded frame/sample timestamps
 ```
 
-The adapter preserves the pinned VideoClaw speed-to-rate conversion and uses `edge_tts.Communicate` directly through this product-owned compatibility boundary.
+UV Studio does not claim an arbitrary visual frame boundary at every microsecond.
 
-Callers cannot provide an output path. UV Studio creates:
+For VFR sources the command explicitly uses:
 
 ```text
-artifacts/art_<uuid>.mp3
+-fps_mode passthrough
 ```
 
-and registers it as a canonical audio `ProjectReference` only after successful synthesis.
+to avoid implicit frame duplication/drop caused by CFR conversion.
 
-### Authorization remains transport-independent
-
-Edge TTS is remote/free, therefore execution still requires D-017 `remote_execution` acknowledgement but no cost acknowledgement.
-
-The API consumes the exact one-shot authorization before the native adapter runs. Existing `local_free_first` cannot widen to Edge TTS because the offer is remote.
-
-Other `native_videoclaw.*` offers remain non-executable through this route even if a test registry marks one available. Model-backed built-ins remain `CONFIGURATION_REQUIRED` until exact provider/model/credential contracts exist.
-
-### Transport-neutral external provenance
-
-`ExternalRunProvenance` no longer depends on the MCP target class. It accepts a small transport-neutral `ExternalExecutionTarget`.
-
-Archive schema v1 is intentionally unchanged for compatibility and retains historical serialized fields:
+Editing intermediates use:
 
 ```text
-profile_id
-tool_name
+container = Matroska (.mkv)
+video     = FFV1 level 3
+audio     = FLAC when present
+lifecycle = intermediate
 ```
 
-For MCP they mean profile/tool. For Edge TTS they contain stable target identity:
+This avoids intentionally adding a lossy encode before later analysis/replacement/reinsertion. It is not a final-delivery codec policy.
+
+### 6. Context artifacts
+
+One execution may create:
 
 ```text
-profile_id = native_videoclaw
-tool_name  = edge_tts
+context_before
+requested
+context_after
 ```
 
-A future rename requires an explicit schema migration; this PR does not invalidate existing MCP project history.
+Zero-length context at a source boundary is omitted.
 
-### Failure/cleanup guarantees
+All are canonical project video artifacts. `CapabilityExecutionResult.artifact` identifies the primary requested-range artifact; structured output also exposes portable paths for context artifacts.
 
-- missing/incomplete `edge_tts` fails before provenance/network execution;
-- provider exceptions are wrapped as controlled `CapabilityToolFailed`;
-- common capability execution exceptions expose stable machine codes;
-- partial MP3 output is removed on synthesis failure;
-- raw provider exception text is not persisted;
-- speech text is not stored in artifact metadata or external run provenance;
-- if an artifact has already been registered successfully, a later provenance persistence failure does not delete the file and leave a dangling project reference.
+Metadata records only portable source/range/role/policy facts, never host absolute paths.
 
-### Optional runtime dependency
+### 7. Tests added
 
-The core `requirements-uv.txt` remains independent of Edge TTS. The supported optional dependency set is:
+Unit coverage includes:
 
-```text
-requirements-edge-tts.txt
-  edge-tts>=7.2.8,<8
-```
+- microsecond round-trip and schema validation;
+- negative/reversed/bool/float rejection;
+- path traversal/absolute-path rejection;
+- bounded context and boundary clamping;
+- exact source-duration containment;
+- FFprobe decimal -> integer microseconds;
+- stream-duration fallback;
+- FFV1/FLAC extraction argv;
+- explicit `fps_mode=passthrough` for VFR-safe timing;
+- no-context single-artifact behavior;
+- non-video/out-of-duration rejection before FFmpeg;
+- output-path/raw-FFmpeg injection rejection;
+- partial multi-segment rollback;
+- zero-byte output rejection;
+- local/free registry availability requires both FFmpeg + FFprobe.
 
-This preserves the existing registry semantics: without the optional client the offer is `UNAVAILABLE`; with it installed, the exact adapter can execute after D-017 authorization. The adapter still lazy-imports the module so incomplete installations fail explicitly.
+API coverage includes:
 
-`THIRD_PARTY_NOTICES.md` records the optional client's LGPLv3 metadata separately from any terms governing the external hosted service.
-
-CI uses a fake communicator and makes no live Edge TTS request.
-
-### Tests in PR #17
-
-Unit tests cover:
-
-- exact pinned VideoClaw request semantics and speed conversion;
-- UV Studio-owned portable artifact path and project registration;
-- no speech text / host path in provenance;
-- default voice;
-- arbitrary native offer rejection;
-- caller-controlled output/unknown field rejection;
-- missing dependency failure before provenance/network;
-- provider failure cleanup + sanitized stable failure code.
-
-API tests cover:
-
-- remote consent required before Edge TTS adapter invocation;
-- exact one-shot authorization permits execution;
-- token replay rejected;
-- mutated speech input rejected before adapter invocation;
-- `local_free_first` does not widen to remote Edge TTS.
-
-Existing MCP/project/archive/local-FFmpeg tests remain the regression guard for schema and transport compatibility.
-
-Decision: `project-context/decisions/D-020-native-videoclaw-edge-tts.md`.
+- prepare-execution reports no consent for the local/free range offer;
+- `local_free_first` executes the exact range capability without a token;
+- requested/context artifacts remain project-relative through the HTTP capability boundary.
 
 ## CI status
 
-An earlier PR #17 head reached green Ubuntu unit/API/frontend checks and green Windows unit checks; the implementation also fixed the first unit-run failure by giving common capability-domain failures stable machine codes. Final dependency/license/documentation corrections changed the head again, so acceptance still requires one fresh full matrix on the exact final commit:
+PR #18 CI has already shown the new unit suite green on Ubuntu on the current implementation line; earlier implementation heads also passed Windows unit and Ubuntu API coverage. Documentation/VFR-hardening changes moved the final head again, so merge acceptance still requires the complete four-job matrix on one final commit:
 
 - Ubuntu bootstrap/unit;
 - Windows bootstrap/unit;
 - Ubuntu API integration + HTTP smoke + frontend build;
 - Windows API integration + HTTP smoke + frontend build.
 
-Do not merge until all four required jobs are green on the same final head.
+Do not merge PR #18 until all four are green on the same frozen head and the final diff/review audit is clean.
 
-## What is not implemented yet
+## Not implemented yet
 
-- exact provider/model/credential configuration contracts for VideoClaw model-backed native offers;
-- Qwen cloud/API bindings' project-file contracts where upstream schemas have not been verified;
-- optional native-Windows WSL bridge for Qwen;
-- optional OpenClaw adapter/runtime;
-- Stage 4 existing-video range editing;
-- Stage 5 dubbing and later workflow stages.
+Stage 4 still does **not** include:
 
-None of these gaps may be hidden by marking a capability available before its execution contract is real.
+- replacement clip reinsertion into the original source;
+- generative replacement;
+- prompt construction;
+- VLM continuity analysis;
+- timeline UI selection controls;
+- final delivery codec policy;
+- automatic lifecycle cleanup of intermediate range/context artifacts.
+
+Later layers must reuse the exact `ProjectMediaRange` identity rather than inventing provider-specific timing semantics.
 
 ## Current invariants
 
 1. Recipe semantics never name provider/runtime-specific implementation IDs.
 2. Discovery/offer metadata never equals execution permission.
 3. `local_free_first` never widens to remote or paid-capable offers.
-4. Remote/non-free execution passes D-017 before external invocation.
-5. Authorization is one-shot and exact-input-bound.
-6. Tokens, resolved secrets and raw remote errors never enter portable project state.
-7. MCP READY execution fails after configuration drift.
-8. Unbound MCP tools are non-executable.
-9. Generic MCP filesystem translation is explicit binding metadata only.
-10. Resolved project-file symlinks cannot cross an operation's allowed roots.
-11. External provenance is portable and transport-neutral at the common boundary.
-12. Native VideoClaw compatibility executes exact known offers only.
-13. Edge TTS is remote/free: keyless does not mean local and does not bypass consent.
-14. Edge TTS is optional and is not a core UV Studio dependency.
-15. Native Windows does not require Qwen, WSL or OpenClaw.
-16. Model-backed native offers remain configuration-required until exact contracts exist.
+4. Remote/non-free execution passes D-017 before invocation.
+5. Tokens, secrets, raw remote errors and host-only paths never become portable project state.
+6. MCP execution remains exact-binding/READY-digest-bound.
+7. Native VideoClaw compatibility remains exact-offer-only.
+8. Existing-video requested ranges use integer microseconds, not persisted floats or frame-only identity.
+9. Context is bounded and cannot silently widen/change the requested interval.
+10. Range execution validates against a freshly probed real source duration.
+11. Range outputs are UV Studio-owned and raw FFmpeg/output-path injection is impossible through the semantic payload.
+12. Range extraction is transcode-based accurate seek; stream copy cannot be substituted while keeping the same precision claim.
+13. VFR extraction explicitly preserves frame timestamps rather than silently normalizing to CFR.
+14. Partial/empty range outputs never become successful project artifacts.
+15. Native Windows remains a required CI baseline.
 
-## Next slice after PR #17
+## Next slice after PR #18
 
-Once PR #17 is merged with a green final matrix, begin the first Stage 4 **existing-video range-edit foundation**: introduce a provider-neutral range representation and bounded local FFmpeg extraction/context primitives without adding generative replacement yet. See `NEXT_TASK.md`.
+After PR #18 is merged with one fully green final matrix, continue Stage 4 with a **deterministic reinsertion contract**:
+
+```text
+source video
++ exact ProjectMediaRange
++ replacement clip
+-> canonical edited output
+```
+
+The reinsertion slice must prove that content outside the requested range is preserved under an explicit codec/timestamp policy. It must not use concat-copy unless compatibility is actually verified, and it must remain independent of any generative replacement provider. See `NEXT_TASK.md`.
 
 ## Development invariant
 

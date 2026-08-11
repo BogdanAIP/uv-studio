@@ -92,6 +92,18 @@ CAPABILITIES = (
         asynchronous=True,
     ),
     CapabilityDefinition(
+        "video.extract_range",
+        "Извлечение диапазона видео",
+        (
+            "Детерминированное извлечение выбранного временного диапазона существующего видео "
+            "и ограниченного контекста до/после без генеративной модели."
+        ),
+        OperationKind.DETERMINISTIC_MEDIA,
+        (MediaKind.VIDEO,),
+        (MediaKind.VIDEO,),
+        asynchronous=False,
+    ),
+    CapabilityDefinition(
         "timeline.assemble",
         "Сборка таймлайна",
         "Детерминированная сборка подготовленных медиафрагментов в итоговую последовательность.",
@@ -172,6 +184,29 @@ def _tool_offer(
     )
 
 
+def _range_extract_offer() -> CapabilityOffer:
+    required_tools = ("ffmpeg", "ffprobe")
+    missing = [tool for tool in required_tools if not shutil.which(tool)]
+    return CapabilityOffer(
+        offer_id="local_ffmpeg.video_extract_range",
+        capability_id="video.extract_range",
+        adapter_id="local_ffmpeg",
+        title="FFmpeg accurate-seek lossless range extraction",
+        availability=(
+            OfferAvailability.UNAVAILABLE if missing else OfferAvailability.AVAILABLE
+        ),
+        reason=(
+            f"Не найдены обязательные локальные инструменты: {', '.join(missing)}."
+            if missing
+            else "FFmpeg и FFprobe найдены в PATH; локальное извлечение диапазона доступно."
+        ),
+        locality=LocalityClass.LOCAL,
+        cost_class=CostClass.FREE,
+        asynchronous=False,
+        features=("video.range", "video.context", "video.lossless_intermediate"),
+    )
+
+
 def _native_model_offer(
     *,
     offer_id: str,
@@ -236,6 +271,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
             features=("media.metadata",),
         )
     )
+    registry.register_offer(_range_extract_offer())
     registry.register_offer(
         _native_model_offer(
             offer_id="native_videoclaw.text_generate",

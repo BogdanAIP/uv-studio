@@ -108,6 +108,9 @@ Current executable operations:
 media.probe
   -> local_ffmpeg.media_probe
 
+video.extract_range
+  -> local_ffmpeg.video_extract_range
+
 timeline.assemble
   -> local_ffmpeg.timeline_assemble
 ```
@@ -121,6 +124,59 @@ Input:
 ```
 
 The adapter resolves the project path, runs bounded `ffprobe` via argv with `shell=false`, parses structured JSON and creates no artifact.
+
+Technical duration output contains both:
+
+```text
+duration_sec  compatibility floating-point field
+duration_us   exact integer microseconds parsed from FFprobe decimal duration
+```
+
+Stage 4 range validation uses `duration_us` rather than binary floating point.
+
+### `video.extract_range`
+
+Semantic input:
+
+```json
+{
+  "source_path":"sources/input.mp4",
+  "start_us":5000000,
+  "end_us":10000000,
+  "context_before_us":3000000,
+  "context_after_us":3000000
+}
+```
+
+Rules:
+
+- source path is project-relative and resolved only from approved readable roots;
+- `start_us` / `end_us` are integer microseconds;
+- context is optional, non-negative and bounded to 30 seconds per side;
+- exact requested range is preserved separately from context;
+- source is probed immediately before extraction;
+- source must contain video and have a known positive duration;
+- requested end must not exceed the probed duration;
+- context clamps to source start/end without changing the requested interval;
+- caller cannot provide output paths or raw FFmpeg options.
+
+The capability is advertised only when both `ffmpeg` and `ffprobe` are present. It is `local + free`, so `local_free_first` may execute it without an authorization token.
+
+The first Stage 4 cut policy deliberately does not use stream copy. FFmpeg input `-ss` and output `-t` are expressed with the `us` duration unit and the selected segment is transcoded. The precision claim is therefore accurate-seek decode/re-encode to the requested media timestamps, subject to the source stream's actual decoded frame/sample timestamps; UV Studio does not claim an arbitrary visual frame boundary at every microsecond.
+
+Editing intermediates use:
+
+```text
+container = Matroska (.mkv)
+video     = FFV1 level 3
+audio     = FLAC when present
+```
+
+The requested clip is the primary result artifact. Non-empty context-before/context-after clips are additional canonical project artifacts. UV Studio allocates every path under `artifacts/art_<uuid>.mkv`.
+
+All planned files are created and validated before any of them are registered. If any segment fails or is empty/missing, every output from that execution is removed and the project remains unchanged.
+
+This is an extraction/intermediate policy, not a final delivery codec policy and not yet a reinsertion operation.
 
 ### `timeline.assemble`
 
@@ -239,7 +295,7 @@ Not persisted:
 - raw stderr;
 - raw remote/provider error text.
 
-Provenance schema v1 retains historical serialized `profile_id` and `tool_name` fields for compatibility. The in-memory target contract is now transport-neutral: MCP maps profile/tool; native Edge TTS maps `native_videoclaw/edge_tts`. Any future serialized rename requires a schema migration.
+Provenance schema v1 retains historical serialized `profile_id` and `tool_name` fields for compatibility. The in-memory target contract is transport-neutral: MCP maps profile/tool; native Edge TTS maps `native_videoclaw/edge_tts`. Any future serialized rename requires a schema migration.
 
 ## Error classes
 
@@ -264,12 +320,15 @@ Provider exception text is not used as durable provenance.
 5. No generic capability accepts raw shell/FFmpeg commands.
 6. Project file access is operation/binding-owned and root-bounded.
 7. Resolved symlinks cannot cross an explicit allowed-root boundary.
-8. MCP invocation is exact-binding/READY-digest-bound.
-9. Native VideoClaw execution is exact-offer-only, never arbitrary Python dispatch.
-10. Partial generated outputs are not left as successful artifacts.
-11. Raw secrets/provider errors/host paths are not written to portable provenance.
-12. Vendor VideoClaw source remains a compatibility/reference boundary rather than the UV Studio orchestration core.
+8. Local range extraction owns its outputs and cannot accept caller FFmpeg/output-path injection.
+9. Range extraction validates the exact requested end against a freshly probed source duration before FFmpeg runs.
+10. Range context is bounded and cannot silently widen the requested edit interval.
+11. MCP invocation is exact-binding/READY-digest-bound.
+12. Native VideoClaw execution is exact-offer-only, never arbitrary Python dispatch.
+13. Partial generated outputs are not left as successful artifacts.
+14. Raw secrets/provider errors/host paths are not written to portable provenance.
+15. Vendor VideoClaw source remains a compatibility/reference boundary rather than the UV Studio orchestration core.
 
 ## Next architecture step
 
-After the native Edge TTS slice is merged, Stage 4 starts with a deterministic existing-video range model and local FFmpeg range/context extraction. Generative replacement is layered later on the same provider-neutral range contract rather than being baked into the mechanical edit primitive.
+After the exact range/context extraction foundation is merged, Stage 4 can add a separate deterministic reinsertion contract for `source video + exact requested range + replacement clip -> canonical output`. Reinsertion must preserve content outside the requested interval and must not claim stream-copy/lossless behavior unless codec/timestamp compatibility actually proves it. Generative replacement remains a later layer above that mechanical contract.
