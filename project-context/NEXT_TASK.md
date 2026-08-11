@@ -1,100 +1,115 @@
 # Next Task
 
-**Primary target:** continue Stage 2 by turning registered recipes into explicit UV Studio execution plans for already-supported VideoClaw workflows, without implementing the general Capability Registry yet.
+**Primary target:** begin Stage 3 with a product-owned semantic Capability Registry. Do not connect Qwen-MM/OpenClaw or spend money in the first slice.
 
 ## Why this comes next
 
-The first Stage 2 slice defines durable provider-neutral task recipes, production policies, API catalog and New Project selection. A recipe still describes intent only; opening a canonical project does not yet say which existing workflow can actually run or what inputs must be collected.
-
-The next slice should bridge that gap for the three existing specialized VideoClaw pipelines while keeping the compatibility layer replaceable.
-
-## Do first
-
-1. Inspect the current VideoClaw API/pipeline launch contracts for:
-   - `standard` (mapped from `narrated_video`);
-   - `action_transfer`;
-   - `digital_human`.
-2. Add UV Studio-owned execution-planning models, for example:
-   - `RecipeExecutionPlan`;
-   - execution status such as `available | unavailable | missing_inputs`;
-   - required input slots and accepted media kinds;
-   - compatibility target metadata kept outside `RecipeDefinition`;
-   - no provider credentials in the plan.
-3. Add a small resolver that maps a canonical project's registered recipe to an execution plan.
-4. `general_video` must report honestly that its full generic execution path is not implemented yet rather than silently using the narrated `standard` pipeline.
-5. Expose project-level endpoint such as:
+Stage 2 now separates:
 
 ```text
-GET /api/uv/projects/{project_id}/execution-plan
+RecipeDefinition
+  -> ProductionPolicy
+  -> RecipeExecutionPlan
 ```
 
-6. For the three compatible recipes, expose the exact existing pipeline target and input requirements through the plan, but do not duplicate the upstream pipeline implementation.
-7. Add minimal project-workspace UI:
-   - show recipe title/description;
-   - show required inputs;
-   - show whether the current workflow is available;
-   - do not launch anything until input binding is explicit.
-8. Add unit/API/frontend build coverage on Windows/Linux.
-9. Document the migration boundary so future Stage 3 Capability Registry can replace native VideoClaw bindings without changing RecipeDefinition or Project Store.
+Execution planning also proved that existing upstream pipelines only partially cover UV Studio semantics:
 
-## Production Policy integration
+- `narrated_video` matches native `standard`;
+- `action_transfer` matches the native transfer pipeline;
+- `digital_human` is only partial because the upstream product-promo workflow does not accept supplied speech;
+- `general_video` has no honest native implementation and must stay unavailable.
 
-Execution plans should carry the recipe's resolved Production Policy so later execution can enforce:
+The missing abstraction is therefore not another hard-coded pipeline wrapper. It is the Stage 3 semantic Capability Registry that can resolve `video.generate`, `speech.synthesize`, `media.understand`, `video.digital_human`, etc. through replaceable local/MCP/native adapters.
 
-- source review;
-- sample-first;
-- plan gate;
-- scene ledger;
-- final review;
-- continuity policy.
+## First Stage 3 slice
 
-Do not implement all gate mechanics in this slice. The important part is that execution does not lose the policy when it leaves the recipe catalog.
+1. Add `uv_studio/capabilities/` as product-owned code.
+2. Define strict/versioned `CapabilityDefinition`, including at least:
+   - `capability_id`;
+   - title/description;
+   - operation kind;
+   - input/output media kinds;
+   - locality class: local / remote / hybrid;
+   - cost class: free / potentially_paid / paid;
+   - asynchronous flag;
+   - optional quality/features metadata.
+3. Define adapter metadata separately from semantic capability definitions:
+   - stable `adapter_id`;
+   - adapter kind: local / native / mcp / runtime;
+   - availability state and reason;
+   - capabilities provided;
+   - no secrets in registry responses.
+4. Implement deterministic `CapabilityRegistry`:
+   - register definitions;
+   - register adapter offers;
+   - list/get;
+   - resolve available offers for a semantic capability;
+   - reject duplicate/conflicting IDs;
+   - preserve deterministic ordering.
+5. Add baseline local/native offers without paid calls:
+   - deterministic FFmpeg-related media operations as local/free capabilities where already supported;
+   - existing VideoClaw compatibility offers as native metadata only;
+   - do not call external models.
+6. Add API:
 
-## Explicit honesty rule
+```text
+GET /api/uv/capabilities
+GET /api/uv/capabilities/{capability_id}
+GET /api/uv/capabilities/{capability_id}/offers
+```
 
-Never make `general_video` run the existing `standard` pipeline merely because it is available. `standard` is narration-led and would recreate the architecture mistake where ordinary video implicitly requires speech.
+7. Update project execution-plan API so runtime config slots can optionally report whether any capability offer currently exists, without choosing a provider automatically.
+8. Add unit/API tests and documentation.
 
-If a recipe has no implementation yet, return an explicit unavailable execution plan with a reason.
+## Mandatory architecture rules
 
-## Capability boundary
+- `RecipeDefinition` remains provider-neutral and unchanged.
+- Capability definitions are semantic; provider/runtime data lives in adapter offers.
+- local/free deterministic work must not be routed to paid AI by default.
+- no API key is required for registry startup/listing.
+- no secrets may appear in capability metadata/API.
+- OpenClaw is an optional adapter, not a mandatory layer.
+- Qwen-MM-Plugins is an optional direct-MCP adapter and workflow donor, not a baseline paid dependency.
+- native Windows startup must work with optional WSL integrations absent.
+- do not modify `vendor/videoclaw-app` in this slice.
 
-Still out of scope:
+## What NOT to implement yet
 
-- direct MCP execution;
-- Qwen-MM runtime installation;
-- OpenClaw runtime integration;
-- provider/model routing;
-- cost selection;
-- generic `video.generate` resolution.
+- actual Qwen-MM installation;
+- DashScope calls;
+- OpenClaw launch/Gateway;
+- generic MCP process management;
+- automatic paid-provider selection;
+- cost estimation from live prices;
+- full general-video generation;
+- dubbing/range-edit/music recipes.
 
-Those belong to Stage 3.
-
-The compatibility resolver may call or identify existing native VideoClaw pipelines only.
+The first Capability Registry slice is metadata + deterministic resolution only. This keeps Stage 3 testable without credentials and creates the exact seam where later adapters can plug in.
 
 ## Suggested files
 
 ```text
-uv_studio/recipes/execution.py
-uv_studio/api/projects.py
+uv_studio/capabilities/__init__.py
+uv_studio/capabilities/models.py
+uv_studio/capabilities/registry.py
+uv_studio/capabilities/builtin.py
+uv_studio/api/capabilities.py
 
-tests/test_recipe_execution.py
-tests_api/test_project_execution_api.py
+tests/test_capability_registry.py
+tests_api/test_capabilities_api.py
 
-frontend/lib/projectsApi.ts
-frontend/app/projects/[projectId]/page.tsx
-
-docs/architecture/RECIPE_EXECUTION.md
+docs/architecture/CAPABILITIES.md
 ```
 
 ## Acceptance criteria
 
-- execution planning is UV Studio-owned and provider-neutral above the compatibility target;
-- `narrated_video`, `action_transfer`, `digital_human` resolve to truthful existing-pipeline plans;
-- `general_video` is explicitly unavailable until a real generic path exists;
-- project execution plan preserves Production Policy;
-- no VideoClaw session ID becomes the canonical UV Studio project ID;
-- no API key/provider/runtime dependency is added;
-- no files under `vendor/videoclaw-app` are modified;
-- tests + production frontend build pass on Windows/Linux.
+- capability IDs and adapter IDs are strict/versioned/provider-separated;
+- registry starts and lists capabilities with zero API credentials;
+- `free` vs `potentially_paid/paid` is explicit metadata;
+- semantic capability listing contains no secret/config values;
+- available offers can be queried without executing them;
+- execution plans can show whether required semantic capabilities have any current offers;
+- tests + frontend production build stay green on Windows/Linux;
+- no hidden paid dependency is added.
 
-After this slice, either bind inputs and launch the existing pipelines through a UV Studio wrapper, or begin Stage 3 Capability Registry depending on how cleanly the upstream launch contracts can be isolated.
+After that, implement adapters incrementally: local deterministic tools first, then direct MCP/Qwen-MM optional support, then OpenClaw only where its broader runtime is useful.
