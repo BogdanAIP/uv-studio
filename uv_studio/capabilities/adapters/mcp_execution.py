@@ -7,7 +7,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from uv_studio.mcp.manager import MCPManager
-from uv_studio.projects.store import ProjectStore
+from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 from uv_studio.projects.task_records import ProjectTaskRecordStore
 
 from ..authorization import ExecutionPreparation
@@ -25,6 +26,7 @@ class MCPExecutionInputRejected(ValueError):
 class MCPExecutionAdapter:
     def __init__(self, manager: MCPManager, project_store: ProjectStore) -> None:
         self.manager = manager
+        self.project_store = project_store
         self.provenance = ExternalRunProvenance(ProjectTaskRecordStore(project_store))
 
     async def execute(
@@ -43,8 +45,14 @@ class MCPExecutionAdapter:
             target=target,
         )
         try:
+            # Reject caller-supplied host paths before any trusted translation occurs.
             self._reject_raw_host_paths(payload)
-            mcp_result = await self.manager.invoke_target(target, payload)
+            arguments = self._translate_project_file_inputs(
+                project_id=project_id,
+                binding=target.binding,
+                payload=payload,
+            )
+            mcp_result = await self.manager.invoke_target(target, arguments)
         except Exception as exc:
             self.provenance.fail(record, exc)
             raise
@@ -58,6 +66,43 @@ class MCPExecutionAdapter:
                 "mcp_result": mcp_result,
             },
         )
+
+    def _translate_project_file_inputs(self, *, project_id, binding, payload) -> dict[str, Any]:
+        """Translate only explicitly declared top-level project file arguments.
+
+        Authorization/provenance stay bound to the original portable payload. Absolute
+        paths exist only in this short-lived invocation dictionary.
+        """
+        translated = dict(payload)
+        for spec in binding.project_file_inputs:
+            if spec.argument_name not in translated:
+                if spec.required:
+                    raise MCPExecutionInputRejected(
+                        f"required project-file argument {spec.argument_name!r} is missing"
+                    )
+                continue
+            value = translated[spec.argument_name]
+            if not isinstance(value, str) or not value.strip():
+                raise MCPExecutionInputRejected(
+                    f"project-file argument {spec.argument_name!r} must be a project-relative string"
+                )
+            try:
+                resolved = self.project_store.resolve_project_file(
+                    project_id,
+                    value,
+                    must_exist=True,
+                    allowed_roots=spec.allowed_roots,
+                )
+            except (ProjectValidationError, ProjectNotFound, ProjectStoreError) as exc:
+                raise MCPExecutionInputRejected(
+                    f"project-file argument {spec.argument_name!r} is not an allowed existing project file"
+                ) from exc
+            if not resolved.is_file():
+                raise MCPExecutionInputRejected(
+                    f"project-file argument {spec.argument_name!r} must resolve to a file"
+                )
+            translated[spec.argument_name] = str(resolved)
+        return translated
 
     @classmethod
     def _reject_raw_host_paths(cls, value: Any) -> None:
