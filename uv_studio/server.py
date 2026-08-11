@@ -24,12 +24,14 @@ from uv_studio.api.capability_execution import router as capability_execution_ro
 from uv_studio.api.execution import router as execution_router  # noqa: E402
 from uv_studio.api.mcp import router as mcp_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
+from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
 from uv_studio.api.recipes import router as recipes_router  # noqa: E402
 
 app = upstream_app
 app.include_router(capabilities_router)
 app.include_router(capability_execution_router)
 app.include_router(mcp_router)
+app.include_router(qwen_mm_router)
 app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)
