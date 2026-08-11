@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any
 
 from .models import ProductionPolicy, RecipeDefinition, validate_semantic_id
-from .registry import RecipeRegistry
+from .registry import RecipeRegistry, UnknownRecipe
 
 EXECUTION_PLAN_SCHEMA_VERSION = 1
 
@@ -169,9 +169,7 @@ def _general_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
             "A true general-video execution path is not implemented yet. The existing VideoClaw "
             "standard pipeline is narration-led and must not be used as a silent fallback."
         ),
-        input_slots=(
-            ExecutionInputSlot("brief", "Задача/идея ролика", InputSlotKind.TEXT),
-        ),
+        input_slots=(ExecutionInputSlot("brief", "Задача/идея ролика", InputSlotKind.TEXT),),
         runtime_config_slots=(),
         production_policy=recipe.production_policy,
     )
@@ -184,24 +182,13 @@ def _narrated_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
         compatibility=ExecutionCompatibility.AVAILABLE,
         reason="The native VideoClaw standard pipeline is narration/topic-led and matches this recipe.",
         input_slots=(
-            ExecutionInputSlot(
-                "text",
-                "Тема или готовый дикторский текст",
-                InputSlotKind.TEXT,
-                maps_to="text",
-            ),
+            ExecutionInputSlot("text", "Тема или готовый дикторский текст", InputSlotKind.TEXT, maps_to="text"),
             ExecutionInputSlot("title", "Заголовок", InputSlotKind.TEXT, required=False, maps_to="title"),
         ),
         runtime_config_slots=(
             RuntimeConfigSlot("llm_model", "Текстовая модель", "text.generate", maps_to="llm_model"),
             RuntimeConfigSlot("image_model", "Модель изображений", "image.generate", maps_to="image_model"),
-            RuntimeConfigSlot(
-                "video_model",
-                "Модель видео",
-                "video.generate",
-                required=False,
-                maps_to="video_model",
-            ),
+            RuntimeConfigSlot("video_model", "Модель видео", "video.generate", required=False, maps_to="video_model"),
         ),
         production_policy=recipe.production_policy,
         target=CompatibilityTarget(
@@ -219,18 +206,8 @@ def _action_transfer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
         compatibility=ExecutionCompatibility.AVAILABLE,
         reason="The native action_transfer request contract matches source video + target image motion transfer.",
         input_slots=(
-            ExecutionInputSlot(
-                "target_reference",
-                "Целевой образ/персонаж",
-                InputSlotKind.IMAGE,
-                maps_to="image_path",
-            ),
-            ExecutionInputSlot(
-                "source_video",
-                "Видео с исходным движением",
-                InputSlotKind.VIDEO,
-                maps_to="video_path",
-            ),
+            ExecutionInputSlot("target_reference", "Целевой образ/персонаж", InputSlotKind.IMAGE, maps_to="image_path"),
+            ExecutionInputSlot("source_video", "Видео с исходным движением", InputSlotKind.VIDEO, maps_to="video_path"),
             ExecutionInputSlot(
                 "instruction",
                 "Инструкция",
@@ -299,4 +276,19 @@ def resolve_recipe_execution(recipe: RecipeDefinition) -> RecipeExecutionPlan:
 
 
 def resolve_project_execution(registry: RecipeRegistry, recipe_id: str) -> RecipeExecutionPlan:
-    return resolve_recipe_execution(registry.get(recipe_id))
+    try:
+        recipe = registry.get(recipe_id)
+    except UnknownRecipe:
+        return RecipeExecutionPlan(
+            recipe_id=recipe_id,
+            recipe_title=recipe_id,
+            compatibility=ExecutionCompatibility.UNAVAILABLE,
+            reason=(
+                "The project references a recipe that is not installed in this UV Studio build. "
+                "Project data is preserved, but execution is unavailable until that recipe is installed or migrated."
+            ),
+            input_slots=(),
+            runtime_config_slots=(),
+            production_policy=ProductionPolicy(),
+        )
+    return resolve_recipe_execution(recipe)
