@@ -79,18 +79,43 @@ class CapabilityRegistry:
         self._adapters[adapter.adapter_id] = adapter
         return adapter
 
+    def upsert_adapter(self, adapter: AdapterDefinition) -> AdapterDefinition:
+        if not isinstance(adapter, AdapterDefinition):
+            raise CapabilityValidationError("registry accepts only AdapterDefinition values")
+        self._adapters[adapter.adapter_id] = adapter
+        return adapter
+
     def register_offer(self, offer: CapabilityOffer) -> CapabilityOffer:
         if not isinstance(offer, CapabilityOffer):
             raise CapabilityValidationError("registry accepts only CapabilityOffer values")
         if offer.offer_id in self._offers:
             raise DuplicateOffer(offer.offer_id)
+        self._validate_offer_references(offer)
+        self._offers[offer.offer_id] = offer
+        self._offers_by_capability[offer.capability_id].append(offer.offer_id)
+        return offer
+
+    def upsert_offer(self, offer: CapabilityOffer) -> CapabilityOffer:
+        if not isinstance(offer, CapabilityOffer):
+            raise CapabilityValidationError("registry accepts only CapabilityOffer values")
+        self._validate_offer_references(offer)
+        existing = self._offers.get(offer.offer_id)
+        if existing is not None and existing.capability_id != offer.capability_id:
+            old_ids = self._offers_by_capability.get(existing.capability_id, [])
+            self._offers_by_capability[existing.capability_id] = [
+                offer_id for offer_id in old_ids if offer_id != offer.offer_id
+            ]
+        self._offers[offer.offer_id] = offer
+        ids = self._offers_by_capability.setdefault(offer.capability_id, [])
+        if offer.offer_id not in ids:
+            ids.append(offer.offer_id)
+        return offer
+
+    def _validate_offer_references(self, offer: CapabilityOffer) -> None:
         if offer.capability_id not in self._capabilities:
             raise UnknownCapability(offer.capability_id)
         if offer.adapter_id not in self._adapters:
             raise UnknownAdapter(offer.adapter_id)
-        self._offers[offer.offer_id] = offer
-        self._offers_by_capability[offer.capability_id].append(offer.offer_id)
-        return offer
 
     def get_capability(self, capability_id: str) -> CapabilityDefinition:
         try:

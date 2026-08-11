@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROJECTS_ROOT = ROOT / "data" / "projects"
+DEFAULT_CONFIGURATION_ROOT = ROOT / "data" / "config"
 
 
 def projects_root() -> Path:
@@ -18,3 +19,10 @@ def projects_root() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     return DEFAULT_PROJECTS_ROOT.resolve()
+
+
+def configuration_root() -> Path:
+    configured = os.environ.get("UV_STUDIO_CONFIG_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return DEFAULT_CONFIGURATION_ROOT.resolve()
