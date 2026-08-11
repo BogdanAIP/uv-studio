@@ -6,7 +6,7 @@
 **Active branch:** `stage-4/range-reinsertion-foundation`  
 **Main baseline:** `155f2e838e2a564b08775171646ab3b4a8be4349`  
 **Open PR:** #19 — deterministic exact range reinsertion foundation  
-**PR status:** draft while final media-contract audit, documentation and frozen Linux/Windows CI are completed.
+**PR status:** draft only until the final documentation-frozen head passes the complete Linux/Windows matrix; D-022 is accepted and functional scope is frozen.
 
 ## Durable architecture snapshot
 
@@ -178,9 +178,9 @@ source_duration - requested_range_duration + replacement_duration
 
 Any failure deletes the new result and registers nothing.
 
-### Tests already in PR #19
+### Tests in PR #19
 
-Unit/API coverage now includes:
+Unit/API coverage includes:
 
 - exact zero-based prefix/replacement/suffix filtergraph boundaries;
 - VFR passthrough + FFV1/FLAC output policy;
@@ -194,21 +194,27 @@ Unit/API coverage now includes:
 - local/free registry availability requires FFmpeg + FFprobe;
 - generic capability API prepare/execute path with no authorization token.
 
-Decision under review: `project-context/decisions/D-022-deterministic-range-reinsertion.md`.  
+Decision: `project-context/decisions/D-022-deterministic-range-reinsertion.md` — **accepted**.  
 Architecture detail: `docs/architecture/RANGE_REINSERTION.md`.
 
-## CI status
+## CI / merge gate
 
-Earlier PR #19 implementation heads have already shown green Ubuntu and Windows unit tests, and a pre-hardening Ubuntu app-baseline passed API/HTTP/frontend. Those are useful regression signals but are **not** the merge gate because timestamp/format hardening changed the head afterward.
+Implementation/handoff head:
 
-Merge acceptance requires one frozen final head with all four green:
+```text
+b31bbcf9ea8e4d9055a329fc3da7171b9262e174
+```
+
+passed GitHub Actions CI run #409 with all four required jobs green:
 
 - Ubuntu bootstrap/unit;
 - Windows bootstrap/unit;
 - Ubuntu API integration + real HTTP smoke + frontend build;
 - Windows API integration + real HTTP smoke + frontend build.
 
-Review threads must also be clear and D-022 must be marked accepted only after that gate.
+Review threads were empty during audit. D-022 was then changed from proposed to accepted and this state file was synchronized. Those are documentation-only changes, but merge still requires the same 4/4 matrix on the final PR head after those changes.
+
+No further repository file changes should be made before that final matrix unless CI exposes a regression.
 
 ## Permanent invariants
 
@@ -229,6 +235,7 @@ Review threads must also be clear and D-022 must be marked accepted only after t
 
 ## Not implemented yet
 
+- provider-neutral continuity/replacement brief model;
 - AI-generated replacement scene;
 - automatic explicit retiming transform for mismatched replacements;
 - VLM/continuity analysis of context before/after;
@@ -237,6 +244,12 @@ Review threads must also be clear and D-022 must be marked accepted only after t
 - final delivery/export codec policy;
 - automatic intermediate lifecycle cleanup;
 - Stage 5 dubbing and later workflows.
+
+## Next slice after PR #19
+
+After PR #19 is merged with a fully green final matrix, continue Stage 4 with the provider-neutral **range continuity / replacement brief** defined in `NEXT_TASK.md`.
+
+The brief must preserve D-021/D-022 mechanical facts and exact range identity while keeping provider/model execution swappable.
 
 ## Development invariant
 
