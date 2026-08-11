@@ -7,7 +7,7 @@ import os
 import threading
 import uuid
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Mapping, Any
 
 from .migrations import migrate_project_data
@@ -17,6 +17,7 @@ from .models import (
     ProjectValidationError,
     utc_now_iso,
     validate_identifier,
+    validate_project_relative_path,
 )
 
 PROJECT_FILENAME = "project.json"
@@ -58,6 +59,68 @@ class ProjectStore:
 
     def project_path(self, project_id: str) -> Path:
         return self._project_dir(project_id) / PROJECT_FILENAME
+
+    def project_directory(self, project_id: str) -> Path:
+        directory = self._project_dir(project_id)
+        if not (directory / PROJECT_FILENAME).is_file():
+            raise ProjectNotFound(project_id)
+        return directory
+
+    def resolve_project_file(
+        self,
+        project_id: str,
+        relative_path: str,
+        *,
+        must_exist: bool = False,
+        allowed_roots: Iterable[str] | None = None,
+    ) -> Path:
+        """Resolve a canonical project-relative file without allowing filesystem escape.
+
+        The method is intentionally conservative for writes: the parent directory
+        must already exist. Callers cannot create arbitrary directory trees or use
+        symlinks to escape the canonical project directory.
+        """
+
+        canonical = validate_project_relative_path(relative_path)
+        parts = PurePosixPath(canonical).parts
+        if not parts:
+            raise ProjectValidationError("project-relative file path is empty")
+
+        if allowed_roots is not None:
+            roots = set(allowed_roots)
+            unknown_roots = roots.difference(PROJECT_DIRECTORIES)
+            if unknown_roots:
+                raise ProjectValidationError(
+                    f"unknown allowed project roots: {sorted(unknown_roots)!r}"
+                )
+            if parts[0] not in roots:
+                raise ProjectValidationError(
+                    f"path root {parts[0]!r} is not allowed for this operation"
+                )
+
+        project_dir = self.project_directory(project_id)
+        candidate = project_dir.joinpath(*parts)
+        try:
+            resolved_parent = candidate.parent.resolve(strict=True)
+        except OSError as exc:
+            raise ProjectValidationError(
+                f"parent directory does not exist inside project: {canonical!r}"
+            ) from exc
+        if resolved_parent != project_dir and project_dir not in resolved_parent.parents:
+            raise ProjectValidationError("project file parent escaped project directory")
+
+        if candidate.exists() or candidate.is_symlink():
+            try:
+                resolved = candidate.resolve(strict=True)
+            except OSError as exc:
+                raise ProjectValidationError(f"project file cannot be resolved: {canonical!r}") from exc
+            if resolved != project_dir and project_dir not in resolved.parents:
+                raise ProjectValidationError("project file escaped project directory")
+            candidate = resolved
+        elif must_exist:
+            raise ProjectValidationError(f"project file does not exist: {canonical!r}")
+
+        return candidate
 
     def create_project(
         self,
