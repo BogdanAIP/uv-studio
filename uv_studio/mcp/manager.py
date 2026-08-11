@@ -1,10 +1,14 @@
-"""MCP discovery lifecycle and explicit binding synchronization."""
+"""MCP discovery lifecycle, exact binding resolution and invocation."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
+from typing import Any, Mapping
 
 from uv_studio.capabilities.adapters.mcp import MCPBindingOfferAdapter
+from uv_studio.capabilities.models import CapabilityOffer
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 
 from .client import (
@@ -18,6 +22,7 @@ from .models import (
     MCPProfile,
     MCPProfileStatus,
     MCPRuntimeState,
+    MCPToolBinding,
     MCPToolDescriptor,
 )
 from .store import MCPConfigStore
@@ -39,10 +44,22 @@ class MCPProfileNotReady(MCPManagerError):
     pass
 
 
+class MCPBindingExecutionRejected(MCPManagerError):
+    """Selected MCP offer no longer resolves to the exact READY binding snapshot."""
+
+
 @dataclass(frozen=True)
 class MCPDiscoverySnapshot:
     profile_id: str
     tools: tuple[MCPToolDescriptor, ...]
+    configuration_digest: str
+
+
+@dataclass(frozen=True)
+class MCPExecutionTarget:
+    profile: MCPProfile
+    binding: MCPToolBinding
+    tool: MCPToolDescriptor
 
 
 class MCPManager:
@@ -125,7 +142,11 @@ class MCPManager:
             self._synchronize(profile, config, (), ready=False, reason=reason)
             raise MCPManagerError(reason) from exc
 
-        snapshot = MCPDiscoverySnapshot(profile.profile_id, tools)
+        snapshot = MCPDiscoverySnapshot(
+            profile.profile_id,
+            tools,
+            self._configuration_digest(profile, config.bindings_for(profile.profile_id)),
+        )
         self._snapshots[profile.profile_id] = snapshot
         status = self._set_status(
             profile,
@@ -148,6 +169,72 @@ class MCPManager:
         )
         self._synchronize(profile, config, (), ready=False, reason=status.reason)
         return status
+
+    def resolve_execution_target(self, offer: CapabilityOffer) -> MCPExecutionTarget:
+        """Resolve an MCP offer only against the exact unchanged READY binding snapshot."""
+        config = self.configuration()
+        matches = tuple(
+            binding
+            for binding in config.bindings
+            if f"mcp.{binding.binding_id}" == offer.offer_id
+        )
+        if len(matches) != 1:
+            raise MCPBindingExecutionRejected(
+                f"MCP offer {offer.offer_id!r} does not resolve to exactly one configured binding"
+            )
+        binding = matches[0]
+        try:
+            profile = config.get_profile(binding.profile_id)
+        except (KeyError, ValueError) as exc:
+            raise MCPBindingExecutionRejected("MCP binding profile is no longer configured") from exc
+        if not profile.enabled:
+            raise MCPBindingExecutionRejected("MCP binding profile is disabled")
+
+        expected_adapter = MCPBindingOfferAdapter.adapter_id(profile.profile_id)
+        if offer.adapter_id != expected_adapter:
+            raise MCPBindingExecutionRejected("MCP offer adapter no longer matches its binding profile")
+        if binding.capability_id != offer.capability_id:
+            raise MCPBindingExecutionRejected("MCP binding capability no longer matches selected offer")
+        if (
+            binding.locality is not offer.locality
+            or binding.cost_class is not offer.cost_class
+            or binding.asynchronous != offer.asynchronous
+            or binding.features != offer.features
+        ):
+            raise MCPBindingExecutionRejected("MCP binding metadata changed after offer discovery")
+
+        status = self._statuses.get(profile.profile_id)
+        snapshot = self._snapshots.get(profile.profile_id)
+        if status is None or status.state is not MCPRuntimeState.READY or snapshot is None:
+            raise MCPBindingExecutionRejected("MCP profile has no READY discovery snapshot")
+
+        current_digest = self._configuration_digest(
+            profile,
+            config.bindings_for(profile.profile_id),
+        )
+        if current_digest != snapshot.configuration_digest:
+            raise MCPBindingExecutionRejected(
+                "MCP profile or binding configuration changed; reconnect before execution"
+            )
+
+        exact = tuple(tool for tool in snapshot.tools if tool.name == binding.tool_name)
+        if len(exact) != 1:
+            raise MCPBindingExecutionRejected(
+                f"bound MCP tool {binding.tool_name!r} is not present in the READY snapshot"
+            )
+        return MCPExecutionTarget(profile=profile, binding=binding, tool=exact[0])
+
+    async def invoke_target(
+        self,
+        target: MCPExecutionTarget,
+        arguments: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Invoke only an already-resolved exact target."""
+        return await self.discovery_client.call_tool(
+            target.profile,
+            target.binding.tool_name,
+            arguments,
+        )
 
     def profile_payload(self, profile: MCPProfile) -> dict[str, object]:
         payload = profile.to_dict()
@@ -209,3 +296,24 @@ class MCPManager:
             ready=ready,
             state_reason=reason,
         )
+
+    @staticmethod
+    def _configuration_digest(
+        profile: MCPProfile,
+        bindings: tuple[MCPToolBinding, ...],
+    ) -> str:
+        payload = {
+            "profile": profile.to_dict(),
+            "bindings": [
+                binding.to_dict()
+                for binding in sorted(bindings, key=lambda item: item.binding_id)
+            ],
+        }
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
