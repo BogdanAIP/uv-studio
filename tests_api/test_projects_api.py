@@ -64,6 +64,61 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertEqual(persisted.title, "Updated API Project")
         self.assertTrue(persisted.extensions["demo"]["enabled"])
 
+    def test_archive_export_and_import_round_trip(self) -> None:
+        created = self.client.post(
+            "/api/uv/projects",
+            json={"title": "Archive API", "settings": {"quality": "preview"}},
+        ).json()
+        project_id = created["project_id"]
+        source_file = self.store.project_path(project_id).parent / "sources" / "input.txt"
+        source_file.write_text("portable source", encoding="utf-8")
+
+        exported = self.client.get(f"/api/uv/projects/{project_id}/archive")
+        self.assertEqual(exported.status_code, 200, exported.text)
+        self.assertEqual(exported.headers["content-type"], "application/zip")
+        self.assertIn(".uvproj.zip", exported.headers.get("content-disposition", ""))
+        archive_bytes = exported.content
+        self.assertGreater(len(archive_bytes), 0)
+
+        target_store = ProjectStore(Path(self.tmp.name) / "imported-projects")
+        app.dependency_overrides[get_project_store] = lambda: target_store
+        imported = self.client.post(
+            "/api/uv/projects/import",
+            content=archive_bytes,
+            headers={"Content-Type": "application/zip"},
+        )
+        self.assertEqual(imported.status_code, 201, imported.text)
+        self.assertEqual(imported.json()["project_id"], project_id)
+        self.assertEqual(imported.json()["title"], "Archive API")
+        self.assertEqual(
+            (target_store.project_path(project_id).parent / "sources" / "input.txt").read_text(
+                encoding="utf-8"
+            ),
+            "portable source",
+        )
+
+        duplicate = self.client.post(
+            "/api/uv/projects/import",
+            content=archive_bytes,
+            headers={"Content-Type": "application/zip"},
+        )
+        self.assertEqual(duplicate.status_code, 409, duplicate.text)
+
+    def test_invalid_archive_is_422_and_empty_archive_is_400(self) -> None:
+        invalid = self.client.post(
+            "/api/uv/projects/import",
+            content=b"not-a-zip",
+            headers={"Content-Type": "application/zip"},
+        )
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
+        empty = self.client.post(
+            "/api/uv/projects/import",
+            content=b"",
+            headers={"Content-Type": "application/zip"},
+        )
+        self.assertEqual(empty.status_code, 400, empty.text)
+
     def test_missing_project_is_404(self) -> None:
         response = self.client.get("/api/uv/projects/prj_missing")
         self.assertEqual(response.status_code, 404)
