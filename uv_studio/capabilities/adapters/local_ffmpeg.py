@@ -181,10 +181,24 @@ class LocalFFmpegAdapter:
         video_streams = [item for item in streams if isinstance(item, dict) and item.get("codec_type") == "video"]
         audio_streams = [item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"]
         primary_video = video_streams[0] if video_streams else {}
+        duration_us = _parse_duration_us(format_data.get("duration"))
+        if duration_us is None:
+            stream_durations = [
+                parsed
+                for item in streams
+                if isinstance(item, dict)
+                for parsed in [_parse_duration_us(item.get("duration"))]
+                if parsed is not None
+            ]
+            if stream_durations:
+                duration_us = max(stream_durations)
+        duration_sec = _parse_optional_float(format_data.get("duration"))
+        if duration_sec is None and duration_us is not None:
+            duration_sec = duration_us / MICROSECONDS_PER_SECOND
         return {
             "path": canonical_path,
-            "duration_sec": _parse_optional_float(format_data.get("duration")),
-            "duration_us": _parse_duration_us(format_data.get("duration")),
+            "duration_sec": duration_sec,
+            "duration_us": duration_us,
             "format_name": format_data.get("format_name"),
             "size_bytes": int(format_data["size"]) if str(format_data.get("size", "")).isdigit() else None,
             "has_video": bool(video_streams),
@@ -329,6 +343,8 @@ class LocalFFmpegAdapter:
                     "0:a?",
                     "-sn",
                     "-dn",
+                    "-fps_mode",
+                    "passthrough",
                     "-c:v",
                     "ffv1",
                     "-level",
@@ -358,6 +374,7 @@ class LocalFFmpegAdapter:
                             "offer_id": offer.offer_id,
                             "source_path": canonical_source,
                             "range_role": role,
+                            "lifecycle": "intermediate",
                             "segment": {
                                 "start_us": start_us,
                                 "end_us": end_us,
