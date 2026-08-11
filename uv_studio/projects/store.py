@@ -168,6 +168,51 @@ class ProjectStore:
         projects.sort(key=lambda item: item.updated_at, reverse=True)
         return projects
 
+    def commit_staged_project(self, staged_project: Path | str, project_id: str) -> Path:
+        """Atomically move a fully validated staged project into the canonical store.
+
+        The staged directory must already live somewhere beneath the Project Store
+        root so the final directory rename stays on the same filesystem. Callers are
+        responsible for validating archive/file contents before invoking this method.
+        """
+        validate_identifier(project_id, field_name="project_id")
+        staged = Path(staged_project).expanduser()
+        if staged.is_symlink():
+            raise ProjectStoreError("Staged project cannot be a symlink")
+        try:
+            staged = staged.resolve(strict=True)
+        except OSError as exc:
+            raise ProjectStoreError(f"Staged project does not exist: {staged}") from exc
+        if not staged.is_dir():
+            raise ProjectStoreError(f"Staged project is not a directory: {staged}")
+        if staged.name != project_id:
+            raise ProjectStoreError(
+                f"Staged project directory name mismatch: expected={project_id!r} actual={staged.name!r}"
+            )
+        if staged == self.root or self.root not in staged.parents:
+            raise ProjectStoreError("Staged project must live beneath the Project Store root")
+
+        destination = self._project_dir(project_id)
+        if staged == destination:
+            raise ProjectStoreError("Staged project is already at its canonical destination")
+
+        # Validate the staged canonical document before moving anything.
+        staged_store = ProjectStore(staged.parent)
+        document = staged_store.load_project(project_id)
+        if document.project_id != project_id:
+            raise ProjectStoreError("Staged project document ID does not match destination ID")
+
+        with self._lock:
+            if destination.exists():
+                raise ProjectAlreadyExists(project_id)
+            try:
+                os.replace(staged, destination)
+            except OSError as exc:
+                raise ProjectStoreError(
+                    f"Could not commit staged project {project_id!r} into canonical store"
+                ) from exc
+        return destination
+
     def _atomic_write_json(self, path: Path, data: Mapping[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
