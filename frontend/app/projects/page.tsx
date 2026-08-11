@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   createUVProject,
   importUVProjectArchive,
   listUVProjects,
   UVProject,
 } from '@/lib/projectsApi';
+import { listUVRecipes, UVRecipe } from '@/lib/recipesApi';
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -16,19 +17,37 @@ function formatDate(value: string) {
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<UVProject[]>([]);
+  const [recipes, setRecipes] = useState<UVRecipe[]>([]);
+  const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedRecipe = useMemo(
+    () => recipes.find(recipe => recipe.recipe_id === selectedRecipeId) ?? null,
+    [recipes, selectedRecipeId],
+  );
+  const recipeTitles = useMemo(
+    () => new Map(recipes.map(recipe => [recipe.recipe_id, recipe.title])),
+    [recipes],
+  );
+
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      setProjects(await listUVProjects());
+      const [projectList, recipeList] = await Promise.all([listUVProjects(), listUVRecipes()]);
+      setProjects(projectList);
+      setRecipes(recipeList);
+      setSelectedRecipeId(current => {
+        if (current && recipeList.some(recipe => recipe.recipe_id === current)) return current;
+        const preferred = recipeList.find(recipe => recipe.ui.featured) ?? recipeList[0];
+        return preferred?.recipe_id ?? '';
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить проекты');
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить проекты и типы задач');
     } finally {
       setLoading(false);
     }
@@ -41,11 +60,14 @@ export default function ProjectsPage() {
   async function createProject(event: FormEvent) {
     event.preventDefault();
     const normalized = title.trim();
-    if (!normalized || creating) return;
+    if (!normalized || !selectedRecipe || creating) return;
     setCreating(true);
     setError(null);
     try {
-      const project = await createUVProject({ title: normalized, recipe_id: 'general_video' });
+      const project = await createUVProject({
+        title: normalized,
+        recipe_id: selectedRecipe.recipe_id,
+      });
       setTitle('');
       setProjects(current => [project, ...current.filter(item => item.project_id !== project.project_id)]);
     } catch (err) {
@@ -79,7 +101,7 @@ export default function ProjectsPage() {
             <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-sky-400">UV Studio</p>
             <h1 className="text-4xl font-semibold tracking-tight">Проекты</h1>
             <p className="mt-3 max-w-2xl text-slate-400">
-              Канонические проекты UV Studio сохраняются отдельно от старых сессий производственного интерфейса.
+              Выберите задачу — студия подключит только нужные этапы. Музыка, диктор, continuity и дополнительные проверки не являются обязательными для каждого проекта.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -102,21 +124,66 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        <form onSubmit={createProject} className="mb-8 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:flex-row">
-          <input
-            value={title}
-            onChange={event => setTitle(event.target.value)}
-            placeholder="Название нового проекта"
-            maxLength={500}
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-sky-500"
-          />
-          <button
-            type="submit"
-            disabled={!title.trim() || creating}
-            className="rounded-lg bg-sky-500 px-5 py-3 font-medium text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {creating ? 'Создание…' : 'Создать проект'}
-          </button>
+        <form onSubmit={createProject} className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <div className="mb-4">
+            <p className="text-sm font-medium text-slate-200">Что нужно сделать?</p>
+            <p className="mt-1 text-xs text-slate-500">Тип задачи определяет рабочий процесс, а не конкретного поставщика ИИ.</p>
+          </div>
+
+          {recipes.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {recipes.map(recipe => {
+                const selected = recipe.recipe_id === selectedRecipeId;
+                return (
+                  <button
+                    key={recipe.recipe_id}
+                    type="button"
+                    onClick={() => setSelectedRecipeId(recipe.recipe_id)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      selected
+                        ? 'border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/30'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium text-slate-100">{recipe.title}</span>
+                      {selected && <span className="text-xs text-sky-400">Выбрано</span>}
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{recipe.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          ) : !loading ? (
+            <div className="rounded-xl border border-amber-900/60 bg-amber-950/30 p-4 text-sm text-amber-200">
+              Каталог типов задач недоступен. Создание нового проекта временно отключено.
+            </div>
+          ) : null}
+
+          {selectedRecipe && (
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
+              <span className="text-slate-200">Основной ввод:</span> {selectedRecipe.ui.primary_input_label}
+              <span className="mx-2 text-slate-700">•</span>
+              {selectedRecipe.steps.length} этапа/этапов в описании процесса
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              value={title}
+              onChange={event => setTitle(event.target.value)}
+              placeholder="Название нового проекта"
+              maxLength={500}
+              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-sky-500"
+            />
+            <button
+              type="submit"
+              disabled={!title.trim() || !selectedRecipe || creating}
+              className="rounded-lg bg-sky-500 px-5 py-3 font-medium text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {creating ? 'Создание…' : 'Создать проект'}
+            </button>
+          </div>
         </form>
 
         {error && (
@@ -145,7 +212,9 @@ export default function ProjectsPage() {
                     <h2 className="truncate text-lg font-medium text-white">{project.title}</h2>
                     <p className="mt-1 truncate font-mono text-xs text-slate-600">{project.project_id}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">{project.recipe_id}</span>
+                  <span className="shrink-0 rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
+                    {recipeTitles.get(project.recipe_id) ?? project.recipe_id}
+                  </span>
                 </div>
                 <div className="flex items-end justify-between gap-4 text-xs text-slate-500">
                   <span>Изменён: {formatDate(project.updated_at)}</span>
