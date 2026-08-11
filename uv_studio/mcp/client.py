@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
+import anyio
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -61,10 +61,13 @@ class MCPStdioDiscoveryClient:
         log_handle = log_path.open("w", encoding="utf-8", errors="replace")
         try:
             try:
-                client = await asyncio.wait_for(
-                    stack.enter_async_context(Client(stdio_client(params, errlog=log_handle))),
-                    timeout=profile.startup_timeout_sec,
-                )
+                # AnyIO cancel scopes must be entered/exited in the same task.
+                # `asyncio.wait_for()` would move the awaitable into another task
+                # and breaks the official SDK's task-group cleanup contract.
+                with anyio.fail_after(profile.startup_timeout_sec):
+                    client = await stack.enter_async_context(
+                        Client(stdio_client(params, errlog=log_handle))
+                    )
             except TimeoutError as exc:
                 raise MCPDiscoveryTimeout(
                     f"MCP profile {profile.profile_id!r} timed out while starting"
@@ -75,9 +78,8 @@ class MCPStdioDiscoveryClient:
                 ) from exc
 
             try:
-                result = await asyncio.wait_for(
-                    client.list_tools(), timeout=profile.discovery_timeout_sec
-                )
+                with anyio.fail_after(profile.discovery_timeout_sec):
+                    result = await client.list_tools()
             except TimeoutError as exc:
                 raise MCPDiscoveryTimeout(
                     f"MCP profile {profile.profile_id!r} timed out while listing tools"
@@ -138,10 +140,12 @@ class MCPStdioDiscoveryClient:
         output_schema = getattr(tool, "output_schema", None)
         if output_schema is None:
             output_schema = getattr(tool, "outputSchema", None)
+        title = getattr(tool, "title", None) or None
+        description = getattr(tool, "description", None) or None
         return MCPToolDescriptor(
             name=getattr(tool, "name", None),
-            title=getattr(tool, "title", None),
-            description=getattr(tool, "description", None),
+            title=title,
+            description=description,
             input_schema=input_schema or {},
             output_schema=output_schema,
         )
