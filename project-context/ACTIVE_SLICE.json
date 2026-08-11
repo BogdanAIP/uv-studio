@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "chore/agent-development-workflow",
     "pull_request": 20,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "AGENTS.md",
       ".github/pull_request_template.md",
