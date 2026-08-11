@@ -1,232 +1,179 @@
 # Next Task
 
-**Primary target:** continue Stage 3 with provider-neutral **direct MCP adapter infrastructure**. Do not make Qwen-MM, OpenClaw, WSL2 or any paid provider mandatory.
+**Primary target:** after the generic MCP discovery PR merges, add an **optional Qwen-MM-Plugins profile/binding pack** against a freshly re-verified upstream revision. Do not enable paid/cloud MCP tool execution yet.
 
 ## Why this comes next
 
-UV Studio now has the full local safety chain:
+Stage 3 now has the provider-neutral seam Qwen-MM needed:
 
 ```text
-CapabilityDefinition
-  -> CapabilityOffer
-      -> SelectionPolicy
-          -> Execution Adapter
+MCPProfile
+  -> official SDK stdio discovery
+      -> MCPToolDescriptor
+          -> explicit MCPToolBinding
+              -> semantic CapabilityOffer
 ```
 
-and a proven local executor for `media.probe` / `timeline.assemble`.
+This means Qwen-MM no longer needs a special architecture path or OpenClaw hop. It can be integrated as one optional capability package while recipes/projects remain unchanged.
 
-The next missing seam is a generic way to connect external MCP capability packages without hard-coding one vendor into RecipeDefinition, Project Store or the execution API.
+## Mandatory first step — re-verify upstream
 
-Qwen-MM-Plugins is an important intended consumer of this seam, but the MCP layer must be generic enough for other servers as well.
+`QwenLM/Qwen-MM-Plugins` changes quickly. Before writing bindings, inspect the **current** repository/release/commit and verify:
 
-## First direct-MCP slice
+- license;
+- current install/launch method;
+- MCP server entrypoint(s);
+- actual current `list_tools` surface;
+- current split between local/core operations and cloud/API operations;
+- required environment variables;
+- Windows native vs WSL support;
+- whether tool names/schemas have changed from the previously inspected revision;
+- whether pricing/cloud requirements have changed.
 
-### 1. Define MCP connection profile metadata
+Pin the researched upstream revision in the Qwen profile-pack documentation/provenance. Do not assume the earlier `7dfc08b...` revision is still current.
 
-Add a product-owned, versioned profile model containing only safe configuration metadata, for example:
+## Qwen profile/binding pack
 
-```text
-profile_id
-transport
-command + argv        # stdio only when explicitly configured
-working_directory     # optional, validated
-safe environment variable names / secret references
-server identity
-status
-```
+### 1. Keep it optional
 
-Do not store raw secret values in public registry/API responses.
+Do not add Qwen-MM as a baseline runtime dependency.
 
-Start with one transport only if that keeps the implementation reliable. Prefer a narrow, well-tested stdio MCP path before adding multiple transports.
+A normal UV Studio installation must still start and run local/free functionality when:
 
-### 2. Separate MCP server discovery from semantic mapping
+- Qwen-MM is not installed;
+- no DashScope/Qwen key exists;
+- WSL is unavailable;
+- the user never enables the profile.
 
-A connected MCP server exposes tools with provider/tool-specific names.
+### 2. Do not vendor the whole project by default
 
-Do not make those names canonical UV Studio capabilities.
+Prefer a profile/binding pack containing:
 
-Add an explicit mapping layer:
+- verified launch template/instructions;
+- environment-variable references;
+- explicit tool bindings;
+- provenance/version metadata;
+- capability classifications;
+- platform requirements.
 
-```text
-MCP tool descriptor
-  -> MCP capability binding
-      -> semantic capability_id
-      -> CapabilityOffer
-```
+Only copy code if a concrete technical need exists and Apache-2.0 NOTICE/attribution obligations are handled.
 
-Bindings should be explicit/testable rather than inferred from fuzzy names at execution time.
+### 3. Classify each tool independently
 
-### 3. Add lifecycle boundary
-
-Implement a small MCP client/manager with clear lifecycle:
-
-```text
-configured
-starting
-ready
-failed
-stopped
-```
-
-Requirements:
-
-- bounded startup timeout;
-- bounded tool-call timeout;
-- stderr captured safely;
-- process termination on shutdown/failure;
-- no orphan process after a failed start;
-- no shell command interpolation;
-- native Windows path/process behavior covered;
-- optional server absence must not prevent UV Studio startup.
-
-Do not build a general agent runtime. This is a capability transport adapter only.
-
-### 4. Read-only discovery first
-
-Before executing tools, support:
-
-- connect/start configured MCP server;
-- initialize protocol;
-- list tools;
-- expose safe normalized tool metadata;
-- health/status;
-- disconnect/stop.
-
-Discovery must not invoke paid model tools.
-
-### 5. Register MCP offers explicitly
-
-Only mapped tools become `CapabilityOffer` values.
-
-An MCP package being installed does not imply every tool is free or executable.
-
-Each binding must preserve explicit metadata:
+For every useful current Qwen-MM tool considered for binding, record actual:
 
 ```text
-availability
+semantic capability_id
 locality
 cost_class
-asynchronous
+configuration requirement
+platform requirement
+input/output contract
 features
 ```
 
-For Qwen-MM later:
+Important rule:
 
-- local/core file operations may be free/local or free/hybrid as actually verified;
-- DashScope/Qwen/Wan/Omni calls remain potentially-paid/paid and configuration-dependent;
-- licensing of the plugin package does not determine execution cost.
+> Open-source repository license does not make a cloud model invocation free.
 
-### 6. Keep paid execution disabled
+Examples of expected classification pattern, subject to re-verification:
 
-This slice should support discovery and registration first.
+- genuinely local file preparation/probing -> `local + free` when actually local;
+- remote but no billed AI service -> `remote/hybrid + free` only when verified;
+- DashScope/Qwen/Wan/Omni/cloud generation or analysis -> `remote/hybrid + potentially_paid` or `paid`;
+- credentials missing -> not executable / configuration required.
 
-If tool execution is added, initially permit only bindings explicitly marked safe under the current permission rules. Do not let MCP discovery bypass `SelectionPolicy` or D-014.
+Do not classify from names alone.
 
-No automatic `local_free_first` fallback to a remote MCP service.
+### 4. Bind only useful, semantically clean tools
 
-### 7. API
+Do not mirror the entire Qwen tool catalog into UV Studio.
 
-Add safe management/discovery endpoints, e.g.:
+Bind only operations that correspond cleanly to existing semantic capabilities or justify one new **provider-neutral** capability.
+
+If a Qwen tool is highly provider-specific, leave it unbound rather than contaminating RecipeDefinition.
+
+### 5. No MCP tool execution yet
+
+This slice should validate:
 
 ```text
-GET  /api/uv/mcp/profiles
-POST /api/uv/mcp/profiles/{profile_id}/connect
-GET  /api/uv/mcp/profiles/{profile_id}/status
-GET  /api/uv/mcp/profiles/{profile_id}/tools
-POST /api/uv/mcp/profiles/{profile_id}/disconnect
+profile can be configured
+  -> discovery succeeds where platform/runtime is available
+  -> current tools match expected bindings
+  -> offers show correct availability/locality/cost
 ```
 
-Exact shape may change if a smaller surface is cleaner.
+Do not add general MCP `call_tool` execution until the explicit remote/paid consent/cost boundary is designed.
 
-Do not expose raw environment secrets, process handles or unrestricted command execution.
+Even a Qwen binding marked local/free should not bypass the current execution architecture merely because discovery says it is available.
 
-### 8. Persistence
+### 6. Windows behavior
 
-Connection profiles should use UV Studio-owned configuration/state, not canonical project documents unless there is a concrete project-specific reason.
+If the current Qwen package still requires WSL2:
 
-Project archives must not accidentally contain machine credentials.
+- represent that as an optional platform constraint;
+- do not alter native UV Studio startup to require WSL;
+- show profile unavailable/configuration-required with a clear reason on native Windows when the configured runtime is missing;
+- generic direct MCP + local FFmpeg remain native Windows paths.
 
-### 9. Tests
+If Qwen now supports native Windows, verify it with a real CI/test path before claiming support.
 
-Use a tiny local fake MCP server/fixture to test the protocol without network/API credentials.
+### 7. Safe configuration helper
+
+It is acceptable to add a **Qwen-specific trusted profile template/helper** because its command/arguments are known and constrained.
+
+Do not add a generic HTTP endpoint that accepts arbitrary command strings.
+
+A Qwen helper may write a profile with env references, but must never persist resolved API-key values.
+
+### 8. Tests
+
+Add fixture/config tests that do not require real paid credentials.
 
 Cover at least:
 
-- startup/init/list-tools success;
-- malformed handshake;
-- startup timeout;
-- tool-list timeout;
-- child process cleanup after failure;
-- explicit disconnect;
-- duplicate/invalid profile IDs;
-- public API contains no raw secret values;
-- semantic binding required before offer registration;
-- `local_free_first` cannot treat remote/potentially-paid MCP offer as local/free;
-- Windows-compatible stdio process launch;
-- UV Studio starts normally when no MCP profiles are configured.
+- Qwen pack absent -> UV Studio starts normally;
+- profile template contains no secret values;
+- pinned upstream/provenance metadata exists;
+- expected bindings are explicit and unique;
+- cloud tools retain `potentially_paid/paid` metadata;
+- missing credentials/runtime do not become `available` execution permission;
+- unrecognized newly discovered Qwen tools remain unbound;
+- missing/renamed expected tool degrades its offer to unavailable instead of fuzzy-remapping;
+- `local_free_first` cannot select remote/potentially-paid Qwen offers;
+- project archives contain no Qwen machine config/secrets;
+- Windows baseline stays green without Qwen/WSL.
 
-## Qwen-MM boundary
+## Architecture decisions to preserve
 
-Do **not** vendor or require Qwen-MM-Plugins in the generic MCP slice.
+- D-011: OpenClaw optional peer, not mandatory.
+- D-012: Qwen-MM workflow donor/optional capability package, not paid baseline dependency.
+- D-013: semantic capability != adapter offer.
+- D-014: metadata != execution permission.
+- D-015: direct MCP discovery is generic, explicit and non-executing.
 
-After the generic client is stable, add Qwen-MM as a separate optional adapter/profile pack and verify its then-current repository contracts before binding tools.
+## What NOT to do
 
-Important:
-
-- Qwen-MM cloud operations may require paid DashScope access;
-- its Windows/WSL support may change, so re-verify at integration time;
-- native Windows UV Studio must continue to work with Qwen-MM absent;
-- reuse workflow ideas independently from runtime integration where useful.
-
-## OpenClaw boundary
-
-Do not connect OpenClaw in this slice.
-
-OpenClaw remains a future peer runtime adapter only if its broader orchestration/provider features provide concrete value that direct MCP/local execution does not.
-
-## What NOT to build
-
-- generic agent orchestration;
-- autonomous provider purchasing;
-- mandatory cloud accounts;
-- a second project database;
-- arbitrary user shell execution;
-- full MCP marketplace/package manager;
-- Qwen-specific semantics inside RecipeDefinition;
-- automatic conversion of every discovered tool into a semantic capability.
-
-## Suggested files
-
-```text
-uv_studio/mcp/models.py
-uv_studio/mcp/store.py
-uv_studio/mcp/client.py
-uv_studio/mcp/manager.py
-uv_studio/mcp/bindings.py
-uv_studio/capabilities/adapters/mcp.py
-uv_studio/api/mcp.py
-
-tests/test_mcp_models.py
-tests/test_mcp_client.py
-tests/test_mcp_bindings.py
-tests_api/test_mcp_api.py
-
-tests/fixtures/mcp_test_server.py
-
-docs/architecture/MCP_ADAPTER.md
-```
+- no mandatory DashScope;
+- no implicit API purchase/spend;
+- no OpenClaw dependency for Qwen;
+- no fuzzy auto-binding of every discovered tool;
+- no Qwen-specific names in RecipeDefinition;
+- no raw secret values in config/API/projects;
+- no generic arbitrary command profile editor;
+- no MCP tool invocation in this slice;
+- no WSL requirement for baseline native Windows UV Studio.
 
 ## Acceptance criteria
 
-- UV Studio starts with zero MCP configuration;
-- one local fake MCP server can be started, initialized, queried and stopped cross-platform;
-- no shell interpolation is used;
-- failed starts/calls leave no orphan child process;
-- tool discovery does not invoke tools;
-- semantic capability mapping is explicit;
-- MCP offer cost/locality/readiness remains explicit;
-- no raw secrets appear in APIs or project archives;
-- Qwen/OpenClaw remain optional and absent from baseline startup;
-- Linux + Windows unit/API/HTTP/frontend CI remains green.
+- current Qwen upstream is re-verified and pinned in provenance docs;
+- optional Qwen profile can be represented without changing canonical projects;
+- useful current Qwen tools have explicit semantic bindings only where justified;
+- local/free vs remote/paid classification is auditable per tool;
+- discovery mismatch fails closed;
+- no real paid API call is needed for tests/startup;
+- Qwen absence leaves all existing UV Studio functionality intact;
+- Linux + Windows baseline CI remains green.
 
-After that, add a separate **optional Qwen-MM profile/binding pack** against a re-verified pinned Qwen-MM-Plugins revision, starting with useful free/local capabilities before any cloud/paid tools.
+After that, design the **MCP/provider execution consent + cost boundary** and only then enable carefully selected tool invocation paths.

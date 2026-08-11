@@ -182,3 +182,15 @@ Decision: discovered/registered offers pass through an explicit `SelectionPolicy
 Reason: deterministic registry preference must never become implicit permission to invoke a provider or spend money. Generic media tools must also not become arbitrary filesystem/shell access.
 
 Consequences: current execution permits only explicit free/local FFmpeg offers; raw FFmpeg flags are not exposed; paths cannot escape the canonical project; failed generation does not create a successful artifact; future MCP/Qwen/OpenClaw/provider adapters must obey the same permission boundary. Full rationale: `project-context/decisions/D-014-execution-permission.md`.
+
+---
+
+## D-015 — Direct MCP discovery is generic, explicit and non-executing
+Status: accepted  
+Date: 2026-08-11
+
+Decision: use the official MCP Python SDK v2 for a generic direct stdio discovery layer. MCP profiles are machine-global configuration with environment-variable references, not portable project state. Only an explicit `MCPToolBinding` can map a discovered tool to an existing semantic capability and create a `CapabilityOffer`.
+
+Reason: MCP should be a reusable transport seam, not another provider-specific orchestration layer. Discovery must not become implicit tool invocation, command execution, secret exposure or paid-provider consent.
+
+Consequences: discovery is ephemeral and calls `list_tools()` only; no arbitrary profile-command creation API exists; no raw secrets or stderr are exposed publicly; unbound tools never become offers; cost/locality are binding facts; real stdio discovery/timeout/cleanup is tested on Linux and Windows; Qwen-MM is added later as an optional profile/binding pack. Full rationale: `project-context/decisions/D-015-direct-mcp-discovery.md`.

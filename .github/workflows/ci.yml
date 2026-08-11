@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install UV Studio dependencies
+        run: python -m pip install -r requirements-uv.txt
+
       - name: Compile UV Studio Python
         run: python -m compileall tools tests uv_studio
 
@@ -76,6 +79,9 @@ jobs:
 
       - name: Install imported backend dependencies
         run: python -m pip install -r vendor/videoclaw-app/backend/requirements.txt
+
+      - name: Install UV Studio dependencies
+        run: python -m pip install -r requirements-uv.txt
 
       - name: Import upstream server without credentials
         shell: python
