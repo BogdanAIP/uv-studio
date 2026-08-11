@@ -8,7 +8,6 @@ import uuid
 from dataclasses import dataclass, replace
 from typing import Any
 
-from uv_studio.mcp.manager import MCPExecutionTarget
 from uv_studio.projects.models import utc_now_iso
 from uv_studio.projects.task_records import ProjectTaskRecordStore
 
@@ -16,6 +15,20 @@ from .authorization import ExecutionPreparation
 from .models import CapabilityOffer
 
 EXTERNAL_RUN_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class ExternalExecutionTarget:
+    """Stable non-secret identity of the concrete external operation.
+
+    Schema v1 run records keep the historical ``profile_id`` / ``tool_name``
+    field names for archive compatibility. They are transport-neutral here:
+    MCP uses profile/tool, while a native compatibility adapter uses its stable
+    adapter namespace and explicitly whitelisted operation name.
+    """
+
+    profile_id: str
+    tool_name: str
 
 
 @dataclass(frozen=True)
@@ -76,7 +89,7 @@ class ExternalRunProvenance:
         project_id: str,
         offer: CapabilityOffer,
         preparation: ExecutionPreparation,
-        target: MCPExecutionTarget,
+        target: ExternalExecutionTarget,
     ) -> ExternalRunRecord:
         if preparation.intent.project_id != project_id:
             raise ValueError("execution preparation project does not match provenance project")
@@ -91,8 +104,8 @@ class ExternalRunProvenance:
             capability_id=offer.capability_id,
             offer_id=offer.offer_id,
             adapter_id=offer.adapter_id,
-            profile_id=target.profile.profile_id,
-            tool_name=target.binding.tool_name,
+            profile_id=target.profile_id,
+            tool_name=target.tool_name,
             started_at=utc_now_iso(),
             ended_at=None,
             authorization_required=preparation.authorization_required,

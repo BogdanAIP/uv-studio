@@ -14,7 +14,7 @@ from uv_studio.projects.task_records import ProjectTaskRecordStore
 from ..authorization import ExecutionPreparation
 from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
-from ..provenance import ExternalRunProvenance
+from ..provenance import ExternalExecutionTarget, ExternalRunProvenance
 
 _WINDOWS_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
@@ -42,7 +42,10 @@ class MCPExecutionAdapter:
             project_id=project_id,
             offer=offer,
             preparation=preparation,
-            target=target,
+            target=ExternalExecutionTarget(
+                profile_id=target.profile.profile_id,
+                tool_name=target.binding.tool_name,
+            ),
         )
         try:
             # Reject caller-supplied host paths before any trusted translation occurs.

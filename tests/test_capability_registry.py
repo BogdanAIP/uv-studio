@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from uv_studio.capabilities import (
     AdapterDefinition,
@@ -38,6 +39,28 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(offer.cost_class, CostClass.FREE)
         self.assertEqual(offer.locality, LocalityClass.LOCAL)
         self.assertIn(offer.availability, {OfferAvailability.AVAILABLE, OfferAvailability.UNAVAILABLE})
+
+    def test_edge_tts_offer_is_optional_remote_and_free(self) -> None:
+        patch_target = "uv_studio.capabilities.builtin.importlib.util.find_spec"
+        with mock.patch(patch_target, return_value=None):
+            missing = next(
+                item
+                for item in build_builtin_capability_registry().offers_for("speech.synthesize")
+                if item.offer_id == "native_videoclaw.edge_tts"
+            )
+        self.assertEqual(missing.availability, OfferAvailability.UNAVAILABLE)
+        self.assertEqual(missing.locality, LocalityClass.REMOTE)
+        self.assertEqual(missing.cost_class, CostClass.FREE)
+
+        with mock.patch(patch_target, return_value=object()):
+            installed = next(
+                item
+                for item in build_builtin_capability_registry().offers_for("speech.synthesize")
+                if item.offer_id == "native_videoclaw.edge_tts"
+            )
+        self.assertEqual(installed.availability, OfferAvailability.AVAILABLE)
+        self.assertEqual(installed.locality, LocalityClass.REMOTE)
+        self.assertEqual(installed.cost_class, CostClass.FREE)
 
     def test_native_model_offer_requires_configuration_and_is_not_declared_free(self) -> None:
         offers = build_builtin_capability_registry().offers_for("video.generate")
@@ -137,7 +160,7 @@ class CapabilityRegistryTests(unittest.TestCase):
         cap = CapabilityDefinition(
             "duplicate.capability",
             "Duplicate",
-            "Duplicate capability",
+            "Duplicate",
             OperationKind.GENERATION,
             (MediaKind.TEXT,),
             (MediaKind.TEXT,),

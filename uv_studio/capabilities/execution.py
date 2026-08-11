@@ -1,4 +1,4 @@
-"""Capability execution contracts shared by local and future external adapters."""
+"""Capability execution contracts shared by local and external adapters."""
 
 from __future__ import annotations
 
@@ -12,23 +12,23 @@ CAPABILITY_EXECUTION_SCHEMA_VERSION = 1
 
 
 class CapabilityExecutionError(RuntimeError):
-    pass
+    code = "capability_execution_failed"
 
 
 class InvalidCapabilityInput(CapabilityExecutionError):
-    pass
+    code = "invalid_capability_input"
 
 
 class UnsupportedCapabilityExecution(CapabilityExecutionError):
-    pass
+    code = "unsupported_capability_execution"
 
 
 class CapabilityToolUnavailable(CapabilityExecutionError):
-    pass
+    code = "capability_tool_unavailable"
 
 
 class CapabilityToolFailed(CapabilityExecutionError):
-    pass
+    code = "capability_tool_failed"
 
 
 @dataclass(frozen=True)
