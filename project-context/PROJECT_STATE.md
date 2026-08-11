@@ -1,17 +1,19 @@
 # Project State
 
-**Updated:** 2026-08-10  
+**Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
-**Active roadmap stage:** Stage 1 — Universal Project Store  
-**Active branch:** `stage-1/frontend-shell`  
-**Open PR:** #5 — `Stage 1: promote UV Studio frontend and add Projects UI`  
-**Main status:** Stage 0, Project Store core and Projects API are merged; owned frontend/Projects UI is ready for merge after final PR CI.
+**Active roadmap stage:** Stage 1 — Universal Project Store (final portability slice)  
+**Active branch:** `stage-1/project-archives`  
+**Main baseline before this branch:** `9570658d18553b5a3cae5a53264376ab00a3ee3a`  
+**Branch status:** portable project archive core/API/UI + Qwen-MM-informed architecture revision implemented; final branch CI must be green before merge.
 
 ## Product definition
 
-UV Studio is a universal video production and editing studio. It supports task-specific recipes rather than forcing every project through a film, music-video or micro-drama pipeline.
+UV Studio is a universal video production and editing studio. It uses task-specific recipes rather than forcing every project through a film, music-video or micro-drama pipeline.
 
 Music, narration, story, characters, continuity, lip-sync and automated review are optional capabilities.
+
+Paid AI APIs are optional capabilities, not hidden baseline dependencies.
 
 ## Current architecture
 
@@ -23,98 +25,129 @@ Music, narration, story, characters, continuity, lip-sync and automated review a
 - canonical project API: `/api/uv/projects`;
 - UV Studio-owned product frontend: top-level `frontend/`, derived once from the pinned MIT frontend baseline;
 - untouched upstream frontend snapshot remains at `vendor/videoclaw-app/frontend`;
-- future provider growth stays behind a semantic capability boundary;
-- specialized state remains optional instead of inflating every project schema.
+- provider growth is behind a future product-owned Capability Registry;
+- direct MCP, local tools, native VideoClaw, OpenClaw and Qwen-MM-Plugins will be peer adapters rather than one mandatory runtime chain;
+- professional production policy is separate from provider/model choice;
+- specialized continuity/review state remains optional.
 
-## Merged milestones
+## Merged milestones in main before this branch
 
 - `af24ed11d899ee1f459571c5d774b7ac9ad6d1ca` — reproducible VideoClaw baseline;
 - `8d175c2535806841c712582532efea403a2f8599` — UV Studio root runtime/HTTP smoke boundary;
 - `2276a854c4109f0039ae1aeb55304650840e1652` — canonical local Project Store v1;
-- `21016061be2a2aedd59e7ed7b0424467d82bfd2f` — UV Studio server wrapper + canonical Projects API.
+- `21016061be2a2aedd59e7ed7b0424467d82bfd2f` — UV Studio server wrapper + canonical Projects API;
+- `9570658d18553b5a3cae5a53264376ab00a3ee3a` — UV Studio-owned frontend + canonical Projects list/create/open UI.
 
-## Stage 1 work completed in current frontend slice
+## Stage 1 portability implemented on current branch
 
-### Product-owned frontend
+### Portable archive format
 
-Promoted the exact pinned VideoClaw frontend baseline into:
+Added `uv_studio/projects/archive.py` and public package exports.
 
-```text
-frontend/
-```
-
-The initial source is traceable through:
+Archive shape:
 
 ```text
-frontend/.uv-derived.json
-frontend/UPSTREAM_LICENSE
+<project-id>.uvproj.zip
+├── .uv-project-archive.json
+└── project/
+    └── complete canonical project directory
 ```
 
-Current recorded source baseline:
+Manifest records archive/project schema versions, project ID, timestamp, regular file paths, sizes and SHA-256 digests.
 
-- source commit: `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`;
-- source subtree: `video-claw/video-claw/frontend`;
-- source file count: 47;
-- source tree SHA-256: `eacb45953cae0ec5a64043eacbc534ef582a6be4867f5edd27af7cdbdf592bcd`.
+### Import safety
 
-`tools/uv_dev.py`, Windows setup and CI now use top-level `frontend/`, not the vendored frontend snapshot.
+Import is staged and fail-closed.
 
-### Frontend promotion/reset safety
+Implemented validation for:
 
-Added `tools/promote_frontend.py` and tests.
+- ZIP path traversal;
+- absolute/Windows-drive paths;
+- case-colliding/duplicate paths;
+- encrypted entries;
+- symlinks/special Unix ZIP entries;
+- undeclared project files;
+- file-size/total-size/entry-count/manifest limits;
+- every file size and SHA-256;
+- archive schema;
+- project ID before it is used as a filesystem component;
+- staged `project.json` and project schema/identity agreement;
+- duplicate canonical project IDs.
 
-Rules:
+Final introduction into Project Store uses `ProjectStore.commit_staged_project()` and an atomic same-filesystem directory rename. Failed final commit leaves no partial canonical project.
 
-- `--check` is read-only and reports source digest/count;
-- an existing `frontend/` is never replaced by a normal promotion command;
-- replacement requires explicit destructive `--force`;
-- staging is created on the destination filesystem so Windows checkouts work even when system temp and repository are on different drives;
-- GitHub workflow `Reset frontend to pinned baseline` is manual-only.
+### Backup primitive
 
-This prevents ordinary tooling from silently deleting UV Studio product frontend changes.
+`create_backup()` creates a unique timestamped portable project archive in an explicitly supplied backup directory.
 
-### Canonical Projects UI
+No hidden scheduling/cloud synchronization is part of the primitive.
+
+### Archive API
 
 Added:
 
 ```text
-frontend/lib/projectsApi.ts
-frontend/app/projects/page.tsx
-frontend/app/projects/[projectId]/page.tsx
+POST /api/uv/projects/import
+GET  /api/uv/projects/{project_id}/archive
 ```
 
-Implemented:
+Import streams raw archive bytes to disk instead of buffering the complete media project in RAM. Export temporary files are removed after response delivery.
 
-- list canonical UV Studio projects;
-- create a `general_video` project through `/api/uv/projects`;
-- open a project using stable UV Studio `project_id`;
-- show recipe/schema/source/artifact metadata;
-- loading/error/empty states;
-- `/api/uv/*` Next.js proxy to the UV Studio backend;
-- link from the existing production workspace to `/projects`;
-- product metadata/title set to UV Studio.
+### Archive UI
 
-Legacy VideoClaw session IDs are intentionally not substituted for canonical UV Studio project IDs.
+Projects UI now supports:
 
-### Migration policy
+- import `.uvproj.zip` from `/projects`;
+- download a complete archive from `/projects/{project_id}`.
 
-The existing production workspace remains reachable at `/` while product surfaces are migrated gradually. Full localization/rebranding of old production screens is not required for this slice.
+### Tests
 
-## Verification
+Added archive unit tests for:
 
-GitHub Actions CI run `31392325018` completed successfully on Ubuntu and Windows.
+- round-trip metadata/files;
+- nested source/artifact files;
+- backup archives;
+- duplicate project ID;
+- tampered checksum;
+- undeclared files;
+- ZIP traversal;
+- malicious manifest project ID;
+- future archive schema;
+- archive resource limits;
+- simulated final atomic commit failure.
 
-Verified:
+API integration tests cover HTTP archive export/import, nested file preservation, duplicate import, invalid ZIP and empty upload.
 
-- UV Studio bootstrap/unit tests;
-- frontend provenance checks;
-- backend compile/install/import;
-- UV Studio Projects API integration tests;
-- real HTTP health smoke through `uv_studio.server`;
-- `npm ci` from top-level `frontend/`;
-- Next.js production build from top-level `frontend/`.
+Documentation: `docs/PROJECT_ARCHIVES.md`.
 
-PR #5 triggers another final CI run after this handoff update before merge.
+## Qwen-MM-Plugins architecture review incorporated
+
+Reviewed `QwenLM/Qwen-MM-Plugins@7dfc08b7de8e621fc28bf9814e3d41a59b4595ae` (Apache-2.0).
+
+Durable conclusion:
+
+- Qwen-MM-Plugins does not replace UV Studio;
+- its strong `video-edit` production methodology is a useful donor: actual source review, pacing/audio-first/beat-sync planning, Scene Ledger, sample-first generation, plan/scene/review gates and evidence-based final review;
+- its Qwen/Wan/Omni/embedding cloud operations require configured API access and must remain optional;
+- DashScope must not become a baseline UV Studio dependency where adequate local/free execution exists;
+- OpenClaw is no longer a mandatory/preferred hop for every capability;
+- Stage 3 is now Capability Registry & Adapters with direct MCP/local/native/OpenClaw/Qwen adapters as peers;
+- Qwen-MM-Plugins currently requiring WSL2 for its supported Windows path prevents it from being required on UV Studio's native-Windows startup path.
+
+See `docs/architecture/QWEN_MM_PLUGINS_EVALUATION.md` and decisions D-011/D-012.
+
+## Verification status
+
+Latest fully observed head before the final documentation commits:
+
+- branch head `7cf295f5f14fb37f37678ea053a9037e62d305d5`;
+- CI run `31462965723`;
+- Ubuntu bootstrap: success;
+- Ubuntu app baseline including API integration tests, HTTP smoke and production frontend build: success;
+- Windows bootstrap/unit tests: success;
+- Windows app baseline was still completing when this handoff text was written.
+
+Final branch merge requires the CI run for the actual final head to pass on both operating systems.
 
 ## What works now
 
@@ -125,37 +158,37 @@ PR #5 triggers another final CI run after this handoff update before merge.
 - canonical project HTTP API;
 - UV Studio-owned user-facing frontend;
 - canonical Projects list/create/open flow;
+- portable checksummed project export/import;
+- explicit project backup primitive;
+- import/download archive UI;
 - existing upstream production UI retained during migration;
-- cross-platform build and backend smoke coverage.
+- cross-platform build/backend smoke coverage;
+- provider-neutral architecture plan updated after Qwen-MM research.
 
-## What does not work yet
+## Deferred intentionally
 
-- project archive export/import is not implemented;
-- project backup/recovery helpers are not implemented;
-- source/artifact upload/mutation API is not implemented;
-- canonical project shell is not yet bound to recipes/workflows;
-- Recipe Registry does not exist;
-- Capability Bridge/OpenClaw integration does not exist;
-- media-specific UV Studio recipes are not implemented;
-- existing production screens still contain upstream terminology/language.
+- project delete/rename/conflict-clone policies;
+- scheduled automatic backups;
+- cloud sync;
+- recipe-specific source/artifact mutation UI/API;
+- Recipe Registry itself;
+- Capability Registry implementation;
+- direct MCP/OpenClaw/Qwen adapters;
+- media-specific UV Studio recipes;
+- localization/replacement of remaining upstream production screens.
 
-## Current risks
+Recipe-specific media/source management is intentionally deferred so Stage 1 does not invent generic media behavior before Recipe Registry defines task requirements.
+
+## Current risks / invariants
 
 1. Never conflate canonical `project_id` with legacy upstream session IDs.
 2. Do not run forced frontend reset during normal development.
 3. Keep Project Store schema universal and small.
-4. Keep product filesystem rules inside `ProjectStore`; API/UI must not duplicate them.
+4. Keep product filesystem/archive rules inside Project Store/archive modules; API/UI must not duplicate them.
 5. Keep the large upstream film orchestrator specialized rather than central.
-6. Finish project portability/recovery before beginning Recipe Registry so project state remains safely movable and recoverable.
-
-## Last verified repository facts
-
-- active branch: `stage-1/frontend-shell`;
-- open PR: #5;
-- latest fully successful branch CI before final handoff commit: `31392325018`;
-- current merged `main` before PR #5: `21016061be2a2aedd59e7ed7b0424467d82bfd2f`;
-- pinned vendored app file count: 195;
-- promoted frontend initial source file count: 47.
+6. No paid provider becomes a hidden prerequisite for a workflow with a viable local/free implementation.
+7. Professional editing/review policy must remain provider-neutral.
+8. Optional Qwen-MM/OpenClaw integrations may not weaken native-Windows baseline support.
 
 ## Development invariant
 
