@@ -1,131 +1,100 @@
 # Next Task
 
-**Primary target:** begin Stage 2 with a provider-neutral Recipe Registry and Production Policy model. Do not implement Capability Registry/provider execution in this slice.
+**Primary target:** continue Stage 2 by turning registered recipes into explicit UV Studio execution plans for already-supported VideoClaw workflows, without implementing the general Capability Registry yet.
 
 ## Why this comes next
 
-Stage 1 now provides a canonical durable project, Projects API/UI, and a validated portable `.uvproj.zip` recovery unit. The next architectural boundary is deciding **what kind of work a project is doing** without forcing every project through one film/music/narration pipeline.
+The first Stage 2 slice defines durable provider-neutral task recipes, production policies, API catalog and New Project selection. A recipe still describes intent only; opening a canonical project does not yet say which existing workflow can actually run or what inputs must be collected.
 
-Recent Qwen-MM-Plugins research also showed that professional source-review/planning/sample/review discipline should be represented independently from the paid model/provider that performs an operation.
-
-Therefore Stage 2 starts by making recipes and production policies explicit data/contracts before adding more provider integrations.
+The next slice should bridge that gap for the three existing specialized VideoClaw pipelines while keeping the compatibility layer replaceable.
 
 ## Do first
 
-1. Add `uv_studio/recipes/` as product-owned code.
-2. Define a strict versioned `RecipeDefinition` model with at least:
-   - `recipe_id`;
-   - title/description;
-   - required and optional input kinds;
-   - required and optional semantic capability IDs;
-   - ordered logical steps;
-   - `production_policy`;
-   - small UI metadata/progressive-disclosure hints.
-3. Define provider-neutral `ProductionPolicy` switches/levels for:
-   - source review;
-   - direction/taste planning;
-   - sample-first generation;
-   - plan gate;
-   - scene/take ledger;
-   - final evidence-based review;
-   - continuity policy reference (disabled by default at this stage).
-4. Implement `RecipeRegistry` with deterministic registration, lookup/list, duplicate rejection and schema validation.
-5. Add built-in recipes without executing them yet:
-   - `general_video` — simple video, no mandatory narration/music/continuity;
-   - `narrated_video` — maps conceptually to existing VideoClaw standard/narrated workflow;
-   - wrappers/metadata for existing `action_transfer` and `digital_human` capabilities where their current pipeline is usable.
-6. Keep existing `project.json.recipe_id` as the stable reference. Do not inflate project schema with copies of full recipe definitions.
-7. Add API endpoint to list available recipes and get one recipe definition.
-8. Change New Project UI from hard-coded `general_video` to selecting from registry-backed recipes, while preserving progressive disclosure.
-9. Add unit/API/frontend build coverage on Windows and Linux.
-10. Record mapping from built-in recipes to existing VideoClaw pipelines, but keep the large film orchestrator specialized.
-
-## Production Policy rule
-
-The policy describes **how carefully work is produced**, not **which vendor executes it**.
-
-Example shape:
+1. Inspect the current VideoClaw API/pipeline launch contracts for:
+   - `standard` (mapped from `narrated_video`);
+   - `action_transfer`;
+   - `digital_human`.
+2. Add UV Studio-owned execution-planning models, for example:
+   - `RecipeExecutionPlan`;
+   - execution status such as `available | unavailable | missing_inputs`;
+   - required input slots and accepted media kinds;
+   - compatibility target metadata kept outside `RecipeDefinition`;
+   - no provider credentials in the plan.
+3. Add a small resolver that maps a canonical project's registered recipe to an execution plan.
+4. `general_video` must report honestly that its full generic execution path is not implemented yet rather than silently using the narrated `standard` pipeline.
+5. Expose project-level endpoint such as:
 
 ```text
-production_policy:
-  source_review: required | optional | off
-  direction_gate: required | optional | off
-  sample_first: required | optional | off
-  plan_gate: required | optional | off
-  scene_ledger: required | optional | off
-  final_review: required | optional | off
+GET /api/uv/projects/{project_id}/execution-plan
 ```
 
-Exact enum naming may be refined, but avoid booleans if three-state behavior is useful.
+6. For the three compatible recipes, expose the exact existing pipeline target and input requirements through the plan, but do not duplicate the upstream pipeline implementation.
+7. Add minimal project-workspace UI:
+   - show recipe title/description;
+   - show required inputs;
+   - show whether the current workflow is available;
+   - do not launch anything until input binding is explicit.
+8. Add unit/API/frontend build coverage on Windows/Linux.
+9. Document the migration boundary so future Stage 3 Capability Registry can replace native VideoClaw bindings without changing RecipeDefinition or Project Store.
 
-For example:
+## Production Policy integration
 
-- mechanical standalone work may have most gates `off`;
-- a designed existing-footage montage may require source review + plan + final review;
-- a multi-scene professional piece may require Scene Ledger;
-- none of these policy choices imply DashScope/Qwen/OpenClaw.
+Execution plans should carry the recipe's resolved Production Policy so later execution can enforce:
 
-## Qwen-MM boundary
+- source review;
+- sample-first;
+- plan gate;
+- scene ledger;
+- final review;
+- continuity policy.
 
-Use `docs/architecture/QWEN_MM_PLUGINS_EVALUATION.md` as design input.
+Do not implement all gate mechanics in this slice. The important part is that execution does not lose the policy when it leaves the recipe catalog.
 
-Allowed in Stage 2:
+## Explicit honesty rule
 
-- adapt concepts such as source review, Scene Ledger, sample-first and evidence review;
-- write our own small provider-neutral contracts/tests;
-- copy specific Apache-2.0 code only if clearly superior and attribution is recorded.
+Never make `general_video` run the existing `standard` pipeline merely because it is available. `standard` is narration-led and would recreate the architecture mistake where ordinary video implicitly requires speech.
 
-Not allowed in Stage 2:
+If a recipe has no implementation yet, return an explicit unavailable execution plan with a reason.
 
-- requiring `DASHSCOPE_API_KEY`;
-- making Qwen-MM-Plugins a runtime prerequisite;
-- installing WSL2-only components on the native Windows startup path;
-- implementing OpenClaw or direct MCP execution yet.
+## Capability boundary
+
+Still out of scope:
+
+- direct MCP execution;
+- Qwen-MM runtime installation;
+- OpenClaw runtime integration;
+- provider/model routing;
+- cost selection;
+- generic `video.generate` resolution.
+
+Those belong to Stage 3.
+
+The compatibility resolver may call or identify existing native VideoClaw pipelines only.
 
 ## Suggested files
 
 ```text
-uv_studio/recipes/__init__.py
-uv_studio/recipes/models.py
-uv_studio/recipes/registry.py
-uv_studio/recipes/builtin.py
-uv_studio/api/recipes.py
+uv_studio/recipes/execution.py
+uv_studio/api/projects.py
 
-tests/test_recipe_registry.py
-tests_api/test_recipes_api.py
-frontend/lib/recipesApi.ts
+tests/test_recipe_execution.py
+tests_api/test_project_execution_api.py
+
+frontend/lib/projectsApi.ts
+frontend/app/projects/[projectId]/page.tsx
+
+docs/architecture/RECIPE_EXECUTION.md
 ```
-
-Likely frontend changes:
-
-```text
-frontend/app/projects/page.tsx
-```
-
-Keep UI changes small: select a task/recipe and show only minimal description at creation time. Full recipe workspaces belong to later slices.
 
 ## Acceptance criteria
 
-- recipe definitions are strict/versioned and provider-neutral;
-- duplicate or invalid recipe definitions fail explicitly;
-- `general_video` does not require music, narration, story, continuity or automatic review;
-- `narrated_video` clearly requires narration-related logical steps but does not become the universal default;
-- available recipes are exposed through UV Studio API;
-- project creation accepts only known registry recipes (or has an explicitly documented compatibility policy if legacy IDs must temporarily pass);
-- New Project UI no longer hard-codes `general_video` as the only choice;
-- no paid API/runtime is introduced;
+- execution planning is UV Studio-owned and provider-neutral above the compatibility target;
+- `narrated_video`, `action_transfer`, `digital_human` resolve to truthful existing-pipeline plans;
+- `general_video` is explicitly unavailable until a real generic path exists;
+- project execution plan preserves Production Policy;
+- no VideoClaw session ID becomes the canonical UV Studio project ID;
+- no API key/provider/runtime dependency is added;
 - no files under `vendor/videoclaw-app` are modified;
-- tests and frontend build pass on Windows and Linux.
+- tests + production frontend build pass on Windows/Linux.
 
-## Explicitly out of scope for this slice
-
-- actual semantic Capability Registry execution;
-- Qwen-MM/OpenClaw MCP connections;
-- cost routing;
-- existing-video range editor;
-- dubbing implementation;
-- continuity engine;
-- Music Video Mode;
-- full rebranding/localization of legacy screens.
-
-After this slice, Stage 2 can bind built-in recipes to existing pipelines and add richer recipe-specific UI progressively without changing the Project Store contract.
+After this slice, either bind inputs and launch the existing pipelines through a UV Studio wrapper, or begin Stage 3 Capability Registry depending on how cleanly the upstream launch contracts can be isolated.
