@@ -3,9 +3,9 @@
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
 **Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
-**Active branch:** `stage-3/qwen-mm-bindings`  
-**Main baseline:** `3e2b60329f7b8aa22fec38c012d703e3a8cca26d`  
-**Branch status:** optional pinned Qwen-MM profile/binding pack implemented; final PR-specific CI required before merge.
+**Active branch:** `stage-3/execution-consent-boundary`  
+**Main baseline:** `4108db23f7de67293a53d1005a119a015539c0aa`  
+**Branch status:** execution consent/cost boundary implemented; PR-specific Linux/Windows CI required before merge.
 
 ## Product architecture
 
@@ -18,7 +18,9 @@ Canonical Project
               -> CapabilityRegistry
                   -> CapabilityOffer metadata
                       -> SelectionPolicy
-                          -> Execution Adapter
+                          -> ExecutionPreparation
+                              -> one-shot ExecutionAuthorization when required
+                                  -> Execution Adapter
 
 Machine Studio Config
   -> MCPProfile
@@ -43,9 +45,10 @@ Permanent rules:
 - `dff8fc14...` — truthful RecipeExecutionPlan;
 - `7fb0ca88...` — semantic Capability Registry;
 - `4cbe383f...` — fail-closed selection + safe local FFprobe/FFmpeg execution;
-- `3e2b60329f7b8aa22fec38c012d703e3a8cca26d` — official-SDK generic direct MCP stdio discovery + explicit semantic bindings.
+- `3e2b60329f7b8aa22fec38c012d703e3a8cca26d` — official-SDK generic direct MCP stdio discovery + explicit semantic bindings;
+- `4108db23f7de67293a53d1005a119a015539c0aa` — optional pinned Qwen-MM profile/binding pack (merged PR #12).
 
-## Current Stage 3 slice — optional Qwen-MM pack
+## Previous Stage 3 slice — optional Qwen-MM pack
 
 ### Fresh upstream verification
 
@@ -206,26 +209,104 @@ Added unit/API coverage for:
 
 Docs: `docs/integrations/QWEN_MM.md`. Decision: D-016.
 
+## Current Stage 3 slice — execution consent + cost boundary
+
+### Product-owned authorization contract
+
+Added `uv_studio/capabilities/authorization.py`.
+
+Selection and authorization are separate. `SelectionPolicy` still decides only which available offer is selected; `ExecutionPreparation` then records the exact selected execution intent and tells the caller which consent scopes are required before execution.
+
+Cost estimate states are versioned separately from `CostClass`:
+
+```text
+known
+bounded
+unknown
+not_applicable
+```
+
+Current conservative defaults:
+
+```text
+free offer                    -> not_applicable
+potentially_paid / paid offer -> unknown
+```
+
+UV Studio does not invent provider pricing. A future adapter may supply a trustworthy current known/bounded estimate without changing selection semantics.
+
+Consent scopes:
+
+```text
+remote_execution  -> selected locality is remote/hybrid
+external_cost     -> cost_class is potentially_paid/paid
+unknown_cost      -> current estimate state is unknown
+```
+
+Therefore free/remote requires remote permission but no payment consent, while a remote/potentially-paid offer with unknown current price requires all three acknowledgements.
+
+### Exact one-shot grant
+
+`OneShotAuthorizationStore` is deliberately process-local and in-memory.
+
+Each grant:
+
+- uses a cryptographically random opaque token;
+- expires after a short TTL;
+- is consumed once;
+- binds to exact project + capability + offer + selection policy + canonical JSON SHA-256 input digest;
+- fails closed on replay, expiry or mutated input;
+- is never written to portable project state or archives.
+
+A mismatched execution attempt consumes the token, preventing a rejected mutation from leaving a reusable grant behind.
+
+### Execution API boundary
+
+Added:
+
+```text
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/prepare-execution
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/authorize-execution
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/execute
+```
+
+`prepare-execution` returns selection + structured locality/cost/consent facts. `authorize-execution` issues a one-shot token only after every required acknowledgement. `execute` consumes authorization before a non-local/non-free execution path can continue.
+
+Existing local/free behavior remains backward-compatible and requires no token.
+
+This slice intentionally does **not** add external transport invocation. An authorized non-local adapter still stops with `adapter_not_executable_yet`; the next slice can add MCP `call_tool()` behind the already-tested boundary.
+
+### Tests
+
+Added unit/API coverage for:
+
+- local/free execution unchanged;
+- `local_free_first` still never widening to potentially-paid offers;
+- free/remote requiring only `remote_execution`;
+- paid/unknown requiring explicit `external_cost` + `unknown_cost`;
+- incomplete acknowledgements rejected;
+- one-shot replay rejection;
+- exact normalized input binding;
+- mismatched input consuming the token;
+- token expiry;
+- structured `consent_required`, `acknowledgement_required` and `authorization_invalid` API behavior.
+
+Decision: `project-context/decisions/D-017-execution-authorization.md`.
+
 ## Verification status
 
-Functional code head before documentation-only commits: `93f094bd7d2ed3d43effdcc9a2663fbf9a178aa4`, CI run `31470778147`.
+PR #12 is merged into `main` at `4108db23f7de67293a53d1005a119a015539c0aa`.
 
-Observed there:
+For the current execution-consent branch, the new Python module, API replacement and tests were syntax-parsed before commit. The ChatGPT container cannot clone GitHub over its outbound network, so the authoritative full verification is the PR-specific GitHub Actions matrix.
 
-- Ubuntu bootstrap/unit: success;
-- Windows bootstrap/unit: success;
-- Ubuntu API integration/HTTP smoke: success;
-- Qwen tests require no real Qwen install, WSL or paid API key.
+Required before merge:
 
-Docs/decision head `04c7f0066bd096f92846cc2b1508233e9c0cc705`, CI run `31470945236` observed:
+- Ubuntu bootstrap/unit success;
+- Windows bootstrap/unit success;
+- Ubuntu API integration/HTTP/frontend checks success;
+- Windows API integration/HTTP smoke success.
 
-- Ubuntu bootstrap/unit: success;
-- Windows bootstrap/unit: success;
-- Ubuntu app-baseline/API/HTTP/frontend build: success;
-- Windows API integration and HTTP smoke: success;
-- Windows frontend install/build still completing when this state was written.
-
-This state update creates a newer head. Merge requires the actual PR head to pass full Linux/Windows PR-specific CI.
+No test in this slice invokes Qwen, DashScope or another paid provider.
 
 ## What works now
 
@@ -238,14 +319,17 @@ This state update creates a newer head. Merge requires the actual PR head to pas
 - optional pinned Qwen-MM profile/binding templates;
 - auditable local/free vs remote/potentially-paid classification;
 - a semantically correct potential `digital_human` implementation via Wan S2V;
+- provider-neutral execution preparation with explicit cost-estimate state;
+- free/remote and non-free/unknown-cost consent scopes;
+- exact short-lived one-shot authorization bound to normalized input;
+- backward-compatible local/free execution without consent friction;
 - baseline startup/testing without DashScope, Qwen, WSL or OpenClaw.
 
 ## Not implemented yet
 
 - MCP `call_tool` execution;
-- explicit remote/potentially-paid execution consent;
-- provider/tool cost estimate/unknown-cost handling;
 - persistent per-run execution provenance for external tools;
+- MCP binding-owned project file argument translation;
 - Qwen cloud invocation;
 - WSL bridge for Qwen on native Windows;
 - OpenClaw adapter;
@@ -263,11 +347,14 @@ This state update creates a newer head. Merge requires the actual PR head to pas
 7. Current native Windows does not claim Qwen support and does not require WSL.
 8. Qwen cloud tool invocation remains disabled.
 9. OpenClaw remains optional and unused in the Qwen path.
-10. New external execution must pass a separate consent/cost boundary before being enabled.
+10. Remote/non-free execution must pass the product-owned consent/cost boundary first.
+11. There is no global reusable paid-execution permission.
+12. Unknown provider price stays unknown and requires explicit acknowledgement.
+13. One-shot authorization tokens are runtime state and must never enter portable project state.
 
 ## Next slice
 
-Design and implement the **MCP/provider execution consent + cost boundary**, tested first with the local fake MCP server. Do not make real paid Qwen calls in CI. See `NEXT_TASK.md`.
+Implement **generic authorized MCP `call_tool()` execution plus durable external invocation provenance**, tested first with the local fake MCP server. Do not make real paid Qwen calls in CI. See `NEXT_TASK.md`.
 
 ## Development invariant
 

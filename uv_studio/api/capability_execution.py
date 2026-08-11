@@ -1,13 +1,19 @@
 """Project-scoped capability execution API.
 
-The endpoint executes only implementations explicitly permitted by current
-selection policy. This Stage 3 slice intentionally exposes local deterministic
-execution only; external/MCP/paid runtimes remain metadata-only.
+Selection, consent and execution are deliberately separate:
+- selection chooses an available semantic offer;
+- preparation reports locality/cost facts and required acknowledgements;
+- authorization issues only a short-lived one-shot grant for the exact input;
+- execution consumes that grant before any non-local or non-free adapter may run.
+
+The current executable adapter remains local FFmpeg. External adapters become
+eligible for transport work only after passing this product-owned boundary.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,6 +21,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.projects import get_project_store
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.authorization import (
+    ConsentScope,
+    ExecutionAuthorizationInvalid,
+    ExecutionConsentRequired,
+    InvalidExecutionInput,
+    OneShotAuthorizationStore,
+    prepare_execution,
+)
 from uv_studio.capabilities.execution import (
     CapabilityExecutionEnvelope,
     CapabilityToolFailed,
@@ -22,10 +36,10 @@ from uv_studio.capabilities.execution import (
     InvalidCapabilityInput,
     UnsupportedCapabilityExecution,
 )
-from uv_studio.capabilities.models import CostClass, LocalityClass
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.capabilities.selection import (
     NoEligibleOffer,
+    OfferSelectionDecision,
     OfferSelectionError,
     OfferSelectionRequired,
     PinnedOfferRejected,
@@ -44,6 +58,11 @@ def get_local_ffmpeg_adapter(
     return LocalFFmpegAdapter(store)
 
 
+@lru_cache(maxsize=1)
+def get_execution_authorization_store() -> OneShotAuthorizationStore:
+    return OneShotAuthorizationStore()
+
+
 def _selection_policy(value: Any) -> SelectionPolicy:
     if value is None:
         return SelectionPolicy.LOCAL_FREE_FIRST
@@ -56,37 +75,28 @@ def _selection_policy(value: Any) -> SelectionPolicy:
         ) from exc
 
 
-@router.post("/{project_id}/capabilities/{capability_id}/execute")
-def execute_project_capability(
-    project_id: str,
-    capability_id: str,
+def _validate_request(
     request: dict[str, Any],
-    store: ProjectStore = Depends(get_project_store),
-    registry: CapabilityRegistry = Depends(get_capability_registry),
-    local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
-) -> dict[str, Any]:
+    *,
+    allow_authorization_token: bool = False,
+    allow_acknowledgements: bool = False,
+) -> tuple[SelectionPolicy, str | None, dict[str, Any]]:
     if not isinstance(request, Mapping):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="request body must be a JSON object",
         )
-
-    unknown_fields = set(request).difference({"selection_policy", "offer_id", "input"})
+    allowed = {"selection_policy", "offer_id", "input"}
+    if allow_authorization_token:
+        allowed.add("authorization_token")
+    if allow_acknowledgements:
+        allowed.add("acknowledgements")
+    unknown_fields = set(request).difference(allowed)
     if unknown_fields:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"unsupported execution request fields: {sorted(unknown_fields)!r}",
         )
-
-    try:
-        store.load_project(project_id)
-    except ProjectNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found") from exc
-    except (ProjectValidationError, ProjectStoreError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
 
     policy = _selection_policy(request.get("selection_policy"))
     offer_id = request.get("offer_id")
@@ -101,7 +111,28 @@ def execute_project_capability(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="input must be a JSON object",
         )
+    return policy, offer_id, dict(input_payload)
 
+
+def _load_project(store: ProjectStore, project_id: str) -> None:
+    try:
+        store.load_project(project_id)
+    except ProjectNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found") from exc
+    except (ProjectValidationError, ProjectStoreError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+def _select(
+    registry: CapabilityRegistry,
+    capability_id: str,
+    *,
+    policy: SelectionPolicy,
+    offer_id: str | None,
+) -> OfferSelectionDecision:
     try:
         decision = select_offer(
             registry,
@@ -128,27 +159,186 @@ def execute_project_capability(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "offer_not_executable", "message": str(exc)},
         ) from exc
-
-    offer = decision.offer
-    if offer is None:
+    if decision.offer is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="selection policy did not produce an executable offer",
         )
+    return decision
 
-    # Stage 3 local slice: known external/remote/paid offers remain metadata-only.
-    if (
-        offer.adapter_id != LocalFFmpegAdapter.adapter_id
-        or offer.cost_class is not CostClass.FREE
-        or offer.locality is not LocalityClass.LOCAL
-    ):
+
+def _prepare(
+    *,
+    project_id: str,
+    capability_id: str,
+    request: dict[str, Any],
+    store: ProjectStore,
+    registry: CapabilityRegistry,
+    allow_authorization_token: bool = False,
+    allow_acknowledgements: bool = False,
+):
+    policy, offer_id, input_payload = _validate_request(
+        request,
+        allow_authorization_token=allow_authorization_token,
+        allow_acknowledgements=allow_acknowledgements,
+    )
+    _load_project(store, project_id)
+    decision = _select(registry, capability_id, policy=policy, offer_id=offer_id)
+    try:
+        preparation = prepare_execution(
+            project_id=project_id,
+            offer=decision.offer,
+            selection_policy=policy,
+            payload=input_payload,
+        )
+    except InvalidExecutionInput as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    return decision, preparation, input_payload
+
+
+def _acknowledgements(value: Any) -> set[ConsentScope]:
+    if value is None:
+        return set()
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="acknowledgements must be an array of consent scope strings",
+        )
+    try:
+        result = {ConsentScope(item) for item in value}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "acknowledgements may contain only remote_execution, external_cost, "
+                "or unknown_cost"
+            ),
+        ) from exc
+    if len(result) != len(value):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="acknowledgements must not contain duplicates",
+        )
+    return result
+
+
+def _consent_required_detail(preparation) -> dict[str, Any]:
+    return {
+        "code": "consent_required",
+        "message": "selected offer requires explicit one-shot execution authorization",
+        "authorization": preparation.to_dict(),
+    }
+
+
+@router.post("/{project_id}/capabilities/{capability_id}/prepare-execution")
+def prepare_project_capability_execution(
+    project_id: str,
+    capability_id: str,
+    request: dict[str, Any],
+    store: ProjectStore = Depends(get_project_store),
+    registry: CapabilityRegistry = Depends(get_capability_registry),
+) -> dict[str, Any]:
+    decision, preparation, _ = _prepare(
+        project_id=project_id,
+        capability_id=capability_id,
+        request=request,
+        store=store,
+        registry=registry,
+    )
+    return {
+        "selection": decision.to_dict(),
+        "authorization": preparation.to_dict(),
+    }
+
+
+@router.post("/{project_id}/capabilities/{capability_id}/authorize-execution")
+def authorize_project_capability_execution(
+    project_id: str,
+    capability_id: str,
+    request: dict[str, Any],
+    store: ProjectStore = Depends(get_project_store),
+    registry: CapabilityRegistry = Depends(get_capability_registry),
+    authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
+) -> dict[str, Any]:
+    decision, preparation, _ = _prepare(
+        project_id=project_id,
+        capability_id=capability_id,
+        request=request,
+        store=store,
+        registry=registry,
+        allow_acknowledgements=True,
+    )
+    acknowledgements = _acknowledgements(request.get("acknowledgements"))
+    try:
+        token, expires_at = authorizations.issue(
+            preparation,
+            acknowledgements=acknowledgements,
+        )
+    except ExecutionConsentRequired as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "acknowledgement_required",
+                "message": str(exc),
+                "authorization": preparation.to_dict(),
+            },
+        ) from exc
+    return {
+        "selection": decision.to_dict(),
+        "authorization": preparation.to_dict(),
+        "authorization_token": token,
+        "expires_at_unix": expires_at,
+    }
+
+
+@router.post("/{project_id}/capabilities/{capability_id}/execute")
+def execute_project_capability(
+    project_id: str,
+    capability_id: str,
+    request: dict[str, Any],
+    store: ProjectStore = Depends(get_project_store),
+    registry: CapabilityRegistry = Depends(get_capability_registry),
+    local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
+    authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
+) -> dict[str, Any]:
+    decision, preparation, input_payload = _prepare(
+        project_id=project_id,
+        capability_id=capability_id,
+        request=request,
+        store=store,
+        registry=registry,
+        allow_authorization_token=True,
+    )
+    token = request.get("authorization_token")
+    if token is not None and not isinstance(token, str):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="authorization_token must be a string when provided",
+        )
+    try:
+        authorizations.consume(token, preparation)
+    except ExecutionConsentRequired as exc:
+        detail = _consent_required_detail(preparation)
+        detail["message"] = str(exc)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+    except ExecutionAuthorizationInvalid as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "authorization_invalid", "message": str(exc)},
+        ) from exc
+
+    offer = decision.offer
+    if offer.adapter_id != LocalFFmpegAdapter.adapter_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "adapter_not_executable_yet",
                 "message": (
-                    f"offer {offer.offer_id!r} is known but current Stage 3 execution permits "
-                    "only free/local local_ffmpeg offers"
+                    f"offer {offer.offer_id!r} passed selection/authorization, but adapter "
+                    f"{offer.adapter_id!r} has no execution transport in this slice"
                 ),
             },
         )
