@@ -17,9 +17,15 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any
 
-from .models import PROJECT_SCHEMA_VERSION, ProjectDocument, utc_now_iso
+from .models import (
+    PROJECT_SCHEMA_VERSION,
+    ProjectDocument,
+    ProjectValidationError,
+    utc_now_iso,
+    validate_identifier,
+)
 from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
 
 ARCHIVE_SCHEMA_VERSION = 1
@@ -52,15 +58,6 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
         while chunk := handle.read(chunk_size):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _sha256_stream(handle, chunk_size: int = 1024 * 1024) -> tuple[str, int]:
-    digest = hashlib.sha256()
-    size = 0
-    while chunk := handle.read(chunk_size):
-        digest.update(chunk)
-        size += len(chunk)
-    return digest.hexdigest(), size
 
 
 def _safe_archive_output(project_dir: Path, archive_path: Path) -> Path:
@@ -219,7 +216,11 @@ def _validated_members(
             if total > limits.max_total_uncompressed_bytes:
                 raise ProjectArchiveError("Archive exceeds maximum uncompressed size")
 
-        if name != ARCHIVE_MANIFEST and name != PROJECT_PREFIX and not name.startswith(f"{PROJECT_PREFIX}/"):
+        if (
+            name != ARCHIVE_MANIFEST
+            and name != PROJECT_PREFIX
+            and not name.startswith(f"{PROJECT_PREFIX}/")
+        ):
             raise ProjectArchiveError(f"Unexpected archive entry outside project/: {info.filename}")
 
     return normalized
@@ -309,6 +310,7 @@ def _extract_project(
     staging_project: Path,
 ) -> None:
     staging_project.mkdir(parents=True, exist_ok=False)
+    staging_root = staging_project.resolve()
 
     # Create declared project directories first, including empty ones.
     for name, info in sorted(members.items()):
@@ -318,7 +320,7 @@ def _extract_project(
             continue
         relative = PurePosixPath(name).relative_to(PROJECT_PREFIX)
         target = staging_project.joinpath(*relative.parts).resolve()
-        if staging_project.resolve() not in target.parents and target != staging_project.resolve():
+        if staging_root not in target.parents and target != staging_root:
             raise ProjectArchiveError(f"Archive directory escaped staging: {name}")
         target.mkdir(parents=True, exist_ok=True)
 
@@ -326,22 +328,36 @@ def _extract_project(
         info = members[name]
         relative = PurePosixPath(name).relative_to(PROJECT_PREFIX)
         target = staging_project.joinpath(*relative.parts).resolve()
-        if staging_project.resolve() not in target.parents:
+        if staging_root not in target.parents:
             raise ProjectArchiveError(f"Archive file escaped staging: {name}")
         target.parent.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256()
         size = 0
-        with archive.open(info, "r") as source, target.open("wb") as output:
-            while chunk := source.read(1024 * 1024):
-                output.write(chunk)
-                digest.update(chunk)
-                size += len(chunk)
+        try:
+            with archive.open(info, "r") as source, target.open("wb") as output:
+                while chunk := source.read(1024 * 1024):
+                    output.write(chunk)
+                    digest.update(chunk)
+                    size += len(chunk)
+        except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+            raise ProjectArchiveError(f"Could not extract archive member: {name}") from exc
         if size != record["size"]:
             raise ProjectArchiveError(
                 f"Size mismatch for {name}: expected={record['size']} actual={size}"
             )
         if digest.hexdigest() != record["sha256"]:
             raise ProjectArchiveError(f"SHA-256 mismatch for {name}")
+
+
+def _validated_project_id(manifest: dict[str, Any]) -> str:
+    project_id = manifest.get("project_id")
+    if not isinstance(project_id, str) or not project_id:
+        raise ProjectArchiveError("Archive manifest has no project_id")
+    try:
+        validate_identifier(project_id, field_name="project_id")
+    except ProjectValidationError as exc:
+        raise ProjectArchiveError(f"Invalid archive project_id: {project_id!r}") from exc
+    return project_id
 
 
 def import_project(
@@ -366,10 +382,9 @@ def import_project(
         records = _manifest_file_records(manifest)
         _validate_declared_files(members, records)
 
-        project_id = manifest.get("project_id")
-        if not isinstance(project_id, str) or not project_id:
-            raise ProjectArchiveError("Archive manifest has no project_id")
-        if (store.root / project_id).exists():
+        # Validate identity before it is ever used as a filesystem component.
+        project_id = _validated_project_id(manifest)
+        if store.project_path(project_id).parent.exists():
             raise ProjectAlreadyExists(project_id)
 
         with tempfile.TemporaryDirectory(prefix=".uv-import-", dir=store.root) as temp:
