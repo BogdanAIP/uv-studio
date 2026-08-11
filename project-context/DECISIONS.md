@@ -63,14 +63,14 @@ Consequences: no future Project Store schema may require continuity data for all
 ---
 
 ## D-006 — Provider-specific growth must be contained
-Status: accepted  
+Status: superseded by D-011  
 Date: 2026-08-10
 
-Decision: preserve existing VideoClaw providers during baseline, but future capability growth should be behind a semantic bridge; OpenClaw is the preferred replaceable runtime candidate.
+Decision at the time: preserve existing VideoClaw providers during baseline, but future capability growth should be behind a semantic bridge; OpenClaw was the preferred replaceable runtime candidate.
 
 Reason: maintaining many fast-changing media APIs inside product domain code would recreate infrastructure already available elsewhere.
 
-Consequences: do not add new provider-specific branches to unrelated domain modules.
+Superseded detail: the semantic boundary remains accepted, but OpenClaw is no longer the preferred mandatory path. D-011 makes all runtimes/adapters peers behind a Capability Registry.
 
 ---
 
@@ -119,3 +119,42 @@ Decision: the pinned VideoClaw frontend is used as the starting UI implementatio
 Reason: the user-facing product surface requires extensive navigation, terminology and workflow changes. Treating that evolving surface as immutable vendor code would either block product development or create an unmaintainable patch set inside the upstream compatibility snapshot.
 
 Consequences: preserve VideoClaw MIT attribution and record the exact source baseline used to promote the frontend. Keep the untouched vendored snapshot for upstream comparison while the product frontend evolves independently. Existing useful screens should be retained/migrated rather than rebuilt from scratch.
+
+---
+
+## D-011 — Capability Registry has peer adapters; OpenClaw is optional
+Status: accepted  
+Date: 2026-08-11
+
+Decision: UV Studio will expose semantic media capabilities through a product-owned Capability Registry. Direct MCP, local tools, existing native VideoClaw integrations, OpenClaw and Qwen-MM-Plugins are peer adapters. No third-party runtime sits unconditionally between recipes and tools.
+
+Reason: research of `QwenLM/Qwen-MM-Plugins` showed that high-quality MCP capability packages can be consumed directly, while OpenClaw remains useful when its broader runtime features are actually needed. A mandatory OpenClaw hop would add coupling without improving every workflow.
+
+Consequences:
+
+- Stage 3 is renamed from `Capability Bridge` to `Capability Registry & Adapters`;
+- recipes depend on semantic capability IDs, not OpenClaw-specific tool names;
+- OpenClaw may be enabled for a project/user but is not required to run UV Studio;
+- direct local and MCP execution must remain possible;
+- existing VideoClaw provider paths remain temporary/native adapters during migration.
+
+---
+
+## D-012 — Qwen-MM-Plugins is a workflow donor and optional capability package, not a paid dependency
+Status: accepted  
+Date: 2026-08-11
+
+Decision: use/adapt the professional production workflow ideas from Qwen-MM-Plugins where they improve UV Studio, and support Qwen-MM-Plugins as an optional MCP package. Do not make DashScope or another Qwen cloud API mandatory for baseline UV Studio functionality.
+
+Research reference: `QwenLM/Qwen-MM-Plugins@7dfc08b7de8e621fc28bf9814e3d41a59b4595ae` (Apache-2.0). At this revision the project explicitly separates local file capabilities from cloud API tools; its video-edit skill contains strong source-review, pacing, beat-sync, Scene Ledger, plan/sample/review gates and evidence-based review practices, while cloud Qwen/Wan/Omni/embedding operations require configured paid API access.
+
+Reason: the workflow discipline is valuable independently of the provider. Requiring DashScope would violate UV Studio's local/free-first goal and duplicate the user's cost across multiple providers.
+
+Consequences:
+
+- Stage 2 gains provider-neutral production policy/gates inspired by suitable Qwen-MM-Plugins video-edit practices;
+- Stage 4 existing-video work uses source review, planned edit direction, sample-first generated assets and evidence-based review where appropriate;
+- local/free alternatives remain first-class for ASR, deterministic media work and other operations with adequate open-source implementations;
+- Qwen cloud generation, Omni analysis and video-memory build are explicit optional capabilities;
+- Qwen-MM-Plugins' current WSL2-only Windows support cannot become a prerequisite for the native Windows application;
+- Apache-2.0 attribution/NOTICE requirements must be preserved for any code actually copied or modified, while architectural ideas alone do not create a runtime dependency.
