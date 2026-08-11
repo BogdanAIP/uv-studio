@@ -250,3 +250,15 @@ Decision: a real project file may be translated to an MCP host path only when th
 Reason: MCP tools often require absolute filesystem paths, while UV Studio must keep requests/projects portable and must never turn generic MCP execution into arbitrary host filesystem access.
 
 Consequences: only `sources`, `assets`, `artifacts` and `exports` may be exposed by this contract; internal `tasks`, `timeline`, `reviews` stay unavailable; raw host paths still fail closed; authorization/provenance digest the original portable input; resolved paths exist only in the invocation payload; binding contract changes require reconnect. The freshly re-verified Qwen core `media_info(path, raw=False)` binding receives the first explicit project-file contract, while unverified Qwen cloud bindings do not. Full rationale: `project-context/decisions/D-019-mcp-project-file-inputs.md`.
+
+---
+
+## D-020 — Native VideoClaw compatibility execution is exact-offer only
+Status: accepted  
+Date: 2026-08-11
+
+Decision: native VideoClaw compatibility may execute only product-whitelisted exact offers. The first executable native offer is `native_videoclaw.edge_tts -> speech.synthesize`; there is no generic Python module/function/command bridge into vendored code.
+
+Reason: an `AVAILABLE` compatibility offer must have a real transport, but making VideoClaw a universal execution engine would violate the product-owned capability boundary. Edge TTS is remote/free, so D-017 `remote_execution` authorization still applies.
+
+Consequences: semantic input is bounded to text/voice/speed; UV Studio owns the output artifact path; external provenance remains portable; `edge-tts` stays an optional dependency in `requirements-edge-tts.txt`; all other model-backed native offers stay configuration-required until exact provider/model/credential contracts exist. Full rationale: `project-context/decisions/D-020-native-videoclaw-edge-tts.md`.
