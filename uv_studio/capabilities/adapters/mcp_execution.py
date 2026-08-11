@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+import re
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from uv_studio.mcp.manager import MCPManager
 from uv_studio.projects.store import ProjectStore
@@ -12,6 +14,12 @@ from ..authorization import ExecutionPreparation
 from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
 from ..provenance import ExternalRunProvenance
+
+_WINDOWS_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+class MCPExecutionInputRejected(ValueError):
+    code = "mcp_unsafe_file_argument"
 
 
 class MCPExecutionAdapter:
@@ -35,6 +43,7 @@ class MCPExecutionAdapter:
             target=target,
         )
         try:
+            self._reject_raw_host_paths(payload)
             mcp_result = await self.manager.invoke_target(target, payload)
         except Exception as exc:
             self.provenance.fail(record, exc)
@@ -49,3 +58,26 @@ class MCPExecutionAdapter:
                 "mcp_result": mcp_result,
             },
         )
+
+    @classmethod
+    def _reject_raw_host_paths(cls, value: Any) -> None:
+        if isinstance(value, str):
+            stripped = value.strip()
+            lowered = stripped.lower()
+            if (
+                stripped.startswith("/")
+                or stripped.startswith("\\\\")
+                or _WINDOWS_ABSOLUTE_RE.match(stripped)
+                or lowered.startswith("file://")
+            ):
+                raise MCPExecutionInputRejected(
+                    "raw host filesystem paths are not allowed in MCP arguments"
+                )
+            return
+        if isinstance(value, Mapping):
+            for item in value.values():
+                cls._reject_raw_host_paths(item)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+            for item in value:
+                cls._reject_raw_host_paths(item)
