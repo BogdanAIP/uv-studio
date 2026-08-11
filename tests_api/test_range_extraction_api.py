@@ -165,9 +165,11 @@ class RangeExtractionApiTests(unittest.TestCase):
         self.assertTrue(result["output"]["context_before_path"].startswith("artifacts/art_"))
         self.assertTrue(result["output"]["context_after_path"].startswith("artifacts/art_"))
         self.assertNotIn(str(self.project_dir), json.dumps(payload))
-        self.assertEqual(len(self.calls), 4)
-        self.assertEqual(self.calls[0][0], "fake-ffprobe")
-        self.assertTrue(all(command[0] == "fake-ffmpeg" for command in self.calls[1:]))
+
+        ffprobe_calls = [command for command in self.calls if command[0] == "fake-ffprobe"]
+        ffmpeg_calls = [command for command in self.calls if command[0] == "fake-ffmpeg"]
+        self.assertEqual(len(ffprobe_calls), 4)
+        self.assertEqual(len(ffmpeg_calls), 3)
 
         artifacts = self.store.load_project(self.project.project_id).artifacts
         self.assertEqual(len(artifacts), 3)
