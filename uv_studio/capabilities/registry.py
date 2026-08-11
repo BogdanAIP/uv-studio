@@ -40,6 +40,10 @@ class UnknownAdapter(CapabilityRegistryError):
     pass
 
 
+class UnknownOffer(CapabilityRegistryError):
+    pass
+
+
 class CapabilityRegistry:
     def __init__(
         self,
@@ -107,6 +111,16 @@ class CapabilityRegistry:
             return self._adapters[normalized]
         except KeyError as exc:
             raise UnknownAdapter(normalized) from exc
+
+    def get_offer(self, offer_id: str) -> CapabilityOffer:
+        try:
+            normalized = validate_capability_id(offer_id, field_name="offer_id")
+        except CapabilityValidationError as exc:
+            raise UnknownOffer(offer_id) from exc
+        try:
+            return self._offers[normalized]
+        except KeyError as exc:
+            raise UnknownOffer(normalized) from exc
 
     def list_capabilities(self) -> tuple[CapabilityDefinition, ...]:
         return tuple(self._capabilities.values())
