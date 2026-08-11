@@ -1,10 +1,13 @@
-"""MCP discovery lifecycle and explicit binding synchronization."""
+"""MCP discovery lifecycle, explicit binding synchronization and invocation."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from uv_studio.capabilities.adapters.mcp import MCPBindingOfferAdapter
+from uv_studio.capabilities.models import CapabilityOffer
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 
 from .client import (
@@ -18,6 +21,7 @@ from .models import (
     MCPProfile,
     MCPProfileStatus,
     MCPRuntimeState,
+    MCPToolBinding,
     MCPToolDescriptor,
 )
 from .store import MCPConfigStore
@@ -36,6 +40,14 @@ class MCPProfileDisabled(MCPManagerError):
 
 
 class MCPProfileNotReady(MCPManagerError):
+    pass
+
+
+class MCPBindingNotFound(MCPManagerError):
+    pass
+
+
+class MCPBindingMismatch(MCPManagerError):
     pass
 
 
@@ -94,12 +106,7 @@ class MCPManager:
         config = self.configuration()
         profile = self._get_profile(profile_id, config=config)
         if not profile.enabled:
-            self._set_status(
-                profile,
-                MCPRuntimeState.FAILED,
-                "profile is disabled",
-                tool_count=0,
-            )
+            self._set_status(profile, MCPRuntimeState.FAILED, "profile is disabled", tool_count=0)
             self._synchronize(profile, config, (), ready=False, reason="profile is disabled")
             raise MCPProfileDisabled(profile.profile_id)
 
@@ -148,6 +155,55 @@ class MCPManager:
         )
         self._synchronize(profile, config, (), ready=False, reason=status.reason)
         return status
+
+    def resolve_offer_binding(self, offer: CapabilityOffer) -> tuple[MCPProfile, MCPToolBinding]:
+        if not offer.offer_id.startswith("mcp.") or not offer.adapter_id.startswith("mcp."):
+            raise MCPBindingMismatch(f"offer {offer.offer_id!r} is not an MCP offer")
+        binding_id = offer.offer_id[len("mcp.") :]
+        config = self.configuration()
+        try:
+            binding = config.get_binding(binding_id)
+            profile = config.get_profile(binding.profile_id)
+        except KeyError as exc:
+            raise MCPBindingNotFound(binding_id) from exc
+        expected_adapter = f"mcp.{binding.profile_id}"
+        if offer.adapter_id != expected_adapter:
+            raise MCPBindingMismatch(
+                f"offer adapter {offer.adapter_id!r} does not match binding profile {binding.profile_id!r}"
+            )
+        if offer.capability_id != binding.capability_id:
+            raise MCPBindingMismatch(
+                f"offer capability {offer.capability_id!r} does not match binding {binding.capability_id!r}"
+            )
+        return profile, binding
+
+    async def invoke_offer(
+        self,
+        offer: CapabilityOffer,
+        arguments: Mapping[str, Any],
+        *,
+        timeout_sec: float = 30.0,
+        max_response_bytes: int = 1024 * 1024,
+    ) -> tuple[MCPToolBinding, dict[str, Any]]:
+        profile, binding = self.resolve_offer_binding(offer)
+        status = self.status(profile.profile_id)
+        snapshot = self._snapshots.get(profile.profile_id)
+        if status.state is not MCPRuntimeState.READY or snapshot is None:
+            raise MCPProfileNotReady(
+                f"MCP profile {profile.profile_id!r} must complete discovery before execution"
+            )
+        if binding.tool_name not in {tool.name for tool in snapshot.tools}:
+            raise MCPBindingMismatch(
+                f"bound tool {binding.tool_name!r} is not present in the latest discovery snapshot"
+            )
+        result = await self.discovery_client.invoke(
+            profile,
+            tool_name=binding.tool_name,
+            arguments=arguments,
+            timeout_sec=timeout_sec,
+            max_response_bytes=max_response_bytes,
+        )
+        return binding, result
 
     def profile_payload(self, profile: MCPProfile) -> dict[str, object]:
         payload = profile.to_dict()
