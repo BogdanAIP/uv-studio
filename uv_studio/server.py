@@ -20,12 +20,14 @@ from api.app import app as upstream_app  # type: ignore  # noqa: E402
 from config import settings as upstream_settings  # type: ignore  # noqa: E402
 
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
+from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
 from uv_studio.api.execution import router as execution_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
 from uv_studio.api.recipes import router as recipes_router  # noqa: E402
 
 app = upstream_app
 app.include_router(capabilities_router)
+app.include_router(capability_execution_router)
 app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)

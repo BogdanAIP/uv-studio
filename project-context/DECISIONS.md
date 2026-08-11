@@ -158,3 +158,27 @@ Consequences:
 - Qwen cloud generation, Omni analysis and video-memory build are explicit optional capabilities;
 - Qwen-MM-Plugins' current WSL2-only Windows support cannot become a prerequisite for the native Windows application;
 - Apache-2.0 attribution/NOTICE requirements must be preserved for any code actually copied or modified, while architectural ideas alone do not create a runtime dependency.
+
+---
+
+## D-013 — Semantic capability is separate from adapter offer
+Status: accepted  
+Date: 2026-08-11
+
+Decision: represent media ability as provider-neutral `CapabilityDefinition`, implementation family as `AdapterDefinition`, and one implementation proposal as `CapabilityOffer` with explicit readiness, locality and cost class.
+
+Reason: an open-source integration may invoke a paid model, while a free operation may be local or remote. Provider identity alone is not sufficient to express execution economics or readiness safely.
+
+Consequences: recipes stay provider-neutral; local/free and remote/paid offers can coexist; `configuration_required` is not `available`; registry ordering is metadata only. Full rationale: `project-context/decisions/D-013-capability-offers.md`.
+
+---
+
+## D-014 — Capability metadata is not execution permission
+Status: accepted  
+Date: 2026-08-11
+
+Decision: discovered/registered offers pass through an explicit `SelectionPolicy` before any adapter may execute. `local_free_first` selects only `available + free + local`; it never widens to remote or paid-capable offers. Local media execution is project-scoped and command-bounded.
+
+Reason: deterministic registry preference must never become implicit permission to invoke a provider or spend money. Generic media tools must also not become arbitrary filesystem/shell access.
+
+Consequences: current execution permits only explicit free/local FFmpeg offers; raw FFmpeg flags are not exposed; paths cannot escape the canonical project; failed generation does not create a successful artifact; future MCP/Qwen/OpenClaw/provider adapters must obey the same permission boundary. Full rationale: `project-context/decisions/D-014-execution-permission.md`.

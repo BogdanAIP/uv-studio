@@ -1,6 +1,16 @@
-"""UV Studio semantic capabilities and adapter offers."""
+"""UV Studio semantic capabilities, offer selection and execution contracts."""
 
 from .builtin import ADAPTERS, CAPABILITIES, build_builtin_capability_registry
+from .execution import (
+    CAPABILITY_EXECUTION_SCHEMA_VERSION,
+    CapabilityExecutionEnvelope,
+    CapabilityExecutionError,
+    CapabilityExecutionResult,
+    CapabilityToolFailed,
+    CapabilityToolUnavailable,
+    InvalidCapabilityInput,
+    UnsupportedCapabilityExecution,
+)
 from .models import (
     CAPABILITY_SCHEMA_VERSION,
     AdapterDefinition,
@@ -22,28 +32,54 @@ from .registry import (
     DuplicateOffer,
     UnknownAdapter,
     UnknownCapability,
+    UnknownOffer,
+)
+from .selection import (
+    NoEligibleOffer,
+    OfferSelectionDecision,
+    OfferSelectionError,
+    OfferSelectionRequired,
+    PinnedOfferRejected,
+    SelectionPolicy,
+    select_offer,
 )
 
 __all__ = [
     "ADAPTERS",
     "CAPABILITIES",
+    "CAPABILITY_EXECUTION_SCHEMA_VERSION",
     "CAPABILITY_SCHEMA_VERSION",
     "AdapterDefinition",
     "AdapterKind",
     "CapabilityDefinition",
+    "CapabilityExecutionEnvelope",
+    "CapabilityExecutionError",
+    "CapabilityExecutionResult",
     "CapabilityOffer",
     "CapabilityRegistry",
     "CapabilityRegistryError",
+    "CapabilityToolFailed",
+    "CapabilityToolUnavailable",
     "CapabilityValidationError",
     "CostClass",
     "DuplicateAdapter",
     "DuplicateCapability",
     "DuplicateOffer",
+    "InvalidCapabilityInput",
     "LocalityClass",
     "MediaKind",
+    "NoEligibleOffer",
     "OfferAvailability",
+    "OfferSelectionDecision",
+    "OfferSelectionError",
+    "OfferSelectionRequired",
     "OperationKind",
+    "PinnedOfferRejected",
+    "SelectionPolicy",
     "UnknownAdapter",
     "UnknownCapability",
+    "UnknownOffer",
+    "UnsupportedCapabilityExecution",
     "build_builtin_capability_registry",
+    "select_offer",
 ]
