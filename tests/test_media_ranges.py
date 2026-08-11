@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from uv_studio.projects.media_ranges import ProjectMediaRange
+from uv_studio.projects.media_ranges import MAX_CONTEXT_US, ProjectMediaRange
 from uv_studio.projects.models import ProjectValidationError
 
 
@@ -34,12 +34,14 @@ class ProjectMediaRangeTests(unittest.TestCase):
                 with self.assertRaises(ProjectValidationError):
                     ProjectMediaRange(source_path="sources/input.mp4", **values)
 
-    def test_context_must_be_non_negative_integer_microseconds(self) -> None:
+    def test_context_must_be_bounded_non_negative_integer_microseconds(self) -> None:
         for field, value in (
             ("context_before_us", -1),
             ("context_after_us", -1),
             ("context_before_us", True),
             ("context_after_us", 0.5),
+            ("context_before_us", MAX_CONTEXT_US + 1),
+            ("context_after_us", MAX_CONTEXT_US + 1),
         ):
             kwargs = {field: value}
             with self.subTest(field=field, value=value):
@@ -50,6 +52,18 @@ class ProjectMediaRangeTests(unittest.TestCase):
                         end_us=2,
                         **kwargs,
                     )
+
+    def test_maximum_context_is_allowed(self) -> None:
+        media_range = ProjectMediaRange(
+            source_path="sources/input.mp4",
+            start_us=MAX_CONTEXT_US,
+            end_us=MAX_CONTEXT_US + 1,
+            context_before_us=MAX_CONTEXT_US,
+            context_after_us=MAX_CONTEXT_US,
+        )
+        resolved = media_range.resolve(MAX_CONTEXT_US * 2 + 1)
+        self.assertEqual(resolved.context_start_us, 0)
+        self.assertEqual(resolved.context_end_us, MAX_CONTEXT_US * 2 + 1)
 
     def test_project_source_path_is_canonical_and_cannot_escape(self) -> None:
         normalized = ProjectMediaRange(
