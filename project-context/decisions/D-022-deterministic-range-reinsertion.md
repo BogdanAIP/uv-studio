@@ -57,7 +57,7 @@ The small tolerance exists only for normal timestamp/frame-boundary differences 
 
 If explicit retiming is added later, it must be a separate semantic transformation or an explicit policy input.
 
-## Narrow stream contract
+## Narrow stream and format contract
 
 The first reinsertion contract intentionally supports a narrow, auditable media shape:
 
@@ -68,9 +68,26 @@ The first reinsertion contract intentionally supports a narrow, auditable media 
 - source and replacement video resolution must match;
 - unsupported additional stream kinds such as subtitles/data fail closed rather than being silently discarded.
 
-The replacement audio/video durations must also agree within 100 ms when audio is present.
+When FFprobe reports both values, the following source/replacement properties must also match rather than being left to implicit concat negotiation:
 
-Before merge, the implementation must be audited for any additional format properties that FFmpeg would otherwise negotiate implicitly. If a mismatch could change decoded source content outside the requested interval, that mismatch should fail closed or be normalized under an explicit documented policy.
+```text
+video: pix_fmt, sample_aspect_ratio,
+       color_range, color_space, color_transfer, color_primaries
+
+audio: sample_fmt, sample_rate, channels, channel_layout
+```
+
+Unknown properties are not invented. A known mismatch fails before FFmpeg.
+
+The source audio/video durations must agree within 250 ms. The replacement audio/video durations must agree within 100 ms.
+
+For AV inputs, FFprobe stream `start_time` must be known for both video and audio. Their relative start must agree within:
+
+```text
+10_000 microseconds (10 ms)
+```
+
+for both source and replacement. A larger or unknown AV start offset fails closed because independently zeroing the streams could otherwise alter lip-sync.
 
 ## Mechanical composition
 
@@ -86,19 +103,21 @@ suffix      = source [end, source_video_duration]
 prefix + replacement + suffix -> output
 ```
 
-Video segments are timestamp-reset with:
+`ProjectMediaRange` is zero-based media time. Source video/audio timestamps are therefore normalized **before** range trimming and each resulting segment is normalized again before concat:
 
 ```text
-trim
-setpts=PTS-STARTPTS
+video:
+  setpts=PTS-STARTPTS
+  -> trim(start_us, end_us)
+  -> setpts=PTS-STARTPTS
+
+audio:
+  asetpts=PTS-STARTPTS
+  -> atrim(start_us, end_us)
+  -> asetpts=PTS-STARTPTS
 ```
 
-Audio segments use:
-
-```text
-atrim
-asetpts=PTS-STARTPTS
-```
+The replacement is also normalized to a zero start timestamp before concat.
 
 When audio is present, corresponding video/audio segments are concatenated together in one concat filter so the segment relationship is explicit.
 
@@ -214,7 +233,7 @@ Those later layers consume `ProjectMediaRange` and `video.replace_range` rather 
 
 Change this decision from `proposed` to `accepted` only after:
 
-- unit tests prove the duration/audio/geometry/path/failure contracts;
+- unit tests prove the duration/audio/geometry/timestamp/path/failure contracts;
 - the capability API proves token-free local execution;
 - final diff/security audit is clean;
 - Ubuntu + Windows bootstrap/unit pass;
