@@ -1,115 +1,160 @@
 # Next Task
 
-**Primary target:** begin Stage 3 with a product-owned semantic Capability Registry. Do not connect Qwen-MM/OpenClaw or spend money in the first slice.
+**Primary target:** continue Stage 3 with UV Studio-owned local deterministic capability execution and an explicit selection policy. Do not connect Qwen-MM/OpenClaw or execute potentially-paid offers in this slice.
 
 ## Why this comes next
 
-Stage 2 now separates:
+The first Stage 3 slice now provides:
 
 ```text
-RecipeDefinition
-  -> ProductionPolicy
-  -> RecipeExecutionPlan
+CapabilityDefinition
+  -> AdapterDefinition
+      -> CapabilityOffer
 ```
 
-Execution planning also proved that existing upstream pipelines only partially cover UV Studio semantics:
+with explicit availability, locality and cost class. The registry can honestly report:
 
-- `narrated_video` matches native `standard`;
-- `action_transfer` matches the native transfer pipeline;
-- `digital_human` is only partial because the upstream product-promo workflow does not accept supplied speech;
-- `general_video` has no honest native implementation and must stay unavailable.
+- local/free FFmpeg/FFprobe availability;
+- free remote Edge TTS compatibility;
+- VideoClaw model paths as `configuration_required / potentially_paid`;
+- no offer where a compatible implementation has not been proved.
 
-The missing abstraction is therefore not another hard-coded pipeline wrapper. It is the Stage 3 semantic Capability Registry that can resolve `video.generate`, `speech.synthesize`, `media.understand`, `video.digital_human`, etc. through replaceable local/MCP/native adapters.
+What is still missing is a safe execution boundary. Implement that first for deterministic local tools where execution is testable without credentials or money.
 
-## First Stage 3 slice
+## Do first
 
-1. Add `uv_studio/capabilities/` as product-owned code.
-2. Define strict/versioned `CapabilityDefinition`, including at least:
-   - `capability_id`;
-   - title/description;
-   - operation kind;
-   - input/output media kinds;
-   - locality class: local / remote / hybrid;
-   - cost class: free / potentially_paid / paid;
-   - asynchronous flag;
-   - optional quality/features metadata.
-3. Define adapter metadata separately from semantic capability definitions:
-   - stable `adapter_id`;
-   - adapter kind: local / native / mcp / runtime;
-   - availability state and reason;
-   - capabilities provided;
-   - no secrets in registry responses.
-4. Implement deterministic `CapabilityRegistry`:
-   - register definitions;
-   - register adapter offers;
-   - list/get;
-   - resolve available offers for a semantic capability;
-   - reject duplicate/conflicting IDs;
-   - preserve deterministic ordering.
-5. Add baseline local/native offers without paid calls:
-   - deterministic FFmpeg-related media operations as local/free capabilities where already supported;
-   - existing VideoClaw compatibility offers as native metadata only;
-   - do not call external models.
-6. Add API:
+1. Add product-owned capability execution contracts, for example:
 
 ```text
-GET /api/uv/capabilities
-GET /api/uv/capabilities/{capability_id}
-GET /api/uv/capabilities/{capability_id}/offers
+CapabilityExecutionRequest
+CapabilityExecutionResult
+CapabilityExecutionError
 ```
 
-7. Update project execution-plan API so runtime config slots can optionally report whether any capability offer currently exists, without choosing a provider automatically.
-8. Add unit/API tests and documentation.
+2. Add an explicit selection policy model:
 
-## Mandatory architecture rules
+```text
+manual
+pinned_offer
+local_free_first
+```
 
-- `RecipeDefinition` remains provider-neutral and unchanged.
-- Capability definitions are semantic; provider/runtime data lives in adapter offers.
-- local/free deterministic work must not be routed to paid AI by default.
-- no API key is required for registry startup/listing.
-- no secrets may appear in capability metadata/API.
-- OpenClaw is an optional adapter, not a mandatory layer.
-- Qwen-MM-Plugins is an optional direct-MCP adapter and workflow donor, not a baseline paid dependency.
-- native Windows startup must work with optional WSL integrations absent.
-- do not modify `vendor/videoclaw-app` in this slice.
+Do **not** add an automatic paid fallback.
 
-## What NOT to implement yet
+3. Implement offer selection rules:
+   - `local_free_first` may choose only `available + free` offers;
+   - prefer local over hybrid over remote inside the allowed free set;
+   - if no safe offer exists, return explicit unavailable/configuration-required rather than selecting `potentially_paid`;
+   - `pinned_offer` executes only the exact requested offer;
+   - a potentially-paid/paid pinned offer is still rejected in this slice because external paid execution is out of scope.
 
-- actual Qwen-MM installation;
+4. Implement first local adapters:
+
+### `media.probe`
+
+Use local `ffprobe` through an argv subprocess (no shell string interpolation).
+
+Return structured metadata such as:
+
+- duration;
+- streams;
+- dimensions/frame rate where available;
+- audio/video presence;
+- source path/artifact metadata.
+
+Validate file paths and timeouts.
+
+### `timeline.assemble`
+
+Start with a deliberately bounded deterministic operation supported by the pinned baseline, e.g. ordered concat of compatible local clips.
+
+Requirements:
+
+- explicit ordered input file list;
+- output stays inside the canonical project's artifact/export area;
+- no arbitrary user-supplied FFmpeg flags;
+- safe temporary manifest handling;
+- clear error on incompatible/failed concat;
+- register output as a project artifact rather than returning an orphan file.
+
+If concat requires normalization/transcoding for reliable output, make that behavior explicit rather than silently degrading quality.
+
+5. Add project/domain execution API, not raw command execution. Possible shape:
+
+```text
+POST /api/uv/projects/{project_id}/capabilities/media.probe/execute
+POST /api/uv/projects/{project_id}/capabilities/timeline.assemble/execute
+```
+
+or one typed endpoint if validation remains strict.
+
+6. Persist resulting artifacts/references through Project Store-owned helpers. Do not let API code invent filesystem paths independently.
+
+7. Add tests for:
+
+- `local_free_first` never selecting potentially-paid offers;
+- exact pinned selection;
+- missing tool behavior;
+- subprocess timeout/failure;
+- paths outside project/source boundary where applicable;
+- successful probe fixture;
+- successful small concat fixture when FFmpeg exists;
+- no shell injection;
+- artifact registration/persistence;
+- Windows path behavior.
+
+8. Keep API/frontend baseline green on Windows and Linux.
+
+## Important product rule
+
+The Capability Registry describes what exists. The execution layer executes only what current policy explicitly allows.
+
+Do not turn registry ordering into implicit purchasing behavior.
+
+```text
+metadata preference != permission to execute
+```
+
+## Qwen-MM / OpenClaw boundary
+
+Still out of scope for this next slice:
+
+- installing Qwen-MM-Plugins;
+- requiring WSL2;
 - DashScope calls;
-- OpenClaw launch/Gateway;
-- generic MCP process management;
-- automatic paid-provider selection;
-- cost estimation from live prices;
-- full general-video generation;
-- dubbing/range-edit/music recipes.
+- direct MCP process management;
+- OpenClaw Gateway/runtime;
+- paid provider execution;
+- provider OAuth/API-key UI.
 
-The first Capability Registry slice is metadata + deterministic resolution only. This keeps Stage 3 testable without credentials and creates the exact seam where later adapters can plug in.
+Those adapters should plug into the same execution contract after local deterministic execution is proven.
 
 ## Suggested files
 
 ```text
-uv_studio/capabilities/__init__.py
-uv_studio/capabilities/models.py
-uv_studio/capabilities/registry.py
-uv_studio/capabilities/builtin.py
-uv_studio/api/capabilities.py
+uv_studio/capabilities/execution.py
+uv_studio/capabilities/selection.py
+uv_studio/capabilities/adapters/local_ffmpeg.py
+uv_studio/api/capability_execution.py
 
-tests/test_capability_registry.py
-tests_api/test_capabilities_api.py
+uv_studio/projects/artifacts.py   # only if a dedicated helper is cleaner
 
-docs/architecture/CAPABILITIES.md
+tests/test_capability_selection.py
+tests/test_local_ffmpeg_adapter.py
+tests_api/test_capability_execution_api.py
+
+docs/architecture/CAPABILITY_EXECUTION.md
 ```
 
 ## Acceptance criteria
 
-- capability IDs and adapter IDs are strict/versioned/provider-separated;
-- registry starts and lists capabilities with zero API credentials;
-- `free` vs `potentially_paid/paid` is explicit metadata;
-- semantic capability listing contains no secret/config values;
-- available offers can be queried without executing them;
-- execution plans can show whether required semantic capabilities have any current offers;
-- tests + frontend production build stay green on Windows/Linux;
-- no hidden paid dependency is added.
+- local deterministic capability execution works without credentials;
+- `local_free_first` can never fall through to potentially-paid/paid;
+- no arbitrary shell/FFmpeg command surface is exposed;
+- outputs are canonical project artifacts;
+- failure does not leave a falsely registered successful artifact;
+- Windows/Linux tests remain green;
+- vendor tree remains unmodified;
+- no Qwen/OpenClaw runtime dependency is added.
 
-After that, implement adapters incrementally: local deterministic tools first, then direct MCP/Qwen-MM optional support, then OpenClaw only where its broader runtime is useful.
+After this slice, the next priority is direct MCP adapter infrastructure so Qwen-MM-Plugins can be integrated optionally behind the same semantic contracts without changing recipes or project state.
