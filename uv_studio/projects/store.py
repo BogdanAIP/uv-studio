@@ -78,7 +78,8 @@ class ProjectStore:
 
         The method is intentionally conservative for writes: the parent directory
         must already exist. Callers cannot create arbitrary directory trees or use
-        symlinks to escape the canonical project directory.
+        symlinks to escape the canonical project directory or the caller's explicit
+        allowed-root boundary.
         """
 
         canonical = validate_project_relative_path(relative_path)
@@ -86,6 +87,7 @@ class ProjectStore:
         if not parts:
             raise ProjectValidationError("project-relative file path is empty")
 
+        roots: set[str] | None = None
         if allowed_roots is not None:
             roots = set(allowed_roots)
             unknown_roots = roots.difference(PROJECT_DIRECTORIES)
@@ -99,6 +101,24 @@ class ProjectStore:
                 )
 
         project_dir = self.project_directory(project_id)
+        resolved_allowed_roots: tuple[Path, ...] = ()
+        if roots is not None:
+            allowed_paths: list[Path] = []
+            for root in sorted(roots):
+                root_path = project_dir / root
+                try:
+                    resolved_root = root_path.resolve(strict=True)
+                except OSError as exc:
+                    raise ProjectValidationError(
+                        f"allowed project root cannot be resolved: {root!r}"
+                    ) from exc
+                if resolved_root != root_path:
+                    raise ProjectValidationError(
+                        f"allowed project root must not be a symlink: {root!r}"
+                    )
+                allowed_paths.append(resolved_root)
+            resolved_allowed_roots = tuple(allowed_paths)
+
         candidate = project_dir.joinpath(*parts)
         try:
             resolved_parent = candidate.parent.resolve(strict=True)
@@ -108,6 +128,11 @@ class ProjectStore:
             ) from exc
         if resolved_parent != project_dir and project_dir not in resolved_parent.parents:
             raise ProjectValidationError("project file parent escaped project directory")
+        if resolved_allowed_roots and not any(
+            resolved_parent == root or root in resolved_parent.parents
+            for root in resolved_allowed_roots
+        ):
+            raise ProjectValidationError("project file parent escaped allowed project roots")
 
         if candidate.exists() or candidate.is_symlink():
             try:
@@ -116,6 +141,11 @@ class ProjectStore:
                 raise ProjectValidationError(f"project file cannot be resolved: {canonical!r}") from exc
             if resolved != project_dir and project_dir not in resolved.parents:
                 raise ProjectValidationError("project file escaped project directory")
+            if resolved_allowed_roots and not any(
+                resolved == root or root in resolved.parents
+                for root in resolved_allowed_roots
+            ):
+                raise ProjectValidationError("project file escaped allowed project roots")
             candidate = resolved
         elif must_exist:
             raise ProjectValidationError(f"project file does not exist: {canonical!r}")

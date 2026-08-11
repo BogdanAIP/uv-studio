@@ -20,9 +20,17 @@ from uv_studio.capabilities import (
     LocalityClass,
     build_builtin_capability_registry,
 )
-from uv_studio.capabilities.authorization import OneShotAuthorizationStore
+from uv_studio.capabilities.authorization import (
+    OneShotAuthorizationStore,
+    normalized_input_digest,
+)
 from uv_studio.mcp.manager import MCPManager
-from uv_studio.mcp.models import MCPConfiguration, MCPProfile, MCPToolBinding
+from uv_studio.mcp.models import (
+    MCPConfiguration,
+    MCPProfile,
+    MCPProjectFileInput,
+    MCPToolBinding,
+)
 from uv_studio.mcp.store import MCPConfigStore
 from uv_studio.projects.archive import export_project
 from uv_studio.projects.store import ProjectStore
@@ -39,13 +47,20 @@ class MCPExecutionApiTests(unittest.TestCase):
         self.project = self.projects.create_project(title="MCP execution")
         self.registry = build_builtin_capability_registry()
         self.config_store = MCPConfigStore(self.root / "config")
+        self.fixture_exit = self.root / "fixture-exit.txt"
         os.environ["UV_TEST_MCP_CALL_DELAY"] = "2"
+        os.environ["UV_TEST_MCP_PROJECT_FILE_TOOL"] = "1"
+        os.environ["UV_TEST_MCP_EXIT"] = str(self.fixture_exit)
 
         fixture_profile = MCPProfile(
             profile_id="fixture",
             title="Fixture",
             command=sys.executable,
             args=(str(FIXTURE),),
+            env_refs=(
+                ("UV_MCP_FIXTURE_PROJECT_FILE_TOOL", "UV_TEST_MCP_PROJECT_FILE_TOOL"),
+                ("UV_MCP_FIXTURE_EXIT_FILE", "UV_TEST_MCP_EXIT"),
+            ),
             startup_timeout_sec=10,
             discovery_timeout_sec=10,
         )
@@ -80,6 +95,22 @@ class MCPExecutionApiTests(unittest.TestCase):
                 asynchronous=True,
             ),
             MCPToolBinding(
+                binding_id="fixture.project_file",
+                profile_id="fixture",
+                tool_name="read_project_file",
+                capability_id="media.understand",
+                title="Fixture project file",
+                locality=LocalityClass.LOCAL,
+                cost_class=CostClass.FREE,
+                asynchronous=False,
+                project_file_inputs=(
+                    MCPProjectFileInput(
+                        argument_name="path",
+                        allowed_roots=("sources",),
+                    ),
+                ),
+            ),
+            MCPToolBinding(
                 binding_id="fixture.fail",
                 profile_id="fixture",
                 tool_name="fail_tool",
@@ -109,6 +140,7 @@ class MCPExecutionApiTests(unittest.TestCase):
         self.manager = MCPManager(self.config_store, self.registry)
         asyncio.run(self.manager.connect("fixture"))
         asyncio.run(self.manager.connect("slow_fixture"))
+        self.fixture_exit.unlink(missing_ok=True)
         self.authorizations = OneShotAuthorizationStore()
 
         app.dependency_overrides[get_project_store] = lambda: self.projects
@@ -121,6 +153,8 @@ class MCPExecutionApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client.close()
         os.environ.pop("UV_TEST_MCP_CALL_DELAY", None)
+        os.environ.pop("UV_TEST_MCP_PROJECT_FILE_TOOL", None)
+        os.environ.pop("UV_TEST_MCP_EXIT", None)
         self.tmp.cleanup()
 
     def _url(self, capability_id: str, action: str = "execute") -> str:
@@ -163,6 +197,68 @@ class MCPExecutionApiTests(unittest.TestCase):
         serialized = json.dumps(record)
         self.assertNotIn("authorization_token", serialized)
         self.assertNotIn("env_refs", serialized)
+
+    def test_declared_project_file_is_translated_only_for_invocation(self) -> None:
+        source = self.projects.project_directory(self.project.project_id) / "sources" / "input.txt"
+        source.write_text("portable project input\n", encoding="utf-8")
+        portable_input = {"path": "sources/input.txt"}
+
+        response = self.client.post(
+            self._url("media.understand"),
+            json={
+                "selection_policy": "pinned_offer",
+                "offer_id": "mcp.fixture.project_file",
+                "input": portable_input,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(self.fixture_exit.is_file())
+        result_text = response.json()["result"]["output"]["mcp_result"]["content"][0]["text"]
+        fixture_result = json.loads(result_text)
+        self.assertEqual(fixture_result["name"], "input.txt")
+        self.assertEqual(fixture_result["bytes"], len(source.read_bytes()))
+
+        record = self._records()[0]
+        self.assertEqual(record["status"], "succeeded")
+        self.assertEqual(record["tool_name"], "read_project_file")
+        self.assertEqual(record["input_digest"], normalized_input_digest(portable_input))
+        serialized = json.dumps(record)
+        self.assertNotIn(str(source.resolve()), serialized)
+        self.assertNotIn(str(self.root.resolve()), serialized)
+
+        archive_path = export_project(
+            self.projects,
+            self.project.project_id,
+            self.root / "project-file-export.uvproj.zip",
+        )
+        with zipfile.ZipFile(archive_path) as archive:
+            task_names = [
+                name
+                for name in archive.namelist()
+                if name.startswith("project/tasks/run_") and name.endswith(".json")
+            ]
+            self.assertEqual(len(task_names), 1)
+            archived_record = archive.read(task_names[0]).decode("utf-8")
+            self.assertNotIn(str(source.resolve()), archived_record)
+            self.assertNotIn(str(self.root.resolve()), archived_record)
+
+    def test_invalid_declared_project_file_fails_before_mcp_spawn(self) -> None:
+        self.assertFalse(self.fixture_exit.exists())
+        response = self.client.post(
+            self._url("media.understand"),
+            json={
+                "selection_policy": "pinned_offer",
+                "offer_id": "mcp.fixture.project_file",
+                "input": {"path": "assets/not-allowed.txt"},
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "mcp_unsafe_file_argument")
+        self.assertFalse(self.fixture_exit.exists())
+        record = self._records()[0]
+        self.assertEqual(record["status"], "failed")
+        self.assertEqual(record["error"]["code"], "mcp_unsafe_file_argument")
+        self.assertNotIn(str(self.root.resolve()), json.dumps(record))
 
     def test_remote_potentially_paid_mcp_requires_one_shot_authorization(self) -> None:
         body = {

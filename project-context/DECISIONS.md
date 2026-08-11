@@ -238,3 +238,15 @@ Decision: an MCP tool may execute only through an exact configured binding that 
 Reason: machine bindings can drift after discovery and external calls may have cost or side effects. Execution must therefore be identity-stable, bounded and auditable without persisting secrets or consent tokens.
 
 Consequences: no fuzzy tool remapping; configuration changes require reconnect; request/response sizes and timeouts are bounded; raw stderr/tool errors are excluded from provenance; generic MCP execution rejects raw host paths until a binding explicitly owns safe Project Store file translation. Full rationale: `project-context/decisions/D-018-authorized-mcp-invocation.md`.
+
+---
+
+## D-019 — MCP project files are binding-owned portable references
+Status: accepted  
+Date: 2026-08-11
+
+Decision: a real project file may be translated to an MCP host path only when the exact `MCPToolBinding` explicitly declares a versioned `MCPProjectFileInput` for that top-level argument and allowed canonical roots.
+
+Reason: MCP tools often require absolute filesystem paths, while UV Studio must keep requests/projects portable and must never turn generic MCP execution into arbitrary host filesystem access.
+
+Consequences: only `sources`, `assets`, `artifacts` and `exports` may be exposed by this contract; internal `tasks`, `timeline`, `reviews` stay unavailable; raw host paths still fail closed; authorization/provenance digest the original portable input; resolved paths exist only in the invocation payload; binding contract changes require reconnect. The freshly re-verified Qwen core `media_info(path, raw=False)` binding receives the first explicit project-file contract, while unverified Qwen cloud bindings do not. Full rationale: `project-context/decisions/D-019-mcp-project-file-inputs.md`.

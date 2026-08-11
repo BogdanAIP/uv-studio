@@ -3,10 +3,10 @@
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
 **Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
-**Active branch:** `stage-3/mcp-call-tool`  
-**Main baseline:** `416677c4ca758a01b0253c8880b44d44150a8cec`  
-**Open PR:** #14 — authorized MCP `call_tool()` execution and provenance  
-**Branch status:** implementation and tests complete; final Linux/Windows CI for the documentation-updated head is required before merge.
+**Active branch:** `stage-3/mcp-project-file-inputs`  
+**Main baseline:** `bb7929dbbd8e5bd69bc509d98c58f4a56bb033c5`  
+**Open PR:** #15 — explicit MCP project-file inputs  
+**Branch status:** implementation/tests/docs complete; final Linux/Windows CI on the final head is required before merge.
 
 ## Product architecture
 
@@ -23,6 +23,7 @@ Canonical Project
   -> exact execution adapter
       -> local bounded FFmpeg
       -> exact MCP binding
+          -> optional explicit project-file translation
           -> running tasks/run_<id>.json
           -> bounded short-lived call_tool()
           -> succeeded/failed provenance
@@ -32,6 +33,7 @@ Machine Studio Config
   -> bounded stdio discovery
   -> MCPToolDescriptor
   -> explicit MCPToolBinding
+      -> optional MCPProjectFileInput declarations
   -> CapabilityOffer
 ```
 
@@ -43,7 +45,8 @@ Permanent rules:
 - machine commands/credential references are not portable project state;
 - Qwen-MM and OpenClaw remain optional peer integrations;
 - native Windows remains a first-class baseline and must not require WSL2;
-- authorization tokens are runtime state, never portable project state.
+- authorization tokens are runtime state, never portable project state;
+- generic MCP execution never infers filesystem access from field names or tool schemas.
 
 ## Merged milestones
 
@@ -54,7 +57,8 @@ Permanent rules:
 - `4cbe383f...` — fail-closed selection + safe local FFprobe/FFmpeg execution;
 - `3e2b60329f7b8aa22fec38c012d703e3a8cca26d` — official-SDK direct MCP stdio discovery + explicit semantic bindings;
 - `4108db23f7de67293a53d1005a119a015539c0aa` — optional pinned Qwen-MM profile/binding pack (PR #12);
-- `416677c4ca758a01b0253c8880b44d44150a8cec` — execution consent/cost boundary (PR #13).
+- `416677c4ca758a01b0253c8880b44d44150a8cec` — execution consent/cost boundary (PR #13);
+- `bb7929dbbd8e5bd69bc509d98c58f4a56bb033c5` — authorized exact MCP `call_tool()` execution + provenance (PR #14).
 
 ## Stable Stage 3 context — optional Qwen-MM pack
 
@@ -76,7 +80,7 @@ video-edit
 
 Profiles use fixed trusted `uvx --from <exact SHA> <entrypoint>` templates. UV Studio does not install or launch Qwen during ordinary startup, and generic arbitrary profile-command creation is absent.
 
-Important current classifications:
+Important classifications:
 
 ```text
 core.media_info -> media.probe
@@ -97,7 +101,7 @@ wan_s2v    -> video.digital_human
 
 `happyhorse` and current self-hosted `segmentation` remain intentionally unbound because their contracts do not cleanly map to one current provider-neutral capability.
 
-`wan_s2v` remains the semantically correct supplied-audio digital-human candidate, but Qwen cloud execution is never selected implicitly.
+`wan_s2v` remains the semantically correct supplied-audio digital-human candidate. It can only become executable after trusted configuration, exact READY MCP discovery and the D-017 remote/cost/unknown-cost authorization required for its offer; it is never selected implicitly.
 
 Current Qwen upstream documents Windows support through WSL2 rather than native Windows. UV Studio therefore fails closed when configuring that optional integration on native Windows; the native-Windows product baseline remains independent of Qwen/WSL.
 
@@ -151,11 +155,11 @@ POST .../execute
 
 Existing local/free execution stays token-free. There is no global reusable paid permission.
 
-## Current Stage 3 slice — exact MCP invocation + provenance
+## Stable Stage 3 context — exact MCP invocation + provenance
 
 ### Official SDK `call_tool()` transport
 
-`uv_studio/mcp/client.py` now supports one exact bounded tool call through the official MCP Python SDK v2.
+`uv_studio/mcp/client.py` supports one exact bounded tool call through the official MCP Python SDK v2.
 
 Transport constraints:
 
@@ -168,7 +172,7 @@ Transport constraints:
 - returned SDK models are normalized to JSON-safe product data;
 - timeout, protocol, tool-error, request-limit and response-limit failures are structured.
 
-The fake MCP server now exposes deterministic success, slow, explicit-error and oversized-response tools for CI. No network/provider API is involved.
+The fake MCP server exposes deterministic success, slow, explicit-error and oversized-response tools for CI. No network/provider API is involved.
 
 ### Exact binding resolution
 
@@ -182,23 +186,23 @@ The fake MCP server now exposes deterministic success, slow, explicit-error and 
 - exact bound `tool_name` exists exactly once in the READY snapshot;
 - current profile + all profile bindings hash to the same configuration digest captured at discovery.
 
-Changing tool name, cost/locality, profile command, environment references or another binding for that profile therefore requires reconnect before any invocation. No fuzzy remapping exists.
+Changing tool name, cost/locality, profile command, environment references or another binding for that profile therefore requires reconnect before invocation. No fuzzy remapping exists.
 
 ### Authorization ordering
 
-The existing `execute` endpoint consumes D-017 authorization before MCP target resolution/invocation.
+The project capability `execute` endpoint consumes D-017 authorization before MCP target resolution/invocation.
 
 Consequences:
 
 - local/free MCP executes without consent token;
-- remote/free still requires `remote_execution`;
-- potentially-paid/paid still requires `external_cost` and, while estimate is unknown, `unknown_cost`;
+- remote/free requires `remote_execution`;
+- potentially-paid/paid requires `external_cost` and, while estimate is unknown, `unknown_cost`;
 - replayed or mutated-input tokens cannot reach MCP invocation;
 - native/non-MCP adapters remain separate.
 
 ### Durable external run provenance
 
-Added atomic canonical project records:
+Canonical project records live at:
 
 ```text
 tasks/run_<uuid>.json
@@ -226,56 +230,161 @@ Not persisted:
 - raw external error content;
 - raw provider response in provenance.
 
-Because `tasks/` is already canonical Project Store history, normal `.uvproj.zip` export includes provenance automatically while process-local authorization grants remain absent.
+Because `tasks/` is canonical Project Store history, normal `.uvproj.zip` export includes provenance automatically while process-local authorization grants remain absent.
 
-### Host-path boundary
+Decision: D-018.
 
-Generic MCP argument pass-through does not translate project-relative files into absolute host paths.
+## Current Stage 3 slice — explicit project-file MCP inputs
 
-Until a binding explicitly declares project-file argument semantics, the MCP adapter rejects raw:
+### Binding-owned file contract
 
-- POSIX absolute paths;
-- Windows drive paths;
-- UNC paths;
-- `file://` URIs.
+Added versioned `MCPProjectFileInput` metadata on an exact `MCPToolBinding`.
 
-Relative references such as `sources/clip.mp4` remain opaque JSON data and are not automatically resolved for the MCP child. This prevents the generic executor from becoming an arbitrary host-path bridge. The next slice owns explicit safe translation.
+Version 1 declares:
 
-### Tests added
+```text
+argument_name
+allowed_roots
+required
+```
 
-Unit tests cover:
+The generic contract deliberately permits only product/media roots:
 
-- real stdio `call_tool` success + child cleanup;
-- timeout + cleanup;
-- explicit MCP tool error;
-- oversized request rejection before spawn;
-- oversized response rejection;
-- exact READY binding resolution;
-- config drift requiring reconnect;
-- missing READY snapshot rejection;
-- absolute POSIX/Windows/UNC/file-URI rejection.
+```text
+sources
+assets
+artifacts
+exports
+```
 
-API integration tests cover:
+It refuses internal project control/history roots:
 
-- exact local/free MCP execution;
-- remote/potentially-paid authorization;
-- one-shot replay rejection;
-- durable success provenance;
-- durable failed provenance on tool error;
-- durable failed provenance on timeout;
-- project archive includes provenance but not authorization token.
+```text
+tasks
+timeline
+reviews
+```
+
+Old serialized bindings without `project_file_inputs` remain valid and load with an empty contract. No existing binding receives filesystem translation implicitly.
+
+### Safe translation semantics
+
+MCP execution now follows this order:
+
+1. exact binding/READY target is resolved;
+2. provenance starts from the portable request facts;
+3. caller-supplied absolute POSIX, Windows drive, UNC and `file://` values are rejected;
+4. only explicitly declared top-level file arguments are translated;
+5. translation uses `ProjectStore.resolve_project_file(..., must_exist=True, allowed_roots=<binding contract>)`;
+6. the resolved target must be a file;
+7. only the short-lived MCP invocation dictionary contains the absolute machine path.
+
+Authorization and provenance continue to hash the original portable request such as:
+
+```json
+{"path":"sources/input.mp4"}
+```
+
+They never hash or persist a machine path such as `C:\...` or `/tmp/...`.
+
+Wrong-root references, traversal, missing files and required-but-missing arguments fail closed before MCP process invocation.
+
+Changing a binding's file contract changes `MCPToolBinding.to_dict()` and therefore the existing MCP configuration digest. A READY snapshot cannot be reused after file-contract drift; reconnect is required.
+
+### Real fake-MCP integration test
+
+The local MCP fixture can opt into `read_project_file`.
+
+API integration tests now prove:
+
+- a real `sources/input.txt` portable reference is resolved only for invocation;
+- the short-lived MCP subprocess can read the actual file;
+- a process exit marker proves the subprocess lifecycle;
+- provenance retains `normalized_input_digest({"path":"sources/input.txt"})`;
+- provenance contains neither the resolved file path nor the temporary project root;
+- `.uvproj.zip` archive contains the portable run record but no resolved host path;
+- wrong-root file input returns controlled HTTP 422 and fails before MCP spawn.
+
+### Qwen core `media_info` narrow enablement
+
+On 2026-08-11 the pinned Qwen core implementation and current upstream were re-checked. The `media_info.py` source blob is unchanged between the pinned UV Studio SHA and the current fetched upstream revision, and its contract remains:
+
+```text
+media_info(path: str, raw: bool = False)
+```
+
+with `path` documented as an absolute image/video path.
+
+Therefore only:
+
+```text
+qwen-mm-core.media-info -> media.probe
+```
+
+receives:
+
+```text
+argument_name = path
+allowed_roots = sources, assets, artifacts, exports
+required      = true
+```
+
+No Qwen cloud/API/video-edit binding receives an inferred file contract in this slice.
+
+This makes the local/free Qwen core `media_info` binding technically executable through the existing generic path after trusted Qwen configuration + exact READY discovery. No Qwen process is started automatically, and native Windows still rejects current Qwen configuration because upstream remains WSL2-only there.
+
+### Qwen execution catalog truth correction
+
+After PR #14, Qwen pack catalog metadata saying `tool_execution_enabled: false` became stale: generic exact MCP execution now exists.
+
+The catalog now truthfully reports conditional support:
+
+```text
+tool_execution_enabled = true
+execution_policy.mode = generic_mcp_after_discovery_and_authorization
+automatic = false
+requires_ready_discovery = true
+authorization_enforced = true
+```
+
+`configure` now tells callers to run discovery and states that execution is limited to exact READY bindings with UV Studio authorization still enforced when locality/cost requires it.
+
+This is not an automatic provider opt-in and does not make DashScope a baseline dependency.
+
+### Tests added/updated
+
+Unit coverage includes:
+
+- backward-compatible old binding serialization;
+- file-contract round-trip;
+- duplicate argument contract rejection;
+- internal-root rejection;
+- file-contract configuration drift requiring reconnect;
+- exact field-only translation;
+- undeclared relative values remain opaque;
+- wrong-root/missing/traversal/required-field failures;
+- raw absolute host-path rejection remains intact.
+
+API coverage includes:
+
+- real subprocess project-file reading;
+- fail-before-spawn on invalid project file;
+- portable provenance digest;
+- no absolute path leakage into provenance/archive;
+- truthful Qwen conditional execution metadata;
+- exact Qwen core `media_info` file contract;
+- Qwen cloud bindings remain without inferred file contracts;
+- secrets remain references only.
 
 No test invokes Qwen, DashScope or another paid provider.
 
-Decision: `project-context/decisions/D-018-authorized-mcp-invocation.md`.
+Decision: `project-context/decisions/D-019-mcp-project-file-inputs.md`.
 
 ## Verification status
 
-PR #13 is merged into `main` at `416677c4ca758a01b0253c8880b44d44150a8cec` after full Ubuntu/Windows green CI.
+PR #14 is merged into `main` at `bb7929dbbd8e5bd69bc509d98c58f4a56bb033c5` after the full exact-head Ubuntu/Windows matrix passed.
 
-PR #14 is open. A current-head PR matrix is required before merge because documentation/safety commits were added after the initial implementation run.
-
-The latest observed current-slice Ubuntu bootstrap/unit job passed, including compilation and unit tests. Final acceptance still requires all four PR jobs on the final head:
+PR #15 is open. The first code-head CI already proved the new unit suite on Ubuntu and Windows and the Ubuntu API integration/HTTP path, but documentation commits were added after that head. Final acceptance requires a fresh full matrix on the final PR head:
 
 - Ubuntu bootstrap/unit;
 - Windows bootstrap/unit;
@@ -296,18 +405,20 @@ The latest observed current-slice Ubuntu bootstrap/unit job passed, including co
 - generic exact MCP `call_tool()` execution;
 - stale/config-mutated MCP bindings fail closed;
 - durable non-secret success/failure MCP provenance;
-- project archive preservation of external run history;
-- raw host paths rejected at the generic MCP boundary;
+- explicit binding-owned project-file translation;
+- portable authorization/provenance despite machine-only invocation paths;
+- Qwen core `media_info` has a verified safe project-file contract;
+- Qwen catalog truthfully reflects conditional generic MCP execution;
+- raw host paths remain rejected at the generic MCP boundary;
 - baseline startup/testing without DashScope, Qwen, WSL or OpenClaw.
 
 ## Not implemented yet
 
-- binding-owned project-file argument translation;
-- Qwen core project-file execution through MCP;
-- Qwen/DashScope cloud invocation from UV Studio production workflows;
+- executable `native_videoclaw` compatibility adapter despite one built-in Edge TTS offer being advertised as available when installed;
+- exact provider/model configuration contracts for VideoClaw model-backed native offers;
+- Qwen cloud/API bindings' project-file contracts (not inferred without schema verification);
 - WSL bridge for optional Qwen integration on native Windows;
 - OpenClaw adapter;
-- generic general-video executor beyond current semantic offers;
 - Stage 4 range editing, dubbing and music workflows.
 
 ## Current invariants
@@ -328,10 +439,13 @@ The latest observed current-slice Ubuntu bootstrap/unit job passed, including co
 14. Unbound discovered MCP tools are non-executable.
 15. Generic MCP execution never auto-translates arbitrary host paths.
 16. External invocation provenance contains non-secret audit facts, not credentials/tokens/stderr.
+17. Only exact binding-declared project file fields may become machine paths.
+18. Authorization/provenance file digests remain portable across project relocation.
+19. Internal project history/control directories are not generic MCP file-input roots.
 
 ## Next slice
 
-Implement **explicit binding-owned project-file argument translation**, tested first against the fake MCP server and only then applied narrowly to a freshly re-verified Qwen core binding if its pinned schema still matches. See `NEXT_TASK.md`.
+Implement **real native VideoClaw compatibility execution**, beginning with the already-advertised `native_videoclaw.edge_tts` offer, and generalize external provenance where necessary without opening arbitrary vendored function execution. See `NEXT_TASK.md`.
 
 ## Development invariant
 

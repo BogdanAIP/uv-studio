@@ -69,7 +69,8 @@ def configure_qwen_pack(
             "binding_count": len(config.bindings),
         },
         "next_action": (
-            f"Run MCP discovery for profile {pack.profile.profile_id!r}; "
-            "tool execution remains disabled."
+            f"Run MCP discovery for profile {pack.profile.profile_id!r}. "
+            "Only exact READY bindings can execute; UV Studio execution authorization "
+            "is still enforced whenever locality or cost requires it."
         ),
     }

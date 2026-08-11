@@ -4,93 +4,126 @@ Updated: 2026-08-11
 
 ## Primary target
 
-Implement **explicit binding-owned project-file argument translation for MCP capabilities**.
+Implement **real native VideoClaw compatibility execution behind the existing Capability Registry**, starting with the already-advertised `native_videoclaw.edge_tts` offer.
 
-Generic authorized MCP invocation now exists, but it deliberately rejects raw host paths and does not convert `sources/...`, `assets/...` or other project-relative strings into host filesystem paths. The next slice must add that capability without creating a generic arbitrary-path escape hatch.
+Stage 3 now has safe local FFmpeg and exact MCP execution, but the built-in registry still publishes `native_videoclaw.edge_tts` as `AVAILABLE` when `edge_tts` is installed while the execution API has no `native_videoclaw` transport. An `AVAILABLE` offer must not be a dead end.
+
+This slice should close that inconsistency without making the vendored VideoClaw application the product architecture.
 
 ## Required implementation
 
-### 1. Versioned binding file-input contract
+### 1. Product-owned native compatibility adapter
 
-Extend `MCPToolBinding` with an explicit, backward-compatible project-file argument contract.
+Add a UV Studio-owned adapter outside `vendor/videoclaw-app`.
 
-The contract must identify exactly which MCP argument fields are project file references and which canonical Project Store roots are allowed for each field. Bindings with no such declaration continue to treat arguments as ordinary JSON data and must not receive resolved host paths.
+It must:
 
-Prefer a small product-owned model over provider-specific special cases. Do not infer file arguments from names such as `path`, `image`, `video` or `file`.
+- accept only exact known native offer IDs;
+- expose no arbitrary Python import/function/command execution surface;
+- normalize product-owned semantic input/output;
+- use the pinned vendor/runtime only through a narrow compatibility boundary when genuinely required;
+- preserve native Windows support;
+- fail closed when an optional native dependency is absent.
 
-### 2. Project Store resolution only
+### 2. Make `native_videoclaw.edge_tts` truthfully executable
 
-For every declared project-file argument:
+The first exact target is:
 
-- accept a project-relative reference only;
-- resolve it through `ProjectStore.resolve_project_file(...)`;
-- constrain resolution to the binding-declared allowed roots;
-- require the referenced file to exist when the tool contract requires an input file;
-- reject traversal, absolute paths, UNC paths and `file://` values;
-- never expose arbitrary host paths supplied by the API caller.
+```text
+native_videoclaw.edge_tts -> speech.synthesize
+locality = remote
+cost     = free
+```
 
-Resolved host paths may exist only in the short-lived adapter invocation payload. They must not be written back into canonical project metadata or provenance.
+Because it contacts a remote service even though it needs no API key, execution must continue to require D-017 `remote_execution` one-shot authorization. It must not require `external_cost`.
 
-### 3. Digest semantics
+Define a small semantic request contract (for example text + explicitly supported voice/output options) rather than forwarding arbitrary Edge TTS arguments.
 
-Keep D-017 authorization bound to the user-facing normalized input, not to machine-specific resolved absolute paths.
+Write output only into the canonical project (normally `artifacts/`), using deterministic bounded filenames/paths owned by UV Studio.
 
-The provenance `input_digest` must therefore remain stable when the same project is moved to another machine/root. Do not recompute authorization or provenance digests from translated host paths.
+### 3. Generalize external execution provenance where needed
 
-### 4. Exact binding drift protection
+Current external provenance was introduced for MCP and records MCP profile/tool identity. Native external execution needs the same durable audit guarantees without pretending to be MCP.
 
-Include the new file-input contract in the existing MCP configuration digest. Any change to declared file fields or allowed roots must require reconnect before execution.
+Refactor the provenance model carefully so common fields stay common while transport-specific identity is explicit and versioned.
 
-No fuzzy migration or automatic widening of allowed roots.
+Minimum invariant for native Edge TTS:
 
-### 5. Fake MCP fixture first
+- project/capability/offer/adapter;
+- portable input digest;
+- authorization fact/scopes;
+- locality/cost snapshot;
+- timestamps/status;
+- safe output reference/summary;
+- controlled error class/code;
+- no token, secret, raw remote error or machine-only path leakage.
 
-Add a deterministic fake MCP tool/binding that accepts one declared project file argument and returns safe metadata about the received path/content.
+Existing MCP provenance/archive tests must remain compatible or have an explicit backward-compatible schema migration.
 
-Tests must prove the translation works without depending on Qwen, WSL, network access or paid APIs.
+### 4. Audit other native offers but do not fake readiness
 
-### 6. Qwen core follow-up only after fresh verification
+Current model-backed offers (`text_generate`, `image_generate`, `video_generate`, `action_transfer`) are `CONFIGURATION_REQUIRED` because UV Studio has not yet selected exact provider/model/credential contracts.
 
-After the generic contract is green, re-check the pinned/current Qwen-MM core tool schema before binding any real project-file field. If the pinned `media_info` contract still maps cleanly, enable only the exact required project-file argument for the existing `core.media_info -> media.probe` trusted binding.
+Do not mark them executable merely because VideoClaw contains provider code.
 
-Do not broaden other Qwen tools in the same slice unless their file contracts are independently verified and covered by tests.
+Instead, document for each native offer what exact configuration/execution contract is still missing. If a small generic native-provider configuration model is clearly justified by the audit, design it in this slice only if it can be tested without real paid credentials; otherwise leave a precise follow-up.
+
+### 5. Execution API routing
+
+Extend the existing project capability `/execute` route so:
+
+- `local_ffmpeg` stays in its threadpool path;
+- `mcp.*` stays exact/authorized/provenance-recorded;
+- `native_videoclaw` routes only to the new exact native adapter;
+- unknown adapters still fail closed;
+- selection and D-017 authorization remain transport-independent.
+
+### 6. Tests first, no paid provider calls
+
+Use mocks/fakes around Edge TTS network behavior in unit/API tests. CI must never depend on live Microsoft/Edge endpoints.
+
+Add at least one optional/manual real smoke recipe or developer instruction only if useful, but it must not be part of the required CI gate.
 
 ## Acceptance criteria
 
 The slice is complete only when tests prove:
 
-1. Existing MCP bindings with no file contract behave exactly as before.
-2. Raw POSIX/Windows/UNC/file-URI host paths remain rejected.
-3. Declared project-relative file input resolves successfully through Project Store.
-4. Undeclared argument fields never receive path translation.
-5. `..` traversal and wrong-root references fail closed.
-6. Missing required project input fails before MCP process invocation.
-7. Authorization digest is computed from portable user input, not resolved host paths.
-8. Provenance contains the portable input digest and no resolved host path.
-9. Changing file-input contract invalidates the READY configuration digest and requires reconnect.
-10. Project archive contains no machine-specific resolved paths.
-11. Fake MCP integration passes on Linux and Windows.
-12. If Qwen core mapping is enabled, no DashScope/network/paid call is made in CI.
+1. `native_videoclaw.edge_tts` cannot execute without `remote_execution` authorization.
+2. Correct one-shot authorization permits the exact known native offer.
+3. The token cannot be replayed or reused with mutated input.
+4. Arbitrary native function/module/command names are not accepted.
+5. Semantic Edge TTS input is bounded and validated.
+6. Output stays inside the canonical project and cannot escape by path manipulation.
+7. Missing optional `edge_tts` fails truthfully before network execution.
+8. Mocked success writes a canonical audio artifact and durable non-secret provenance.
+9. Mocked remote failure writes controlled failed provenance without raw provider content.
+10. Existing MCP provenance and archive history remain valid.
+11. Local FFmpeg behavior remains off the async event loop.
+12. `local_free_first` still cannot widen to this remote/free offer.
+13. Model-backed native offers remain `CONFIGURATION_REQUIRED` until exact provider/model contracts exist.
+14. Linux and Windows CI remain green.
 
 ## Expected files
 
 Likely changes:
 
-- `uv_studio/mcp/models.py`
-- `uv_studio/mcp/manager.py`
-- `uv_studio/capabilities/adapters/mcp_execution.py`
-- `uv_studio/projects/store.py` only if a small additional safe resolver primitive is genuinely required
-- fake MCP fixture and MCP execution tests
-- optional trusted Qwen pack binding update after upstream verification
-- `project-context/PROJECT_STATE.md`
-- this file
-- architecture decision record if the file-input contract becomes durable
+- new `uv_studio/capabilities/adapters/native_videoclaw.py`;
+- `uv_studio/api/capability_execution.py`;
+- `uv_studio/capabilities/provenance.py` (only for a clean transport-neutral provenance model);
+- possibly a small native semantic request/result module;
+- native adapter unit tests;
+- capability execution API tests;
+- archive/provenance regression tests;
+- `project-context/PROJECT_STATE.md`;
+- this file;
+- architecture decision record if provenance/native adapter semantics become durable.
 
 ## Explicit non-goals
 
-- No generic host filesystem access.
-- No automatic inference of file arguments from tool schemas or field names.
-- No arbitrary command execution.
-- No paid Qwen/DashScope call in tests or CI.
-- No OpenClaw work in this slice.
-- No Stage 4 workflow expansion until Stage 3 external execution boundaries remain green on Linux and Windows.
+- No arbitrary vendored function execution bridge.
+- No direct user-controlled Python module/class/function names.
+- No paid provider call in CI.
+- No automatic selection of a paid VideoClaw model.
+- No claim that all native VideoClaw model offers are executable.
+- No OpenClaw work in the same slice.
+- No Stage 4 range-edit workflow work until this Stage 3 advertised-offer inconsistency is closed.

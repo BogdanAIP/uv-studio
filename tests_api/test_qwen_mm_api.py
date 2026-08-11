@@ -27,7 +27,7 @@ class QwenMMPackApiTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
-    def test_catalog_is_pinned_secret_free_and_execution_disabled(self) -> None:
+    def test_catalog_is_pinned_secret_free_and_execution_is_conditional(self) -> None:
         os.environ["DASHSCOPE_API_KEY"] = "should-never-appear"
         try:
             response = self.client.get("/api/uv/integrations/qwen-mm")
@@ -38,18 +38,42 @@ class QwenMMPackApiTests(unittest.TestCase):
             self.assertNotIn("should-never-appear", encoded)
             self.assertNotIn(".git@main", encoded)
             for pack in packs:
-                self.assertFalse(pack["tool_execution_enabled"])
+                self.assertTrue(pack["tool_execution_enabled"])
+                self.assertEqual(
+                    pack["execution_policy"]["mode"],
+                    "generic_mcp_after_discovery_and_authorization",
+                )
+                self.assertFalse(pack["execution_policy"]["automatic"])
+                self.assertTrue(pack["execution_policy"]["requires_ready_discovery"])
+                self.assertTrue(pack["execution_policy"]["authorization_enforced"])
         finally:
             os.environ.pop("DASHSCOPE_API_KEY", None)
 
-    def test_configure_core_writes_only_known_profile(self) -> None:
+    def test_configure_core_writes_known_profile_and_media_info_file_contract(self) -> None:
         response = self.client.post("/api/uv/integrations/qwen-mm/core/configure")
         self.assertEqual(response.status_code, 201, response.text)
         payload = response.json()
         self.assertEqual(payload["configured_profile_id"], "qwen-mm-core")
+        self.assertIn("exact READY bindings", payload["next_action"])
         config = self.store.load()
         self.assertEqual([profile.profile_id for profile in config.profiles], ["qwen-mm-core"])
         self.assertEqual([binding.tool_name for binding in config.bindings], ["media_info"])
+        binding = config.bindings[0]
+        self.assertEqual(len(binding.project_file_inputs), 1)
+        file_input = binding.project_file_inputs[0]
+        self.assertEqual(file_input.argument_name, "path")
+        self.assertEqual(
+            file_input.allowed_roots,
+            ("sources", "assets", "artifacts", "exports"),
+        )
+        self.assertTrue(file_input.required)
+
+    def test_cloud_bindings_do_not_gain_unverified_file_contracts(self) -> None:
+        response = self.client.post("/api/uv/integrations/qwen-mm/video-edit/configure")
+        self.assertEqual(response.status_code, 201, response.text)
+        config = self.store.load()
+        self.assertTrue(config.bindings)
+        self.assertTrue(all(binding.project_file_inputs == () for binding in config.bindings))
 
     def test_configure_cloud_pack_stores_key_reference_not_value(self) -> None:
         os.environ["DASHSCOPE_API_KEY"] = "never-write-this"
@@ -59,7 +83,9 @@ class QwenMMPackApiTests(unittest.TestCase):
             raw = self.store.path.read_text(encoding="utf-8")
             self.assertIn("DASHSCOPE_API_KEY", raw)
             self.assertNotIn("never-write-this", raw)
-            self.assertIn("tool execution remains disabled", response.json()["next_action"])
+            next_action = response.json()["next_action"]
+            self.assertIn("READY", next_action)
+            self.assertIn("execution authorization", next_action)
         finally:
             os.environ.pop("DASHSCOPE_API_KEY", None)
 

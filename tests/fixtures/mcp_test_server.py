@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,46 +18,52 @@ async def handle_list_tools(
     delay = float(os.environ.get("UV_MCP_FIXTURE_LIST_DELAY", "0") or "0")
     if delay:
         await anyio.sleep(delay)
-    return types.ListToolsResult(
-        tools=[
+    tools = [
+        types.Tool(
+            name="echo_metadata",
+            title="Echo Metadata",
+            description="Returns deterministic test metadata.",
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}},
+        ),
+        types.Tool(
+            name="cloud_generate",
+            title="Cloud Generate",
+            description="Fixture representing a remote paid-capable operation.",
+            input_schema={"type": "object", "properties": {"prompt": {"type": "string"}}},
+        ),
+        types.Tool(
+            name="slow_echo",
+            title="Slow Echo",
+            description="Delays before returning deterministic metadata.",
+            input_schema={"type": "object"},
+        ),
+        types.Tool(
+            name="fail_tool",
+            title="Fail Tool",
+            description="Returns an MCP tool error for tests.",
+            input_schema={"type": "object"},
+        ),
+        types.Tool(
+            name="oversized_response",
+            title="Oversized Response",
+            description="Returns a response beyond the UV Studio response limit.",
+            input_schema={"type": "object"},
+        ),
+    ]
+    if os.environ.get("UV_MCP_FIXTURE_PROJECT_FILE_TOOL") == "1":
+        tools.append(
             types.Tool(
-                name="echo_metadata",
-                title="Echo Metadata",
-                description="Returns deterministic test metadata.",
+                name="read_project_file",
+                title="Read Project File",
+                description="Reads one absolute file path supplied by UV Studio translation.",
                 input_schema={
                     "type": "object",
-                    "properties": {"text": {"type": "string"}},
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
                 },
-            ),
-            types.Tool(
-                name="cloud_generate",
-                title="Cloud Generate",
-                description="Fixture representing a remote paid-capable operation.",
-                input_schema={
-                    "type": "object",
-                    "properties": {"prompt": {"type": "string"}},
-                },
-            ),
-            types.Tool(
-                name="slow_echo",
-                title="Slow Echo",
-                description="Delays before returning deterministic metadata.",
-                input_schema={"type": "object"},
-            ),
-            types.Tool(
-                name="fail_tool",
-                title="Fail Tool",
-                description="Returns an MCP tool error for tests.",
-                input_schema={"type": "object"},
-            ),
-            types.Tool(
-                name="oversized_response",
-                title="Oversized Response",
-                description="Returns a response beyond the UV Studio response limit.",
-                input_schema={"type": "object"},
-            ),
-        ]
-    )
+            )
+        )
+    return types.ListToolsResult(tools=tools)
 
 
 async def handle_call_tool(
@@ -70,15 +77,36 @@ async def handle_call_tool(
             ensure_ascii=False,
             sort_keys=True,
         )
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text=text)]
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
+    if params.name == "read_project_file":
+        raw_path = arguments.get("path")
+        if not isinstance(raw_path, str):
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="path must be a string")],
+                is_error=True,
+            )
+        path = Path(raw_path)
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="fixture could not read file")],
+                is_error=True,
+            )
+        text = json.dumps(
+            {
+                "name": path.name,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
         )
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
     if params.name == "slow_echo":
         delay = float(os.environ.get("UV_MCP_FIXTURE_CALL_DELAY", "2") or "2")
         await anyio.sleep(delay)
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text="slow-ok")]
-        )
+        return types.CallToolResult(content=[types.TextContent(type="text", text="slow-ok")])
     if params.name == "fail_tool":
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="fixture failure")],
