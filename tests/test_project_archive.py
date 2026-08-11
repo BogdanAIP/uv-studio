@@ -146,6 +146,23 @@ class ProjectArchiveTests(unittest.TestCase):
             import_project(self.target_store, malicious)
         self.assertFalse((self.base / "escape.txt").exists())
 
+    def test_manifest_project_id_traversal_is_rejected_before_staging(self) -> None:
+        archive = self._export()
+        malicious = self.base / "bad-project-id.uvproj.zip"
+
+        def mutate(name: str, data: bytes) -> bytes | None:
+            if name == ARCHIVE_MANIFEST:
+                manifest = json.loads(data.decode("utf-8"))
+                manifest["project_id"] = "../escape"
+                return json.dumps(manifest).encode("utf-8")
+            return data
+
+        self._rewrite_archive(archive, malicious, mutate)
+        with self.assertRaises(ProjectArchiveError):
+            import_project(self.target_store, malicious)
+        self.assertFalse((self.target_store.root.parent / "escape").exists())
+        self.assertEqual(list(self.target_store.root.iterdir()), [])
+
     def test_future_archive_schema_is_rejected(self) -> None:
         archive = self._export()
         future = self.base / "future.uvproj.zip"
