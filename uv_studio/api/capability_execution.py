@@ -22,6 +22,7 @@ from uv_studio.capabilities.execution import (
     InvalidCapabilityInput,
     UnsupportedCapabilityExecution,
 )
+from uv_studio.capabilities.models import CostClass, LocalityClass
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.capabilities.selection import (
     NoEligibleOffer,
@@ -135,16 +136,19 @@ def execute_project_capability(
             detail="selection policy did not produce an executable offer",
         )
 
-    # Stage 3 local slice: even an explicitly pinned external/paid offer remains
-    # non-executable until its own adapter and cost permission flow exist.
-    if offer.adapter_id != LocalFFmpegAdapter.adapter_id:
+    # Stage 3 local slice: known external/remote/paid offers remain metadata-only.
+    if (
+        offer.adapter_id != LocalFFmpegAdapter.adapter_id
+        or offer.cost_class is not CostClass.FREE
+        or offer.locality is not LocalityClass.LOCAL
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "adapter_not_executable_yet",
                 "message": (
-                    f"offer {offer.offer_id!r} is known but adapter {offer.adapter_id!r} "
-                    "is not executable in the current local-only Stage 3 slice"
+                    f"offer {offer.offer_id!r} is known but current Stage 3 execution permits "
+                    "only free/local local_ffmpeg offers"
                 ),
             },
         )
