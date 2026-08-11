@@ -2,5 +2,6 @@
 
 from .local_ffmpeg import LocalFFmpegAdapter
 from .mcp import MCPBindingOfferAdapter
+from .native_videoclaw import NativeVideoClawAdapter
 
-__all__ = ["LocalFFmpegAdapter", "MCPBindingOfferAdapter"]
+__all__ = ["LocalFFmpegAdapter", "MCPBindingOfferAdapter", "NativeVideoClawAdapter"]
