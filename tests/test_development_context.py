@@ -369,6 +369,33 @@ class DevelopmentContextValidationTests(unittest.TestCase):
                         event_path=event_path,
                     )
 
+    def test_pr_body_ignores_headings_inside_fenced_code(self) -> None:
+        self.document["active_slice"]["pull_request"] = 27
+        self._write_repository()
+
+        body_with_example = self._valid_pr_body().replace(
+            "Build the continuity brief.",
+            "Build the continuity brief.\n\n```markdown\n## Changes\nExample only.\n```",
+        )
+        event_path = self._write_event(self._event(body=body_with_example))
+        validate_repository(
+            self.root,
+            event_name="pull_request",
+            event_path=event_path,
+        )
+
+        body_without_real_section = self._valid_pr_body().replace(
+            "## Changes\nAdd a strict validator.",
+            "```markdown\n## Changes\nExample only.\n```",
+        )
+        event_path = self._write_event(self._event(body=body_without_real_section))
+        with self.assertRaisesRegex(DevelopmentContextError, "## Changes"):
+            validate_repository(
+                self.root,
+                event_name="pull_request",
+                event_path=event_path,
+            )
+
     def test_review_phase_rejects_placeholders_but_draft_allows_them(self) -> None:
         placeholders = (
             "TODO",

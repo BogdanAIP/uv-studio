@@ -42,6 +42,7 @@ REQUIRED_PR_SECTIONS = (
 
 _ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _H2_PATTERN = re.compile(r"^## ([^\r\n]+?)\s*$", re.MULTILINE)
+_FENCE_OPEN_PATTERN = re.compile(r"^ {0,3}(`{3,}|~{3,})[^\r\n]*$")
 _HTML_COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
 _REVIEW_PLACEHOLDER_PATTERN = re.compile(
     r"\b(?:TODO|TBD)\b|\bstill\s+to\s+do\b|replace-with-[a-z0-9-]+",
@@ -324,8 +325,39 @@ def _validate_single_marker(text: str, *, name: str, value: str, location: str) 
         )
 
 
-def _section_content(body: str, match: re.Match[str]) -> str:
-    next_match = _H2_PATTERN.search(body, match.end())
+def _mask_fenced_code(body: str) -> str:
+    """Mask Markdown code fences while preserving character offsets and newlines."""
+
+    masked: list[str] = []
+    fence_character: str | None = None
+    fence_length = 0
+    for line in body.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        newline = line[len(content) :]
+        if fence_character is None:
+            opening = _FENCE_OPEN_PATTERN.fullmatch(content)
+            if opening is None:
+                masked.append(line)
+                continue
+            marker = opening.group(1)
+            fence_character = marker[0]
+            fence_length = len(marker)
+        else:
+            closing = re.fullmatch(
+                rf" {{0,3}}{re.escape(fence_character)}{{{fence_length},}}[ \t]*",
+                content,
+            )
+            if closing is not None:
+                fence_character = None
+                fence_length = 0
+        masked.append(" " * len(content) + newline)
+    return "".join(masked)
+
+
+def _section_content(
+    body: str, heading_body: str, match: re.Match[str]
+) -> str:
+    next_match = _H2_PATTERN.search(heading_body, match.end())
     end = next_match.start() if next_match else len(body)
     return body[match.end() : end]
 
@@ -346,7 +378,8 @@ def _validate_pr_body(body: Any, *, active_id: str, next_id: str, phase: str) ->
         location="pull_request.body",
     )
 
-    matches = list(_H2_PATTERN.finditer(body))
+    heading_body = _mask_fenced_code(body)
+    matches = list(_H2_PATTERN.finditer(heading_body))
     positions: list[int] = []
     for section in REQUIRED_PR_SECTIONS:
         section_matches = [match for match in matches if match.group(1) == section]
@@ -356,7 +389,9 @@ def _validate_pr_body(body: Any, *, active_id: str, next_id: str, phase: str) ->
             )
         match = section_matches[0]
         positions.append(match.start())
-        content = _HTML_COMMENT_PATTERN.sub("", _section_content(body, match)).strip()
+        content = _HTML_COMMENT_PATTERN.sub(
+            "", _section_content(body, heading_body, match)
+        ).strip()
         if not content:
             raise DevelopmentContextError(
                 f"pull_request.body section '## {section}' must contain meaningful content"
