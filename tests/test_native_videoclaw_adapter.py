@@ -4,11 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from uv_studio.capabilities.adapters.native_videoclaw import NativeVideoClawAdapter
 from uv_studio.capabilities.authorization import ConsentScope, prepare_execution
 from uv_studio.capabilities.execution import (
     CapabilityToolFailed,
+    CapabilityToolUnavailable,
     InvalidCapabilityInput,
     UnsupportedCapabilityExecution,
 )
@@ -209,6 +211,24 @@ class NativeVideoClawAdapterTests(unittest.IsolatedAsyncioTestCase):
                 payload=payload,
             )
         self.assertEqual(self.calls, [])
+
+    async def test_missing_edge_tts_dependency_fails_before_provenance_or_network(self) -> None:
+        payload = {"text": "dependency check"}
+        adapter = NativeVideoClawAdapter(self.store)
+        with mock.patch(
+            "uv_studio.capabilities.adapters.native_videoclaw.importlib.import_module",
+            side_effect=ImportError("edge_tts missing"),
+        ):
+            with self.assertRaises(CapabilityToolUnavailable):
+                await adapter.execute(
+                    project_id=self.project.project_id,
+                    offer=self.offer,
+                    preparation=self.preparation(payload),
+                    payload=payload,
+                )
+        project_dir = self.store.project_directory(self.project.project_id)
+        self.assertEqual(list((project_dir / "artifacts").iterdir()), [])
+        self.assertEqual(list((project_dir / "tasks").iterdir()), [])
 
     async def test_provider_failure_removes_partial_artifact_and_writes_sanitized_failure(self) -> None:
         payload = {"text": "failure"}
