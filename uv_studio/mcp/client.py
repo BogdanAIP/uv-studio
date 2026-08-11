@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
@@ -34,11 +33,10 @@ class MCPMissingEnvironment(MCPDiscoveryError):
 
 
 class MCPStdioDiscoveryClient:
-    """Opens one bounded discovery session and always closes the subprocess.
+    """Open one bounded discovery session and always close the subprocess.
 
-    The first slice is intentionally ephemeral: `ready` means the profile was
-    successfully discovered, not that UV Studio keeps a child process resident.
-    Tool execution is a later permission boundary.
+    `ready` means the latest bounded discovery succeeded; UV Studio does not keep
+    a hidden MCP child process resident after this method returns.
     """
 
     def __init__(self, config_store: MCPConfigStore) -> None:
@@ -57,36 +55,42 @@ class MCPStdioDiscoveryClient:
         )
 
         log_path = self.config_store.stderr_log_path(profile.profile_id)
-        stack = AsyncExitStack()
         log_handle = log_path.open("w", encoding="utf-8", errors="replace")
+        session_timeout = profile.startup_timeout_sec + profile.discovery_timeout_sec
         try:
             try:
-                # AnyIO cancel scopes must be entered/exited in the same task.
-                # `asyncio.wait_for()` would move the awaitable into another task
-                # and breaks the official SDK's task-group cleanup contract.
-                with anyio.fail_after(profile.startup_timeout_sec):
-                    client = await stack.enter_async_context(
-                        Client(stdio_client(params, errlog=log_handle))
-                    )
+                # The MCP SDK keeps AnyIO task-group/cancel scopes open for the
+                # full Client context lifetime. Therefore the outer timeout must
+                # remain open until Client.__aexit__ completes (strict LIFO).
+                with anyio.fail_after(session_timeout):
+                    async with Client(stdio_client(params, errlog=log_handle)) as client:
+                        try:
+                            # This nested scope enters and exits wholly while the
+                            # Client context is active, so cancel-scope ordering is
+                            # valid and list_tools still has its own hard budget.
+                            with anyio.fail_after(profile.discovery_timeout_sec):
+                                result = await client.list_tools()
+                        except TimeoutError as exc:
+                            raise MCPDiscoveryTimeout(
+                                f"MCP profile {profile.profile_id!r} timed out while listing tools"
+                            ) from exc
+                        except MCPDiscoveryTimeout:
+                            raise
+                        except Exception as exc:
+                            raise MCPDiscoveryError(
+                                f"MCP profile {profile.profile_id!r} tool discovery failed "
+                                f"({type(exc).__name__})"
+                            ) from exc
+            except MCPDiscoveryTimeout:
+                raise
             except TimeoutError as exc:
                 raise MCPDiscoveryTimeout(
-                    f"MCP profile {profile.profile_id!r} timed out while starting"
+                    f"MCP profile {profile.profile_id!r} discovery session timed out"
                 ) from exc
             except Exception as exc:
                 raise MCPDiscoveryError(
-                    f"MCP profile {profile.profile_id!r} could not start ({type(exc).__name__})"
-                ) from exc
-
-            try:
-                with anyio.fail_after(profile.discovery_timeout_sec):
-                    result = await client.list_tools()
-            except TimeoutError as exc:
-                raise MCPDiscoveryTimeout(
-                    f"MCP profile {profile.profile_id!r} timed out while listing tools"
-                ) from exc
-            except Exception as exc:
-                raise MCPDiscoveryError(
-                    f"MCP profile {profile.profile_id!r} tool discovery failed ({type(exc).__name__})"
+                    f"MCP profile {profile.profile_id!r} could not complete discovery "
+                    f"({type(exc).__name__})"
                 ) from exc
 
             raw_tools = list(result.tools)
@@ -100,10 +104,7 @@ class MCPStdioDiscoveryClient:
                 raise MCPDiscoveryError("MCP server returned duplicate tool names")
             return descriptors
         finally:
-            try:
-                await stack.aclose()
-            finally:
-                log_handle.close()
+            log_handle.close()
 
     @staticmethod
     def _resolve_environment(profile: MCPProfile) -> dict[str, str]:
