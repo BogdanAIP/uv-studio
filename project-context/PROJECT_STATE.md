@@ -3,13 +3,13 @@
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
 **Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
-**Active branch:** `stage-3/local-capability-execution`  
-**Main baseline:** `7fb0ca88b8e38a6bc2704e7ead8bfc365fc3fa04`  
-**Branch status:** local deterministic capability execution implemented; final branch/PR CI must be green before merge.
+**Active branch:** `stage-3/direct-mcp-adapter`  
+**Main baseline:** `4cbe383f3c30971b3cc006dc71ed8ea30b68e2a6`  
+**Branch status:** generic direct MCP stdio discovery + explicit semantic bindings implemented; final PR-specific CI required before merge.
 
 ## Product definition
 
-UV Studio is a universal video production/editing studio. Task recipes, production policy, semantic capabilities, offer selection and execution are separate layers. Paid AI APIs remain explicit optional capabilities rather than hidden baseline dependencies.
+UV Studio is a universal video production/editing studio. Project state, recipes, production policy, semantic capabilities, implementation offers, selection permission and adapter execution remain separate layers. Paid AI APIs are optional capabilities rather than hidden baseline dependencies.
 
 ## Current architecture
 
@@ -23,9 +23,21 @@ Canonical Project
                   -> CapabilityOffer metadata
                       -> SelectionPolicy
                           -> Execution Adapter
+
+Machine Studio Config
+  -> MCPProfile
+      -> bounded stdio discovery
+          -> MCPToolDescriptor
+              -> explicit MCPToolBinding
+                  -> CapabilityOffer
 ```
 
-Permanent rule: **metadata preference is not execution permission**.
+Permanent rules:
+
+- metadata/discovery is not execution permission;
+- unbound MCP tools never become UV Studio semantic offers;
+- MCP profile licensing does not imply tool execution is free;
+- machine commands/credential references are not portable project state.
 
 ## Merged milestones
 
@@ -34,179 +46,183 @@ Permanent rule: **metadata preference is not execution permission**.
 - `2276a854...` — canonical Project Store v1;
 - `21016061...` — UV server + Projects API;
 - `9570658d...` — UV-owned frontend + Projects UI;
-- `3214cec8...` — portable project archives/backups + Qwen-MM-informed architecture;
+- `3214cec8...` — portable project archives/backups + Qwen-informed architecture;
 - `49dcef68...` — provider-neutral Recipe Registry + ProductionPolicy;
 - `dff8fc14...` — truthful RecipeExecutionPlan and project readiness UI;
-- `7fb0ca88b8e38a6bc2704e7ead8bfc365fc3fa04` — semantic Capability Registry + explicit offer cost/locality/readiness metadata.
+- `7fb0ca88...` — semantic Capability Registry + explicit offer readiness/locality/cost;
+- `4cbe383f3c30971b3cc006dc71ed8ea30b68e2a6` — fail-closed selection policy + safe project-scoped local FFprobe/FFmpeg execution.
 
-## Current Stage 3 slice
+## Current Stage 3 slice — generic direct MCP discovery
 
-### Explicit selection policy
+### Official MCP SDK v2
 
-Added:
-
-```text
-manual
-pinned_offer
-local_free_first
-```
-
-`local_free_first` selects only:
+Added UV Studio-owned dependency:
 
 ```text
-availability = available
-cost_class   = free
-locality     = local
+requirements-uv.txt
+mcp>=2.0,<3
 ```
 
-It never falls through to remote, hybrid, `potentially_paid` or `paid` offers.
+It is installed separately from vendored VideoClaw dependencies in CI and `scripts/setup-dev.ps1`.
 
-`manual` never auto-selects. `pinned_offer` resolves exactly the named available offer, but the current execution API still refuses remote or paid-capable execution because those permission/cost flows do not exist yet.
+### Machine-global MCP configuration
 
-Decision record: `project-context/decisions/D-014-execution-permission.md`.
+Added strict/versioned:
 
-### Project-scoped filesystem boundary
+- `MCPProfile`;
+- `MCPToolBinding`;
+- `MCPConfiguration`;
+- `MCPConfigStore`.
 
-`ProjectStore` now exposes safe project-file resolution:
+Configuration lives under `UV_STUDIO_CONFIG_DIR` or `data/config`, not in Project Store.
 
-- canonical project-relative paths only;
-- no absolute path / `..` traversal;
-- Windows backslashes normalize to canonical project paths;
-- operation-specific allowed roots;
-- no implicit nested directory creation;
-- symlink escape is rejected;
-- resolved inputs/outputs remain inside the canonical project directory.
+Profiles store environment-variable references, not raw secret values. There is intentionally no HTTP API for arbitrary `command + args` profile creation/editing.
 
-### Execution contracts
+### Ephemeral bounded stdio discovery
 
-Added product-owned execution contracts in `uv_studio/capabilities/execution.py`:
+`MCPStdioDiscoveryClient` uses official SDK `Client` + `stdio_client`.
 
-- `CapabilityExecutionResult`;
-- `CapabilityExecutionEnvelope`;
-- normalized input/tool/unsupported errors.
+Flow:
 
-### First executable adapter — local FFmpeg
+1. resolve configured env references and optional cwd;
+2. start the configured stdio server;
+3. initialize MCP;
+4. call `list_tools()` only;
+5. normalize bounded metadata;
+6. close SDK contexts and subprocess;
+7. keep only discovery status/snapshot in UV Studio memory.
 
-Added `LocalFFmpegAdapter` with two bounded operations.
+`ready` therefore means the last discovery succeeded; it does not mean a hidden MCP process stays resident.
 
-#### `media.probe`
+Tool-list request timeout uses the SDK's own `read_timeout_seconds` cancellation path. UV Studio domain errors are raised only after SDK cleanup completes, avoiding AnyIO task-group/cancel-scope corruption. A coarse whole-session timeout remains as fail-safe.
 
-- uses local `ffprobe`;
-- fixed argv arguments;
-- `shell=false`;
-- timeout enforced;
-- returns structured duration/format/size/audio-video/stream metadata;
-- no artifact is created for inspection.
+Limits include:
 
-#### `timeline.assemble`
+- max 500 tools/profile;
+- bounded names/descriptions;
+- max 64 KiB per input/output schema;
+- duplicate tool names reject discovery.
 
-- ordered project-file concat;
-- max 200 inputs;
-- output only under `artifacts/` or `exports/`;
-- existing output is not overwritten;
-- temporary concat manifest is stored in project `tasks/` and always removed;
-- no arbitrary FFmpeg flags;
-- uses stream copy (`-c copy`), so incompatible inputs fail explicitly instead of being silently transcoded;
-- output is registered as canonical `ProjectReference` only after FFmpeg succeeds;
-- if project metadata registration fails, the newly generated output is removed.
+Child stderr is written only to machine-local MCP logs and is not returned by public APIs.
 
-### Project execution API
+### Explicit binding -> semantic offer
 
-Added:
+`MCPBindingOfferAdapter` registers:
 
 ```text
-POST /api/uv/projects/{project_id}/capabilities/{capability_id}/execute
+adapter_id = mcp.<profile_id>
+offer_id   = mcp.<binding_id>
 ```
 
-Allowed request fields are exactly:
+Only explicit `MCPToolBinding` can create an offer. The binding must reference an existing UV Studio semantic capability and explicitly declares locality/cost/asynchronous/features.
+
+Consequences:
+
+- discovered but unbound tool -> visible in tool discovery only, no offer;
+- bound + reported tool -> available offer;
+- bound but missing tool -> unavailable offer;
+- disconnect -> ready snapshot cleared and bound offers marked unavailable;
+- remote/potentially-paid MCP offer cannot pass `local_free_first`.
+
+### MCP API
+
+Added discovery/management API:
 
 ```text
-selection_policy
-offer_id
-input
+GET  /api/uv/mcp/profiles
+GET  /api/uv/mcp/bindings
+GET  /api/uv/mcp/profiles/{profile_id}/status
+POST /api/uv/mcp/profiles/{profile_id}/connect
+GET  /api/uv/mcp/profiles/{profile_id}/tools
+POST /api/uv/mcp/profiles/{profile_id}/disconnect
 ```
 
-The current execution boundary permits only `free + local + local_ffmpeg` offers. Known VideoClaw/Qwen/OpenClaw/remote/paid-capable offers are not executable here.
+There is no MCP tool-call endpoint and no arbitrary profile-command creation endpoint in this slice.
+
+### Capability Registry runtime refresh
+
+Added `upsert_adapter()` / `upsert_offer()` so ephemeral discovery can refresh MCP availability without redefining semantic capabilities.
+
+This refresh remains metadata only and does not bypass D-014 selection/execution permission.
 
 ### Tests
 
-Added coverage for:
+Real official-SDK stdio fixture tests cover:
 
-- `local_free_first` never falling through to paid or remote offers;
-- exact pinned offer selection;
-- manual selection never auto-running;
-- project path traversal rejection;
-- Windows path normalization;
-- symlink escape rejection;
-- no shell execution;
-- probe parsing;
-- command timeout/failure;
-- concat success and artifact registration;
-- concat failure leaving no false artifact;
-- forbidden output roots;
-- pinned paid offer rejected at execution boundary;
-- raw command-like API fields rejected.
+- initialize/list-tools success;
+- timeout/cancellation;
+- subprocess cleanup after success/timeout;
+- missing command/environment;
+- secret-free machine config/API;
+- no arbitrary profile creation API;
+- explicit binding requirement;
+- unbound tool never becoming an offer;
+- missing bound tool unavailable;
+- disconnect invalidating offers;
+- remote potentially-paid MCP offer blocked by `local_free_first`;
+- Windows and Linux stdio behavior.
 
-One unit failure caught an internal `ProjectValidationError` escaping the adapter path-validation boundary. It was corrected so invalid user paths normalize to `InvalidCapabilityInput` / HTTP 422 while the underlying path protection remains strict.
-
-Documentation: `docs/architecture/CAPABILITY_EXECUTION.md`.
+Documentation: `docs/architecture/MCP_ADAPTER.md`. Decision: D-015.
 
 ## Verification status
 
-Functional code/docs head before context-only commits: `11f1a57b3bdb99dff4e4b43f7cfd7372356995d4`, CI run `31467517961`.
+Functional head: `5ab7b0f321d8b4dfc023ec171c27393c167e920e`, CI run `31469785841`.
 
-Observed on that head:
+Observed on that exact head:
 
 - Ubuntu bootstrap/unit: success;
-- Ubuntu API integration: success;
-- Ubuntu real HTTP smoke: success;
-- Ubuntu frontend production build: success;
 - Windows bootstrap/unit: success;
+- Ubuntu API integration: success;
 - Windows API integration: success;
+- Ubuntu real HTTP smoke: success;
 - Windows real HTTP smoke: success;
-- Windows frontend install/build was still completing when this state file was updated.
+- Ubuntu frontend production build: success;
+- Windows frontend production build: success.
 
-Context updates create a newer final head. Merge requires the actual final branch/PR head to pass the complete Linux/Windows matrix.
+This context update creates a newer docs-only head. Merge still requires PR-specific CI on the actual PR head.
 
 ## What works now
 
 - durable project/recovery/UI foundation;
-- provider-neutral recipes and production policies;
-- truthful execution planning;
+- provider-neutral recipes/policies/execution planning;
 - semantic Capability Registry;
-- explicit offer readiness/locality/cost metadata;
-- strict execution permission policies;
-- project-scoped local deterministic execution;
-- real FFprobe inspection and bounded FFmpeg concat when tools are installed;
-- no paid API required by the execution layer.
+- fail-closed selection permission;
+- safe local deterministic execution;
+- generic direct MCP stdio discovery through official SDK;
+- machine-global secret-reference configuration;
+- explicit MCP semantic bindings;
+- runtime MCP offer availability refresh;
+- cross-platform real stdio tests;
+- no paid API required by baseline startup/discovery.
 
 ## Not implemented yet
 
-- direct MCP client/process adapter;
-- optional Qwen-MM runtime adapter;
+- MCP tool invocation;
+- Qwen-MM optional profile/binding pack;
 - OpenClaw runtime adapter;
-- remote/provider execution permission and cost confirmation;
-- live model/provider selection;
+- remote/paid-provider execution consent/cost confirmation;
+- persistent MCP process pooling;
+- Streamable HTTP MCP transport;
+- trusted desktop UI for MCP profile editing;
 - generic general-video executor;
-- range edit/dubbing/music workflows;
-- explicit normalization/transcoding capability for incompatible timeline inputs.
+- range edit/dubbing/music workflows.
 
 ## Current invariants
 
 1. Recipe semantics never name provider/runtime.
-2. Capability metadata and execution permission remain separate.
-3. `local_free_first` is fail-closed and cannot widen to paid/remote.
-4. Local capability paths remain inside the canonical project.
-5. No arbitrary shell/FFmpeg command surface is exposed.
-6. A failed execution does not create a successful artifact record.
-7. Remote/paid-capable offers require a future explicit permission flow.
-8. Native Windows cannot depend on WSL-only optional adapters.
-9. Vendor source remains an immutable compatibility boundary.
-10. Qwen-MM/OpenClaw remain optional peer adapters.
+2. Discovery/offer metadata never equals execution permission.
+3. `local_free_first` cannot widen to remote/paid-capable offers.
+4. MCP profiles are machine config, not portable projects.
+5. Raw secret values are not persisted or returned by MCP APIs.
+6. No arbitrary profile command creation endpoint exists.
+7. Discovery invokes `list_tools()` only; no MCP tool is called.
+8. Discovered tools require explicit semantic binding.
+9. Qwen-MM/OpenClaw remain optional peers.
+10. Native Windows works with no Qwen/OpenClaw/WSL dependency.
 
 ## Next slice
 
-Add **direct MCP adapter infrastructure** behind the same semantic capability/execution contracts. Qwen-MM-Plugins should then be connectable as an optional MCP package without becoming a mandatory runtime or changing recipe/project schemas. See `NEXT_TASK.md`.
+After this PR is merged, re-verify the then-current `QwenLM/Qwen-MM-Plugins` repository and add a separate **optional Qwen-MM profile/binding pack**. Classify each useful tool by actual locality/cost and platform requirements. Do not enable cloud/paid MCP tool execution yet. See `NEXT_TASK.md`.
 
 ## Development invariant
 
