@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from uv_studio.projects.media_ranges import ProjectMediaRange
+from uv_studio.projects.media_ranges import MICROSECONDS_PER_SECOND, ProjectMediaRange
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.store import ProjectStoreError
 
@@ -32,6 +33,7 @@ _REPLACE_OUTPUT_ROOTS = ("artifacts",)
 _REPLACEMENT_DURATION_TOLERANCE_US = 100_000
 _FINAL_VIDEO_DURATION_TOLERANCE_US = 250_000
 _SOURCE_AV_DURATION_TOLERANCE_US = 250_000
+_AV_START_ALIGNMENT_TOLERANCE_US = 10_000
 _COMPOSITION_MODE = "filter_concat_ffv1_flac_vfr"
 _AUDIO_POLICY = "matching_presence_single_track"
 _VIDEO_MATCH_FIELDS = (
@@ -105,6 +107,22 @@ def _audio_duration_us(probe: Mapping[str, Any]) -> int | None:
     if isinstance(value, int) and value > 0:
         return value
     return None
+
+
+def _stream_start_us(probe: Mapping[str, Any], kind: str) -> int | None:
+    stream = _primary_stream(probe, kind)
+    if stream is None:
+        return None
+    value = stream.get("start_time")
+    if value in (None, "", "N/A"):
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if not parsed.is_finite():
+        return None
+    return int(parsed * MICROSECONDS_PER_SECOND)
 
 
 def _video_geometry(probe: Mapping[str, Any]) -> tuple[int, int] | None:
@@ -388,6 +406,8 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
             )
         source_audio_duration_us: int | None = None
         replacement_audio_duration_us: int | None = None
+        source_av_start_delta_us: int | None = None
+        replacement_av_start_delta_us: int | None = None
         if has_audio:
             source_audio_duration_us = _audio_duration_us(source_probe)
             replacement_audio_duration_us = _audio_duration_us(replacement_probe)
@@ -412,6 +432,31 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
             ):
                 raise InvalidCapabilityInput(
                     "replacement audio/video durations differ beyond the supported tolerance"
+                )
+
+            source_video_start_us = _stream_start_us(source_probe, "video")
+            source_audio_start_us = _stream_start_us(source_probe, "audio")
+            replacement_video_start_us = _stream_start_us(replacement_probe, "video")
+            replacement_audio_start_us = _stream_start_us(replacement_probe, "audio")
+            if source_video_start_us is None or source_audio_start_us is None:
+                raise InvalidCapabilityInput(
+                    "video.replace_range requires known source video/audio start_time values"
+                )
+            if replacement_video_start_us is None or replacement_audio_start_us is None:
+                raise InvalidCapabilityInput(
+                    "video.replace_range requires known replacement video/audio start_time values"
+                )
+            source_av_start_delta_us = source_audio_start_us - source_video_start_us
+            replacement_av_start_delta_us = (
+                replacement_audio_start_us - replacement_video_start_us
+            )
+            if abs(source_av_start_delta_us) > _AV_START_ALIGNMENT_TOLERANCE_US:
+                raise InvalidCapabilityInput(
+                    "source audio/video start timestamps are not aligned closely enough"
+                )
+            if abs(replacement_av_start_delta_us) > _AV_START_ALIGNMENT_TOLERANCE_US:
+                raise InvalidCapabilityInput(
+                    "replacement audio/video start timestamps are not aligned closely enough"
                 )
 
         artifact_id = f"art_{uuid.uuid4().hex}"
@@ -537,8 +582,10 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
                     "requested_range": requested.to_dict(),
                     "source_video_duration_us": source_duration_us,
                     "source_audio_duration_us": source_audio_duration_us,
+                    "source_av_start_delta_us": source_av_start_delta_us,
                     "replacement_video_duration_us": replacement_duration_us,
                     "replacement_audio_duration_us": replacement_audio_duration_us,
+                    "replacement_av_start_delta_us": replacement_av_start_delta_us,
                     "replacement_duration_delta_us": replacement_delta_us,
                     "expected_output_video_duration_us": expected_output_duration_us,
                     "actual_output_video_duration_us": actual_output_duration_us,
@@ -547,6 +594,7 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
                     "audio_policy": _AUDIO_POLICY,
                     "replacement_duration_tolerance_us": _REPLACEMENT_DURATION_TOLERANCE_US,
                     "source_av_duration_tolerance_us": _SOURCE_AV_DURATION_TOLERANCE_US,
+                    "av_start_alignment_tolerance_us": _AV_START_ALIGNMENT_TOLERANCE_US,
                     "final_duration_tolerance_us": _FINAL_VIDEO_DURATION_TOLERANCE_US,
                     "lifecycle": "intermediate",
                 },
