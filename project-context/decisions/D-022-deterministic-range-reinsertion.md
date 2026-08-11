@@ -1,6 +1,6 @@
 # D-022 — Exact range reinsertion is deterministic, duration-bounded and provider-neutral
 
-Status: proposed  
+Status: accepted  
 Date: 2026-08-11
 
 ## Context
@@ -18,7 +18,7 @@ and a deterministic local extraction primitive. The next mechanical requirement 
 
 The reinsertion layer must therefore solve media/timestamp mechanics only. Generative models, prompt construction and provider selection stay above this boundary.
 
-## Proposed decision
+## Decision
 
 Add the semantic capability:
 
@@ -91,7 +91,7 @@ for both source and replacement. A larger or unknown AV start offset fails close
 
 ## Mechanical composition
 
-The first implementation uses one product-owned FFmpeg filtergraph rather than caller-provided commands or concat-copy.
+The implementation uses one product-owned FFmpeg filtergraph rather than caller-provided commands or concat-copy.
 
 Conceptually:
 
@@ -133,13 +133,13 @@ The output command explicitly uses:
 -fps_mode passthrough
 ```
 
-The first mechanical reinsertion policy therefore does not intentionally normalize a variable-frame-rate input to constant frame rate.
+The mechanical reinsertion policy therefore does not intentionally normalize a variable-frame-rate input to constant frame rate.
 
 If a future delivery format requires CFR, that must be a separate declared output/export policy.
 
 ## Intermediate output policy
 
-The first reinsertion result is still an editing artifact rather than a final delivery encode:
+The reinsertion result is still an editing artifact rather than a final delivery encode:
 
 ```text
 container = Matroska (.mkv)
@@ -184,7 +184,7 @@ source_video_duration_us
 + replacement_video_duration_us
 ```
 
-The first validation tolerance is:
+The validation tolerance is:
 
 ```text
 250_000 microseconds (250 ms)
@@ -229,12 +229,19 @@ This decision does not add:
 
 Those later layers consume `ProjectMediaRange` and `video.replace_range` rather than replacing the deterministic boundary.
 
-## Acceptance gate
+## Acceptance evidence
 
-Change this decision from `proposed` to `accepted` only after:
+The frozen implementation/handoff head immediately preceding acceptance was:
 
-- unit tests prove the duration/audio/geometry/timestamp/path/failure contracts;
-- the capability API proves token-free local execution;
-- final diff/security audit is clean;
-- Ubuntu + Windows bootstrap/unit pass;
-- Ubuntu + Windows API/HTTP/frontend app-baseline pass on the same frozen head.
+```text
+b31bbcf9ea8e4d9055a329fc3da7171b9262e174
+```
+
+GitHub Actions CI run #409 passed the complete required matrix on that exact head:
+
+- Ubuntu bootstrap/unit — green;
+- Windows bootstrap/unit — green;
+- Ubuntu API integration + real HTTP smoke + frontend build — green;
+- Windows API integration + real HTTP smoke + frontend build — green.
+
+Review threads were empty during final audit. The acceptance-status commit is documentation-only; merge still requires the same complete matrix to pass on the final PR head.
