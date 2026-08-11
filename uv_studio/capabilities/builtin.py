@@ -104,6 +104,18 @@ CAPABILITIES = (
         asynchronous=False,
     ),
     CapabilityDefinition(
+        "video.replace_range",
+        "Замена диапазона видео",
+        (
+            "Детерминированная замена точного временного диапазона существующего видео "
+            "подготовленным replacement-клипом без скрытого ретайминга или генеративной модели."
+        ),
+        OperationKind.DETERMINISTIC_MEDIA,
+        (MediaKind.VIDEO,),
+        (MediaKind.VIDEO,),
+        asynchronous=False,
+    ),
+    CapabilityDefinition(
         "timeline.assemble",
         "Сборка таймлайна",
         "Детерминированная сборка подготовленных медиафрагментов в итоговую последовательность.",
@@ -184,26 +196,61 @@ def _tool_offer(
     )
 
 
-def _range_extract_offer() -> CapabilityOffer:
+def _required_local_media_offer(
+    *,
+    offer_id: str,
+    capability_id: str,
+    title: str,
+    available_reason: str,
+    features: tuple[str, ...],
+) -> CapabilityOffer:
     required_tools = ("ffmpeg", "ffprobe")
     missing = [tool for tool in required_tools if not shutil.which(tool)]
     return CapabilityOffer(
-        offer_id="local_ffmpeg.video_extract_range",
-        capability_id="video.extract_range",
+        offer_id=offer_id,
+        capability_id=capability_id,
         adapter_id="local_ffmpeg",
-        title="FFmpeg accurate-seek lossless range extraction",
+        title=title,
         availability=(
             OfferAvailability.UNAVAILABLE if missing else OfferAvailability.AVAILABLE
         ),
         reason=(
             f"Не найдены обязательные локальные инструменты: {', '.join(missing)}."
             if missing
-            else "FFmpeg и FFprobe найдены в PATH; локальное извлечение диапазона доступно."
+            else available_reason
         ),
         locality=LocalityClass.LOCAL,
         cost_class=CostClass.FREE,
         asynchronous=False,
+        features=features,
+    )
+
+
+def _range_extract_offer() -> CapabilityOffer:
+    return _required_local_media_offer(
+        offer_id="local_ffmpeg.video_extract_range",
+        capability_id="video.extract_range",
+        title="FFmpeg accurate-seek lossless range extraction",
+        available_reason=(
+            "FFmpeg и FFprobe найдены в PATH; локальное извлечение диапазона доступно."
+        ),
         features=("video.range", "video.context", "video.lossless_intermediate"),
+    )
+
+
+def _range_replace_offer() -> CapabilityOffer:
+    return _required_local_media_offer(
+        offer_id="local_ffmpeg.video_replace_range",
+        capability_id="video.replace_range",
+        title="FFmpeg deterministic exact-range reinsertion",
+        available_reason=(
+            "FFmpeg и FFprobe найдены в PATH; локальная замена диапазона доступна."
+        ),
+        features=(
+            "video.range_replace",
+            "video.reinsertion",
+            "video.lossless_intermediate",
+        ),
     )
 
 
@@ -272,6 +319,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
         )
     )
     registry.register_offer(_range_extract_offer())
+    registry.register_offer(_range_replace_offer())
     registry.register_offer(
         _native_model_offer(
             offer_id="native_videoclaw.text_generate",
