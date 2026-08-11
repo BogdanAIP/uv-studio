@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import anyio
-from mcp import Client, StdioServerParameters
+from mcp import Client, MCPError, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp_types import REQUEST_TIMEOUT
 
 from .models import (
     MAX_MCP_DISCOVERED_TOOLS,
@@ -59,29 +60,28 @@ class MCPStdioDiscoveryClient:
         session_timeout = profile.startup_timeout_sec + profile.discovery_timeout_sec
         try:
             try:
-                # The MCP SDK keeps AnyIO task-group/cancel scopes open for the
-                # full Client context lifetime. Therefore the outer timeout must
-                # remain open until Client.__aexit__ completes (strict LIFO).
+                # Keep only a coarse whole-session fail-safe outside the SDK.
+                # Per-request cancellation belongs to the MCP SDK itself so it can
+                # send the protocol cancellation and drain its internal task groups.
                 with anyio.fail_after(session_timeout):
-                    async with Client(stdio_client(params, errlog=log_handle)) as client:
+                    async with Client(
+                        stdio_client(params, errlog=log_handle),
+                        read_timeout_seconds=profile.discovery_timeout_sec,
+                    ) as client:
                         try:
-                            # This nested scope enters and exits wholly while the
-                            # Client context is active, so cancel-scope ordering is
-                            # valid and list_tools still has its own hard budget.
-                            with anyio.fail_after(profile.discovery_timeout_sec):
-                                result = await client.list_tools()
-                        except TimeoutError as exc:
-                            raise MCPDiscoveryTimeout(
-                                f"MCP profile {profile.profile_id!r} timed out while listing tools"
-                            ) from exc
-                        except MCPDiscoveryTimeout:
-                            raise
-                        except Exception as exc:
+                            result = await client.list_tools()
+                        except MCPError as exc:
+                            if getattr(exc.error, "code", None) == REQUEST_TIMEOUT:
+                                raise MCPDiscoveryTimeout(
+                                    f"MCP profile {profile.profile_id!r} timed out while listing tools"
+                                ) from exc
                             raise MCPDiscoveryError(
                                 f"MCP profile {profile.profile_id!r} tool discovery failed "
-                                f"({type(exc).__name__})"
+                                f"(MCPError code={getattr(exc.error, 'code', 'unknown')})"
                             ) from exc
             except MCPDiscoveryTimeout:
+                raise
+            except MCPDiscoveryError:
                 raise
             except TimeoutError as exc:
                 raise MCPDiscoveryTimeout(
