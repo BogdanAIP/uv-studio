@@ -11,7 +11,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from uv_studio.capabilities import CostClass, LocalityClass
-from uv_studio.mcp.models import MCPConfiguration, MCPProfile, MCPToolBinding
+from uv_studio.mcp.models import (
+    MCPConfiguration,
+    MCPProfile,
+    MCPProjectFileInput,
+    MCPToolBinding,
+)
 from uv_studio.mcp.store import MCPConfigStore
 
 QWEN_MM_REPOSITORY = "QwenLM/Qwen-MM-Plugins"
@@ -72,6 +77,7 @@ def _binding(
     *,
     asynchronous: bool,
     features: tuple[str, ...] = (),
+    project_file_inputs: tuple[MCPProjectFileInput, ...] = (),
 ) -> MCPToolBinding:
     return MCPToolBinding(
         binding_id=binding_id,
@@ -83,6 +89,7 @@ def _binding(
         cost_class=cost_class,
         asynchronous=asynchronous,
         features=features,
+        project_file_inputs=project_file_inputs,
     )
 
 
@@ -123,7 +130,13 @@ class QwenMMPackDefinition:
             "intentionally_unbound_tools": list(self.intentionally_unbound_tools),
             "system_requirements": list(self.system_requirements),
             "cloud_backed": self.cloud_backed,
-            "tool_execution_enabled": False,
+            "tool_execution_enabled": True,
+            "execution_policy": {
+                "mode": "generic_mcp_after_discovery_and_authorization",
+                "automatic": False,
+                "requires_ready_discovery": True,
+                "authorization_enforced": True,
+            },
         }
 
 
@@ -153,6 +166,12 @@ CORE_PACK = QwenMMPackDefinition(
             CostClass.FREE,
             asynchronous=False,
             features=("media.metadata",),
+            project_file_inputs=(
+                MCPProjectFileInput(
+                    argument_name="path",
+                    allowed_roots=("sources", "assets", "artifacts", "exports"),
+                ),
+            ),
         ),
     ),
     expected_tools=(
