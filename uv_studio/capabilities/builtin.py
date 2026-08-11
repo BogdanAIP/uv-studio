@@ -203,7 +203,7 @@ def _edge_tts_offer() -> CapabilityOffer:
         locality=LocalityClass.REMOTE,
         cost_class=CostClass.FREE,
         asynchronous=True,
-        features=("speech.no_api_key",),
+        features=("speech.keyless",),
     )
 
 
