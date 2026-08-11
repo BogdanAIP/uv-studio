@@ -72,6 +72,19 @@ class FailingCommunicate(FakeCommunicate):
         raise RuntimeError("provider detail that must not be returned")
 
 
+class EmptyCommunicate(FakeCommunicate):
+    async def save(self, path: str) -> None:
+        self.calls.append(
+            {
+                "text": self.text,
+                "voice": self.voice,
+                "rate": self.rate,
+                "path": path,
+            }
+        )
+        Path(path).write_bytes(b"")
+
+
 class NativeVideoClawAdapterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -121,14 +134,14 @@ class NativeVideoClawAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(output_path.startswith("artifacts/art_"))
         self.assertTrue(output_path.endswith(".mp3"))
         self.assertNotIn(str(self.store.root), json.dumps(result.to_dict()))
-        self.assertTrue(
-            self.store.resolve_project_file(
-                self.project.project_id,
-                output_path,
-                must_exist=True,
-                allowed_roots=("artifacts",),
-            ).is_file()
+        resolved = self.store.resolve_project_file(
+            self.project.project_id,
+            output_path,
+            must_exist=True,
+            allowed_roots=("artifacts",),
         )
+        self.assertTrue(resolved.is_file())
+        self.assertGreater(resolved.stat().st_size, 0)
 
         loaded = self.store.load_project(self.project.project_id)
         self.assertEqual(len(loaded.artifacts), 1)
@@ -212,23 +225,87 @@ class NativeVideoClawAdapterTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(self.calls, [])
 
-    async def test_missing_edge_tts_dependency_fails_before_provenance_or_network(self) -> None:
+    async def test_broken_edge_tts_dependency_fails_before_provenance_or_network(self) -> None:
         payload = {"text": "dependency check"}
-        adapter = NativeVideoClawAdapter(self.store)
-        with mock.patch(
-            "uv_studio.capabilities.adapters.native_videoclaw.importlib.import_module",
-            side_effect=ImportError("edge_tts missing"),
+        for import_failure in (
+            ImportError("edge_tts missing"),
+            RuntimeError("broken optional dependency detail"),
         ):
-            with self.assertRaises(CapabilityToolUnavailable):
-                await adapter.execute(
-                    project_id=self.project.project_id,
-                    offer=self.offer,
-                    preparation=self.preparation(payload),
-                    payload=payload,
+            with self.subTest(import_failure=type(import_failure).__name__):
+                adapter = NativeVideoClawAdapter(self.store)
+                with mock.patch(
+                    "uv_studio.capabilities.adapters.native_videoclaw.importlib.import_module",
+                    side_effect=import_failure,
+                ):
+                    with self.assertRaises(CapabilityToolUnavailable) as caught:
+                        await adapter.execute(
+                            project_id=self.project.project_id,
+                            offer=self.offer,
+                            preparation=self.preparation(payload),
+                            payload=payload,
+                        )
+                self.assertEqual(
+                    str(caught.exception),
+                    "edge-tts could not be loaded in this installation",
                 )
         project_dir = self.store.project_directory(self.project.project_id)
         self.assertEqual(list((project_dir / "artifacts").iterdir()), [])
         self.assertEqual(list((project_dir / "tasks").iterdir()), [])
+
+    async def test_constructor_failure_is_sanitized_and_recorded(self) -> None:
+        payload = {"text": "constructor failure"}
+
+        def failing_factory(*, text: str, voice: str, rate: str):
+            raise RuntimeError("constructor provider detail that must not escape")
+
+        with self.assertRaises(CapabilityToolFailed) as caught:
+            await NativeVideoClawAdapter(
+                self.store,
+                communicate_factory=failing_factory,
+            ).execute(
+                project_id=self.project.project_id,
+                offer=self.offer,
+                preparation=self.preparation(payload),
+                payload=payload,
+            )
+        self.assertEqual(str(caught.exception), "edge-tts synthesis failed")
+        project_dir = self.store.project_directory(self.project.project_id)
+        self.assertEqual(list((project_dir / "artifacts").iterdir()), [])
+        task_files = list((project_dir / "tasks").glob("run_*.json"))
+        self.assertEqual(len(task_files), 1)
+        run = json.loads(task_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(run["status"], "failed")
+        self.assertEqual(run["error"]["code"], "capability_tool_failed")
+        self.assertNotIn("constructor provider detail", json.dumps(run))
+
+    async def test_empty_provider_output_is_rejected_and_removed(self) -> None:
+        payload = {"text": "empty output"}
+
+        def empty_factory(*, text: str, voice: str, rate: str):
+            return EmptyCommunicate(calls=self.calls, text=text, voice=voice, rate=rate)
+
+        with self.assertRaises(CapabilityToolFailed) as caught:
+            await NativeVideoClawAdapter(
+                self.store,
+                communicate_factory=empty_factory,
+            ).execute(
+                project_id=self.project.project_id,
+                offer=self.offer,
+                preparation=self.preparation(payload),
+                payload=payload,
+            )
+        self.assertEqual(
+            str(caught.exception),
+            "edge-tts reported success but output file is empty or missing",
+        )
+        project_dir = self.store.project_directory(self.project.project_id)
+        self.assertEqual(list((project_dir / "artifacts").iterdir()), [])
+        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        task_files = list((project_dir / "tasks").glob("run_*.json"))
+        self.assertEqual(len(task_files), 1)
+        run = json.loads(task_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(run["status"], "failed")
+        self.assertEqual(run["error"]["code"], "capability_tool_failed")
 
     async def test_provider_failure_removes_partial_artifact_and_writes_sanitized_failure(self) -> None:
         payload = {"text": "failure"}
