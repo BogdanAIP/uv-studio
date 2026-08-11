@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -38,6 +39,16 @@ async def handle_list_tools(
                 },
             ),
             types.Tool(
+                name="read_project_file",
+                title="Read Project File",
+                description="Reads one absolute file path supplied by UV Studio translation.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            ),
+            types.Tool(
                 name="slow_echo",
                 title="Slow Echo",
                 description="Delays before returning deterministic metadata.",
@@ -70,15 +81,36 @@ async def handle_call_tool(
             ensure_ascii=False,
             sort_keys=True,
         )
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text=text)]
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
+    if params.name == "read_project_file":
+        raw_path = arguments.get("path")
+        if not isinstance(raw_path, str):
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="path must be a string")],
+                is_error=True,
+            )
+        path = Path(raw_path)
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="fixture could not read file")],
+                is_error=True,
+            )
+        text = json.dumps(
+            {
+                "name": path.name,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
         )
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
     if params.name == "slow_echo":
         delay = float(os.environ.get("UV_MCP_FIXTURE_CALL_DELAY", "2") or "2")
         await anyio.sleep(delay)
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text="slow-ok")]
-        )
+        return types.CallToolResult(content=[types.TextContent(type="text", text="slow-ok")])
     if params.name == "fail_tool":
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="fixture failure")],
