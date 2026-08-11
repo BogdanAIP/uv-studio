@@ -4,126 +4,175 @@ Updated: 2026-08-11
 
 ## Primary target
 
-Implement **real native VideoClaw compatibility execution behind the existing Capability Registry**, starting with the already-advertised `native_videoclaw.edge_tts` offer.
+After PR #17 is merged with the full Linux/Windows matrix green, begin the first **Stage 4 — Existing Video / Range Edit** foundation.
 
-Stage 3 now has safe local FFmpeg and exact MCP execution, but the built-in registry still publishes `native_videoclaw.edge_tts` as `AVAILABLE` when `edge_tts` is installed while the execution API has no `native_videoclaw` transport. An `AVAILABLE` offer must not be a dead end.
+The first Stage 4 slice must stay deterministic and local. Do not add generative replacement yet. Establish a correct project-owned representation of a requested media range and safe FFmpeg primitives for extracting that range plus its surrounding context.
 
-This slice should close that inconsistency without making the vendored VideoClaw application the product architecture.
+## Why this is next
+
+Stage 3 now has the execution boundaries needed by product workflows:
+
+- canonical Project Store;
+- provider-neutral recipes/capabilities;
+- fail-closed local/free selection;
+- product-owned D-017 external consent;
+- exact MCP execution and project-file translation;
+- first exact native compatibility execution (`native_videoclaw.edge_tts`).
+
+The roadmap explicitly requires Stage 4 to edit only a requested interval of an existing video without regenerating the whole source. The next useful product capability is therefore not another provider integration; it is a trustworthy range-edit substrate that later local or generative replacements can share.
 
 ## Required implementation
 
-### 1. Product-owned native compatibility adapter
+### 1. Project-owned range representation
 
-Add a UV Studio-owned adapter outside `vendor/videoclaw-app`.
+Add a small versioned model for an exact interval in a source media file.
 
-It must:
-
-- accept only exact known native offer IDs;
-- expose no arbitrary Python import/function/command execution surface;
-- normalize product-owned semantic input/output;
-- use the pinned vendor/runtime only through a narrow compatibility boundary when genuinely required;
-- preserve native Windows support;
-- fail closed when an optional native dependency is absent.
-
-### 2. Make `native_videoclaw.edge_tts` truthfully executable
-
-The first exact target is:
+It must represent at least:
 
 ```text
-native_videoclaw.edge_tts -> speech.synthesize
-locality = remote
-cost     = free
+source_path
+start
+end
 ```
 
-Because it contacts a remote service even though it needs no API key, execution must continue to require D-017 `remote_execution` one-shot authorization. It must not require `external_cost`.
+Requirements:
 
-Define a small semantic request contract (for example text + explicitly supported voice/output options) rather than forwarding arbitrary Edge TTS arguments.
+- canonical project-relative `source_path`;
+- no negative time;
+- `end > start`;
+- validate against probed source duration before execution;
+- avoid persisted binary floating-point ambiguity; prefer a deterministic integer time unit (for example microseconds) or another explicitly serialized exact representation;
+- no provider/model/runtime identity in the range model.
 
-Write output only into the canonical project (normally `artifacts/`), using deterministic bounded filenames/paths owned by UV Studio.
+Do not make frame number the only canonical representation because projects may contain variable-frame-rate media. Frame/time metadata may be added as derived evidence later.
 
-### 3. Generalize external execution provenance where needed
+### 2. Explicit context window
 
-Current external provenance was introduced for MCP and records MCP profile/tool identity. Native external execution needs the same durable audit guarantees without pretending to be MCP.
+Stage 4 needs context before and after the requested edit so later replacement generation/review can preserve continuity.
 
-Refactor the provenance model carefully so common fields stay common while transport-specific identity is explicit and versioned.
+Define bounded optional context durations, for example:
 
-Minimum invariant for native Edge TTS:
+```text
+context_before
+context_after
+```
 
-- project/capability/offer/adapter;
-- portable input digest;
-- authorization fact/scopes;
-- locality/cost snapshot;
-- timestamps/status;
-- safe output reference/summary;
-- controlled error class/code;
-- no token, secret, raw remote error or machine-only path leakage.
+The resolved context range must clamp to `[0, source_duration]` rather than underflow/overflow.
 
-Existing MCP provenance/archive tests must remain compatible or have an explicit backward-compatible schema migration.
+Persist the requested range separately from derived context boundaries so the user's requested interval is never silently changed.
 
-### 4. Audit other native offers but do not fake readiness
+### 3. Deterministic local extraction capability
 
-Current model-backed offers (`text_generate`, `image_generate`, `video_generate`, `action_transfer`) are `CONFIGURATION_REQUIRED` because UV Studio has not yet selected exact provider/model/credential contracts.
+Add a provider-neutral semantic capability for extracting a project video interval and a `local_ffmpeg` offer for it.
 
-Do not mark them executable merely because VideoClaw contains provider code.
+The API must accept only semantic fields, not raw FFmpeg flags.
 
-Instead, document for each native offer what exact configuration/execution contract is still missing. If a small generic native-provider configuration model is clearly justified by the audit, design it in this slice only if it can be tested without real paid credentials; otherwise leave a precise follow-up.
+Minimum behavior:
 
-### 5. Execution API routing
+- input video only from approved readable project roots;
+- requested range validated against real `media.probe` duration;
+- output path owned by UV Studio under `artifacts/`;
+- no overwrite;
+- subprocess argv only, `shell=false`;
+- bounded timeout;
+- partial output removed on failure;
+- successful output registered as a canonical video artifact;
+- artifact metadata records the portable source path and exact requested range.
 
-Extend the existing project capability `/execute` route so:
+For correctness, do not claim frame-accurate cutting if the chosen FFmpeg mode only seeks to keyframes. Either use a re-encode path with an explicit bounded codec policy or document/test the actual precision guarantee.
 
-- `local_ffmpeg` stays in its threadpool path;
-- `mcp.*` stays exact/authorized/provenance-recorded;
-- `native_videoclaw` routes only to the new exact native adapter;
-- unknown adapters still fail closed;
-- selection and D-017 authorization remain transport-independent.
+### 4. Context extraction
 
-### 6. Tests first, no paid provider calls
+Using the same validated range model, create deterministic artifacts for:
 
-Use mocks/fakes around Edge TTS network behavior in unit/API tests. CI must never depend on live Microsoft/Edge endpoints.
+```text
+context_before clip
+requested_range clip
+context_after clip
+```
 
-Add at least one optional/manual real smoke recipe or developer instruction only if useful, but it must not be part of the required CI gate.
+where the context clips are non-empty.
 
-## Acceptance criteria
+These are production inputs for later analysis/replacement, not three independent user-selected edits.
 
-The slice is complete only when tests prove:
+Do not persist machine-only absolute paths.
 
-1. `native_videoclaw.edge_tts` cannot execute without `remote_execution` authorization.
-2. Correct one-shot authorization permits the exact known native offer.
-3. The token cannot be replayed or reused with mutated input.
-4. Arbitrary native function/module/command names are not accepted.
-5. Semantic Edge TTS input is bounded and validated.
-6. Output stays inside the canonical project and cannot escape by path manipulation.
-7. Missing optional `edge_tts` fails truthfully before network execution.
-8. Mocked success writes a canonical audio artifact and durable non-secret provenance.
-9. Mocked remote failure writes controlled failed provenance without raw provider content.
-10. Existing MCP provenance and archive history remain valid.
-11. Local FFmpeg behavior remains off the async event loop.
-12. `local_free_first` still cannot widen to this remote/free offer.
-13. Model-backed native offers remain `CONFIGURATION_REQUIRED` until exact provider/model contracts exist.
-14. Linux and Windows CI remain green.
+### 5. Keep reinsertion contract separate
+
+Design the reinsertion/replacement semantic contract in this slice, but implement it only if the exact media/codec behavior can be made truthful and regression-tested without silently changing source characteristics.
+
+The eventual contract must take:
+
+```text
+source video
+exact requested range
+replacement clip
+```
+
+and produce one canonical output while preserving content outside the requested range.
+
+Do not fake this with concat-copy if stream compatibility or timestamp behavior makes the result unreliable. A controlled re-encode is preferable to a falsely lossless claim.
+
+### 6. No generative work in this slice
+
+Explicit non-goals:
+
+- no AI-generated replacement scene;
+- no provider selection work;
+- no prompt generation;
+- no VLM continuity review yet;
+- no dubbing/music-specific behavior;
+- no UI timeline editor yet unless a minimal API contract needs representation testing.
+
+This slice creates the deterministic foundation those later workflows depend on.
+
+## Tests required
+
+At minimum prove:
+
+1. invalid/negative/reversed ranges are rejected;
+2. ranges beyond source duration fail clearly;
+3. context windows clamp correctly at source start/end;
+4. project traversal and raw host paths are rejected;
+5. caller cannot inject raw FFmpeg options;
+6. extraction uses argv with `shell=false`;
+7. output path is UV Studio-owned and stays under `artifacts/`;
+8. partial output is removed on FFmpeg failure;
+9. successful extraction creates a canonical video artifact with portable range metadata;
+10. source/project absolute paths do not enter portable metadata;
+11. local-free selection remains local/free and token-free;
+12. Windows and Linux unit/API CI remain green;
+13. at least one generated tiny local fixture validates real FFmpeg/FFprobe behavior when FFmpeg is available in CI, or the existing subprocess seam is used deterministically if the CI image guarantee is insufficient.
+
+## Architecture questions to settle during implementation
+
+- exact persisted time unit/serialization;
+- truthful cut precision guarantee and whether extraction re-encodes;
+- deterministic output codec/container policy for Stage 4 artifacts;
+- whether context artifacts are first-class `ProjectReference`s or task-intermediate artifacts with explicit lifecycle;
+- exact semantic IDs for extraction and later replacement.
+
+Resolve these from the current code/tests and FFmpeg behavior; record a new decision if the choice becomes durable.
 
 ## Expected files
 
 Likely changes:
 
-- new `uv_studio/capabilities/adapters/native_videoclaw.py`;
-- `uv_studio/api/capability_execution.py`;
-- `uv_studio/capabilities/provenance.py` (only for a clean transport-neutral provenance model);
-- possibly a small native semantic request/result module;
-- native adapter unit tests;
-- capability execution API tests;
-- archive/provenance regression tests;
+- project-owned range model/module;
+- built-in semantic capability/offer definitions;
+- `uv_studio/capabilities/adapters/local_ffmpeg.py`;
+- capability execution tests;
+- range model/unit tests;
+- API tests if a project-scoped range endpoint is added;
+- architecture documentation/decision;
 - `project-context/PROJECT_STATE.md`;
-- this file;
-- architecture decision record if provenance/native adapter semantics become durable.
+- this file.
 
-## Explicit non-goals
+## Gate before starting
 
-- No arbitrary vendored function execution bridge.
-- No direct user-controlled Python module/class/function names.
-- No paid provider call in CI.
-- No automatic selection of a paid VideoClaw model.
-- No claim that all native VideoClaw model offers are executable.
-- No OpenClaw work in the same slice.
-- No Stage 4 range-edit workflow work until this Stage 3 advertised-offer inconsistency is closed.
+Do not begin this Stage 4 slice from an unmerged or red PR #17. First confirm:
+
+- PR #17 exact final head has all four required CI jobs green;
+- PR #17 review threads are resolved;
+- PR #17 is merged to `main`;
+- new Stage 4 branch is created from that merged `main`.
