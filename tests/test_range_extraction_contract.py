@@ -92,8 +92,11 @@ class RangeExtractionContractTests(unittest.TestCase):
         )
 
         self.assertEqual(result.output["range"]["source_duration_us"], 5_250_001)
-        self.assertEqual(len(calls), 2)
-        ffmpeg = calls[1]
+        ffprobe_calls = [command for command in calls if command[0] == "fake-ffprobe"]
+        ffmpeg_calls = [command for command in calls if command[0] == "fake-ffmpeg"]
+        self.assertEqual(len(ffprobe_calls), 2)
+        self.assertEqual(len(ffmpeg_calls), 1)
+        ffmpeg = ffmpeg_calls[0]
         self.assertEqual(ffmpeg[ffmpeg.index("-fps_mode") + 1], "passthrough")
         self.assertEqual(ffmpeg[ffmpeg.index("-c:v") + 1], "ffv1")
         self.assertEqual(ffmpeg[ffmpeg.index("-c:a") + 1], "flac")
