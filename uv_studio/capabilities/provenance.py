@@ -6,7 +6,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Mapping
 
 from uv_studio.mcp.manager import MCPExecutionTarget
 from uv_studio.projects.models import utc_now_iso
@@ -15,7 +15,48 @@ from uv_studio.projects.task_records import ProjectTaskRecordStore
 from .authorization import ExecutionPreparation
 from .models import CapabilityOffer
 
-EXTERNAL_RUN_SCHEMA_VERSION = 1
+# Version 1 records used MCP-specific top-level profile_id/tool_name fields.
+# Version 2 keeps executor identity transport-neutral. Existing v1 files are
+# immutable project history and require no migration.
+EXTERNAL_RUN_SCHEMA_VERSION = 2
+
+
+@dataclass(frozen=True)
+class ExternalExecutorIdentity:
+    kind: str
+    identity: Mapping[str, str]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, str) or not self.kind.strip():
+            raise ValueError("external executor kind must be non-empty")
+        normalized: dict[str, str] = {}
+        for key, value in self.identity.items():
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError("external executor identity keys must be non-empty strings")
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("external executor identity values must be non-empty strings")
+            normalized[key] = value
+        if not normalized:
+            raise ValueError("external executor identity must not be empty")
+        object.__setattr__(self, "kind", self.kind.strip())
+        object.__setattr__(self, "identity", normalized)
+
+    @classmethod
+    def for_mcp(cls, target: MCPExecutionTarget) -> "ExternalExecutorIdentity":
+        return cls(
+            kind="mcp",
+            identity={
+                "profile_id": target.profile.profile_id,
+                "tool_name": target.binding.tool_name,
+            },
+        )
+
+    @classmethod
+    def for_native_videoclaw(cls, operation: str) -> "ExternalExecutorIdentity":
+        return cls(kind="native_videoclaw", identity={"operation": operation})
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "identity": dict(self.identity)}
 
 
 @dataclass(frozen=True)
@@ -25,8 +66,7 @@ class ExternalRunRecord:
     capability_id: str
     offer_id: str
     adapter_id: str
-    profile_id: str
-    tool_name: str
+    executor: ExternalExecutorIdentity
     started_at: str
     ended_at: str | None
     authorization_required: bool
@@ -47,8 +87,7 @@ class ExternalRunRecord:
             "capability_id": self.capability_id,
             "offer_id": self.offer_id,
             "adapter_id": self.adapter_id,
-            "profile_id": self.profile_id,
-            "tool_name": self.tool_name,
+            "executor": self.executor.to_dict(),
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "authorization": {
@@ -76,7 +115,7 @@ class ExternalRunProvenance:
         project_id: str,
         offer: CapabilityOffer,
         preparation: ExecutionPreparation,
-        target: MCPExecutionTarget,
+        executor: ExternalExecutorIdentity,
     ) -> ExternalRunRecord:
         if preparation.intent.project_id != project_id:
             raise ValueError("execution preparation project does not match provenance project")
@@ -91,8 +130,7 @@ class ExternalRunProvenance:
             capability_id=offer.capability_id,
             offer_id=offer.offer_id,
             adapter_id=offer.adapter_id,
-            profile_id=target.profile.profile_id,
-            tool_name=target.binding.tool_name,
+            executor=executor,
             started_at=utc_now_iso(),
             ended_at=None,
             authorization_required=preparation.authorization_required,
@@ -105,8 +143,16 @@ class ExternalRunProvenance:
         self._persist(record)
         return record
 
-    def succeed(self, record: ExternalRunRecord, result: dict[str, Any]) -> ExternalRunRecord:
-        summary = self._result_summary(result)
+    def succeed(
+        self,
+        record: ExternalRunRecord,
+        result: Mapping[str, Any],
+        *,
+        references: Mapping[str, str] | None = None,
+    ) -> ExternalRunRecord:
+        summary = self._result_summary(dict(result))
+        if references:
+            summary["references"] = dict(references)
         updated = replace(
             record,
             ended_at=utc_now_iso(),
