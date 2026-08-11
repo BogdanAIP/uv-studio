@@ -172,17 +172,8 @@ class MCPProfile:
         _exact_keys(
             data,
             {
-                "schema_version",
-                "profile_id",
-                "title",
-                "transport",
-                "command",
-                "args",
-                "cwd",
-                "env_refs",
-                "enabled",
-                "startup_timeout_sec",
-                "discovery_timeout_sec",
+                "schema_version", "profile_id", "title", "transport", "command", "args",
+                "cwd", "env_refs", "enabled", "startup_timeout_sec", "discovery_timeout_sec",
             },
             context="MCP profile",
         )
@@ -194,12 +185,9 @@ class MCPProfile:
             raise MCPConfigurationError("args must be an array")
         return cls(
             schema_version=int(data.get("schema_version", MCP_CONFIG_SCHEMA_VERSION)),
-            profile_id=data.get("profile_id"),
-            title=data.get("title"),
-            transport=data.get("transport", MCPTransport.STDIO.value),
-            command=data.get("command"),
-            args=tuple(raw_args),
-            cwd=data.get("cwd"),
+            profile_id=data.get("profile_id"), title=data.get("title"),
+            transport=data.get("transport", MCPTransport.STDIO.value), command=data.get("command"),
+            args=tuple(raw_args), cwd=data.get("cwd"),
             env_refs=tuple((str(key), value) for key, value in raw_refs.items()),
             enabled=data.get("enabled", True),
             startup_timeout_sec=data.get("startup_timeout_sec", 10.0),
@@ -208,16 +196,11 @@ class MCPProfile:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": self.schema_version,
-            "profile_id": self.profile_id,
-            "title": self.title,
-            "transport": self.transport.value,
-            "command": self.command,
-            "args": list(self.args),
-            "cwd": self.cwd,
+            "schema_version": self.schema_version, "profile_id": self.profile_id,
+            "title": self.title, "transport": self.transport.value, "command": self.command,
+            "args": list(self.args), "cwd": self.cwd,
             "env_refs": {child: source for child, source in self.env_refs},
-            "enabled": self.enabled,
-            "startup_timeout_sec": self.startup_timeout_sec,
+            "enabled": self.enabled, "startup_timeout_sec": self.startup_timeout_sec,
             "discovery_timeout_sec": self.discovery_timeout_sec,
         }
 
@@ -240,22 +223,10 @@ class MCPToolBinding:
             raise MCPConfigurationError(
                 f"MCPToolBinding only supports schema v{MCP_CONFIG_SCHEMA_VERSION}"
             )
-        object.__setattr__(
-            self,
-            "binding_id",
-            validate_capability_id(self.binding_id, field_name="binding_id"),
-        )
-        object.__setattr__(
-            self,
-            "profile_id",
-            validate_capability_id(self.profile_id, field_name="profile_id"),
-        )
+        object.__setattr__(self, "binding_id", validate_capability_id(self.binding_id, field_name="binding_id"))
+        object.__setattr__(self, "profile_id", validate_capability_id(self.profile_id, field_name="profile_id"))
         object.__setattr__(self, "tool_name", _clean_text(self.tool_name, field_name="tool_name", max_length=256))
-        object.__setattr__(
-            self,
-            "capability_id",
-            validate_capability_id(self.capability_id, field_name="capability_id"),
-        )
+        object.__setattr__(self, "capability_id", validate_capability_id(self.capability_id, field_name="capability_id"))
         object.__setattr__(self, "title", _clean_text(self.title, field_name="title", max_length=200))
         object.__setattr__(self, "locality", _enum_value(self.locality, LocalityClass, field_name="locality"))
         object.__setattr__(self, "cost_class", _enum_value(self.cost_class, CostClass, field_name="cost_class"))
@@ -263,9 +234,7 @@ class MCPToolBinding:
             raise MCPConfigurationError("asynchronous must be boolean")
         if not isinstance(self.features, tuple):
             raise MCPConfigurationError("features must be a tuple")
-        normalized_features = tuple(
-            validate_capability_id(value, field_name="feature") for value in self.features
-        )
+        normalized_features = tuple(validate_capability_id(value, field_name="feature") for value in self.features)
         if len(set(normalized_features)) != len(normalized_features):
             raise MCPConfigurationError("features contains duplicates")
         object.__setattr__(self, "features", normalized_features)
@@ -274,50 +243,28 @@ class MCPToolBinding:
     def from_dict(cls, data: Mapping[str, Any]) -> "MCPToolBinding":
         if not isinstance(data, Mapping):
             raise MCPConfigurationError("MCP binding must be an object")
-        _exact_keys(
-            data,
-            {
-                "schema_version",
-                "binding_id",
-                "profile_id",
-                "tool_name",
-                "capability_id",
-                "title",
-                "locality",
-                "cost_class",
-                "asynchronous",
-                "features",
-            },
-            context="MCP binding",
-        )
+        _exact_keys(data, {
+            "schema_version", "binding_id", "profile_id", "tool_name", "capability_id",
+            "title", "locality", "cost_class", "asynchronous", "features",
+        }, context="MCP binding")
         raw_features = data.get("features", [])
         if not isinstance(raw_features, list):
             raise MCPConfigurationError("features must be an array")
         return cls(
             schema_version=int(data.get("schema_version", MCP_CONFIG_SCHEMA_VERSION)),
-            binding_id=data.get("binding_id"),
-            profile_id=data.get("profile_id"),
-            tool_name=data.get("tool_name"),
-            capability_id=data.get("capability_id"),
-            title=data.get("title"),
-            locality=data.get("locality"),
-            cost_class=data.get("cost_class"),
-            asynchronous=data.get("asynchronous", True),
-            features=tuple(raw_features),
+            binding_id=data.get("binding_id"), profile_id=data.get("profile_id"),
+            tool_name=data.get("tool_name"), capability_id=data.get("capability_id"),
+            title=data.get("title"), locality=data.get("locality"), cost_class=data.get("cost_class"),
+            asynchronous=data.get("asynchronous", True), features=tuple(raw_features),
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": self.schema_version,
-            "binding_id": self.binding_id,
-            "profile_id": self.profile_id,
-            "tool_name": self.tool_name,
-            "capability_id": self.capability_id,
-            "title": self.title,
-            "locality": self.locality.value,
-            "cost_class": self.cost_class.value,
-            "asynchronous": self.asynchronous,
-            "features": list(self.features),
+            "schema_version": self.schema_version, "binding_id": self.binding_id,
+            "profile_id": self.profile_id, "tool_name": self.tool_name,
+            "capability_id": self.capability_id, "title": self.title,
+            "locality": self.locality.value, "cost_class": self.cost_class.value,
+            "asynchronous": self.asynchronous, "features": list(self.features),
         }
 
 
@@ -378,6 +325,13 @@ class MCPConfiguration:
                 return profile
         raise KeyError(normalized)
 
+    def get_binding(self, binding_id: str) -> MCPToolBinding:
+        normalized = validate_capability_id(binding_id, field_name="binding_id")
+        for binding in self.bindings:
+            if binding.binding_id == normalized:
+                return binding
+        raise KeyError(normalized)
+
     def bindings_for(self, profile_id: str) -> tuple[MCPToolBinding, ...]:
         normalized = validate_capability_id(profile_id, field_name="profile_id")
         return tuple(binding for binding in self.bindings if binding.profile_id == normalized)
@@ -396,19 +350,13 @@ class MCPToolDescriptor:
         if self.title is not None:
             object.__setattr__(self, "title", _clean_text(self.title, field_name="tool title", max_length=500))
         if self.description is not None:
-            object.__setattr__(
-                self,
-                "description",
-                _clean_text(self.description, field_name="tool description", max_length=8000),
-            )
+            object.__setattr__(self, "description", _clean_text(self.description, field_name="tool description", max_length=8000))
         object.__setattr__(self, "input_schema", _schema(self.input_schema, field_name="input_schema") or {})
         object.__setattr__(self, "output_schema", _schema(self.output_schema, field_name="output_schema"))
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "name": self.name,
-            "title": self.title,
-            "description": self.description,
+            "name": self.name, "title": self.title, "description": self.description,
             "input_schema": dict(self.input_schema),
             "output_schema": None if self.output_schema is None else dict(self.output_schema),
         }
