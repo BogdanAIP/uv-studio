@@ -1,80 +1,131 @@
 # Next Task
 
-**Primary target:** finish the durable-storage portion of Stage 1 with safe project archive export/import and explicit backup/recovery primitives before introducing Recipe Registry.
+**Primary target:** begin Stage 2 with a provider-neutral Recipe Registry and Production Policy model. Do not implement Capability Registry/provider execution in this slice.
 
 ## Why this comes next
 
-Canonical projects now exist in the local Project Store, are available over HTTP, and are visible in the UV Studio frontend. Before workflows begin attaching more state to projects, the project directory must be safely movable and recoverable.
+Stage 1 now provides a canonical durable project, Projects API/UI, and a validated portable `.uvproj.zip` recovery unit. The next architectural boundary is deciding **what kind of work a project is doing** without forcing every project through one film/music/narration pipeline.
 
-Portability/recovery should be implemented while the project format is still small rather than after media-specific recipes make recovery behavior harder to define.
+Recent Qwen-MM-Plugins research also showed that professional source-review/planning/sample/review discipline should be represented independently from the paid model/provider that performs an operation.
+
+Therefore Stage 2 starts by making recipes and production policies explicit data/contracts before adding more provider integrations.
 
 ## Do first
 
-1. Add a UV Studio-owned archive module around `ProjectStore`.
-2. Define archive format/version metadata without changing `project.json` schema v1 unnecessarily.
-3. Export one complete project directory to ZIP while preserving project-relative paths.
-4. Import an archive through a temporary staging directory and validate canonical `project.json` before committing it into the Project Store.
-5. Reject archive path traversal, absolute paths, symlinks/hardlinks or other entries that could escape the destination.
-6. Reject duplicate project IDs by default; do not silently overwrite an existing project.
-7. Add an explicit backup helper that creates a timestamped project archive in a configured backup directory.
-8. Ensure an interrupted/failed import leaves no partial canonical project directory.
-9. Add tests for round-trip export/import, nested files, duplicate ID, malformed project metadata, malicious ZIP paths and simulated commit failure.
-10. Document the archive/recovery contract.
+1. Add `uv_studio/recipes/` as product-owned code.
+2. Define a strict versioned `RecipeDefinition` model with at least:
+   - `recipe_id`;
+   - title/description;
+   - required and optional input kinds;
+   - required and optional semantic capability IDs;
+   - ordered logical steps;
+   - `production_policy`;
+   - small UI metadata/progressive-disclosure hints.
+3. Define provider-neutral `ProductionPolicy` switches/levels for:
+   - source review;
+   - direction/taste planning;
+   - sample-first generation;
+   - plan gate;
+   - scene/take ledger;
+   - final evidence-based review;
+   - continuity policy reference (disabled by default at this stage).
+4. Implement `RecipeRegistry` with deterministic registration, lookup/list, duplicate rejection and schema validation.
+5. Add built-in recipes without executing them yet:
+   - `general_video` — simple video, no mandatory narration/music/continuity;
+   - `narrated_video` — maps conceptually to existing VideoClaw standard/narrated workflow;
+   - wrappers/metadata for existing `action_transfer` and `digital_human` capabilities where their current pipeline is usable.
+6. Keep existing `project.json.recipe_id` as the stable reference. Do not inflate project schema with copies of full recipe definitions.
+7. Add API endpoint to list available recipes and get one recipe definition.
+8. Change New Project UI from hard-coded `general_video` to selecting from registry-backed recipes, while preserving progressive disclosure.
+9. Add unit/API/frontend build coverage on Windows and Linux.
+10. Record mapping from built-in recipes to existing VideoClaw pipelines, but keep the large film orchestrator specialized.
+
+## Production Policy rule
+
+The policy describes **how carefully work is produced**, not **which vendor executes it**.
+
+Example shape:
+
+```text
+production_policy:
+  source_review: required | optional | off
+  direction_gate: required | optional | off
+  sample_first: required | optional | off
+  plan_gate: required | optional | off
+  scene_ledger: required | optional | off
+  final_review: required | optional | off
+```
+
+Exact enum naming may be refined, but avoid booleans if three-state behavior is useful.
+
+For example:
+
+- mechanical standalone work may have most gates `off`;
+- a designed existing-footage montage may require source review + plan + final review;
+- a multi-scene professional piece may require Scene Ledger;
+- none of these policy choices imply DashScope/Qwen/OpenClaw.
+
+## Qwen-MM boundary
+
+Use `docs/architecture/QWEN_MM_PLUGINS_EVALUATION.md` as design input.
+
+Allowed in Stage 2:
+
+- adapt concepts such as source review, Scene Ledger, sample-first and evidence review;
+- write our own small provider-neutral contracts/tests;
+- copy specific Apache-2.0 code only if clearly superior and attribution is recorded.
+
+Not allowed in Stage 2:
+
+- requiring `DASHSCOPE_API_KEY`;
+- making Qwen-MM-Plugins a runtime prerequisite;
+- installing WSL2-only components on the native Windows startup path;
+- implementing OpenClaw or direct MCP execution yet.
 
 ## Suggested files
 
-- `uv_studio/projects/archive.py`
-- updates to `uv_studio/projects/__init__.py`
-- `tests/test_project_archive.py`
-- `docs/PROJECT_ARCHIVES.md`
-- optional small API/tool wrapper only if it remains thin and does not enlarge this slice unnecessarily.
-
-## Proposed archive shape
-
 ```text
-<project-id>.uvproj.zip
-├── .uv-project-archive.json
-└── project/
-    ├── project.json
-    ├── sources/
-    ├── assets/
-    ├── tasks/
-    ├── artifacts/
-    ├── timeline/
-    ├── reviews/
-    └── exports/
+uv_studio/recipes/__init__.py
+uv_studio/recipes/models.py
+uv_studio/recipes/registry.py
+uv_studio/recipes/builtin.py
+uv_studio/api/recipes.py
+
+tests/test_recipe_registry.py
+tests_api/test_recipes_api.py
+frontend/lib/recipesApi.ts
 ```
 
-Archive manifest should at minimum record:
+Likely frontend changes:
 
 ```text
-archive_schema_version
-project_id
-project_schema_version
-created_at
+frontend/app/projects/page.tsx
 ```
+
+Keep UI changes small: select a task/recipe and show only minimal description at creation time. Full recipe workspaces belong to later slices.
 
 ## Acceptance criteria
 
-- a project containing nested files exports and imports with identical canonical metadata and file contents;
-- import validates the project before replacing/moving anything into the canonical project root;
-- malicious ZIP entries cannot escape staging/project root;
-- duplicate project IDs fail explicitly unless a future separate conflict policy is deliberately added;
-- failed import leaves existing projects and unrelated files untouched;
-- backup creation is deterministic in behavior and explicit about its output path;
-- no SQLite/cloud service is introduced;
+- recipe definitions are strict/versioned and provider-neutral;
+- duplicate or invalid recipe definitions fail explicitly;
+- `general_video` does not require music, narration, story, continuity or automatic review;
+- `narrated_video` clearly requires narration-related logical steps but does not become the universal default;
+- available recipes are exposed through UV Studio API;
+- project creation accepts only known registry recipes (or has an explicitly documented compatibility policy if legacy IDs must temporarily pass);
+- New Project UI no longer hard-codes `general_video` as the only choice;
+- no paid API/runtime is introduced;
 - no files under `vendor/videoclaw-app` are modified;
-- tests pass on Windows and Linux.
+- tests and frontend build pass on Windows and Linux.
 
 ## Explicitly out of scope for this slice
 
-- Recipe Registry;
-- project delete/rename;
-- automatic scheduled backups;
-- cloud sync;
-- frontend archive buttons unless the core archive contract is already complete and adding thin UI does not broaden the slice;
-- media upload management;
-- OpenClaw integration;
-- music/dubbing/range-edit workflows.
+- actual semantic Capability Registry execution;
+- Qwen-MM/OpenClaw MCP connections;
+- cost routing;
+- existing-video range editor;
+- dubbing implementation;
+- continuity engine;
+- Music Video Mode;
+- full rebranding/localization of legacy screens.
 
-After this slice, Stage 1 can move to its final UI/source-management details or be closed if the remaining items are better owned by later recipes. Stage 2 then begins with Recipe Registry.
+After this slice, Stage 2 can bind built-in recipes to existing pipelines and add richer recipe-specific UI progressively without changing the Project Store contract.

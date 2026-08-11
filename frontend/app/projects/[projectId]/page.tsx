@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { getUVProject, UVProject } from '@/lib/projectsApi';
+import { getUVProject, projectArchiveUrl, UVProject } from '@/lib/projectsApi';
 
 export default function ProjectPage() {
   const params = useParams<{ projectId: string }>();
@@ -57,9 +57,16 @@ export default function ProjectPage() {
             <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
               <h2 className="text-lg font-medium">Рабочая область проекта</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Канонический проект уже выбран по стабильному UV Studio ID. Подключение конкретных рабочих процессов к проекту появится через Recipe Registry; старые VideoClaw session ID намеренно не подменяют этот идентификатор.
+                Канонический проект выбран по стабильному UV Studio ID. Его можно сохранить целиком в переносимый архив и восстановить на другой установке UV Studio без зависимости от старых VideoClaw session ID.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
+                <a
+                  href={projectArchiveUrl(project.project_id)}
+                  download={`${project.project_id}.uvproj.zip`}
+                  className="rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-sky-400"
+                >
+                  Скачать архив проекта
+                </a>
                 <Link
                   href="/"
                   className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
