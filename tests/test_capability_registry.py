@@ -160,7 +160,7 @@ class CapabilityRegistryTests(unittest.TestCase):
         cap = CapabilityDefinition(
             "duplicate.capability",
             "Duplicate",
-            "Test capability",
+            "Duplicate",
             OperationKind.GENERATION,
             (MediaKind.TEXT,),
             (MediaKind.TEXT,),
