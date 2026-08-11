@@ -2,38 +2,30 @@
 
 **Updated:** 2026-08-11  
 **Repository:** `BogdanAIP/uv-studio`  
-**Active roadmap stage:** Stage 2 — Recipe Registry + Production Policy  
-**Active branch:** `stage-2/recipe-execution-plan`  
-**Main baseline:** `49dcef68ba5e91cdfb87202f66daba5dfe88821c`  
-**Branch status:** truthful project execution planning implemented; final CI/PR required before merge.
+**Active roadmap stage:** Stage 3 — Capability Registry & Adapters  
+**Active branch:** `stage-3/capability-registry`  
+**Main baseline:** `dff8fc14a522bdb46498921ea5ebded204682747`  
+**Branch status:** semantic capability metadata/offer registry implemented; final branch/PR CI must be green before merge.
 
 ## Product definition
 
-UV Studio is a universal video production and editing studio with task-specific recipes. Music, narration, story, characters, continuity, lip-sync and automated review are optional. Paid AI APIs are optional capabilities, not hidden baseline dependencies.
+UV Studio is a universal video production/editing studio. Task recipes, professional production policy and semantic capabilities are separate layers. Music, narration, story, continuity, lip-sync and review remain optional. Paid AI APIs are never hidden baseline dependencies.
 
 ## Current architecture
 
 ```text
 Canonical Project
-  -> recipe_id
-      -> RecipeDefinition
-          -> ProductionPolicy
-          -> RecipeExecutionPlan
-              -> semantic inputs/runtime capabilities
-              -> optional compatibility target
-                  -> Stage 3 Capability Registry / adapters
+  -> RecipeDefinition
+      -> ProductionPolicy
+      -> RecipeExecutionPlan
+          -> semantic capability IDs
+              -> CapabilityRegistry
+                  -> CapabilityDefinition
+                  -> AdapterDefinition
+                  -> CapabilityOffer
 ```
 
-Permanent boundaries:
-
-- pinned VideoClaw remains a vendored runtime/compatibility source, not canonical project state;
-- Project Store + `.uvproj.zip` are UV Studio-owned;
-- top-level `frontend/` is UV Studio-owned derived UI;
-- RecipeDefinition is provider-neutral;
-- ProductionPolicy describes professional workflow discipline, not vendor choice;
-- ExecutionPlan may identify a temporary compatibility adapter but never chooses a paid provider/model;
-- future Capability Registry resolves local, direct MCP, native VideoClaw, optional Qwen-MM, optional OpenClaw and other offers as peers;
-- native Windows is first-class.
+Adapters are peers. Local tools, direct MCP, native VideoClaw, optional Qwen-MM-Plugins, optional OpenClaw and future providers may coexist without becoming canonical project state or mandatory product layers.
 
 ## Merged milestones
 
@@ -42,139 +34,177 @@ Permanent boundaries:
 - `2276a854...` — canonical Project Store v1;
 - `21016061...` — UV server + Projects API;
 - `9570658d...` — UV-owned frontend + Projects UI;
-- `3214cec8...` — portable project archives/backups + Qwen-MM-informed provider-neutral architecture;
-- `49dcef68ba5e91cdfb87202f66daba5dfe88821c` — provider-neutral Recipe Registry, ProductionPolicy, recipe API and task selection UI.
+- `3214cec8...` — portable project archives/backups + Qwen-MM-informed architecture;
+- `49dcef68...` — provider-neutral Recipe Registry + ProductionPolicy;
+- `dff8fc14a522bdb46498921ea5ebded204682747` — truthful RecipeExecutionPlan and project readiness UI.
 
-## Current Stage 2 slice
+## Stage 3 implemented on current branch
 
-### `RecipeExecutionPlan`
+### Capability contracts
 
-Added `uv_studio/recipes/execution.py` with:
+Added `uv_studio/capabilities/` with schema v1.
 
-- execution schema v1;
-- compatibility states `available | partial | unavailable`;
-- content input slots;
-- runtime capability/config slots;
-- optional compatibility target;
-- preserved ProductionPolicy;
-- forward-compatible unavailable plan for recovered projects whose recipe is not installed.
+`CapabilityDefinition` describes a provider-neutral operation.
 
-The planning layer does not launch a task, spend money, create a legacy session or choose a provider/model.
+Current semantic capabilities include:
 
-### Truthful native compatibility audit
+```text
+text.generate
+image.generate
+video.generate
+video.action_transfer
+video.digital_human
+speech.synthesize
+media.understand
+timeline.assemble
+audio.mix
+subtitle.render
+media.probe
+```
 
-Inspected the actual pinned VideoClaw launch schemas/routes.
+Definitions record operation/input/output/async semantics only.
 
-Current conclusions:
+### Adapter / offer separation
 
-- `general_video` → **unavailable**. Native `standard` is narration/topic-led and must not be used as a silent fallback.
-- `narrated_video` → **available** via native `standard`; content requires text and runtime requires text/image model capability, with video optional.
-- `action_transfer` → **available** via native `action_transfer`; source motion video + target image align with recipe semantics; default instruction may fill the native required prompt when user does not specify one.
-- `digital_human` → **partial** only. The pinned native pipeline is product-promo oriented and does not accept the recipe's required supplied speech input. No launch target is exposed for it.
+`AdapterDefinition` describes implementation family.
 
-This prevents upstream convenience from distorting UV Studio product semantics.
+`CapabilityOffer` records one adapter's proposal for one semantic capability with explicit:
 
-### API
+```text
+availability: available | configuration_required | unavailable
+locality:     local | remote | hybrid
+cost_class:   free | potentially_paid | paid
+```
+
+This prevents open-source plugin licensing from being confused with free model execution.
+
+Decision record: `project-context/decisions/D-013-capability-offers.md`.
+
+### Deterministic registry
+
+`CapabilityRegistry` supports:
+
+- strict registration and references;
+- deterministic list/get;
+- offers per capability;
+- availability summary;
+- duplicate/conflict errors;
+- display preference order: available → configured-needed → unavailable; free → potentially-paid → paid; local → hybrid → remote.
+
+This ordering is metadata only. It does not automatically execute or purchase an offer.
+
+### Initial real offers
+
+The first slice uses only capabilities verified in the pinned baseline.
+
+#### `local_ffmpeg`
+
+- `timeline.assemble` → local/free if `ffmpeg` is found;
+- `media.probe` → local/free if `ffprobe` is found.
+
+#### `native_videoclaw`
+
+- `text.generate` → configuration-required / potentially-paid;
+- `image.generate` → configuration-required / potentially-paid;
+- `video.generate` → configuration-required / potentially-paid;
+- `video.action_transfer` → configuration-required / potentially-paid;
+- `speech.synthesize` → Edge TTS compatibility, remote/free when `edge-tts` package is installed.
+
+No native `video.digital_human` offer is registered because Stage 2 proved the current upstream product-promo contract does not match UV Studio's portrait + supplied-speech semantics.
+
+`media.understand`, `audio.mix` and `subtitle.render` remain definition-only until a concrete tested adapter is added.
+
+### Read-only Capability API
 
 Added:
 
 ```text
-GET /api/uv/projects/{project_id}/execution-plan
+GET /api/uv/capabilities
+GET /api/uv/capabilities/{capability_id}
+GET /api/uv/capabilities/{capability_id}/offers
 ```
 
-Response includes:
+Responses contain safe metadata only; no secrets/config objects.
 
-- project/recipe identity;
-- compatibility and reason;
-- content input slots;
-- runtime semantic capability slots;
-- ProductionPolicy;
-- optional native compatibility target.
+### Execution-plan integration
 
-Unknown-but-recovered recipe IDs return `unavailable` rather than making user data inaccessible.
+Project execution-plan runtime slots now include safe capability readiness summaries:
 
-### UI
+```text
+total
+available
+configuration_required
+unavailable
+```
 
-Project page now shows:
+The endpoint still does not choose a model/provider or launch work.
 
-- recipe title;
-- process readiness (`available`, `partial`, `unavailable`);
-- explicit reason;
-- required/optional materials;
-- semantic runtime requirements;
-- archive download/recovery controls.
+### Tests / security
 
-Legacy production workspace link is shown only when the plan reports an available native compatibility target.
+Added unit/API tests for:
 
-### Tests/docs
+- zero-credential registry startup;
+- strict IDs/references/duplicates;
+- free/local FFmpeg metadata;
+- potentially-paid/configuration-required native generation metadata;
+- absence of false digital-human offer;
+- deterministic offer preference;
+- no secret values in public metadata;
+- capability API summaries;
+- execution-plan capability readiness.
 
-Added:
+A security test initially caught the harmless feature label `speech.no_api_key` because public metadata forbids the literal secret-field name. The metadata was renamed to `speech.keyless`; the test was kept strict.
 
-- `tests/test_recipe_execution.py`;
-- `tests_api/test_project_execution_api.py`;
-- `docs/architecture/RECIPE_EXECUTION.md`.
-
-Tests explicitly prevent:
-
-- general video silently falling back to narrated `standard`;
-- digital-human mismatch being reported as full compatibility;
-- ProductionPolicy being dropped;
-- concrete Qwen/OpenClaw/Wan/Seedance/Kling provider choice leaking into execution planning.
+Documentation: `docs/architecture/CAPABILITIES.md`.
 
 ## Verification status
 
-Functional head before context-only commits: `8f99a5a4e65cd9d32dc80493e157d81158ccc8b2`, CI run `31464568264`.
-
-Observed:
+Functional head `4ecc3eb76a8213bad53165d7d15aa8531628a8ae`, CI run `31465538901`:
 
 - Ubuntu bootstrap/unit: success;
+- Ubuntu API integration + real HTTP smoke + frontend production build: success;
 - Windows bootstrap/unit: success;
-- Ubuntu API integration: success;
-- Ubuntu real HTTP smoke: success;
-- Ubuntu frontend production build: success;
-- Windows API integration: success;
-- Windows real HTTP smoke: success;
-- Windows frontend dependency/build steps were still completing when this state file was written.
+- Windows API integration + real HTTP smoke: success;
+- Windows frontend install/build was still completing when this state update was written.
 
-This context update triggers a newer CI run. Merge requires the actual final branch head to pass the complete Linux/Windows matrix.
+This state commit creates a newer CI head. Merge requires the final actual head to pass the full Linux/Windows matrix.
 
 ## What works now
 
-- durable cross-chat repository memory;
-- canonical projects + portable recovery;
-- UV-owned backend/frontend;
-- provider-neutral Recipe Registry;
-- ProductionPolicy;
-- recipe catalog/API/task selection;
-- honest project execution planning;
-- real native compatibility audit without modifying vendor code;
-- no paid API introduced by Stages 1–2.
+- durable project/recovery/UI foundation;
+- provider-neutral recipes and production policies;
+- truthful execution planning;
+- semantic Capability Registry;
+- explicit free/paid-potential/locality/readiness metadata;
+- local FFmpeg/FFprobe discovery;
+- native VideoClaw compatibility offers without pretending they are already configured/free;
+- zero paid API calls required to start/list the registry.
 
 ## Not implemented yet
 
-- actual input binding/task launch through UV-owned wrapper;
-- Stage 3 semantic Capability Registry;
-- direct MCP/Qwen/OpenClaw adapters;
-- cost/provider resolution;
-- true generic `general_video` executor;
-- generic supplied-speech digital-human capability;
-- range edit/dubbing/music modes;
-- continuity mechanics.
+- capability execution through UV-owned adapters;
+- explicit selection policy implementation;
+- direct MCP process/client;
+- Qwen-MM runtime adapter;
+- OpenClaw runtime adapter;
+- live provider/model/cost selection;
+- general-video executor;
+- range edit/dubbing/music workflows.
 
 ## Current invariants
 
-1. Recipe semantics must not be weakened to match an available upstream pipeline.
-2. Recipe definitions never choose provider/runtime.
-3. ProductionPolicy survives into execution planning.
-4. Paid capabilities remain explicit and optional.
-5. Project recovery is independent of installed recipe/runtime availability.
-6. Canonical `project_id` is never a legacy VideoClaw session ID.
-7. Vendor code stays unchanged unless a documented isolated compatibility patch becomes unavoidable.
-8. Native Windows startup cannot depend on WSL-only optional tools.
+1. Capability semantics and adapter offers remain separate.
+2. RecipeDefinition never names a provider/runtime.
+3. Metadata may prefer free/local for display, but never silently executes a paid fallback.
+4. Public capability metadata contains no credentials/secrets.
+5. No paid provider is a hidden baseline dependency.
+6. Native Windows cannot depend on WSL-only optional adapters.
+7. No false offer is registered merely because a related upstream pipeline exists.
+8. Vendor source remains an immutable compatibility boundary.
 
 ## Next slice
 
-Begin Stage 3 with metadata-only semantic Capability Registry and adapters/offers. No paid calls in the first Stage 3 slice. See `NEXT_TASK.md`.
+Implement UV Studio-owned **local deterministic capability execution + explicit selection policy** before connecting Qwen-MM/OpenClaw. See `NEXT_TASK.md`.
 
 ## Development invariant
 

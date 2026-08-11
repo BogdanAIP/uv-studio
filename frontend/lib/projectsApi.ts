@@ -30,12 +30,26 @@ export interface ExecutionInputSlot {
   default: unknown;
 }
 
+export interface CapabilityOfferSummary {
+  total: number;
+  available: number;
+  configuration_required: number;
+  unavailable: number;
+}
+
+export interface RuntimeCapabilityStatus {
+  known: boolean;
+  operation_kind?: string;
+  offer_summary: CapabilityOfferSummary;
+}
+
 export interface RuntimeConfigSlot {
   slot_id: string;
   title: string;
   capability_id: string;
   required: boolean;
   maps_to: string | null;
+  capability_status: RuntimeCapabilityStatus;
 }
 
 export interface ProjectExecutionPlan {

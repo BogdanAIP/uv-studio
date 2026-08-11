@@ -42,7 +42,7 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertIsNone(plan["target"])
         self.assertIn("narration-led", plan["reason"])
 
-    def test_narrated_video_reports_real_native_contract(self) -> None:
+    def test_narrated_video_reports_real_native_contract_and_offer_readiness(self) -> None:
         project_id = self._create("narrated_video")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
         self.assertEqual(plan["compatibility"], "available")
@@ -52,6 +52,13 @@ class ProjectExecutionApiTests(unittest.TestCase):
             [slot["slot_id"] for slot in plan["runtime_config_slots"]],
             ["llm_model", "image_model", "video_model"],
         )
+        for slot in plan["runtime_config_slots"]:
+            self.assertTrue(slot["capability_status"]["known"])
+            self.assertGreaterEqual(slot["capability_status"]["offer_summary"]["total"], 1)
+            self.assertGreaterEqual(
+                slot["capability_status"]["offer_summary"]["configuration_required"],
+                1,
+            )
 
     def test_action_transfer_preserves_required_production_gates(self) -> None:
         project_id = self._create("action_transfer")
@@ -60,6 +67,9 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertEqual(plan["production_policy"]["source_review"], "required")
         self.assertEqual(plan["production_policy"]["sample_first"], "required")
         self.assertEqual(plan["production_policy"]["final_review"], "required")
+        runtime = plan["runtime_config_slots"][0]
+        self.assertEqual(runtime["capability_id"], "video.action_transfer")
+        self.assertEqual(runtime["capability_status"]["offer_summary"]["configuration_required"], 1)
 
     def test_digital_human_reports_partial_instead_of_false_compatibility(self) -> None:
         project_id = self._create("digital_human")
