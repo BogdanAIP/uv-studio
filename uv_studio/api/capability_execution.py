@@ -19,7 +19,7 @@ from starlette.concurrency import run_in_threadpool
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.mcp import get_mcp_manager
 from uv_studio.api.projects import get_project_store
-from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter, NativeVideoClawAdapter
 from uv_studio.capabilities.adapters.mcp_execution import (
     MCPExecutionAdapter,
     MCPExecutionInputRejected,
@@ -67,6 +67,12 @@ def get_local_ffmpeg_adapter(
     store: ProjectStore = Depends(get_project_store),
 ) -> LocalFFmpegAdapter:
     return LocalFFmpegAdapter(store)
+
+
+def get_native_videoclaw_adapter(
+    store: ProjectStore = Depends(get_project_store),
+) -> NativeVideoClawAdapter:
+    return NativeVideoClawAdapter(store)
 
 
 def get_mcp_execution_adapter(
@@ -330,6 +336,7 @@ async def execute_project_capability(
     store: ProjectStore = Depends(get_project_store),
     registry: CapabilityRegistry = Depends(get_capability_registry),
     local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
+    native_videoclaw: NativeVideoClawAdapter = Depends(get_native_videoclaw_adapter),
     mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
 ) -> dict[str, Any]:
@@ -366,6 +373,13 @@ async def execute_project_capability(
                 local_ffmpeg.execute,
                 project_id=project_id,
                 offer=offer,
+                payload=input_payload,
+            )
+        elif offer.adapter_id == NativeVideoClawAdapter.adapter_id:
+            result = await native_videoclaw.execute(
+                project_id=project_id,
+                offer=offer,
+                preparation=preparation,
                 payload=input_payload,
             )
         elif offer.adapter_id.startswith("mcp."):
