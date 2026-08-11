@@ -132,11 +132,11 @@ Reason: research of `QwenLM/Qwen-MM-Plugins` showed that high-quality MCP capabi
 
 Consequences:
 
-- Stage 3 is renamed from `Capability Bridge` to `Capability Registry & Adapters`;
-- recipes depend on semantic capability IDs, not OpenClaw-specific tool names;
-- OpenClaw may be enabled for a project/user but is not required to run UV Studio;
-- direct local and MCP execution must remain possible;
-- existing VideoClaw provider paths remain temporary/native adapters during migration.
+- Stage 3 is `Capability Registry & Adapters`;
+- recipes depend on semantic capability IDs, not runtime-specific tool names;
+- OpenClaw may be enabled but is not required;
+- direct local and MCP execution remain possible;
+- native VideoClaw paths are compatibility offers during migration.
 
 ---
 
@@ -144,20 +144,17 @@ Consequences:
 Status: accepted  
 Date: 2026-08-11
 
-Decision: use/adapt the professional production workflow ideas from Qwen-MM-Plugins where they improve UV Studio, and support Qwen-MM-Plugins as an optional MCP package. Do not make DashScope or another Qwen cloud API mandatory for baseline UV Studio functionality.
+Decision: use/adapt professional production workflow ideas from Qwen-MM-Plugins where they improve UV Studio and support Qwen-MM as an optional MCP package. Do not make DashScope or another Qwen cloud API mandatory.
 
-Research reference: `QwenLM/Qwen-MM-Plugins@7dfc08b7de8e621fc28bf9814e3d41a59b4595ae` (Apache-2.0). At this revision the project explicitly separates local file capabilities from cloud API tools; its video-edit skill contains strong source-review, pacing, beat-sync, Scene Ledger, plan/sample/review gates and evidence-based review practices, while cloud Qwen/Wan/Omni/embedding operations require configured paid API access.
-
-Reason: the workflow discipline is valuable independently of the provider. Requiring DashScope would violate UV Studio's local/free-first goal and duplicate the user's cost across multiple providers.
+Research reference: `QwenLM/Qwen-MM-Plugins@7dfc08b7de8e621fc28bf9814e3d41a59b4595ae` (Apache-2.0).
 
 Consequences:
 
-- Stage 2 gains provider-neutral production policy/gates inspired by suitable Qwen-MM-Plugins video-edit practices;
-- Stage 4 existing-video work uses source review, planned edit direction, sample-first generated assets and evidence-based review where appropriate;
-- local/free alternatives remain first-class for ASR, deterministic media work and other operations with adequate open-source implementations;
-- Qwen cloud generation, Omni analysis and video-memory build are explicit optional capabilities;
-- Qwen-MM-Plugins' current WSL2-only Windows support cannot become a prerequisite for the native Windows application;
-- Apache-2.0 attribution/NOTICE requirements must be preserved for any code actually copied or modified, while architectural ideas alone do not create a runtime dependency.
+- provider-neutral Qwen-inspired workflow discipline may be reused independently;
+- local/free alternatives stay first-class;
+- Qwen cloud generation/Omni operations remain explicit optional capabilities;
+- WSL-only optional integrations cannot become a native-Windows prerequisite;
+- Apache-2.0 obligations must be preserved for any copied/modified code.
 
 ---
 
@@ -167,7 +164,7 @@ Date: 2026-08-11
 
 Decision: represent media ability as provider-neutral `CapabilityDefinition`, implementation family as `AdapterDefinition`, and one implementation proposal as `CapabilityOffer` with explicit readiness, locality and cost class.
 
-Reason: an open-source integration may invoke a paid model, while a free operation may be local or remote. Provider identity alone is not sufficient to express execution economics or readiness safely.
+Reason: an open-source integration may invoke a paid model, while a free operation may be local or remote.
 
 Consequences: recipes stay provider-neutral; local/free and remote/paid offers can coexist; `configuration_required` is not `available`; registry ordering is metadata only. Full rationale: `project-context/decisions/D-013-capability-offers.md`.
 
@@ -177,11 +174,11 @@ Consequences: recipes stay provider-neutral; local/free and remote/paid offers c
 Status: accepted  
 Date: 2026-08-11
 
-Decision: discovered/registered offers pass through an explicit `SelectionPolicy` before any adapter may execute. `local_free_first` selects only `available + free + local`; it never widens to remote or paid-capable offers. Local media execution is project-scoped and command-bounded.
+Decision: registered offers pass through explicit `SelectionPolicy` before execution. `local_free_first` selects only `available + free + local`; it never widens to remote or paid-capable offers. Local media execution is project-scoped and command-bounded.
 
-Reason: deterministic registry preference must never become implicit permission to invoke a provider or spend money. Generic media tools must also not become arbitrary filesystem/shell access.
+Reason: registry preference must never become implicit permission to invoke a provider or spend money.
 
-Consequences: current execution permits only explicit free/local FFmpeg offers; raw FFmpeg flags are not exposed; paths cannot escape the canonical project; failed generation does not create a successful artifact; future MCP/Qwen/OpenClaw/provider adapters must obey the same permission boundary. Full rationale: `project-context/decisions/D-014-execution-permission.md`.
+Consequences: current local execution is fail-closed; raw FFmpeg flags are not exposed; paths cannot escape canonical projects; future MCP/Qwen/OpenClaw/provider adapters obey the same permission boundary. Full rationale: `project-context/decisions/D-014-execution-permission.md`.
 
 ---
 
@@ -189,8 +186,32 @@ Consequences: current execution permits only explicit free/local FFmpeg offers; 
 Status: accepted  
 Date: 2026-08-11
 
-Decision: use the official MCP Python SDK v2 for a generic direct stdio discovery layer. MCP profiles are machine-global configuration with environment-variable references, not portable project state. Only an explicit `MCPToolBinding` can map a discovered tool to an existing semantic capability and create a `CapabilityOffer`.
+Decision: use official MCP Python SDK v2 for generic direct stdio discovery. MCP profiles are machine-global configuration with environment-variable references, not portable project state. Only explicit `MCPToolBinding` maps a discovered tool to an existing semantic capability and creates a `CapabilityOffer`.
 
-Reason: MCP should be a reusable transport seam, not another provider-specific orchestration layer. Discovery must not become implicit tool invocation, command execution, secret exposure or paid-provider consent.
+Reason: MCP is a reusable transport seam, not another provider-specific orchestration layer. Discovery must not become implicit tool invocation, command execution, secret exposure or paid-provider consent.
 
-Consequences: discovery is ephemeral and calls `list_tools()` only; no arbitrary profile-command creation API exists; no raw secrets or stderr are exposed publicly; unbound tools never become offers; cost/locality are binding facts; real stdio discovery/timeout/cleanup is tested on Linux and Windows; Qwen-MM is added later as an optional profile/binding pack. Full rationale: `project-context/decisions/D-015-direct-mcp-discovery.md`.
+Consequences: discovery calls `list_tools()` only; no arbitrary profile-command creation API exists; unbound tools never become offers; cost/locality are binding facts; real stdio discovery/timeout/cleanup is tested on Linux and Windows. Full rationale: `project-context/decisions/D-015-direct-mcp-discovery.md`.
+
+---
+
+## D-016 — Qwen-MM is an optional pinned profile/binding pack
+Status: accepted  
+Date: 2026-08-11
+
+Decision: integrate `QwenLM/Qwen-MM-Plugins` as optional trusted MCP profile/binding templates pinned to verified commit `7dfc08b7de8e621fc28bf9814e3d41a59b4595ae`, not as a mandatory runtime or special orchestration layer.
+
+Reason: current Qwen-MM combines genuinely local/free core operations with DashScope-backed remote operations, and the Apache-2.0 repository license does not determine execution cost.
+
+Consequences:
+
+- `core.media_info -> media.probe` is `local + free`;
+- DashScope-backed understanding/ASR and Qwen/Wan generation bindings are `remote + potentially_paid`;
+- provider-neutral `speech.transcribe` is added for ASR implementations;
+- `wan_s2v -> video.digital_human` closes the supplied-audio semantic gap but remains non-executable until remote/paid consent and cost controls exist;
+- mixed/mismatched tools such as current `happyhorse` and `segmentation` remain intentionally unbound;
+- cloud profiles persist only `DASHSCOPE_API_KEY` references, never resolved values;
+- current upstream WSL2-only Windows support is fail-closed for native-Windows Qwen configuration;
+- Qwen profile templates pin an exact SHA and never fuzzy-remap tool drift;
+- MCP tool invocation is still disabled.
+
+Full rationale: `project-context/decisions/D-016-qwen-mm-pack.md`.

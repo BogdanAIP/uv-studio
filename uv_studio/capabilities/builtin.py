@@ -74,6 +74,15 @@ CAPABILITIES = (
         asynchronous=True,
     ),
     CapabilityDefinition(
+        "speech.transcribe",
+        "Распознавание речи",
+        "Преобразование речи из аудио или видео в текст и временные речевые аннотации.",
+        OperationKind.SPEECH,
+        (MediaKind.AUDIO, MediaKind.VIDEO),
+        (MediaKind.TEXT, MediaKind.SUBTITLE, MediaKind.METADATA),
+        asynchronous=True,
+    ),
+    CapabilityDefinition(
         "media.understand",
         "Понимание медиа",
         "Структурированный анализ изображения, видео или аудио.",
@@ -259,6 +268,6 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     registry.register_offer(_edge_tts_offer())
     # Intentionally no native offer for video.digital_human: Stage 2 proved that
     # the pinned product-promo contract does not match portrait + supplied speech.
-    # Likewise media.understand/audio.mix/subtitle.render stay definition-only until
-    # a concrete, tested adapter is registered.
+    # Likewise speech.transcribe/media.understand/audio.mix/subtitle.render stay
+    # definition-only until a concrete, tested adapter is registered.
     return registry

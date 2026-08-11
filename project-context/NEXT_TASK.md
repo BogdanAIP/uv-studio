@@ -1,179 +1,272 @@
 # Next Task
 
-**Primary target:** after the generic MCP discovery PR merges, add an **optional Qwen-MM-Plugins profile/binding pack** against a freshly re-verified upstream revision. Do not enable paid/cloud MCP tool execution yet.
+**Primary target:** after the optional Qwen-MM pack PR merges, implement the **MCP/provider execution consent + cost boundary**. Test execution with the local fake MCP server first. Do not make real paid Qwen/DashScope calls in CI.
 
 ## Why this comes next
 
-Stage 3 now has the provider-neutral seam Qwen-MM needed:
+UV Studio now has:
 
 ```text
-MCPProfile
-  -> official SDK stdio discovery
-      -> MCPToolDescriptor
-          -> explicit MCPToolBinding
-              -> semantic CapabilityOffer
+semantic capability
+  -> capability offers
+      -> fail-closed selection policy
+      -> safe local FFmpeg execution
+      -> generic MCP discovery
+      -> explicit MCP tool binding
+      -> optional pinned Qwen-MM offers
 ```
 
-This means Qwen-MM no longer needs a special architecture path or OpenClaw hop. It can be integrated as one optional capability package while recipes/projects remain unchanged.
+The missing boundary is the one that turns a discovered/bound external offer into a permitted invocation **without allowing implicit spending**.
 
-## Mandatory first step — re-verify upstream
+D-014 already says metadata is not execution permission. This slice implements that rule for MCP/provider calls.
 
-`QwenLM/Qwen-MM-Plugins` changes quickly. Before writing bindings, inspect the **current** repository/release/commit and verify:
+## 1. Define external execution authorization
 
-- license;
-- current install/launch method;
-- MCP server entrypoint(s);
-- actual current `list_tools` surface;
-- current split between local/core operations and cloud/API operations;
-- required environment variables;
-- Windows native vs WSL support;
-- whether tool names/schemas have changed from the previously inspected revision;
-- whether pricing/cloud requirements have changed.
-
-Pin the researched upstream revision in the Qwen profile-pack documentation/provenance. Do not assume the earlier `7dfc08b...` revision is still current.
-
-## Qwen profile/binding pack
-
-### 1. Keep it optional
-
-Do not add Qwen-MM as a baseline runtime dependency.
-
-A normal UV Studio installation must still start and run local/free functionality when:
-
-- Qwen-MM is not installed;
-- no DashScope/Qwen key exists;
-- WSL is unavailable;
-- the user never enables the profile.
-
-### 2. Do not vendor the whole project by default
-
-Prefer a profile/binding pack containing:
-
-- verified launch template/instructions;
-- environment-variable references;
-- explicit tool bindings;
-- provenance/version metadata;
-- capability classifications;
-- platform requirements.
-
-Only copy code if a concrete technical need exists and Apache-2.0 NOTICE/attribution obligations are handled.
-
-### 3. Classify each tool independently
-
-For every useful current Qwen-MM tool considered for binding, record actual:
+Create a product-owned, versioned authorization/request model. It should distinguish at least:
 
 ```text
-semantic capability_id
-locality
+free/local
+free/remote
+potentially_paid
+paid
+unknown_cost
+```
+
+Do not encode Qwen-specific logic into the authorization model.
+
+A useful shape may include:
+
+```text
+capability_id
+offer_id
+selection_policy
 cost_class
-configuration requirement
-platform requirement
-input/output contract
-features
+cost_estimate
+cost_currency
+cost_estimate_state
+consent_mode
+consent_token / one-shot authorization reference
+project_id
+run_id
 ```
 
-Important rule:
+Exact field names may change, but cost knowledge and user consent must be explicit.
 
-> Open-source repository license does not make a cloud model invocation free.
+## 2. Fail closed on unknown or paid-capable cost
 
-Examples of expected classification pattern, subject to re-verification:
+Initial policy:
 
-- genuinely local file preparation/probing -> `local + free` when actually local;
-- remote but no billed AI service -> `remote/hybrid + free` only when verified;
-- DashScope/Qwen/Wan/Omni/cloud generation or analysis -> `remote/hybrid + potentially_paid` or `paid`;
-- credentials missing -> not executable / configuration required.
+- local/free remains executable by existing rules;
+- remote/free requires explicit remote-execution permission but no payment consent;
+- `potentially_paid`, `paid` or unknown-cost external tools require an explicit **one-shot** user authorization before invocation;
+- no remembered global "always allow paid" switch in the first version;
+- no automatic fallback from local failure into a paid offer;
+- no invocation when price is unknown unless the authorization explicitly acknowledges unknown cost.
 
-Do not classify from names alone.
+The API must return a structured `consent_required` response rather than silently invoking the tool.
 
-### 4. Bind only useful, semantically clean tools
+## 3. Cost estimate contract
 
-Do not mirror the entire Qwen tool catalog into UV Studio.
+Do not invent prices.
 
-Bind only operations that correspond cleanly to existing semantic capabilities or justify one new **provider-neutral** capability.
-
-If a Qwen tool is highly provider-specific, leave it unbound rather than contaminating RecipeDefinition.
-
-### 5. No MCP tool execution yet
-
-This slice should validate:
+Support an estimate state such as:
 
 ```text
-profile can be configured
-  -> discovery succeeds where platform/runtime is available
-  -> current tools match expected bindings
-  -> offers show correct availability/locality/cost
+known
+bounded
+unknown
+not_applicable
 ```
 
-Do not add general MCP `call_tool` execution until the explicit remote/paid consent/cost boundary is designed.
+A provider adapter may later supply:
 
-Even a Qwen binding marked local/free should not bypass the current execution architecture merely because discovery says it is available.
+- fixed known price;
+- upper bound;
+- estimated range;
+- unknown.
 
-### 6. Windows behavior
+For the first slice, fake MCP fixtures can expose deterministic test metadata. Qwen cloud offers may remain `unknown` until an auditable current pricing adapter exists.
 
-If the current Qwen package still requires WSL2:
+Never treat `potentially_paid` as free merely because no estimate is available.
 
-- represent that as an optional platform constraint;
-- do not alter native UV Studio startup to require WSL;
-- show profile unavailable/configuration-required with a clear reason on native Windows when the configured runtime is missing;
-- generic direct MCP + local FFmpeg remain native Windows paths.
+## 4. One-shot authorization store
 
-If Qwen now supports native Windows, verify it with a real CI/test path before claiming support.
+Use UV Studio machine/runtime state, not portable project state, for ephemeral authorization tokens.
 
-### 7. Safe configuration helper
+Requirements:
 
-It is acceptable to add a **Qwen-specific trusted profile template/helper** because its command/arguments are known and constrained.
+- random opaque token;
+- bound to exact project + capability + offer + normalized input digest;
+- one use only;
+- short expiration;
+- not written into `.uvproj.zip`;
+- cannot authorize a different tool/input after mutation;
+- no raw secret credentials inside token/public API.
 
-Do not add a generic HTTP endpoint that accepts arbitrary command strings.
+If a simpler signed in-memory grant is safer than persistence, prefer it initially.
 
-A Qwen helper may write a profile with env references, but must never persist resolved API-key values.
+## 5. Add actual generic MCP tool invocation
 
-### 8. Tests
+Only after authorization exists, extend the official SDK adapter with a bounded `call_tool` path.
 
-Add fixture/config tests that do not require real paid credentials.
+Requirements:
+
+- exact discovered/bound tool only;
+- no fuzzy tool resolution;
+- bounded call timeout;
+- official SDK cancellation/cleanup;
+- no resident child process required initially;
+- normalized JSON-serializable arguments;
+- strict maximum request/response sizes;
+- child stderr remains private;
+- structured tool error handling;
+- external invocation provenance recorded.
+
+Use the existing local MCP fixture for all execution tests.
+
+## 6. Project-scoped external inputs/outputs
+
+Do not let MCP tool arguments become arbitrary host filesystem access through UV Studio.
+
+Where a binding accepts project files:
+
+- resolve project-relative paths through Project Store;
+- binding/adapter decides which input fields are file paths;
+- only allowed project roots;
+- do not expose canonical project directory paths to APIs unnecessarily;
+- imported/generated output must be copied/registered into canonical project artifacts before being considered durable.
+
+Do not attempt a universal automatic path-rewriter based on field names.
+
+## 7. Invocation provenance
+
+Every allowed external execution should produce durable run metadata containing at least:
+
+```text
+run_id
+project_id
+capability_id
+offer_id
+adapter/profile/tool identity
+started_at/completed_at
+selection/authorization mode
+cost estimate snapshot
+status
+input digest
+result/artifact references
+error class if failed
+```
+
+Do not persist secret values or full sensitive provider payloads by default.
+
+Reuse Project Store `tasks/` or introduce a small versioned run record only if needed; do not add a database without measured need.
+
+## 8. API shape
+
+Prefer a two-step explicit flow for paid-capable tools:
+
+```text
+POST /api/uv/projects/{project}/capabilities/{capability}/prepare-execution
+  -> selected offer + cost state + consent_required
+
+POST /api/uv/projects/{project}/capabilities/{capability}/authorize-execution
+  -> one-shot grant
+
+POST /api/uv/projects/{project}/capabilities/{capability}/execute
+  -> grant required when policy says so
+```
+
+Exact endpoint split may be simplified, but a single call must not both request and silently assume paid consent.
+
+Existing free/local execution compatibility should remain stable.
+
+## 9. Qwen boundary
+
+Do not make a real DashScope call in this slice unless the user later explicitly requests testing with credentials and understands potential cost.
+
+For current Qwen packs:
+
+```text
+core.media_info             -> local/free metadata offer
+Qwen API tools              -> remote/potentially_paid
+qwen_image/qwen_tts/wan_*   -> remote/potentially_paid
+```
+
+`wan_s2v` may become an executable digital-human offer only after this consent boundary works generically.
+
+Qwen price remains unknown unless separately verified from current official provider pricing; unknown cost must require explicit acknowledgement.
+
+## 10. OpenClaw boundary
+
+Do not add OpenClaw during this slice.
+
+The authorization/cost contract must be reusable by a future OpenClaw adapter without making it mandatory.
+
+## 11. Tests
+
+Use the local official-SDK MCP fixture. Extend it with deterministic tools such as:
+
+```text
+free_echo
+remote_free_echo
+paid_echo
+large_result
+slow_tool
+error_tool
+```
 
 Cover at least:
 
-- Qwen pack absent -> UV Studio starts normally;
-- profile template contains no secret values;
-- pinned upstream/provenance metadata exists;
-- expected bindings are explicit and unique;
-- cloud tools retain `potentially_paid/paid` metadata;
-- missing credentials/runtime do not become `available` execution permission;
-- unrecognized newly discovered Qwen tools remain unbound;
-- missing/renamed expected tool degrades its offer to unavailable instead of fuzzy-remapping;
-- `local_free_first` cannot select remote/potentially-paid Qwen offers;
-- project archives contain no Qwen machine config/secrets;
-- Windows baseline stays green without Qwen/WSL.
+- free/local existing FFmpeg path still works unchanged;
+- `local_free_first` still never widens to remote/paid;
+- remote/free external invocation requires correct remote permission;
+- potentially-paid/unknown-cost tool returns consent-required before invocation;
+- one-shot authorization works exactly once;
+- expired authorization rejected;
+- grant bound to exact project/offer/input digest;
+- altered input after authorization rejected;
+- unknown-cost requires explicit acknowledgement;
+- MCP `call_tool` success through real local stdio fixture;
+- MCP tool timeout/error cleans process and creates failure provenance;
+- response-size limit enforced;
+- unbound tool cannot be invoked even if discovered;
+- missing/renamed tool fails closed;
+- public execution/run records contain no resolved API keys;
+- project archives do not contain ephemeral consent tokens;
+- Linux + Windows unit/API/HTTP/frontend CI green.
 
 ## Architecture decisions to preserve
 
-- D-011: OpenClaw optional peer, not mandatory.
-- D-012: Qwen-MM workflow donor/optional capability package, not paid baseline dependency.
-- D-013: semantic capability != adapter offer.
+- D-011: adapters are peers; OpenClaw optional.
+- D-012: Qwen-MM optional; no mandatory DashScope.
+- D-013: semantic capability != offer.
 - D-014: metadata != execution permission.
-- D-015: direct MCP discovery is generic, explicit and non-executing.
+- D-015: MCP discovery is explicit and safe.
+- D-016: Qwen pack is pinned, optional, and per-tool cost classified.
 
 ## What NOT to do
 
-- no mandatory DashScope;
-- no implicit API purchase/spend;
-- no OpenClaw dependency for Qwen;
-- no fuzzy auto-binding of every discovered tool;
-- no Qwen-specific names in RecipeDefinition;
-- no raw secret values in config/API/projects;
-- no generic arbitrary command profile editor;
-- no MCP tool invocation in this slice;
-- no WSL requirement for baseline native Windows UV Studio.
+- no "allow all paid providers" global switch;
+- no implicit spend after selection fallback;
+- no price guessing;
+- no generic arbitrary MCP tool endpoint by raw tool name;
+- no fuzzy binding;
+- no raw host paths from external callers;
+- no secret values in run records/API/projects;
+- no database unless measured need appears;
+- no real paid CI calls;
+- no OpenClaw dependency;
+- no native-Windows Qwen claim while upstream remains WSL2-only.
 
 ## Acceptance criteria
 
-- current Qwen upstream is re-verified and pinned in provenance docs;
-- optional Qwen profile can be represented without changing canonical projects;
-- useful current Qwen tools have explicit semantic bindings only where justified;
-- local/free vs remote/paid classification is auditable per tool;
-- discovery mismatch fails closed;
-- no real paid API call is needed for tests/startup;
-- Qwen absence leaves all existing UV Studio functionality intact;
-- Linux + Windows baseline CI remains green.
+- external execution cannot occur without a semantic binding and policy approval;
+- paid-capable/unknown-cost execution cannot occur without explicit one-shot authorization;
+- authorization is bound to exact execution intent and cannot be replayed;
+- real local MCP `call_tool` is cross-platform tested through official SDK;
+- failures/timeouts leave no orphan process;
+- provenance is durable and secret-free;
+- current Qwen cloud offers remain non-executed in CI;
+- all existing local/free behavior remains green on Linux and Windows.
 
-After that, design the **MCP/provider execution consent + cost boundary** and only then enable carefully selected tool invocation paths.
+After that, enable individual external capabilities incrementally, beginning with operations whose contracts/costs are well understood, and then move toward Stage 4 existing-video workflows.
