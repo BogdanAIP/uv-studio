@@ -173,6 +173,7 @@ class NativeVideoClawAdapter:
                 tool_name="edge_tts",
             ),
         )
+        artifact_registered = False
         try:
             communicate = communicate_factory(
                 text=text,
@@ -202,15 +203,12 @@ class NativeVideoClawAdapter:
                     "speed": speed,
                 },
             )
-            try:
-                project = self.store.load_project(project_id)
-                self.store.update_project(
-                    project_id,
-                    artifacts=(*project.artifacts, artifact),
-                )
-            except Exception:
-                output_path.unlink(missing_ok=True)
-                raise
+            project = self.store.load_project(project_id)
+            self.store.update_project(
+                project_id,
+                artifacts=(*project.artifacts, artifact),
+            )
+            artifact_registered = True
 
             portable_result = {
                 "path": canonical_output,
@@ -225,6 +223,7 @@ class NativeVideoClawAdapter:
                 artifact=artifact.to_dict(),
             )
         except Exception as exc:
-            output_path.unlink(missing_ok=True)
+            if not artifact_registered:
+                output_path.unlink(missing_ok=True)
             self.provenance.fail(record, exc)
             raise
