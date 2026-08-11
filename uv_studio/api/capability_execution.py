@@ -20,7 +20,10 @@ from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.mcp import get_mcp_manager
 from uv_studio.api.projects import get_project_store
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
-from uv_studio.capabilities.adapters.mcp_execution import MCPExecutionAdapter
+from uv_studio.capabilities.adapters.mcp_execution import (
+    MCPExecutionAdapter,
+    MCPExecutionInputRejected,
+)
 from uv_studio.capabilities.authorization import (
     ConsentScope,
     ExecutionAuthorizationInvalid,
@@ -408,6 +411,8 @@ async def execute_project_capability(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "mcp_binding_rejected", "message": str(exc)},
         ) from exc
+    except MCPExecutionInputRejected as exc:
+        raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
     except MCPRequestTooLarge as exc:
         raise _mcp_error(exc, status_code=status.HTTP_422_UNPROCESSABLE_ENTITY) from exc
     except MCPCallTimeout as exc:
