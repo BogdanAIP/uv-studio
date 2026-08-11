@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from uv_studio.capabilities import (
@@ -14,7 +15,7 @@ from uv_studio.capabilities import (
     select_offer,
 )
 from uv_studio.capabilities.registry import UnknownOffer
-from uv_studio.mcp.manager import MCPManager
+from uv_studio.mcp.manager import MCPBindingExecutionRejected, MCPManager
 from uv_studio.mcp.models import (
     MCPConfiguration,
     MCPProfile,
@@ -156,6 +157,77 @@ class MCPBindingTests(unittest.TestCase):
             offer = registry.get_offer("mcp.fixture.missing")
             self.assertEqual(offer.availability, OfferAvailability.UNAVAILABLE)
             self.assertIn("not reported", offer.reason)
+        finally:
+            tmp.cleanup()
+
+    def test_ready_offer_resolves_to_exact_bound_tool(self) -> None:
+        binding = MCPToolBinding(
+            binding_id="fixture.echo",
+            profile_id="fixture",
+            tool_name="echo_metadata",
+            capability_id="media.understand",
+            title="Fixture echo",
+            locality=LocalityClass.LOCAL,
+            cost_class=CostClass.FREE,
+            asynchronous=False,
+        )
+        tmp, registry, manager = self._manager((binding,))
+        try:
+            asyncio.run(manager.connect("fixture"))
+            offer = registry.get_offer("mcp.fixture.echo")
+            target = manager.resolve_execution_target(offer)
+            self.assertEqual(target.profile.profile_id, "fixture")
+            self.assertEqual(target.binding.binding_id, "fixture.echo")
+            self.assertEqual(target.tool.name, "echo_metadata")
+        finally:
+            tmp.cleanup()
+
+    def test_binding_change_after_discovery_requires_reconnect(self) -> None:
+        binding = MCPToolBinding(
+            binding_id="fixture.echo",
+            profile_id="fixture",
+            tool_name="echo_metadata",
+            capability_id="media.understand",
+            title="Fixture echo",
+            locality=LocalityClass.LOCAL,
+            cost_class=CostClass.FREE,
+            asynchronous=False,
+        )
+        tmp, registry, manager = self._manager((binding,))
+        try:
+            asyncio.run(manager.connect("fixture"))
+            offer = registry.get_offer("mcp.fixture.echo")
+            config = manager.configuration()
+            manager.config_store.save(
+                MCPConfiguration(
+                    profiles=config.profiles,
+                    bindings=(replace(binding, tool_name="cloud_generate"),),
+                )
+            )
+            with self.assertRaises(MCPBindingExecutionRejected) as caught:
+                manager.resolve_execution_target(offer)
+            self.assertIn("reconnect", str(caught.exception))
+        finally:
+            tmp.cleanup()
+
+    def test_missing_ready_snapshot_fails_closed(self) -> None:
+        binding = MCPToolBinding(
+            binding_id="fixture.echo",
+            profile_id="fixture",
+            tool_name="echo_metadata",
+            capability_id="media.understand",
+            title="Fixture echo",
+            locality=LocalityClass.LOCAL,
+            cost_class=CostClass.FREE,
+            asynchronous=False,
+        )
+        tmp, registry, manager = self._manager((binding,))
+        try:
+            asyncio.run(manager.connect("fixture"))
+            offer = registry.get_offer("mcp.fixture.echo")
+            asyncio.run(manager.disconnect("fixture"))
+            with self.assertRaises(MCPBindingExecutionRejected):
+                manager.resolve_execution_target(offer)
         finally:
             tmp.cleanup()
 
