@@ -9,6 +9,7 @@ The roadmap targets the full product. Early stages create useful working slices,
 - prefer deterministic/local tools for deterministic work;
 - local/free implementations may coexist with paid providers behind the same semantic capability;
 - provider choice and expected paid cost must remain explicit for chargeable generation;
+- capability discovery/ordering is metadata, not permission to execute or spend;
 - professional workflow policy (source review, planning, sample-first generation, scene/take gates, evidence-based review) is separate from the provider that performs an AI operation;
 - OpenClaw, Qwen-MM-Plugins and other MCP/runtime packages are optional adapters, not the canonical project state or mandatory execution layer;
 - Windows remains a first-class target even when an optional third-party package currently requires WSL2.
@@ -67,19 +68,23 @@ Exit: user selects a task, only relevant workflow/UI loads, and recipes can opt 
 Goal: stable semantic interface to replaceable local, MCP and provider capabilities without a mandatory intermediate runtime.
 
 - semantic contracts for image/video/speech/media-understanding operations;
-- capability registry with availability, locality, cost class and provider metadata;
-- direct MCP adapter;
+- capability registry with availability, locality, cost class and safe implementation metadata;
+- separate registry metadata from `SelectionPolicy` and execution permission;
+- fail-closed `local_free_first`: only `available + free + local`, never implicit remote/paid fallback;
+- project-scoped local execution with no arbitrary shell/FFmpeg command surface;
+- direct MCP client/adapter with explicit semantic tool bindings;
 - local-tool adapter;
 - native VideoClaw adapter during migration;
 - optional OpenClaw adapter/runtime;
-- optional Qwen-MM-Plugins adapter;
+- optional Qwen-MM-Plugins profile/binding pack after generic MCP support is proven;
 - exact provider/model selection for paid media;
+- explicit consent/cost boundary before potentially-paid or paid execution;
 - cost/error/job metadata;
-- `local/free first`, `pinned`, `best available`, `manual`, and budget-aware selection policies;
+- `local_free_first`, `pinned_offer`, `manual`, and later explicit best-available/budget-aware policies where their permission semantics are defined;
 - never require DashScope for a baseline UV Studio feature when an adequate local/free path exists;
 - keep Qwen cloud generation/Omni/video-memory capabilities optional for users who explicitly configure their API access.
 
-Exit: core workflows call semantic capabilities; the same operation can be fulfilled directly, locally, through MCP, OpenClaw, Qwen-MM-Plugins, or a native provider without changing project-domain code.
+Exit: core workflows call semantic capabilities; the same operation can be fulfilled directly, locally, through MCP, OpenClaw, Qwen-MM-Plugins, or a native provider without changing project-domain code, and no registry fallback can silently trigger chargeable work.
 
 ## Stage 4 — Existing Video / Range Edit
 
