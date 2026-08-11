@@ -54,3 +54,17 @@ export async function createUVProject(input: CreateProjectInput): Promise<UVProj
   if (!response.ok) throw await apiError(response, 'Failed to create project');
   return response.json();
 }
+
+export async function importUVProjectArchive(file: File): Promise<UVProject> {
+  const response = await fetch('/api/uv/projects/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/zip' },
+    body: file,
+  });
+  if (!response.ok) throw await apiError(response, 'Failed to import project archive');
+  return response.json();
+}
+
+export function projectArchiveUrl(projectId: string): string {
+  return `/api/uv/projects/${encodeURIComponent(projectId)}/archive`;
+}
