@@ -92,6 +92,18 @@ CAPABILITIES = (
         asynchronous=True,
     ),
     CapabilityDefinition(
+        "video.extract_range",
+        "Извлечение диапазона видео",
+        (
+            "Детерминированное извлечение выбранного временного диапазона существующего видео "
+            "и ограниченного контекста до/после без генеративной модели."
+        ),
+        OperationKind.DETERMINISTIC_MEDIA,
+        (MediaKind.VIDEO,),
+        (MediaKind.VIDEO,),
+        asynchronous=False,
+    ),
+    CapabilityDefinition(
         "timeline.assemble",
         "Сборка таймлайна",
         "Детерминированная сборка подготовленных медиафрагментов в итоговую последовательность.",
@@ -234,6 +246,15 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
             tool="ffprobe",
             title="FFprobe local media probe",
             features=("media.metadata",),
+        )
+    )
+    registry.register_offer(
+        _tool_offer(
+            offer_id="local_ffmpeg.video_extract_range",
+            capability_id="video.extract_range",
+            tool="ffmpeg",
+            title="FFmpeg accurate-seek lossless range extraction",
+            features=("video.range", "video.context", "video.lossless_intermediate"),
         )
     )
     registry.register_offer(
