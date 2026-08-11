@@ -87,21 +87,30 @@ The run record stores the portable authorization input digest, consent scopes, l
 
 A future provenance schema may rename transport identity fields only through an explicit version/migration. This slice does not break existing MCP archive history merely for cleaner names.
 
-## Dependency policy
+## Optional dependency policy
 
-`edge-tts` is a UV Studio runtime dependency bounded to the currently supported major line:
+`edge-tts` remains optional. The core UV Studio dependency set does not install a remote TTS client merely to make one compatibility offer available.
+
+The supported optional dependency line is recorded separately in:
+
+```text
+requirements-edge-tts.txt
+```
+
+with:
 
 ```text
 edge-tts>=7.2.8,<8
 ```
 
-The adapter still lazy-loads the module and fails truthfully with `CapabilityToolUnavailable` if the installed runtime is incomplete or unavailable.
+When the package is absent, the built-in offer is `UNAVAILABLE`. When it is present, the adapter still lazy-loads the module and fails truthfully with `CapabilityToolUnavailable` if the installed runtime is incomplete.
 
-CI substitutes a deterministic fake `Communicate` implementation and never contacts the live Edge TTS endpoint.
+CI substitutes a deterministic fake `Communicate` implementation and never contacts the live Edge TTS endpoint. The library's source-code license and any terms governing the external hosted service are tracked separately in `THIRD_PARTY_NOTICES.md`.
 
 ## Consequences
 
-- `native_videoclaw.edge_tts` becomes truthfully executable after D-017 authorization.
+- `native_videoclaw.edge_tts` becomes truthfully executable after D-017 authorization when its optional dependency is installed.
+- baseline UV Studio installation remains independent of Edge TTS and its networking dependencies.
 - `local_free_first` still cannot choose it because locality is `remote`.
 - free does not mean local and does not bypass remote consent.
 - all other current native VideoClaw model offers remain non-executable/configuration-required until exact provider/model/credential contracts are designed.
