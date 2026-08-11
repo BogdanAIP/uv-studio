@@ -2,38 +2,36 @@
 
 ## Purpose
 
-The Capability Registry answers **what implementations exist**. The execution layer answers **which implementation is allowed to run now**.
+The Capability Registry answers **what implementations exist**. The execution layer answers **which exact implementation is allowed to run now**.
 
-These are deliberately separate decisions:
+These remain separate decisions:
 
 ```text
 Recipe / ExecutionPlan
   -> semantic capability_id
-      -> Capability Registry
-          -> offers
-              -> Selection Policy
-                  -> Execution Adapter
+  -> Capability Registry
+  -> CapabilityOffer
+  -> SelectionPolicy
+  -> ExecutionPreparation
+  -> one-shot authorization when required
+  -> exact execution adapter
 ```
 
-Registry ordering is never permission to spend money or invoke a remote service.
+Registry ordering, installed dependencies and open-source licenses are never execution permission.
 
 ## Selection policies
 
 ### `manual`
 
-No automatic selection occurs. The API returns the known offers and requires an explicit later choice.
+No automatic selection occurs. Known offers are returned for an explicit later choice.
 
 ### `pinned_offer`
 
-Select exactly one named available offer. The selector itself does not reinterpret the choice.
-
-The current Stage 3 execution API still permits only `free + local + local_ffmpeg` execution. Therefore a pinned remote, potentially-paid or paid offer remains known metadata and is rejected before execution.
+Select exactly one named `available` offer. Pinning an offer does not bypass its locality/cost authorization requirements.
 
 ### `local_free_first`
 
-This policy is intentionally strict.
-
-It selects only offers satisfying all three conditions:
+Select only offers satisfying all of:
 
 ```text
 availability = available
@@ -41,192 +39,237 @@ cost_class   = free
 locality     = local
 ```
 
-It does **not** widen to:
+It never widens to remote/free, hybrid, `potentially_paid` or `paid` offers. If no eligible offer exists, execution stops explicitly.
 
-- remote free services;
-- hybrid services;
-- `potentially_paid` offers;
-- `paid` offers.
+## D-017 execution authorization
 
-If no eligible offer exists, execution stops explicitly.
+Selection is separate from permission to contact an external service or incur cost.
+
+Consent scopes are derived from the selected offer:
+
+```text
+remote_execution  -> locality is remote or hybrid
+external_cost     -> cost class is potentially_paid or paid
+unknown_cost      -> current external price estimate is unknown
+```
+
+A free remote service therefore still requires `remote_execution`.
+
+Authorization grants are:
+
+- process-local;
+- short-lived;
+- one-shot;
+- bound to exact project, capability, offer, selection policy and normalized input digest;
+- consumed/fail-closed on replay or mismatch;
+- never persisted to the project/archive.
+
+API boundary:
+
+```text
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/prepare-execution
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/authorize-execution
+POST /api/uv/projects/{project_id}/capabilities/{capability_id}/execute
+```
+
+Local/free execution remains token-free.
 
 ## Project-scoped filesystem boundary
 
-Local media execution never accepts an unrestricted OS path.
-
-All media paths are canonical project-relative paths such as:
+Capability inputs use canonical project-relative paths, never unrestricted OS paths:
 
 ```text
 sources/input.mp4
 assets/reference.png
-artifacts/assembled.mp4
+artifacts/output.mp4
 exports/final.mp4
 ```
 
 `ProjectStore.resolve_project_file()` enforces:
 
-- no absolute paths;
-- no `..` traversal;
-- Windows backslashes are normalized to canonical project paths;
-- operation-specific allowed top-level project roots;
+- no absolute path input;
+- no parent traversal;
+- canonical path normalization;
+- operation-specific top-level allowed roots;
 - existing parent directory for writes;
-- resolved path must remain under the canonical project directory;
-- symlink parents cannot escape the project.
+- resolved parent/target containment inside the canonical project;
+- when `allowed_roots` is supplied, resolved symlinks must also remain inside those roots;
+- allowed canonical roots themselves cannot be symlinks for an allowlisted operation.
 
-The API never exposes `project.json` or arbitrary host filesystem writes as capability inputs.
+The last rule prevents a path written as `sources/alias` from resolving through a symlink into a disallowed internal root such as `tasks/`.
 
 ## Local FFmpeg adapter
 
-The first executable adapter is `local_ffmpeg`.
+`local_ffmpeg` exposes semantic operations rather than raw commands.
 
-It deliberately exposes a very small semantic surface instead of raw FFmpeg commands.
+Current executable operations:
+
+```text
+media.probe
+  -> local_ffmpeg.media_probe
+
+timeline.assemble
+  -> local_ffmpeg.timeline_assemble
+```
 
 ### `media.probe`
 
 Input:
 
 ```json
-{
-  "path": "sources/input.mp4"
-}
+{"path":"sources/input.mp4"}
 ```
 
-Execution:
-
-- resolve the path through Project Store;
-- execute local `ffprobe` using argv with `shell=false`;
-- fixed arguments only;
-- timeout enforced;
-- parse JSON output.
-
-Returned metadata includes:
-
-- duration;
-- format;
-- byte size where available;
-- audio/video presence;
-- primary video codec, dimensions and average frame rate;
-- stream metadata.
-
-No project artifact is created because probing is an inspection operation.
+The adapter resolves the project path, runs bounded `ffprobe` via argv with `shell=false`, parses structured JSON and creates no artifact.
 
 ### `timeline.assemble`
 
-Input:
+Current mode performs ordered concat with a bounded number of project inputs and UV Studio-controlled project output. Raw FFmpeg flags are not accepted. Temporary manifests live under project `tasks/` and are removed. Output is registered only after successful FFmpeg completion; failed project registration removes the just-created output.
 
-```json
-{
-  "input_paths": [
-    "sources/a.mp4",
-    "sources/b.mp4"
-  ],
-  "output_path": "artifacts/joined.mp4"
-}
-```
+The current concat-copy mode fails explicitly for incompatible streams rather than silently transcoding.
 
-Current bounded behavior:
+## Exact MCP execution
 
-- ordered concat only;
-- maximum 200 inputs;
-- all inputs must already be project files;
-- output only under `artifacts/` or `exports/`;
-- existing output is never overwritten;
-- no arbitrary FFmpeg flags;
-- temporary concat manifest lives under the project's `tasks/` directory;
-- FFmpeg is invoked through argv with `shell=false`;
-- current mode uses stream copy (`-c copy`), so incompatible clips fail explicitly instead of being silently transcoded;
-- temporary manifest is always removed;
-- output is registered as a canonical `ProjectReference` only after FFmpeg succeeds;
-- if project metadata registration fails, the newly created output is removed.
+Direct MCP execution uses the official MCP Python SDK v2 and an exact configured `MCPToolBinding`.
 
-Artifact metadata records:
+A selected MCP offer executes only when:
+
+- the exact configured binding still exists;
+- semantic capability identity still matches;
+- the profile is enabled and READY;
+- the bound tool exists exactly once in the READY discovery snapshot;
+- current profile + binding configuration digest matches the discovery digest;
+- D-017 authorization has been consumed when required.
+
+Each call uses a bounded short-lived stdio process/session. No fuzzy tool remapping occurs after configuration drift.
+
+### Explicit project-file translation
+
+Generic MCP execution does not infer filesystem access from argument names or tool schemas.
+
+A binding must declare an `MCPProjectFileInput` for the exact top-level argument. The contract contains:
 
 ```text
-capability_id
-offer_id
-input_paths
-assembly_mode = concat_copy
+argument_name
+allowed_roots
+required
 ```
 
-## API
+Generic MCP file contracts may expose only:
 
 ```text
-POST /api/uv/projects/{project_id}/capabilities/{capability_id}/execute
+sources
+assets
+artifacts
+exports
 ```
 
-Request envelope:
+Internal `tasks`, `timeline` and `reviews` are not generic input roots.
 
-```json
-{
-  "selection_policy": "local_free_first",
-  "offer_id": null,
-  "input": {}
-}
-```
+Authorization/provenance hash the original portable request. A resolved absolute path exists only in the short-lived invocation dictionary and is never written into portable history.
 
-Allowed top-level request fields are exactly:
+## Native VideoClaw compatibility execution
+
+Native compatibility is not a generic bridge into vendored Python code.
+
+The execution API currently routes exactly one native offer:
 
 ```text
-selection_policy
-offer_id
-input
+native_videoclaw.edge_tts -> speech.synthesize
 ```
 
-This prevents the endpoint from becoming a hidden raw command surface.
+The product-owned `NativeVideoClawAdapter` accepts only that exact offer/capability pair.
 
-Successful response contains both the selection decision and execution result, so provenance is visible:
+Semantic request contract:
 
 ```text
-selection.policy
-selection.offer
-result.capability_id
-result.offer_id
-result.adapter_id
-result.output
-result.artifact
+text   required non-empty string, <= 20,000 chars
+voice  optional non-empty string, <= 128 chars
+speed  optional positive finite number
 ```
+
+Default voice and speed-to-rate behavior match the pinned VideoClaw TTS contract. The adapter invokes `edge_tts.Communicate` directly; it does not import an arbitrary vendored module/function selected by a caller.
+
+The offer remains:
+
+```text
+locality   = remote
+cost_class = free
+```
+
+so D-017 requires one-shot `remote_execution` consent but no external-cost acknowledgement.
+
+Callers do not choose the output path. UV Studio allocates:
+
+```text
+artifacts/art_<uuid>.mp3
+```
+
+and registers a canonical audio artifact after successful synthesis.
+
+Other current `native_videoclaw.*` model offers remain configuration-required/non-executable until exact provider/model/credential contracts exist.
+
+## External execution provenance
+
+External MCP and native execution share `ExternalRunProvenance`.
+
+A running record is written before the external operation and finalized to success/failure under:
+
+```text
+tasks/run_<uuid>.json
+```
+
+Persisted facts include:
+
+- schema/run/project/capability/offer/adapter identity;
+- stable concrete target identity;
+- timestamps/status;
+- authorization-required fact and semantic consent scopes;
+- cost-class/estimate snapshot;
+- portable normalized input digest;
+- success result byte-count + SHA-256 summary;
+- controlled failure exception class/code.
+
+Not persisted:
+
+- authorization tokens;
+- resolved environment secret values;
+- speech text as provenance content;
+- host-only resolved project paths;
+- raw stderr;
+- raw remote/provider error text.
+
+Provenance schema v1 retains historical serialized `profile_id` and `tool_name` fields for compatibility. The in-memory target contract is now transport-neutral: MCP maps profile/tool; native Edge TTS maps `native_videoclaw/edge_tts`. Any future serialized rename requires a schema migration.
 
 ## Error classes
 
-The adapter normalizes errors into capability-domain failures:
+Capability-domain failures expose stable machine codes while the API maps them to bounded HTTP classes:
 
-- invalid input/path -> HTTP 422;
-- manual/no eligible offer -> HTTP 409;
-- known but not-yet-executable adapter/cost class -> HTTP 409;
-- local tool missing -> HTTP 503;
-- FFmpeg/FFprobe timeout or command failure -> HTTP 502;
+- invalid semantic input/path -> HTTP 422;
+- selection/manual/no eligible offer -> HTTP 409;
+- selected but unsupported adapter/offer -> HTTP 409;
+- local/optional tool unavailable -> HTTP 503;
+- external/local tool operation failure -> HTTP 502;
+- MCP timeout -> HTTP 504;
 - unknown capability/project -> HTTP 404.
 
-Internal Project Store validation exceptions are not exposed as an uncontrolled execution surface.
+Provider exception text is not used as durable provenance.
 
 ## Security invariants
 
-1. No shell command string is constructed from user input.
-2. `shell=false` is explicit for subprocess execution.
-3. No arbitrary FFmpeg options are accepted.
-4. Local execution is restricted to canonical project paths.
-5. Symlink escape is rejected.
-6. `local_free_first` cannot fall through to paid-capable offers.
-7. Pinned paid/remote offers remain non-executable in this slice.
-8. Registry metadata is not execution permission.
-9. Failed media generation does not create a successful artifact record.
-10. Vendor VideoClaw code remains unchanged.
-
-## What is intentionally not implemented yet
-
-- remote provider execution;
-- direct MCP process/client execution;
-- Qwen-MM-Plugins runtime installation;
-- DashScope calls;
-- OpenClaw Gateway/runtime;
-- OAuth/API-key flows;
-- automatic paid fallback;
-- live price selection;
-- arbitrary FFmpeg command execution;
-- implicit normalization/transcoding of incompatible concat inputs.
+1. Registry metadata is not execution permission.
+2. `local_free_first` cannot fall through to remote or paid-capable offers.
+3. External consent is product-owned and transport-independent.
+4. One-shot authorization is exact-input-bound and not portable state.
+5. No generic capability accepts raw shell/FFmpeg commands.
+6. Project file access is operation/binding-owned and root-bounded.
+7. Resolved symlinks cannot cross an explicit allowed-root boundary.
+8. MCP invocation is exact-binding/READY-digest-bound.
+9. Native VideoClaw execution is exact-offer-only, never arbitrary Python dispatch.
+10. Partial generated outputs are not left as successful artifacts.
+11. Raw secrets/provider errors/host paths are not written to portable provenance.
+12. Vendor VideoClaw source remains a compatibility/reference boundary rather than the UV Studio orchestration core.
 
 ## Next architecture step
 
-After this local execution boundary is green on Linux and Windows, add direct MCP adapter infrastructure behind the same contracts.
-
-Qwen-MM-Plugins can then be an optional MCP capability package without changing recipes, Project Store semantics or the local-free safety rules.
+After the native Edge TTS slice is merged, Stage 4 starts with a deterministic existing-video range model and local FFmpeg range/context extraction. Generative replacement is layered later on the same provider-neutral range contract rather than being baked into the mechanical edit primitive.
