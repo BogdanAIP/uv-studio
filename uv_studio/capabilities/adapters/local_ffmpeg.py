@@ -195,6 +195,9 @@ class LocalFFmpegAdapter:
         duration_sec = _parse_optional_float(format_data.get("duration"))
         if duration_sec is None and duration_us is not None:
             duration_sec = duration_us / MICROSECONDS_PER_SECOND
+        video_duration_us = (
+            _parse_duration_us(primary_video.get("duration")) if primary_video else None
+        )
         return {
             "path": canonical_path,
             "duration_sec": duration_sec,
@@ -208,6 +211,7 @@ class LocalFFmpegAdapter:
                 "width": primary_video.get("width"),
                 "height": primary_video.get("height"),
                 "avg_frame_rate": primary_video.get("avg_frame_rate"),
+                "duration_us": video_duration_us,
             }
             if primary_video
             else None,
@@ -281,10 +285,18 @@ class LocalFFmpegAdapter:
         probe = self._probe_path(canonical_path=canonical_source, source=source)
         if not probe["has_video"]:
             raise InvalidCapabilityInput("video.extract_range source does not contain a video stream")
-        source_duration_us = probe.get("duration_us")
+        video_info = probe.get("video")
+        video_duration_us = (
+            video_info.get("duration_us") if isinstance(video_info, dict) else None
+        )
+        source_duration_us = (
+            video_duration_us
+            if isinstance(video_duration_us, int) and video_duration_us > 0
+            else probe.get("duration_us")
+        )
         if not isinstance(source_duration_us, int) or source_duration_us <= 0:
             raise InvalidCapabilityInput(
-                "video.extract_range requires a source with a known positive duration"
+                "video.extract_range requires a source with a known positive video duration"
             )
         try:
             resolved_range = requested.resolve(source_duration_us)
@@ -355,7 +367,22 @@ class LocalFFmpegAdapter:
                 ]
                 self._invoke(command, timeout=self.extract_timeout_sec, tool="ffmpeg")
                 try:
-                    output_size = output_path.stat().st_size if output_path.is_file() else 0
+                    validated_output = self.store.resolve_project_file(
+                        project_id,
+                        canonical_output,
+                        must_exist=True,
+                        allowed_roots=_RANGE_OUTPUT_ROOTS,
+                    )
+                except (ProjectValidationError, ProjectStoreError) as exc:
+                    raise CapabilityToolFailed(
+                        "ffmpeg range output escaped its project artifact boundary"
+                    ) from exc
+                if validated_output != output_path or output_path.is_symlink():
+                    raise CapabilityToolFailed(
+                        "ffmpeg range output must be a regular UV Studio-owned artifact file"
+                    )
+                try:
+                    output_size = validated_output.stat().st_size if validated_output.is_file() else 0
                 except OSError as exc:
                     raise CapabilityToolFailed(
                         "ffmpeg range output could not be validated"
@@ -363,6 +390,19 @@ class LocalFFmpegAdapter:
                 if output_size <= 0:
                     raise CapabilityToolFailed(
                         "ffmpeg reported success but range output is empty or missing"
+                    )
+                output_probe = self._probe_path(
+                    canonical_path=canonical_output,
+                    source=validated_output,
+                )
+                actual_duration_us = output_probe.get("duration_us")
+                if (
+                    not output_probe.get("has_video")
+                    or not isinstance(actual_duration_us, int)
+                    or actual_duration_us <= 0
+                ):
+                    raise CapabilityToolFailed(
+                        "ffmpeg range output is not a non-empty video clip"
                     )
                 artifacts.append(
                     ProjectReference(
@@ -379,6 +419,7 @@ class LocalFFmpegAdapter:
                                 "start_us": start_us,
                                 "end_us": end_us,
                                 "duration_us": duration_us,
+                                "actual_duration_us": actual_duration_us,
                             },
                             "requested_range": requested.to_dict(),
                             "extraction_mode": _RANGE_EXTRACTION_MODE,
