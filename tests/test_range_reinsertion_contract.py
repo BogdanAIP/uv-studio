@@ -52,6 +52,9 @@ class RangeReinsertionContractTests(unittest.TestCase):
         audio_duration: str | None = None,
         video_count: int = 1,
         subtitle: bool = False,
+        pix_fmt: str | None = None,
+        sample_rate: str | None = None,
+        channel_layout: str | None = None,
     ) -> dict:
         streams = [
             {
@@ -61,6 +64,7 @@ class RangeReinsertionContractTests(unittest.TestCase):
                 "height": height,
                 "duration": duration,
                 "avg_frame_rate": "0/0",
+                **({"pix_fmt": pix_fmt} if pix_fmt is not None else {}),
             }
             for _ in range(video_count)
         ]
@@ -70,6 +74,8 @@ class RangeReinsertionContractTests(unittest.TestCase):
                     "codec_type": "audio",
                     "codec_name": "flac",
                     "duration": audio_duration or duration,
+                    **({"sample_rate": sample_rate} if sample_rate is not None else {}),
+                    **({"channel_layout": channel_layout} if channel_layout is not None else {}),
                 }
             )
         if subtitle:
@@ -103,7 +109,7 @@ class RangeReinsertionContractTests(unittest.TestCase):
 
         return runner
 
-    def test_reinsertion_uses_exact_prefix_replacement_suffix_and_vfr_lossless_policy(self) -> None:
+    def test_reinsertion_uses_zero_based_exact_segments_and_vfr_lossless_policy(self) -> None:
         calls: list[tuple[list[str], dict]] = []
         adapter = LocalFFmpegAdapter(
             self.store,
@@ -127,12 +133,24 @@ class RangeReinsertionContractTests(unittest.TestCase):
         self.assertEqual(len(ffmpeg_calls), 1)
         command = ffmpeg_calls[0]
         graph = command[command.index("-filter_complex") + 1]
-        self.assertIn("trim=start=0us:end=2000000us,setpts=PTS-STARTPTS", graph)
-        self.assertIn("atrim=start=0us:end=2000000us,asetpts=PTS-STARTPTS", graph)
-        self.assertIn("[1:v:0]null,setpts=PTS-STARTPTS", graph)
-        self.assertIn("[1:a:0]anull,asetpts=PTS-STARTPTS", graph)
-        self.assertIn("trim=start=4000000us:end=10000000us,setpts=PTS-STARTPTS", graph)
-        self.assertIn("atrim=start=4000000us:end=10000000us,asetpts=PTS-STARTPTS", graph)
+        self.assertIn(
+            "[0:v:0]setpts=PTS-STARTPTS,trim=start=0us:end=2000000us,setpts=PTS-STARTPTS",
+            graph,
+        )
+        self.assertIn(
+            "[0:a:0]asetpts=PTS-STARTPTS,atrim=start=0us:end=2000000us,asetpts=PTS-STARTPTS",
+            graph,
+        )
+        self.assertIn("[1:v:0]setpts=PTS-STARTPTS", graph)
+        self.assertIn("[1:a:0]asetpts=PTS-STARTPTS", graph)
+        self.assertIn(
+            "[0:v:0]setpts=PTS-STARTPTS,trim=start=4000000us:end=10000000us,setpts=PTS-STARTPTS",
+            graph,
+        )
+        self.assertIn(
+            "[0:a:0]asetpts=PTS-STARTPTS,atrim=start=4000000us:end=10000000us,asetpts=PTS-STARTPTS",
+            graph,
+        )
         self.assertIn("concat=n=3:v=1:a=1[vout][aout]", graph)
         self.assertEqual(command[command.index("-fps_mode") + 1], "passthrough")
         self.assertEqual(command[command.index("-c:v") + 1], "ffv1")
@@ -230,6 +248,89 @@ class RangeReinsertionContractTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2)
                 self.assertTrue(all(command[0] == "fake-ffprobe" for command in calls))
         self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+
+    def test_known_video_audio_format_mismatch_fails_before_composition(self) -> None:
+        replacement_payloads = []
+        pix_fmt_mismatch = self._probe_payload(duration="2.0", pix_fmt="rgb24")
+        replacement_payloads.append((pix_fmt_mismatch, "pix_fmt"))
+        sample_rate_mismatch = self._probe_payload(
+            duration="2.0",
+            pix_fmt="yuv420p",
+            sample_rate="44100",
+            channel_layout="stereo",
+        )
+        replacement_payloads.append((sample_rate_mismatch, "sample_rate"))
+
+        for replacement_payload, label in replacement_payloads:
+            calls: list[list[str]] = []
+
+            def runner(command, **kwargs):
+                calls.append(list(command))
+                target = Path(command[-1])
+                if target == self.source:
+                    payload = self._probe_payload(
+                        duration="10.0",
+                        pix_fmt="yuv420p",
+                        sample_rate="48000",
+                        channel_layout="stereo",
+                    )
+                else:
+                    payload = replacement_payload
+                return subprocess.CompletedProcess(
+                    command, 0, stdout=json.dumps(payload), stderr=""
+                )
+
+            with self.subTest(field=label):
+                with self.assertRaises(InvalidCapabilityInput):
+                    LocalFFmpegAdapter(
+                        self.store,
+                        runner=runner,
+                        tool_paths={"ffprobe": "fake-ffprobe", "ffmpeg": "fake-ffmpeg"},
+                    ).execute(
+                        project_id=self.project.project_id,
+                        offer=self.offer,
+                        payload={
+                            "source_path": "sources/source.mkv",
+                            "replacement_path": "artifacts/replacement.mkv",
+                            "start_us": 2_000_000,
+                            "end_us": 4_000_000,
+                        },
+                    )
+                self.assertEqual(len(calls), 2)
+                self.assertTrue(all(command[0] == "fake-ffprobe" for command in calls))
+
+    def test_source_audio_video_duration_mismatch_fails_closed(self) -> None:
+        calls: list[list[str]] = []
+
+        def runner(command, **kwargs):
+            calls.append(list(command))
+            target = Path(command[-1])
+            payload = (
+                self._probe_payload(duration="10.0", audio_duration="9.5")
+                if target == self.source
+                else self._probe_payload(duration="2.0")
+            )
+            return subprocess.CompletedProcess(
+                command, 0, stdout=json.dumps(payload), stderr=""
+            )
+
+        with self.assertRaises(InvalidCapabilityInput):
+            LocalFFmpegAdapter(
+                self.store,
+                runner=runner,
+                tool_paths={"ffprobe": "fake-ffprobe", "ffmpeg": "fake-ffmpeg"},
+            ).execute(
+                project_id=self.project.project_id,
+                offer=self.offer,
+                payload={
+                    "source_path": "sources/source.mkv",
+                    "replacement_path": "artifacts/replacement.mkv",
+                    "start_us": 2_000_000,
+                    "end_us": 4_000_000,
+                },
+            )
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all(command[0] == "fake-ffprobe" for command in calls))
 
     def test_caller_cannot_choose_output_or_inject_ffmpeg_and_paths_stay_project_bounded(self) -> None:
         adapter = LocalFFmpegAdapter(
