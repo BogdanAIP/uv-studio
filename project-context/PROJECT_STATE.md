@@ -6,7 +6,7 @@
 **Active branch:** `stage-3/native-videoclaw-edge-tts`  
 **Main baseline:** `b76c25c0e97f9198bbaab848c2b3e6b99421b9d3`  
 **Open PR:** #17 — native VideoClaw Edge TTS execution  
-**PR status:** draft while final Linux/Windows CI and documentation are completed.
+**PR status:** draft while the exact final Linux/Windows CI head is verified.
 
 ## Durable architecture snapshot
 
@@ -71,7 +71,7 @@ Permanent rules:
 Current executable offers include:
 
 ```text
-local_ffmpeg.media_probe      -> media.probe
+local_ffmpeg.media_probe       -> media.probe
 local_ffmpeg.timeline_assemble -> timeline.assemble
 ```
 
@@ -126,7 +126,7 @@ exports
 
 Internal `tasks`, `timeline` and `reviews` are not generic MCP input roots.
 
-`ProjectStore.resolve_project_file()` now re-checks the resolved parent and target against the resolved allowed-root boundary. A symlink such as `sources/alias -> ../tasks/private` therefore fails even though the resolved target is still inside the overall project.
+`ProjectStore.resolve_project_file()` re-checks the resolved parent and target against the resolved allowed-root boundary. A symlink such as `sources/alias -> ../tasks/private` therefore fails even though the resolved target is still inside the overall project.
 
 The verified Qwen core `media_info(path, raw=False)` binding is the first explicit project-file contract. Qwen cloud bindings do not receive inferred file access.
 
@@ -146,7 +146,7 @@ Qwen remains optional. Core `media_info` is classified local/free; DashScope-bac
 
 ### Problem being closed
 
-The built-in registry already advertises:
+The built-in registry advertises:
 
 ```text
 native_videoclaw.edge_tts -> speech.synthesize
@@ -154,7 +154,7 @@ locality = remote
 cost     = free
 ```
 
-as `AVAILABLE` when `edge_tts` is installed. Before this PR, the project capability API had no native execution transport, so an advertised available offer became a dead end.
+as `AVAILABLE` only when `edge_tts` is installed. Before this PR, the project capability API had no native execution transport, so an advertised available offer became a dead end.
 
 ### Product-owned exact adapter
 
@@ -220,21 +220,26 @@ A future rename requires an explicit schema migration; this PR does not invalida
 
 - missing/incomplete `edge_tts` fails before provenance/network execution;
 - provider exceptions are wrapped as controlled `CapabilityToolFailed`;
-- common capability execution exceptions now expose stable machine codes;
+- common capability execution exceptions expose stable machine codes;
 - partial MP3 output is removed on synthesis failure;
 - raw provider exception text is not persisted;
 - speech text is not stored in artifact metadata or external run provenance;
 - if an artifact has already been registered successfully, a later provenance persistence failure does not delete the file and leave a dangling project reference.
 
-### Runtime dependency
+### Optional runtime dependency
 
-UV Studio now installs:
+The core `requirements-uv.txt` remains independent of Edge TTS. The supported optional dependency set is:
 
 ```text
-edge-tts>=7.2.8,<8
+requirements-edge-tts.txt
+  edge-tts>=7.2.8,<8
 ```
 
-The package is still lazy-imported by the adapter so incomplete installations fail explicitly. CI uses a fake communicator and makes no live Edge TTS request.
+This preserves the existing registry semantics: without the optional client the offer is `UNAVAILABLE`; with it installed, the exact adapter can execute after D-017 authorization. The adapter still lazy-imports the module so incomplete installations fail explicitly.
+
+`THIRD_PARTY_NOTICES.md` records the optional client's LGPLv3 metadata separately from any terms governing the external hosted service.
+
+CI uses a fake communicator and makes no live Edge TTS request.
 
 ### Tests in PR #17
 
@@ -263,9 +268,7 @@ Decision: `project-context/decisions/D-020-native-videoclaw-edge-tts.md`.
 
 ## CI status
 
-The first PR #17 run compiled and installed successfully on Ubuntu and Windows. Unit CI exposed one test/contract mismatch: generic `CapabilityToolFailed` previously had no stable code, so provenance used `external_execution_failed`. The implementation was tightened by adding stable capability-domain codes rather than weakening the assertion.
-
-A fresh full matrix is required on the final PR head:
+An earlier PR #17 head reached green Ubuntu unit/API/frontend checks and green Windows unit checks; the implementation also fixed the first unit-run failure by giving common capability-domain failures stable machine codes. Final dependency/license/documentation corrections changed the head again, so acceptance still requires one fresh full matrix on the exact final commit:
 
 - Ubuntu bootstrap/unit;
 - Windows bootstrap/unit;
@@ -300,12 +303,13 @@ None of these gaps may be hidden by marking a capability available before its ex
 11. External provenance is portable and transport-neutral at the common boundary.
 12. Native VideoClaw compatibility executes exact known offers only.
 13. Edge TTS is remote/free: keyless does not mean local and does not bypass consent.
-14. Native Windows does not require Qwen, WSL or OpenClaw.
-15. Model-backed native offers remain configuration-required until exact contracts exist.
+14. Edge TTS is optional and is not a core UV Studio dependency.
+15. Native Windows does not require Qwen, WSL or OpenClaw.
+16. Model-backed native offers remain configuration-required until exact contracts exist.
 
 ## Next slice after PR #17
 
-Once PR #17 is merged with a green final matrix, begin the first Stage 4 **existing-video range-edit foundation**: introduce a provider-neutral range representation and bounded local FFmpeg extraction/reinsertion primitives without adding generative replacement yet. See `NEXT_TASK.md`.
+Once PR #17 is merged with a green final matrix, begin the first Stage 4 **existing-video range-edit foundation**: introduce a provider-neutral range representation and bounded local FFmpeg extraction/context primitives without adding generative replacement yet. See `NEXT_TASK.md`.
 
 ## Development invariant
 
