@@ -31,8 +31,23 @@ _REPLACE_OFFER_ID = "local_ffmpeg.video_replace_range"
 _REPLACE_OUTPUT_ROOTS = ("artifacts",)
 _REPLACEMENT_DURATION_TOLERANCE_US = 100_000
 _FINAL_VIDEO_DURATION_TOLERANCE_US = 250_000
+_SOURCE_AV_DURATION_TOLERANCE_US = 250_000
 _COMPOSITION_MODE = "filter_concat_ffv1_flac_vfr"
 _AUDIO_POLICY = "matching_presence_single_track"
+_VIDEO_MATCH_FIELDS = (
+    "pix_fmt",
+    "sample_aspect_ratio",
+    "color_range",
+    "color_space",
+    "color_transfer",
+    "color_primaries",
+)
+_AUDIO_MATCH_FIELDS = (
+    "sample_fmt",
+    "sample_rate",
+    "channels",
+    "channel_layout",
+)
 
 
 def _stream_count(probe: Mapping[str, Any], kind: str) -> int:
@@ -44,6 +59,16 @@ def _stream_count(probe: Mapping[str, Any], kind: str) -> int:
         for item in streams
         if isinstance(item, Mapping) and item.get("codec_type") == kind
     )
+
+
+def _primary_stream(probe: Mapping[str, Any], kind: str) -> Mapping[str, Any] | None:
+    streams = probe.get("streams")
+    if not isinstance(streams, list):
+        return None
+    for item in streams:
+        if isinstance(item, Mapping) and item.get("codec_type") == kind:
+            return item
+    return None
 
 
 def _unsupported_stream_types(probe: Mapping[str, Any]) -> set[str]:
@@ -71,14 +96,11 @@ def _video_duration_us(probe: Mapping[str, Any]) -> int | None:
 
 
 def _audio_duration_us(probe: Mapping[str, Any]) -> int | None:
-    streams = probe.get("streams")
-    if isinstance(streams, list):
-        for item in streams:
-            if isinstance(item, Mapping) and item.get("codec_type") == "audio":
-                parsed = _parse_duration_us(item.get("duration"))
-                if isinstance(parsed, int) and parsed > 0:
-                    return parsed
-                break
+    stream = _primary_stream(probe, "audio")
+    if stream is not None:
+        parsed = _parse_duration_us(stream.get("duration"))
+        if isinstance(parsed, int) and parsed > 0:
+            return parsed
     value = probe.get("duration_us")
     if isinstance(value, int) and value > 0:
         return value
@@ -103,24 +125,59 @@ def _video_geometry(probe: Mapping[str, Any]) -> tuple[int, int] | None:
     return None
 
 
+def _require_matching_known_fields(
+    source_probe: Mapping[str, Any],
+    replacement_probe: Mapping[str, Any],
+    *,
+    kind: str,
+    fields: tuple[str, ...],
+) -> None:
+    source_stream = _primary_stream(source_probe, kind)
+    replacement_stream = _primary_stream(replacement_probe, kind)
+    if source_stream is None or replacement_stream is None:
+        return
+    mismatched: list[str] = []
+    for field in fields:
+        source_value = source_stream.get(field)
+        replacement_value = replacement_stream.get(field)
+        if (
+            source_value not in (None, "", "unknown", "N/A")
+            and replacement_value not in (None, "", "unknown", "N/A")
+            and str(source_value) != str(replacement_value)
+        ):
+            mismatched.append(field)
+    if mismatched:
+        raise InvalidCapabilityInput(
+            f"video.replace_range requires matching known {kind} parameters: {mismatched!r}"
+        )
+
+
 def _trim_video(input_index: int, start_us: int | None, end_us: int | None, label: str) -> str:
+    # ProjectMediaRange is zero-based media time. Normalize the decoded input before
+    # applying trim so non-zero source PTS/start offsets cannot shift the requested range.
+    base = f"[{input_index}:v:0]setpts=PTS-STARTPTS"
     options: list[str] = []
     if start_us is not None:
         options.append(f"start={start_us}us")
     if end_us is not None:
         options.append(f"end={end_us}us")
-    trim = "trim=" + ":".join(options) if options else "null"
-    return f"[{input_index}:v:0]{trim},setpts=PTS-STARTPTS[{label}]"
+    if not options:
+        return f"{base}[{label}]"
+    trim = "trim=" + ":".join(options)
+    return f"{base},{trim},setpts=PTS-STARTPTS[{label}]"
 
 
 def _trim_audio(input_index: int, start_us: int | None, end_us: int | None, label: str) -> str:
+    base = f"[{input_index}:a:0]asetpts=PTS-STARTPTS"
     options: list[str] = []
     if start_us is not None:
         options.append(f"start={start_us}us")
     if end_us is not None:
         options.append(f"end={end_us}us")
-    trim = "atrim=" + ":".join(options) if options else "anull"
-    return f"[{input_index}:a:0]{trim},asetpts=PTS-STARTPTS[{label}]"
+    if not options:
+        return f"{base}[{label}]"
+    trim = "atrim=" + ":".join(options)
+    return f"{base},{trim},asetpts=PTS-STARTPTS[{label}]"
 
 
 def _build_filter_graph(
@@ -294,6 +351,19 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
             raise InvalidCapabilityInput(
                 "video.replace_range requires replacement resolution to match the source"
             )
+        _require_matching_known_fields(
+            source_probe,
+            replacement_probe,
+            kind="video",
+            fields=_VIDEO_MATCH_FIELDS,
+        )
+        if has_audio:
+            _require_matching_known_fields(
+                source_probe,
+                replacement_probe,
+                kind="audio",
+                fields=_AUDIO_MATCH_FIELDS,
+            )
 
         source_duration_us = _video_duration_us(source_probe)
         replacement_duration_us = _video_duration_us(replacement_probe)
@@ -316,11 +386,25 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
                 "replacement video duration differs from the requested range by more than "
                 f"{_REPLACEMENT_DURATION_TOLERANCE_US} microseconds"
             )
+        source_audio_duration_us: int | None = None
+        replacement_audio_duration_us: int | None = None
         if has_audio:
+            source_audio_duration_us = _audio_duration_us(source_probe)
             replacement_audio_duration_us = _audio_duration_us(replacement_probe)
+            if source_audio_duration_us is None:
+                raise InvalidCapabilityInput(
+                    "video.replace_range requires a known positive source audio duration"
+                )
             if replacement_audio_duration_us is None:
                 raise InvalidCapabilityInput(
                     "video.replace_range requires a known positive replacement audio duration"
+                )
+            if (
+                abs(source_audio_duration_us - source_duration_us)
+                > _SOURCE_AV_DURATION_TOLERANCE_US
+            ):
+                raise InvalidCapabilityInput(
+                    "source audio/video durations differ beyond the supported reinsertion tolerance"
                 )
             if (
                 abs(replacement_audio_duration_us - replacement_duration_us)
@@ -452,7 +536,9 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
                     "replacement_path": canonical_replacement,
                     "requested_range": requested.to_dict(),
                     "source_video_duration_us": source_duration_us,
+                    "source_audio_duration_us": source_audio_duration_us,
                     "replacement_video_duration_us": replacement_duration_us,
+                    "replacement_audio_duration_us": replacement_audio_duration_us,
                     "replacement_duration_delta_us": replacement_delta_us,
                     "expected_output_video_duration_us": expected_output_duration_us,
                     "actual_output_video_duration_us": actual_output_duration_us,
@@ -460,6 +546,7 @@ class LocalFFmpegRangeAdapter(BaseLocalFFmpegAdapter):
                     "composition_mode": _COMPOSITION_MODE,
                     "audio_policy": _AUDIO_POLICY,
                     "replacement_duration_tolerance_us": _REPLACEMENT_DURATION_TOLERANCE_US,
+                    "source_av_duration_tolerance_us": _SOURCE_AV_DURATION_TOLERANCE_US,
                     "final_duration_tolerance_us": _FINAL_VIDEO_DURATION_TOLERANCE_US,
                     "lifecycle": "intermediate",
                 },
