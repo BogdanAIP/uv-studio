@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.background import BackgroundTask
 
+from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.config import projects_root
 from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
 from uv_studio.projects.models import ProjectDocument, ProjectValidationError
@@ -22,6 +23,7 @@ from uv_studio.projects.store import (
     ProjectStore,
     ProjectStoreError,
 )
+from uv_studio.recipes import UnknownRecipe
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Projects"])
 MAX_ARCHIVE_UPLOAD_BYTES = 100 * 1024**3
@@ -85,6 +87,16 @@ def _payload(document: ProjectDocument) -> ProjectPayload:
     return ProjectPayload.model_validate(document.to_dict())
 
 
+def _require_known_recipe(recipe_id: str) -> None:
+    try:
+        get_recipe_registry().get(recipe_id)
+    except UnknownRecipe as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown recipe_id: {recipe_id}",
+        ) from exc
+
+
 def _translate_store_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -122,6 +134,7 @@ def create_project(
     request: CreateProjectRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
+    _require_known_recipe(request.recipe_id)
     try:
         document = store.create_project(
             title=request.title,
@@ -139,7 +152,12 @@ async def import_project_archive(
     request: Request,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
-    """Stream one `.uvproj.zip` request body to disk, validate it, then import atomically."""
+    """Stream one `.uvproj.zip` request body to disk, validate it, then import atomically.
+
+    Import intentionally preserves archives whose recipe ID is not installed in
+    the current build. This keeps project recovery forward-compatible; execution
+    can later report the missing recipe instead of refusing to recover user data.
+    """
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -225,6 +243,8 @@ def update_project(
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
     changes = request.model_fields_set
+    if "recipe_id" in changes and request.recipe_id is not None:
+        _require_known_recipe(request.recipe_id)
     try:
         document = store.update_project(
             project_id,
