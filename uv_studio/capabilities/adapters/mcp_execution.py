@@ -6,7 +6,6 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from uv_studio.mcp.client import MCPRequestTooLarge
 from uv_studio.mcp.manager import MCPManager
 from uv_studio.projects.store import ProjectStore
 from uv_studio.projects.task_records import ProjectTaskRecordStore
@@ -19,7 +18,7 @@ from ..provenance import ExternalRunProvenance
 _WINDOWS_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
-class MCPExecutionInputRejected(MCPRequestTooLarge):
+class MCPExecutionInputRejected(ValueError):
     code = "mcp_unsafe_file_argument"
 
 
