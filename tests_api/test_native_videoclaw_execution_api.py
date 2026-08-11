@@ -168,6 +168,39 @@ class NativeVideoClawExecutionApiTests(unittest.TestCase):
         self.assertEqual(replay.json()["detail"]["code"], "authorization_invalid")
         self.assertEqual(len(self.executor.calls), 1)
 
+    def test_authorization_token_cannot_be_reused_for_mutated_speech_input(self) -> None:
+        body = self._body()
+        authorized = self.client.post(
+            self._url("authorize-execution"),
+            json={**body, "acknowledgements": ["remote_execution"]},
+        )
+        self.assertEqual(authorized.status_code, 200, authorized.text)
+        token = authorized.json()["authorization_token"]
+
+        mutated = self.client.post(
+            self._url(),
+            json={
+                **body,
+                "input": {**body["input"], "text": "mutated after authorization"},
+                "authorization_token": token,
+            },
+        )
+        self.assertEqual(mutated.status_code, 409, mutated.text)
+        self.assertEqual(mutated.json()["detail"]["code"], "authorization_invalid")
+        self.assertEqual(self.executor.calls, [])
+
+    def test_local_free_first_does_not_widen_to_remote_edge_tts(self) -> None:
+        response = self.client.post(
+            self._url(),
+            json={
+                "selection_policy": "local_free_first",
+                "input": {"text": "no remote fallback"},
+            },
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "offer_not_executable")
+        self.assertEqual(self.executor.calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
