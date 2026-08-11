@@ -10,6 +10,7 @@ from .archive import (
     import_project,
 )
 from .media_ranges import (
+    MAX_CONTEXT_US,
     MEDIA_RANGE_SCHEMA_VERSION,
     MICROSECONDS_PER_SECOND,
     ProjectMediaRange,
@@ -21,6 +22,7 @@ from .store import ProjectStore
 __all__ = [
     "ARCHIVE_SCHEMA_VERSION",
     "ArchiveLimits",
+    "MAX_CONTEXT_US",
     "MEDIA_RANGE_SCHEMA_VERSION",
     "MICROSECONDS_PER_SECOND",
     "PROJECT_SCHEMA_VERSION",
