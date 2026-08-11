@@ -375,7 +375,10 @@ async def execute_project_capability(
                 offer=offer,
                 payload=input_payload,
             )
-        elif offer.adapter_id == NativeVideoClawAdapter.adapter_id:
+        elif (
+            offer.adapter_id == NativeVideoClawAdapter.adapter_id
+            and offer.offer_id == "native_videoclaw.edge_tts"
+        ):
             result = await native_videoclaw.execute(
                 project_id=project_id,
                 offer=offer,
