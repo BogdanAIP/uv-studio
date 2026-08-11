@@ -2,177 +2,239 @@
 
 Updated: 2026-08-11
 
-## Primary target
+## Gate first
 
-After PR #17 is merged with the full Linux/Windows matrix green, begin the first **Stage 4 — Existing Video / Range Edit** foundation.
+Do not start the next implementation slice until PR #18 — **exact existing-video range extraction foundation** — has:
 
-The first Stage 4 slice must stay deterministic and local. Do not add generative replacement yet. Establish a correct project-owned representation of a requested media range and safe FFmpeg primitives for extracting that range plus its surrounding context.
+- one frozen final head;
+- Ubuntu bootstrap/unit green;
+- Windows bootstrap/unit green;
+- Ubuntu API integration + HTTP smoke + frontend build green;
+- Windows API integration + HTTP smoke + frontend build green;
+- no unresolved review threads;
+- final diff/security audit complete;
+- merge to `main` confirmed.
 
-## Why this is next
+If PR #18 is not merged, continue/fix PR #18 rather than opening parallel Stage 4 work.
 
-Stage 3 now has the execution boundaries needed by product workflows:
+## Primary target after PR #18
 
-- canonical Project Store;
-- provider-neutral recipes/capabilities;
-- fail-closed local/free selection;
-- product-owned D-017 external consent;
-- exact MCP execution and project-file translation;
-- first exact native compatibility execution (`native_videoclaw.edge_tts`).
+Implement the first deterministic **existing-video reinsertion contract**.
 
-The roadmap explicitly requires Stage 4 to edit only a requested interval of an existing video without regenerating the whole source. The next useful product capability is therefore not another provider integration; it is a trustworthy range-edit substrate that later local or generative replacements can share.
-
-## Required implementation
-
-### 1. Project-owned range representation
-
-Add a small versioned model for an exact interval in a source media file.
-
-It must represent at least:
-
-```text
-source_path
-start
-end
-```
-
-Requirements:
-
-- canonical project-relative `source_path`;
-- no negative time;
-- `end > start`;
-- validate against probed source duration before execution;
-- avoid persisted binary floating-point ambiguity; prefer a deterministic integer time unit (for example microseconds) or another explicitly serialized exact representation;
-- no provider/model/runtime identity in the range model.
-
-Do not make frame number the only canonical representation because projects may contain variable-frame-rate media. Frame/time metadata may be added as derived evidence later.
-
-### 2. Explicit context window
-
-Stage 4 needs context before and after the requested edit so later replacement generation/review can preserve continuity.
-
-Define bounded optional context durations, for example:
-
-```text
-context_before
-context_after
-```
-
-The resolved context range must clamp to `[0, source_duration]` rather than underflow/overflow.
-
-Persist the requested range separately from derived context boundaries so the user's requested interval is never silently changed.
-
-### 3. Deterministic local extraction capability
-
-Add a provider-neutral semantic capability for extracting a project video interval and a `local_ffmpeg` offer for it.
-
-The API must accept only semantic fields, not raw FFmpeg flags.
-
-Minimum behavior:
-
-- input video only from approved readable project roots;
-- requested range validated against real `media.probe` duration;
-- output path owned by UV Studio under `artifacts/`;
-- no overwrite;
-- subprocess argv only, `shell=false`;
-- bounded timeout;
-- partial output removed on failure;
-- successful output registered as a canonical video artifact;
-- artifact metadata records the portable source path and exact requested range.
-
-For correctness, do not claim frame-accurate cutting if the chosen FFmpeg mode only seeks to keyframes. Either use a re-encode path with an explicit bounded codec policy or document/test the actual precision guarantee.
-
-### 4. Context extraction
-
-Using the same validated range model, create deterministic artifacts for:
-
-```text
-context_before clip
-requested_range clip
-context_after clip
-```
-
-where the context clips are non-empty.
-
-These are production inputs for later analysis/replacement, not three independent user-selected edits.
-
-Do not persist machine-only absolute paths.
-
-### 5. Keep reinsertion contract separate
-
-Design the reinsertion/replacement semantic contract in this slice, but implement it only if the exact media/codec behavior can be made truthful and regression-tested without silently changing source characteristics.
-
-The eventual contract must take:
+The semantic operation must take:
 
 ```text
 source video
-exact requested range
-replacement clip
++ exact ProjectMediaRange
++ replacement clip
+-> one canonical edited video
 ```
 
-and produce one canonical output while preserving content outside the requested range.
+and prove that content outside the requested interval is preserved under an explicit codec/timestamp policy.
 
-Do not fake this with concat-copy if stream compatibility or timestamp behavior makes the result unreliable. A controlled re-encode is preferable to a falsely lossless claim.
+This is still a mechanical Stage 4 slice. Do **not** add AI generation, prompting or provider-specific replacement logic yet.
 
-### 6. No generative work in this slice
+## Existing foundation to reuse
 
-Explicit non-goals:
+PR #18 establishes:
 
-- no AI-generated replacement scene;
-- no provider selection work;
-- no prompt generation;
-- no VLM continuity review yet;
-- no dubbing/music-specific behavior;
-- no UI timeline editor yet unless a minimal API contract needs representation testing.
+- schema-v1 `ProjectMediaRange` with integer microseconds;
+- requested range separate from bounded/clamped context;
+- exact `duration_us` FFprobe output;
+- `video.extract_range` semantic capability;
+- `local_ffmpeg.video_extract_range` local/free offer;
+- accurate-seek decode/re-encode extraction;
+- FFV1 + FLAC Matroska editing intermediates;
+- explicit VFR timestamp passthrough;
+- requested/context artifacts under UV Studio-owned paths;
+- rollback on partial/empty extraction failure.
 
-This slice creates the deterministic foundation those later workflows depend on.
+Do not invent a second timing representation for reinsertion.
+
+## Required reinsertion design
+
+### 1. Semantic capability
+
+Add a provider-neutral capability, expected shape:
+
+```text
+video.replace_range
+```
+
+Input should contain only semantic fields, for example:
+
+```text
+source_path
+replacement_path
+start_us
+end_us
+```
+
+or one serialized `ProjectMediaRange` plus `replacement_path` if that produces a cleaner exact contract.
+
+Do not expose:
+
+- raw FFmpeg flags;
+- shell commands;
+- arbitrary codec command strings;
+- caller-chosen host paths;
+- provider/model identifiers.
+
+### 2. Validate both media inputs
+
+Before editing:
+
+- resolve source and replacement through approved project roots;
+- probe both files;
+- require video streams;
+- validate requested range against the current source duration;
+- require non-empty replacement duration;
+- record exact portable technical facts needed for the chosen policy.
+
+Do not trust metadata persisted by an earlier extraction if the concrete files have changed.
+
+### 3. Explicit duration policy
+
+Decide what happens when replacement duration differs from requested range duration.
+
+Do not silently stretch or trim without a documented semantic rule.
+
+Preferred first behavior is fail-closed unless the difference falls inside a small timestamp/frame tolerance that is justified by actual decoded timing.
+
+If automatic retiming is introduced later, it should be a separate explicit transformation/policy rather than an invisible side effect of reinsertion.
+
+### 4. Preserve content outside the requested interval
+
+The output must be composed from:
+
+```text
+prefix:      source [0, start)
+replacement replacement clip
+suffix:      source [end, source_duration]
+```
+
+The source outside `[start, end]` must not be regenerated by an AI model.
+
+Mechanical re-encoding may be necessary for a reliable final stream, but the product must be truthful about it. “Preserved content” means the same decoded source content outside the edit interval under the explicit mechanical encoding policy; do not call a re-encoded full file byte-identical/lossless relative to the original compressed bitstream.
+
+### 5. Do not use concat-copy by assumption
+
+`timeline.assemble` currently has a concat-copy primitive for already-compatible prepared clips. That is **not** automatically a valid reinsertion implementation.
+
+For `video.replace_range`, either:
+
+- normalize prefix/replacement/suffix to an explicitly compatible intermediate representation and then compose them; or
+- use one controlled FFmpeg filtergraph/re-encode path that handles stream/timestamp compatibility truthfully.
+
+Choose the method from actual FFmpeg behavior and regression tests.
+
+### 6. Audio policy must be explicit
+
+A replacement clip may contain:
+
+- video + audio;
+- video without audio;
+- audio with different layout/sample rate.
+
+Do not let FFmpeg defaults silently decide user-visible audio behavior.
+
+For the first slice, choose and document one narrow supported contract. A reasonable fail-closed baseline is to require a replacement with audio when the replaced source interval has audio, and normalize to a deterministic intermediate audio format before composition.
+
+If silent replacement is supported, make silence insertion an explicit semantic behavior.
+
+### 7. VFR/timestamp handling
+
+Reuse the Stage 4 principle that canonical time is microseconds, not frame number.
+
+Test at least one VFR-like timestamp scenario through the subprocess seam. Avoid implicit CFR conversion unless the output policy explicitly requires it.
+
+If the final mechanical composition must normalize to CFR, that becomes a declared output policy and must not be hidden.
+
+### 8. UV Studio-owned output
+
+Caller must not choose the host output path.
+
+Allocate a canonical project artifact under `artifacts/` with a stable semantic result structure.
+
+Artifact metadata should include only portable facts:
+
+```text
+source_path
+replacement_path
+requested range
+mechanical composition policy
+source/replacement probe summary needed for audit
+```
+
+Do not persist absolute machine paths or full FFmpeg commands.
+
+### 9. Atomic failure behavior
+
+If any prefix/suffix extraction, normalization, composition, validation or project registration fails:
+
+- remove all temporary/partial outputs from that execution;
+- do not register the final artifact;
+- do not leave a project document pointing at a deleted file.
+
+Temporary mechanical intermediates should live under an explicit lifecycle policy and be cleaned when no longer needed.
+
+### 10. Validate the final result
+
+Do not accept “FFmpeg exited 0” as sufficient proof.
+
+Probe the final output and verify at minimum:
+
+- output file exists and is non-empty;
+- video stream exists;
+- duration is consistent with the declared reinsertion policy;
+- output is project-contained;
+- no host paths entered portable metadata.
+
+If practical in the deterministic test seam, also assert that prefix/suffix composition boundaries are derived from the exact requested microseconds.
 
 ## Tests required
 
 At minimum prove:
 
-1. invalid/negative/reversed ranges are rejected;
-2. ranges beyond source duration fail clearly;
-3. context windows clamp correctly at source start/end;
-4. project traversal and raw host paths are rejected;
-5. caller cannot inject raw FFmpeg options;
-6. extraction uses argv with `shell=false`;
-7. output path is UV Studio-owned and stays under `artifacts/`;
-8. partial output is removed on FFmpeg failure;
-9. successful extraction creates a canonical video artifact with portable range metadata;
-10. source/project absolute paths do not enter portable metadata;
-11. local-free selection remains local/free and token-free;
-12. Windows and Linux unit/API CI remain green;
-13. at least one generated tiny local fixture validates real FFmpeg/FFprobe behavior when FFmpeg is available in CI, or the existing subprocess seam is used deterministically if the CI image guarantee is insufficient.
+1. source/replacement traversal and absolute paths are rejected;
+2. requested range is revalidated against current source duration;
+3. non-video source/replacement fails before composition;
+4. replacement-duration mismatch follows the explicit fail-closed/tolerance policy;
+5. caller cannot inject output path/raw FFmpeg arguments;
+6. prefix/replacement/suffix boundaries use exact integer microseconds;
+7. VFR handling does not silently use an undeclared CFR conversion;
+8. subprocesses use argv with `shell=false`;
+9. final output path is UV Studio-owned under `artifacts/`;
+10. failures remove every partial output/intermediate created by that execution;
+11. successful output is probed before artifact registration;
+12. portable metadata contains no host path or full command line;
+13. local-free selection remains token-free and cannot widen to remote;
+14. API execution test covers the semantic path end-to-end with deterministic fake FFmpeg/FFprobe;
+15. Ubuntu and Windows unit/API/frontend matrix remains green.
 
-## Architecture questions to settle during implementation
+## Architecture decision required
 
-- exact persisted time unit/serialization;
-- truthful cut precision guarantee and whether extraction re-encodes;
-- deterministic output codec/container policy for Stage 4 artifacts;
-- whether context artifacts are first-class `ProjectReference`s or task-intermediate artifacts with explicit lifecycle;
-- exact semantic IDs for extraction and later replacement.
+Record the durable reinsertion decision before merge. It should settle:
 
-Resolve these from the current code/tests and FFmpeg behavior; record a new decision if the choice becomes durable.
+- semantic capability ID;
+- duration mismatch behavior;
+- audio behavior;
+- exact mechanical codec/container policy;
+- VFR/CFR policy;
+- temporary-intermediate lifecycle;
+- final validation/tolerance guarantees;
+- what “preserve outside range” means technically.
 
-## Expected files
+## Explicit non-goals
 
-Likely changes:
+Do not add in this slice:
 
-- project-owned range model/module;
-- built-in semantic capability/offer definitions;
-- `uv_studio/capabilities/adapters/local_ffmpeg.py`;
-- capability execution tests;
-- range model/unit tests;
-- API tests if a project-scoped range endpoint is added;
-- architecture documentation/decision;
-- `project-context/PROJECT_STATE.md`;
-- this file.
+- AI scene generation;
+- provider selection for replacement generation;
+- prompt generation;
+- VLM continuity scoring;
+- automatic character/style matching;
+- dubbing workflow;
+- final timeline UI editor.
 
-## Gate before starting
-
-Do not begin this Stage 4 slice from an unmerged or red PR #17. First confirm:
-
-- PR #17 exact final head has all four required CI jobs green;
-- PR #17 review threads are resolved;
-- PR #17 is merged to `main`;
-- new Stage 4 branch is created from that merged `main`.
+Those features should consume `ProjectMediaRange` + deterministic reinsertion rather than replacing them.
