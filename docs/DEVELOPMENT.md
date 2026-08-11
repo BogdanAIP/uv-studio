@@ -147,13 +147,12 @@ Do **not** run a forced frontend reset during normal development. `python tools/
 
 ## Cross-chat continuation
 
-At the start of a new development chat, read:
+The repository and GitHub are the project memory; old chat history is not required to continue development. Every coding agent or new development chat must begin with `AGENTS.md`, which owns the mandatory reading order and coordination rules. `DEVELOPMENT_PROTOCOL.md` defines the full slice, PR and handoff lifecycle.
 
-1. `project-context/PROJECT_STATE.md`
-2. `project-context/NEXT_TASK.md`
-3. `project-context/DECISIONS.md`
-4. `ROADMAP.md`
-5. `UPSTREAM.md`
-6. current open PRs and recent `main` commits.
+Before implementation, validate the checked-in development state from the repository root:
 
-The repository is the project memory; old chat history is not required to continue development.
+```text
+python tools/validate_development_context.py
+```
+
+The validator checks the machine-readable active slice and its links to the human context. GitHub CI additionally checks the live PR identity, draft phase, body markers and required sections.

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "active_slice": {
+    "id": "chore-agent-development-workflow",
+    "kind": "chore",
+    "roadmap_stage": "stage-4",
+    "goal": "Make cross-chat and multi-agent development state explicit and CI-checked.",
+    "base_branch": "main",
+    "branch": "chore/agent-development-workflow",
+    "pull_request": null,
+    "phase": "draft",
+    "write_scope": [
+      "AGENTS.md",
+      ".github/pull_request_template.md",
+      ".github/workflows/ci.yml",
+      "tools/validate_development_context.py",
+      "tests/test_development_context.py",
+      "project-context/**",
+      "DEVELOPMENT_PROTOCOL.md",
+      "README.md",
+      "ROADMAP.md",
+      "docs/DEVELOPMENT.md"
+    ]
+  },
+  "handoff": {
+    "next_slice_id": "stage-4-range-continuity-brief",
+    "next_task_file": "project-context/NEXT_TASK.md"
+  },
+  "coordination": {
+    "integration_owner": "coordinator",
+    "context_owner": "coordinator",
+    "parallel_write_policy": "disjoint_paths"
+  },
+  "required_checks": [
+    "development-context",
+    "bootstrap (ubuntu-latest, 3.11)",
+    "bootstrap (windows-latest, 3.11)",
+    "app-baseline (ubuntu-latest)",
+    "app-baseline (windows-latest)"
+  ]
+}

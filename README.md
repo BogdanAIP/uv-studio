@@ -23,22 +23,15 @@ Music, narration, story, characters, continuity and automatic review are optiona
 
 ## Development source of truth
 
-Repository state is the durable project memory. A new ChatGPT development chat should start by reading:
-
-1. `project-context/PROJECT_STATE.md`
-2. `project-context/NEXT_TASK.md`
-3. `project-context/DECISIONS.md`
-4. `ROADMAP.md`
-5. the latest merged PR / current open PR
-
-Do not rely on an old chat transcript to know the current implementation state.
+Repository and GitHub state are the durable project memory. Coding agents and new development chats must start with `AGENTS.md`; it defines the required reading order, active-slice contract and multi-agent ownership rules. Do not rely on an old chat transcript to know the current implementation state.
 
 ## Development rule
 
 Every meaningful development slice must end with:
 
-- code/tests committed to a feature branch;
+- code/tests committed to one integration branch;
 - a PR describing what changed and what was verified;
+- `project-context/ACTIVE_SLICE.json` synchronized with the PR and its single handoff;
 - `PROJECT_STATE.md` updated to the actual repository state;
 - `NEXT_TASK.md` containing one concrete next development target;
 - architectural decisions recorded in `DECISIONS.md` when they change long-term behavior.
