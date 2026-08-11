@@ -90,6 +90,25 @@ class ProjectStoreTests(unittest.TestCase):
         with self.assertRaises(ProjectValidationError):
             ProjectReference(id="src_bad2", kind="source", path="C:\\outside.mp4")
 
+    def test_resolve_project_file_rechecks_allowed_root_after_symlink_resolution(self) -> None:
+        project = self.store.create_project(title="Symlink boundary", project_id="prj_symlink")
+        project_dir = self.store.project_directory(project.project_id)
+        private = project_dir / "tasks" / "private.json"
+        private.write_text('{"secret": true}\n', encoding="utf-8")
+        alias = project_dir / "sources" / "alias.json"
+        try:
+            alias.symlink_to(Path("..") / "tasks" / "private.json")
+        except OSError as exc:
+            self.skipTest(f"symlinks are unavailable on this runner: {exc}")
+
+        with self.assertRaises(ProjectValidationError):
+            self.store.resolve_project_file(
+                project.project_id,
+                "sources/alias.json",
+                must_exist=True,
+                allowed_roots=("sources",),
+            )
+
     def test_malformed_json_is_rejected(self) -> None:
         self.store.create_project(title="Broken", project_id="prj_broken")
         path = self.store.project_path("prj_broken")
