@@ -55,6 +55,8 @@ class RangeReinsertionContractTests(unittest.TestCase):
         pix_fmt: str | None = None,
         sample_rate: str | None = None,
         channel_layout: str | None = None,
+        video_start_time: str | None = "0.000000",
+        audio_start_time: str | None = "0.000000",
     ) -> dict:
         streams = [
             {
@@ -64,6 +66,7 @@ class RangeReinsertionContractTests(unittest.TestCase):
                 "height": height,
                 "duration": duration,
                 "avg_frame_rate": "0/0",
+                **({"start_time": video_start_time} if video_start_time is not None else {}),
                 **({"pix_fmt": pix_fmt} if pix_fmt is not None else {}),
             }
             for _ in range(video_count)
@@ -74,6 +77,7 @@ class RangeReinsertionContractTests(unittest.TestCase):
                     "codec_type": "audio",
                     "codec_name": "flac",
                     "duration": audio_duration or duration,
+                    **({"start_time": audio_start_time} if audio_start_time is not None else {}),
                     **({"sample_rate": sample_rate} if sample_rate is not None else {}),
                     **({"channel_layout": channel_layout} if channel_layout is not None else {}),
                 }
@@ -172,6 +176,8 @@ class RangeReinsertionContractTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["source_path"], "sources/source.mkv")
         self.assertEqual(artifact.metadata["replacement_path"], "artifacts/replacement.mkv")
         self.assertEqual(artifact.metadata["requested_range"]["start_us"], 2_000_000)
+        self.assertEqual(artifact.metadata["source_av_start_delta_us"], 0)
+        self.assertEqual(artifact.metadata["replacement_av_start_delta_us"], 0)
         self.assertNotIn(str(self.project_dir), json.dumps(artifact.to_dict()))
 
     def test_duration_mismatch_fails_before_ffmpeg_and_does_not_retime(self) -> None:
@@ -331,6 +337,45 @@ class RangeReinsertionContractTests(unittest.TestCase):
             )
         self.assertEqual(len(calls), 2)
         self.assertTrue(all(command[0] == "fake-ffprobe" for command in calls))
+
+    def test_missing_or_misaligned_audio_video_start_times_fail_closed(self) -> None:
+        replacement_payloads = (
+            self._probe_payload(duration="2.0", audio_start_time="0.020001"),
+            self._probe_payload(duration="2.0", audio_start_time=None),
+        )
+        for replacement_payload in replacement_payloads:
+            calls: list[list[str]] = []
+
+            def runner(command, **kwargs):
+                calls.append(list(command))
+                target = Path(command[-1])
+                payload = (
+                    self._probe_payload(duration="10.0")
+                    if target == self.source
+                    else replacement_payload
+                )
+                return subprocess.CompletedProcess(
+                    command, 0, stdout=json.dumps(payload), stderr=""
+                )
+
+            with self.subTest(replacement=bool(replacement_payload)):
+                with self.assertRaises(InvalidCapabilityInput):
+                    LocalFFmpegAdapter(
+                        self.store,
+                        runner=runner,
+                        tool_paths={"ffprobe": "fake-ffprobe", "ffmpeg": "fake-ffmpeg"},
+                    ).execute(
+                        project_id=self.project.project_id,
+                        offer=self.offer,
+                        payload={
+                            "source_path": "sources/source.mkv",
+                            "replacement_path": "artifacts/replacement.mkv",
+                            "start_us": 2_000_000,
+                            "end_us": 4_000_000,
+                        },
+                    )
+                self.assertEqual(len(calls), 2)
+                self.assertTrue(all(command[0] == "fake-ffprobe" for command in calls))
 
     def test_caller_cannot_choose_output_or_inject_ffmpeg_and_paths_stay_project_bounded(self) -> None:
         adapter = LocalFFmpegAdapter(
