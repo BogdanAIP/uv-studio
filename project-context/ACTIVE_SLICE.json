@@ -7,7 +7,7 @@
     "goal": "Make cross-chat and multi-agent development state explicit and CI-checked.",
     "base_branch": "main",
     "branch": "chore/agent-development-workflow",
-    "pull_request": null,
+    "pull_request": 20,
     "phase": "draft",
     "write_scope": [
       "AGENTS.md",
