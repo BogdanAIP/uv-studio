@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from uv_studio.projects.archive import (
     ARCHIVE_MANIFEST,
@@ -15,7 +16,7 @@ from uv_studio.projects.archive import (
     export_project,
     import_project,
 )
-from uv_studio.projects.store import ProjectAlreadyExists, ProjectStore
+from uv_studio.projects.store import ProjectAlreadyExists, ProjectStore, ProjectStoreError
 
 
 class ProjectArchiveTests(unittest.TestCase):
@@ -114,6 +115,20 @@ class ProjectArchiveTests(unittest.TestCase):
             import_project(self.target_store, tampered)
         self.assertIn("mismatch", str(caught.exception).lower())
         self.assertFalse((self.target_store.root / self.project.project_id).exists())
+
+    def test_failed_final_commit_leaves_no_partial_canonical_project(self) -> None:
+        archive = self._export()
+        canonical = self.target_store.root / self.project.project_id
+
+        with mock.patch("uv_studio.projects.store.os.replace", side_effect=OSError("simulated commit failure")):
+            with self.assertRaises(ProjectStoreError):
+                import_project(self.target_store, archive)
+
+        self.assertFalse(canonical.exists())
+        self.assertEqual(
+            [item for item in self.target_store.root.iterdir() if not item.name.startswith(".uv-import-")],
+            [],
+        )
 
     def test_undeclared_project_file_is_rejected(self) -> None:
         archive = self._export()
