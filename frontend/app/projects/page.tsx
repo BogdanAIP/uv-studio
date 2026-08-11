@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
-import { createUVProject, listUVProjects, UVProject } from '@/lib/projectsApi';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import {
+  createUVProject,
+  importUVProjectArchive,
+  listUVProjects,
+  UVProject,
+} from '@/lib/projectsApi';
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -14,6 +19,7 @@ export default function ProjectsPage() {
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
@@ -49,6 +55,22 @@ export default function ProjectsPage() {
     }
   }
 
+  async function importProject(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || importing) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const project = await importUVProjectArchive(file);
+      setProjects(current => [project, ...current.filter(item => item.project_id !== project.project_id)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось импортировать архив проекта');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -60,12 +82,24 @@ export default function ProjectsPage() {
               Канонические проекты UV Studio сохраняются отдельно от старых сессий производственного интерфейса.
             </p>
           </div>
-          <Link
-            href="/"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 px-4 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
-          >
-            Производственный интерфейс
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <label className={`inline-flex h-10 cursor-pointer items-center justify-center rounded-lg border border-slate-700 px-4 text-sm text-slate-200 transition hover:border-sky-600 hover:bg-slate-900 ${importing ? 'pointer-events-none opacity-50' : ''}`}>
+              {importing ? 'Импорт…' : 'Импортировать .uvproj.zip'}
+              <input
+                type="file"
+                accept=".zip,.uvproj.zip,application/zip"
+                className="hidden"
+                onChange={importProject}
+                disabled={importing}
+              />
+            </label>
+            <Link
+              href="/"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 px-4 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
+            >
+              Производственный интерфейс
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={createProject} className="mb-8 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:flex-row">
@@ -96,7 +130,7 @@ export default function ProjectsPage() {
         ) : projects.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-10 text-center">
             <h2 className="text-lg font-medium">Проектов пока нет</h2>
-            <p className="mt-2 text-sm text-slate-500">Создайте первый проект. Тип рабочего процесса будет развиваться через Recipe Registry на следующем этапе.</p>
+            <p className="mt-2 text-sm text-slate-500">Создайте новый проект или импортируйте переносимый архив `.uvproj.zip`.</p>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
