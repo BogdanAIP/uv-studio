@@ -2,6 +2,17 @@
 
 The roadmap targets the full product. Early stages create useful working slices, but the architecture must remain compatible with later stages.
 
+## Permanent architecture rules
+
+- no single mandatory film/music/micro-drama pipeline;
+- paid AI APIs are optional capabilities, never hidden baseline dependencies;
+- prefer deterministic/local tools for deterministic work;
+- local/free implementations may coexist with paid providers behind the same semantic capability;
+- provider choice and expected paid cost must remain explicit for chargeable generation;
+- professional workflow policy (source review, planning, sample-first generation, scene/take gates, evidence-based review) is separate from the provider that performs an AI operation;
+- OpenClaw, Qwen-MM-Plugins and other MCP/runtime packages are optional adapters, not the canonical project state or mandatory execution layer;
+- Windows remains a first-class target even when an optional third-party package currently requires WSL2.
+
 ## Stage 0 — Clean baseline
 
 Goal: establish a reproducible modern VideoClaw-derived baseline and repository discipline.
@@ -24,62 +35,86 @@ Goal: project state survives chats, restarts and task failures independently of 
 - project schema/versioning;
 - atomic local persistence;
 - source/artifact/task references;
-- import/export archive;
-- migrations/backups;
-- Projects UI.
+- validated `.uvproj.zip` project archives with checksums and traversal protection;
+- import/export;
+- backups/migrations/recovery helpers;
+- Projects API/UI.
 
-Exit: close/reopen application and resume project without data loss.
+Exit: close/reopen application, export/import a complete project, and resume without data loss.
 
-## Stage 2 — Recipe Registry
+## Stage 2 — Recipe Registry + Production Policy
 
-Goal: one studio supports different tasks without one mandatory pipeline.
+Goal: one studio supports different tasks without one mandatory pipeline, while professional production discipline is reusable across recipes.
 
 - recipe schema/registry;
 - required/optional capabilities;
 - UI schema/progressive disclosure;
 - wrap existing VideoClaw pipelines;
-- add `general_video` and rename narrated semantics clearly.
+- add `general_video` and rename narrated semantics clearly;
+- provider-neutral production policy hooks;
+- source-review gate for workflows based on real footage;
+- optional creative direction/taste contract;
+- sample-first generation policy;
+- scene/take ledger where multi-scene work needs it;
+- plan/review gate contracts;
+- evidence-based final review with timestamps/frame references;
+- use/adapt suitable Apache-2.0 Qwen-MM-Plugins `video-edit` workflow ideas without inheriting its DashScope dependency.
 
-Exit: user selects a task, and only relevant workflow/UI loads.
+Exit: user selects a task, only relevant workflow/UI loads, and recipes can opt into professional planning/review gates independently of model/provider choice.
 
-## Stage 3 — Capability Bridge
+## Stage 3 — Capability Registry & Adapters
 
-Goal: stable semantic interface to replaceable external/local capabilities.
+Goal: stable semantic interface to replaceable local, MCP and provider capabilities without a mandatory intermediate runtime.
 
-- image/video/speech/media-understanding capability contracts;
-- OpenClaw Gateway integration;
+- semantic contracts for image/video/speech/media-understanding operations;
+- capability registry with availability, locality, cost class and provider metadata;
+- direct MCP adapter;
+- local-tool adapter;
+- native VideoClaw adapter during migration;
+- optional OpenClaw adapter/runtime;
+- optional Qwen-MM-Plugins adapter;
 - exact provider/model selection for paid media;
 - cost/error/job metadata;
-- native VideoClaw integrations kept as fallback during migration.
+- `local/free first`, `pinned`, `best available`, `manual`, and budget-aware selection policies;
+- never require DashScope for a baseline UV Studio feature when an adequate local/free path exists;
+- keep Qwen cloud generation/Omni/video-memory capabilities optional for users who explicitly configure their API access.
 
-Exit: core workflows call semantic capabilities instead of hard-coded providers.
+Exit: core workflows call semantic capabilities; the same operation can be fulfilled directly, locally, through MCP, OpenClaw, Qwen-MM-Plugins, or a native provider without changing project-domain code.
 
 ## Stage 4 — Existing Video / Range Edit
 
-Goal: edit only the requested range of an existing video.
+Goal: professionally edit only the requested range of an existing video.
 
-- import/probe;
+- import/probe and actual source review before content decisions;
 - timeline range selection;
 - context before/after;
-- deterministic FFmpeg operations;
-- generative transform capability;
-- replacement/reinsertion/preview.
+- deterministic FFmpeg operations for mechanical edits;
+- edit-direction/pacing/audio-first/beat-sync policies where relevant;
+- optional Scene Ledger for multi-scene edits;
+- plan gate before designed assembly;
+- sample-first rule for generated replacement assets;
+- generative transform capability only when needed;
+- replacement/reinsertion/preview;
+- independent evidence-based review for production outputs;
+- no silent downgrade from an approved method/provider to a weaker result.
 
-Exit: replace/change a 5–10 second range without regenerating the whole video.
+Exit: replace/change a 5–10 second range without regenerating the whole video, while preserving surrounding context and giving designed edits a verifiable production workflow.
 
 ## Stage 5 — Dubbing / Translation
 
 Goal: revoice an existing video without running filmmaking workflow.
 
 - speech extraction;
-- ASR;
+- local/free ASR path (for example Whisper-compatible/WhisperX) as baseline;
+- optional cloud ASR/Omni adapters;
 - optional translation;
 - speech synthesis/recorded voice;
 - alignment/subtitles;
 - optional lip-sync;
-- mix/export.
+- mix/export;
+- audio-preservation/loudness checks.
 
-Exit: existing video can be dubbed independently.
+Exit: existing video can be dubbed independently without requiring a Qwen/DashScope or other paid media API.
 
 ## Stage 6 — Optional Sequence Continuity & Review
 
@@ -90,7 +125,9 @@ Goal: robust linked-shot generation only where continuity matters.
 - accepted/rejected takes;
 - re-anchor policy;
 - optional VLM take review;
-- human confirmation fallback.
+- human confirmation fallback;
+- provider-neutral structured review schema;
+- reuse professional scene/take gate concepts without forcing them on standalone clips.
 
 Exit: connected generated clips continue from accepted observed state; simple projects do not pay this complexity.
 
@@ -103,9 +140,12 @@ Goal: professional music-driven video workflow.
 - Music Map UI;
 - Music Director;
 - music-aware shot timing;
-- rhythm audit/final assembly.
+- beat-sync and audio-first editing craft;
+- sample-first generated assets;
+- rhythm audit/final assembly;
+- evidence-based review of timing/scene transitions.
 
-Exit: 20–30 second music excerpt completes a music-aware production workflow.
+Exit: 20–30 second music excerpt completes a music-aware production workflow without making music mandatory for other video types.
 
 ## Stage 8 — Additional recipes
 
@@ -118,7 +158,7 @@ Goal: broaden product by composing existing primitives, not new engines.
 - performance/lip-sync;
 - free project.
 
-Exit: each mode is mostly recipe + capability mapping + minimal UI.
+Exit: each mode is mostly recipe + capability mapping + production policy + minimal UI.
 
 ## Stage 9 — Desktop packaging and hardening
 
@@ -128,11 +168,12 @@ Goal: distributable Windows application.
 - launcher/updater strategy;
 - migrations/backups/recovery;
 - cancellation/logging;
+- capability self-check and clear optional dependency diagnostics;
 - security and license audit;
 - CI/golden regression projects;
 - documentation/sample projects/release build.
 
-Exit: user installs UV Studio without manually preparing Python/Node.
+Exit: user installs UV Studio without manually preparing Python/Node; optional WSL/cloud integrations do not prevent normal native-Windows use.
 
 ## Permanent regression scenarios
 
@@ -142,4 +183,4 @@ C. 20–30 s music-video excerpt.
 D. Existing-video dubbing.  
 E. 5–10 s targeted existing-video edit.
 
-Major architecture must remain compatible with all five scenarios.
+Major architecture must remain compatible with all five scenarios and must not make a paid third-party API mandatory for scenarios that have a viable local/free implementation.
