@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.mcp import get_mcp_manager
@@ -358,7 +359,8 @@ async def execute_project_capability(
     offer = decision.offer
     try:
         if offer.adapter_id == LocalFFmpegAdapter.adapter_id:
-            result = local_ffmpeg.execute(
+            result = await run_in_threadpool(
+                local_ffmpeg.execute,
                 project_id=project_id,
                 offer=offer,
                 payload=input_payload,
