@@ -124,7 +124,7 @@ class MCPProjectOutputExecutionTests(unittest.IsolatedAsyncioTestCase):
             capability_id="video.generate",
             adapter_id="mcp.profile_test.binding_output",
             title="Write output",
-            availability=OfferAvailability.READY,
+            availability=OfferAvailability.AVAILABLE,
             reason="fixture ready",
             locality=LocalityClass.REMOTE,
             cost_class=CostClass.PAID,
