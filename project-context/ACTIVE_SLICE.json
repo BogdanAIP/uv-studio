@@ -7,7 +7,7 @@
     "goal": "Produce project-owned replacement candidates from a currently valid approved ReplacementPlan without auto-acceptance, preserving approved method class, enforcing sample-first generative preparation, and adding a trusted MCP output-path contract so external generators cannot nominate arbitrary host paths.",
     "base_branch": "main",
     "branch": "stage-4/replacement-preparation",
-    "pull_request": null,
+    "pull_request": 28,
     "phase": "draft",
     "write_scope": [
       "uv_studio/projects/replacement_candidate.py",
