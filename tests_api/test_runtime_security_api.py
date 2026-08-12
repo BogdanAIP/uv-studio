@@ -83,15 +83,26 @@ class RuntimeSecurityApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertNotIn("forbidden", response.text)
 
-    def test_untrusted_browser_origin_is_not_granted_cors_access(self) -> None:
+    def test_untrusted_browser_origin_is_rejected_before_routing(self) -> None:
+        origin = "https://evil.example"
         response = self.client.options(
             "/api/config",
             headers={
-                "Origin": "https://evil.example",
+                "Origin": origin,
                 "Access-Control-Request-Method": "GET",
             },
         )
-        self.assertNotEqual(response.headers.get("access-control-allow-origin"), "https://evil.example")
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertNotEqual(response.headers.get("access-control-allow-origin"), origin)
+
+        path = "api_providers.openai.api_key"
+        mutation = self.client.put(
+            "/api/config",
+            headers={"Origin": origin},
+            json={"secret_updates": {path: "must-not-be-stored"}},
+        )
+        self.assertEqual(mutation.status_code, 403, mutation.text)
+        self.assertIsNone(self.store.secret_value(path))
 
     def test_intended_local_frontend_origin_is_granted_cors_access(self) -> None:
         origin = "http://127.0.0.1:3000"
@@ -104,6 +115,10 @@ class RuntimeSecurityApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.headers.get("access-control-allow-origin"), origin)
+
+        read = self.client.get("/api/config", headers={"Origin": origin})
+        self.assertEqual(read.status_code, 200, read.text)
+        self.assertEqual(read.headers.get("access-control-allow-origin"), origin)
 
     def test_legacy_remote_execution_routes_are_not_mounted(self) -> None:
         blocked = (
