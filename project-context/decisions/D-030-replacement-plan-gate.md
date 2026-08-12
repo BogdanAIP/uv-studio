@@ -1,6 +1,6 @@
 # D-030 — Replacement preparation requires an explicit provider-neutral approved plan
 
-Status: pending  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -102,18 +102,23 @@ Natural-language `goal` and change descriptions are semantic content, not an exe
 5. The next preparation slice can select exact implementations while respecting D-017 and the approved method class.
 6. Candidate creation remains separate from final `AcceptedRangeEdit` acceptance.
 
-## Acceptance evidence required
+## Acceptance evidence
 
-Before D-030 becomes accepted, final PR #27 review head must pass all required Ubuntu/Windows checks and prove:
+Draft functional head `e816f962ff892fae5401e6cf006204f354ca6630` passed all five required checks in CI run #699 (`31590672057`) on Ubuntu and Windows after the PR metadata heading was corrected without moving the head.
+
+That head proves:
 
 - exact target identity is inherited from a validated Brief, not caller supplied;
-- canonical Brief SHA-256 is server-computed and stable across archive/fresh reopen;
-- changed Brief content makes an existing plan stale but structurally repairable;
-- explicit reapproval after a Brief change refreshes digest and traceability;
-- method/audio/change-scope validation is strict and bounded;
-- generative method always derives mandatory sample-first policy;
+- canonical Brief SHA-256 is server-computed and survives archive/fresh reopen;
+- changed Brief content makes an existing plan stale while structural read/remove remains available;
+- explicit reapproval refreshes digest and current constraint/review traceability;
+- method/audio/change-scope validation is strict, bounded and pairwise disjoint;
+- `generative_transform` always derives `required_before_full_generation` sample policy;
 - provider/runtime unknown fields and invalid method classes are rejected;
-- approval works before replacement media/AcceptedRangeEdit exists and creates no artifacts/execution side effects;
+- approval works before replacement media or `AcceptedRangeEdit` exists and creates no media artifact or execution side effect;
 - archive/import/fresh reopen preserves the approved plan exactly;
-- HTTP list/get/put/delete and 404/422 boundaries are proven;
-- existing Stage 4A/D-028 real-media regressions, security gates, frontend lint, high-severity audit and production build remain green.
+- HTTP list/get/put/delete plus 404/422 boundaries pass;
+- existing Stage 4A/D-028 real-media regressions remain green;
+- frontend lint, `npm audit --audit-level=high` with no high-severity findings and production build pass on both platforms.
+
+The exact final review head must repeat the same five required checks before PR #27 is merged.

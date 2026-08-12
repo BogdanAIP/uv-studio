@@ -14,43 +14,55 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 ## Product now
 
-Stage 4 now has three proven layers: exact local range mechanics, non-destructive accepted replacement decisions, and a provider-neutral pre-replacement `RangeContinuityBrief` under D-029. PR #26 corrected the workflow so continuity evidence and constraints exist before replacement preparation rather than describing an already-produced take.
-
-The current product order is:
+Stage 4 has a proven chain from exact target selection through provider-neutral intelligence and non-destructive acceptance:
 
 ```text
 targeted range intent
-  -> RangeContinuityBrief
-  -> approved replacement plan
+  -> RangeContinuityBrief (D-029)
+  -> approved ReplacementPlan (D-030)
   -> replacement preparation / optional generation
-  -> evidence-based review
-  -> accepted replacement decision
+  -> independent evidence-based review
+  -> accepted replacement decision (D-028)
   -> explicit render/export
 ```
 
-## Active slice
+PR #26 established that continuity evidence exists before replacement creation. The current slice adds the next approval boundary without executing media/provider work.
 
-`stage-4-replacement-plan-gate` introduces a typed/versioned approved plan under `timeline/` for one logical `edit_id`.
+## Replacement plan gate — review-ready
 
-The plan must:
+Canonical approved plan state lives in:
 
-- load and explicitly validate the current RangeContinuityBrief;
-- inherit exact `edit_id + source_path + start_us + end_us` from that Brief rather than trusting duplicate caller identity;
-- bind to a server-computed SHA-256 digest of canonical Brief JSON so later Brief changes make the plan stale;
-- approve a provider-neutral method class such as deterministic edit, prepared project asset or generative transform;
-- persist bounded required/allowed/forbidden change scope and an audio strategy;
-- automatically carry continuity constraint IDs and review target IDs from the Brief;
-- make sample-first mandatory for generative plans and unnecessary for non-generative plans;
-- contain no provider/model/offer/runtime/credential/host identity;
-- remain valid before any replacement media or `AcceptedRangeEdit` exists;
-- perform no media/provider execution when approved;
-- remain structurally readable/removable if the Brief later changes or disappears, while explicit validation fails closed.
+```text
+timeline/replacement-plans.json
+```
 
-Persisting a plan is the approval gate. Draft editor form state does not become canonical project state in this slice.
+The implemented boundary provides:
+
+- one approved plan per logical `edit_id`;
+- exact target identity inherited server-side from a currently valid RangeContinuityBrief;
+- server-computed canonical `brief_sha256` binding so changed Brief content makes old approval stale;
+- provider-neutral method classes: `deterministic_edit`, `prepared_asset`, `generative_transform`;
+- bounded, duplicate-free and pairwise-disjoint required/allowed/forbidden change scopes;
+- explicit `preserve_source` vs `replacement_audio` strategy;
+- Brief constraint IDs and review-target IDs copied automatically for traceability;
+- derived sample policy: generative plans require sample-first, deterministic/prepared plans do not;
+- strict schemas with no provider/model/offer/runtime/credential fields;
+- valid approval before replacement media or `AcceptedRangeEdit` exists;
+- no FFmpeg/VLM/MCP/provider execution and no artifact creation during approval;
+- structural readability/removal after Brief staleness plus explicit current-health validation;
+- explicit reapproval after a Brief change refreshes digest and traceability;
+- UV-owned list/get/put/delete API with no execution endpoint;
+- archive/import/fresh reopen exactness before replacement creation.
+
+D-030 is accepted.
+
+Draft functional head `e816f962ff892fae5401e6cf006204f354ca6630` passed all five required checks in CI run #699 (`31590672057`) on Ubuntu and Windows. Unit/API/HTTP, existing Stage 4A real-media golden tests, frontend lint, zero high-severity npm audit and production build are green.
+
+The final state-only review head must repeat the same five required checks before merge.
 
 ## Expected following work
 
-After this gate is proven, continue with `stage-4-replacement-preparation`: consume an approved current plan and produce candidate replacement media without automatically accepting it. Deterministic/prepared methods stay first-class; optional generative execution uses semantic capabilities and D-017, with sample-first enforced before full generation.
+After PR #27 merges, continue with `stage-4-replacement-preparation`: consume a currently valid approved plan and produce candidate replacement media without automatically accepting it. Deterministic/prepared methods remain first-class; optional generative execution uses semantic capabilities and D-017, and generative full preparation must enforce the persisted sample-first obligation.
 
 ## Remaining cross-cutting gaps
 
