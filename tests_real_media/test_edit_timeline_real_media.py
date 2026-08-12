@@ -38,12 +38,19 @@ def _ffmpeg(*args: str) -> None:
         raise AssertionError(completed.stderr)
 
 
-def _color(path: Path, *, color: str, duration_s: int) -> None:
+def _color(
+    path: Path,
+    *,
+    color: str,
+    duration_s: int,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+) -> None:
     _ffmpeg(
         "-f",
         "lavfi",
         "-i",
-        f"color=c={color}:s={WIDTH}x{HEIGHT}:r={FPS}:d={duration_s}",
+        f"color=c={color}:s={width}x{height}:r={FPS}:d={duration_s}",
         "-map",
         "0:v:0",
         "-c:v",
@@ -104,9 +111,17 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         self.source = self.project_dir / "sources" / "blue-source.mkv"
         self.red = self.project_dir / "artifacts" / "red-replacement.mkv"
         self.green = self.project_dir / "artifacts" / "green-replacement.mkv"
+        self.wrong_size = self.project_dir / "artifacts" / "wrong-size-replacement.mkv"
         _color(self.source, color="blue", duration_s=6)
         _color(self.red, color="red", duration_s=1)
         _color(self.green, color="green", duration_s=1)
+        _color(
+            self.wrong_size,
+            color="yellow",
+            duration_s=1,
+            width=128,
+            height=72,
+        )
         app.dependency_overrides[get_project_store] = lambda: self.store
         # API tests run before explicit FFmpeg provisioning in the same CI job and may
         # have cached an unavailable local offer. Rebuild after provisioning here.
@@ -118,6 +133,12 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client.close()
         self.tmp.cleanup()
+
+    def _render_url(self) -> str:
+        return (
+            f"/api/uv/projects/{self.project.project_id}"
+            "/capabilities/video.render_edits/execute"
+        )
 
     def test_accept_two_edits_stays_lightweight_until_one_explicit_render(self) -> None:
         artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
@@ -156,7 +177,7 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         self.assertEqual(offer.availability.value, "available")
 
         rendered = self.client.post(
-            f"/api/uv/projects/{self.project.project_id}/capabilities/video.render_edits/execute",
+            self._render_url(),
             json={"input": {"source_path": "sources/blue-source.mkv"}},
         )
         self.assertEqual(rendered.status_code, 200, rendered.text)
@@ -176,6 +197,37 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
             (5.5, "blue"),
         ):
             _assert_color(self, _sample_rgb(output, timestamp), expected)
+
+    def test_acceptance_is_storage_only_and_incompatible_media_fails_at_render(self) -> None:
+        artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        accepted = self.client.post(
+            f"/api/uv/projects/{self.project.project_id}/edits",
+            json={
+                "edit_id": "edit_wrong_size",
+                "source_path": "sources/blue-source.mkv",
+                "start_us": 2_000_000,
+                "end_us": 3_000_000,
+                "replacement_path": "artifacts/wrong-size-replacement.mkv",
+            },
+        )
+        self.assertEqual(accepted.status_code, 201, accepted.text)
+        self.assertEqual(
+            sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
+            artifacts_before_accept,
+        )
+        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+
+        rendered = self.client.post(
+            self._render_url(),
+            json={"input": {"source_path": "sources/blue-source.mkv"}},
+        )
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("resolution must match", rendered.text)
+        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        self.assertEqual(
+            sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
+            artifacts_before_accept,
+        )
 
 
 if __name__ == "__main__":
