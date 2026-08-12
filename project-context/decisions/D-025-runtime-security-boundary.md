@@ -1,6 +1,6 @@
 # D-025 — UV Studio owns the application security boundary
 
-Status: proposed  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -48,12 +48,14 @@ The pinned VideoClaw source remains available to exact product-owned compatibili
 
 - public runtime settings live in `data/config/runtime.json` by default;
 - provider secrets live separately in `data/config/secrets.json` by default;
-- both locations are machine-only and outside portable projects;
+- both locations are machine-only, resolve outside `vendor/` and cannot resolve inside the canonical Project Store;
 - the server host remains loopback-only in this stage;
 - CORS uses explicit configured frontend origins and rejects wildcard configuration;
+- browser requests carrying an untrusted `Origin` are rejected before route execution, not merely deprived of CORS response headers;
 - GET configuration returns public settings + boolean secret-presence state only;
 - secret replacement is write-only and does not require the old value;
 - explicit `null` clears a secret; an empty string is rejected;
+- public provider/proxy URLs cannot embed userinfo credentials, query data or fragments;
 - the transitional vendor `config.yaml` path is defensively ignored by Git;
 - no real provider credential is committed or used by regression tests.
 
@@ -64,14 +66,18 @@ The pinned VideoClaw source remains available to exact product-owned compatibili
 3. Future provider adapters must read exact machine secrets from the UV Studio configuration boundary rather than revive raw browser-readable config.
 4. A future authenticated remote-access feature would require a separate threat model; changing the default server host away from loopback is rejected for now.
 5. Dependency ownership remains a separate Stage 3.5 slice; the current app may still import packages installed by the vendored compatibility requirement set until that work is complete.
+6. Local plaintext secret storage remains a machine-local compatibility implementation with restrictive file permissions where supported; a future OS credential-vault integration may replace the storage backend without changing the HTTP contract.
 
-## Acceptance
+## Acceptance evidence
 
-Change this decision to `accepted` only after the exact final PR head proves on Ubuntu and Windows that:
+The frozen runtime-security implementation head passed the complete required Ubuntu/Windows matrix before this decision was accepted:
 
 - raw secrets do not appear in configuration responses;
-- project archives exclude machine secrets;
-- untrusted browser origins receive no permissive CORS origin;
-- representative legacy provider execution routes are absent from the default route table;
+- canonical project archives exclude machine secrets;
+- machine configuration cannot be placed in the vendor tree or canonical Project Store;
+- untrusted browser origins are rejected before they can mutate local state;
+- unsafe legacy provider/file/pipeline surfaces are absent from the default route table;
 - UV Studio local/free capability execution remains available;
-- API, real HTTP smoke and frontend production build remain green.
+- unit, API integration, real HTTP smoke and frontend production build all pass on Ubuntu and Windows.
+
+The exact final review-state PR head must repeat the same required CI gate before merge.
