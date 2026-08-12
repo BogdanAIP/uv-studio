@@ -55,6 +55,21 @@ class RuntimeConfigStoreTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 configuration_root()
 
+    def test_machine_config_override_cannot_point_into_project_store(self) -> None:
+        root = Path(self.tempdir.name)
+        project_store = root / "canonical-projects"
+        forbidden = project_store / "project-a" / "machine-config"
+        with patch.dict(
+            os.environ,
+            {
+                "UV_STUDIO_PROJECTS_DIR": str(project_store),
+                "UV_STUDIO_CONFIG_DIR": str(forbidden),
+            },
+            clear=False,
+        ):
+            with self.assertRaises(RuntimeError):
+                configuration_root()
+
     def test_runtime_config_store_rejects_direct_vendor_paths(self) -> None:
         vendor_runtime = ROOT / "vendor" / "runtime.json"
         vendor_secrets = ROOT / "vendor" / "secrets.json"
@@ -68,6 +83,21 @@ class RuntimeConfigStoreTests(unittest.TestCase):
                 config_path=self.config_path,
                 secrets_path=vendor_secrets,
             )
+
+    def test_runtime_config_store_rejects_direct_project_store_paths(self) -> None:
+        root = Path(self.tempdir.name)
+        project_store = root / "canonical-projects"
+        inside_project_store = project_store / "project-a" / "secrets.json"
+        with patch.dict(
+            os.environ,
+            {"UV_STUDIO_PROJECTS_DIR": str(project_store)},
+            clear=False,
+        ):
+            with self.assertRaises(RuntimeConfigError):
+                RuntimeConfigStore(
+                    config_path=self.config_path,
+                    secrets_path=inside_project_store,
+                )
 
     def test_secret_updates_are_separate_from_public_config(self) -> None:
         secret = "test-secret-never-return-this"
