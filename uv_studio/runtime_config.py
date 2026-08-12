@@ -108,6 +108,10 @@ def _validate_url(value: str, *, path: str) -> str:
     parsed = urlsplit(normalized)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise RuntimeConfigError(f"{path} must be an http(s) URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise RuntimeConfigError(f"{path} must not contain URL userinfo credentials")
+    if parsed.query or parsed.fragment:
+        raise RuntimeConfigError(f"{path} must not contain query or fragment data")
     return normalized
 
 
@@ -137,6 +141,8 @@ def _validate_leaf(path: str, value: Any, default: Any) -> Any:
             return normalized
         if path.endswith(".base_url"):
             return _validate_url(normalized, path=path)
+        if path == "api_providers.common.proxy":
+            return "" if not normalized else _validate_url(normalized, path=path)
         return normalized
     raise RuntimeConfigError(f"unsupported runtime configuration schema at {path}")
 
