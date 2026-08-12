@@ -32,19 +32,6 @@ async def handle_list_tools(
             input_schema={"type": "object", "properties": {"prompt": {"type": "string"}}},
         ),
         types.Tool(
-            name="write_project_output",
-            title="Write Project Output",
-            description="Writes deterministic bytes to a UV Studio injected output path.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "prompt": {"type": "string"},
-                    "output_path": {"type": "string"},
-                },
-                "required": ["output_path"],
-            },
-        ),
-        types.Tool(
             name="slow_echo",
             title="Slow Echo",
             description="Delays before returning deterministic metadata.",
@@ -63,6 +50,22 @@ async def handle_list_tools(
             input_schema={"type": "object"},
         ),
     ]
+    if os.environ.get("UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL") == "1":
+        tools.append(
+            types.Tool(
+                name="write_project_output",
+                title="Write Project Output",
+                description="Writes deterministic bytes to a UV Studio injected output path.",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string"},
+                        "output_path": {"type": "string"},
+                    },
+                    "required": ["output_path"],
+                },
+            )
+        )
     if os.environ.get("UV_MCP_FIXTURE_PROJECT_FILE_TOOL") == "1":
         tools.append(
             types.Tool(
