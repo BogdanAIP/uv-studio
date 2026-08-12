@@ -32,6 +32,19 @@ async def handle_list_tools(
             input_schema={"type": "object", "properties": {"prompt": {"type": "string"}}},
         ),
         types.Tool(
+            name="write_project_output",
+            title="Write Project Output",
+            description="Writes deterministic bytes to a UV Studio injected output path.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "output_path": {"type": "string"},
+                },
+                "required": ["output_path"],
+            },
+        ),
+        types.Tool(
             name="slow_echo",
             title="Slow Echo",
             description="Delays before returning deterministic metadata.",
@@ -74,6 +87,30 @@ async def handle_call_tool(
     if params.name in {"echo_metadata", "cloud_generate"}:
         text = json.dumps(
             {"tool": params.name, "arguments": arguments},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        return types.CallToolResult(content=[types.TextContent(type="text", text=text)])
+    if params.name == "write_project_output":
+        raw_path = arguments.get("output_path")
+        if not isinstance(raw_path, str):
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="output_path must be a string")],
+                is_error=True,
+            )
+        output_path = Path(raw_path)
+        try:
+            output_path.write_bytes(b"uv-studio-fixture-video-output\n")
+        except OSError:
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text="fixture could not write output")],
+                is_error=True,
+            )
+        text = json.dumps(
+            {
+                "written": output_path.name,
+                "bytes": output_path.stat().st_size,
+            },
             ensure_ascii=False,
             sort_keys=True,
         )
