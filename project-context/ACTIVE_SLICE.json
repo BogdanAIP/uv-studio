@@ -1,37 +1,35 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "stage-4-replacement-preparation",
+    "id": "stage-4-replacement-review-gate",
     "kind": "stage",
     "roadmap_stage": "stage-4b",
-    "goal": "Produce project-owned replacement candidates from a currently valid approved ReplacementPlan without auto-acceptance, preserving approved method class, enforcing sample-first generative preparation, and adding a trusted MCP output-path contract so external generators cannot nominate arbitrary host paths.",
+    "goal": "Persist provider-neutral evidence-based review verdicts for exact current ReplacementCandidates and make an approved current review the only product path that may create a new AcceptedRangeEdit, while preserving manual/local review as a first-class baseline and optional model-assisted analysis behind the existing Capability Registry and D-017 boundary.",
     "base_branch": "main",
-    "branch": "stage-4/replacement-preparation",
-    "pull_request": 28,
-    "phase": "review",
+    "branch": "stage-4/replacement-review-gate",
+    "pull_request": null,
+    "phase": "draft",
     "write_scope": [
-      "uv_studio/projects/replacement_candidate.py",
+      "uv_studio/projects/replacement_review.py",
       "uv_studio/projects/__init__.py",
-      "uv_studio/api/replacement_preparation.py",
+      "uv_studio/api/replacement_review.py",
+      "uv_studio/api/edit_state.py",
       "uv_studio/server.py",
-      "uv_studio/mcp/models.py",
-      "uv_studio/capabilities/adapters/mcp_execution.py",
-      "tests/fixtures/mcp_test_server.py",
-      "tests/test_replacement_candidate.py",
-      "tests/test_replacement_candidate_archive.py",
-      "tests/test_mcp_project_outputs.py",
-      "tests_api/test_replacement_preparation_api.py",
-      "tests_api/test_mcp_execution_api.py",
-      "tests_real_media/test_replacement_preparation_real_media.py",
+      "tests/test_replacement_review.py",
+      "tests/test_replacement_review_archive.py",
+      "tests_api/test_replacement_review_api.py",
+      "tests_api/test_edit_state_api.py",
+      "tests_real_media/test_replacement_review_real_media.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
       "project-context/PROJECT_HISTORY.md",
-      "project-context/decisions/D-031-replacement-candidate-preparation.md"
+      "project-context/DECISIONS.md",
+      "project-context/decisions/D-032-replacement-review-gate.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-replacement-review-gate",
+    "next_slice_id": "stage-4-range-edit-user-workflow",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
