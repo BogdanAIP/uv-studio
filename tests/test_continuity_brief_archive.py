@@ -60,7 +60,8 @@ class ContinuityBriefArchiveTests(unittest.TestCase):
                 project.project_id
             )
             self.assertEqual(reopened.get("edit_1"), expected)
-            self.assertFalse((target_root / project.project_id / "artifacts").glob("*.mkv"))
+            imported_artifacts = target_root / project.project_id / "artifacts"
+            self.assertEqual(list(imported_artifacts.glob("*.mkv")), [])
 
 
 if __name__ == "__main__":
