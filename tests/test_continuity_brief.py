@@ -26,9 +26,12 @@ class RangeContinuityBriefTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         self.project = self.store.create_project(title="Continuity brief")
         self.project_dir = self.store.project_directory(self.project.project_id)
-        (self.project_dir / "sources" / "source.mkv").write_bytes(b"source")
-        (self.project_dir / "artifacts" / "replacement.mkv").write_bytes(b"replacement")
-        (self.project_dir / "assets" / "reference.txt").write_text("reference", encoding="utf-8")
+        self.source = self.project_dir / "sources" / "source.mkv"
+        self.replacement = self.project_dir / "artifacts" / "replacement.mkv"
+        self.reference = self.project_dir / "assets" / "reference.txt"
+        self.source.write_bytes(b"source")
+        self.replacement.write_bytes(b"replacement")
+        self.reference.write_text("reference", encoding="utf-8")
         self.accepted = AcceptedRangeEdit(
             edit_id="edit_1",
             source_path="sources/source.mkv",
@@ -42,8 +45,8 @@ class RangeContinuityBriefTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _brief(self) -> RangeContinuityBrief:
-        evidence = (
+    def _evidence(self) -> tuple[ContinuityEvidence, ...]:
+        return (
             ContinuityEvidence(
                 evidence_id="ev_before",
                 role="before",
@@ -71,13 +74,14 @@ class RangeContinuityBriefTests(unittest.TestCase):
                 path="assets/reference.txt",
             ),
         )
+
+    def _brief(self) -> RangeContinuityBrief:
         return RangeContinuityBrief(
             edit_id=self.accepted.edit_id,
             source_path=self.accepted.source_path,
             start_us=self.accepted.start_us,
             end_us=self.accepted.end_us,
-            replacement_path=self.accepted.replacement_path,
-            evidence=evidence,
+            evidence=self._evidence(),
             mechanical_facts=(
                 MechanicalFact(
                     fact_id="fact_width",
@@ -127,55 +131,183 @@ class RangeContinuityBriefTests(unittest.TestCase):
             ),
         )
 
+    def _minimal_brief(
+        self,
+        *,
+        edit_id: str = "edit_1",
+        start_us: int = 1_000_000,
+        end_us: int = 2_000_000,
+    ) -> RangeContinuityBrief:
+        return RangeContinuityBrief(
+            edit_id=edit_id,
+            source_path="sources/source.mkv",
+            start_us=start_us,
+            end_us=end_us,
+            evidence=(
+                ContinuityEvidence(
+                    evidence_id="requested",
+                    role="requested",
+                    path="sources/source.mkv",
+                    source_start_us=start_us,
+                    source_end_us=end_us,
+                ),
+            ),
+        )
+
     def test_valid_brief_round_trips_and_requires_no_media_execution(self) -> None:
         artifacts_before = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
         expected = self._brief()
         state = self.briefs.upsert(self.project.project_id, expected)
         self.assertEqual(state.get("edit_1"), expected)
-        self.assertEqual(self.briefs.validate_project(self.project.project_id).get("edit_1"), expected)
+        self.assertEqual(
+            self.briefs.validate_project(self.project.project_id).get("edit_1"),
+            expected,
+        )
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
             artifacts_before,
         )
         self.assertEqual(RangeContinuityBrief.from_dict(expected.to_dict()), expected)
+        self.assertNotIn("replacement_path", expected.to_dict())
 
-    def test_requested_before_after_roles_are_range_consistent(self) -> None:
+    def test_brief_can_exist_before_replacement_or_accepted_edit(self) -> None:
+        RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
+        self.replacement.unlink()
+
+        expected = self._brief()
+        state = self.briefs.upsert(self.project.project_id, expected)
+        self.assertEqual(state.get("edit_1"), expected)
+        self.assertEqual(
+            self.briefs.validate_project(self.project.project_id).get("edit_1"),
+            expected,
+        )
+
+        self.replacement.write_bytes(b"replacement")
+        RangeEditStateStore(self.store).accept(self.project.project_id, self.accepted)
+        self.assertEqual(
+            self.briefs.validate_project(self.project.project_id).get("edit_1"),
+            expected,
+        )
+
+    def test_existing_accepted_edit_must_match_target_but_not_replacement_identity(self) -> None:
+        with self.assertRaises(ContinuityBriefError) as ctx:
+            self.briefs.upsert(
+                self.project.project_id,
+                self._minimal_brief(start_us=1_100_000),
+            )
+        self.assertIn("does not exactly match accepted edit", str(ctx.exception))
+
+        self.briefs.upsert(self.project.project_id, self._brief())
+        RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
+        alternate = self.project_dir / "artifacts" / "alternate.mkv"
+        alternate.write_bytes(b"alternate")
+        RangeEditStateStore(self.store).accept(
+            self.project.project_id,
+            AcceptedRangeEdit(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                replacement_path="artifacts/alternate.mkv",
+            ),
+        )
+        self.assertEqual(
+            self.briefs.validate_project(self.project.project_id).get("edit_1"),
+            self._brief(),
+        )
+
+    def test_temporal_evidence_is_source_bound_and_adjacent_to_target(self) -> None:
         with self.assertRaises(ContinuityBriefError):
             RangeContinuityBrief(
-                edit_id=self.accepted.edit_id,
-                source_path=self.accepted.source_path,
-                start_us=self.accepted.start_us,
-                end_us=self.accepted.end_us,
-                replacement_path=self.accepted.replacement_path,
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
                 evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested",
+                        role="requested",
+                        path="assets/reference.txt",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                ),
+            )
+
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
                     ContinuityEvidence(
                         evidence_id="bad_before",
                         role="before",
                         path="sources/source.mkv",
-                        source_start_us=900_000,
-                        source_end_us=1_100_000,
-                    ),
-                ),
-            )
-        with self.assertRaises(ContinuityBriefError):
-            RangeContinuityBrief(
-                edit_id=self.accepted.edit_id,
-                source_path=self.accepted.source_path,
-                start_us=self.accepted.start_us,
-                end_us=self.accepted.end_us,
-                replacement_path=self.accepted.replacement_path,
-                evidence=(
-                    ContinuityEvidence(
-                        evidence_id="bad_requested",
-                        role="requested",
-                        path="sources/source.mkv",
-                        source_start_us=1_100_000,
-                        source_end_us=1_900_000,
+                        source_start_us=500_000,
+                        source_end_us=900_000,
                     ),
                 ),
             )
 
-    def test_evidence_windows_are_bounded(self) -> None:
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                    ContinuityEvidence(
+                        evidence_id="bad_after",
+                        role="after",
+                        path="sources/source.mkv",
+                        source_start_us=2_100_000,
+                        source_end_us=2_500_000,
+                    ),
+                ),
+            )
+
+    def test_reference_coordinates_are_only_meaningful_on_target_source(self) -> None:
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                    ContinuityEvidence(
+                        evidence_id="reference",
+                        role="reference",
+                        path="assets/reference.txt",
+                        source_start_us=0,
+                        source_end_us=500_000,
+                    ),
+                ),
+            )
+
+    def test_evidence_windows_are_bounded_and_requested_evidence_is_required_once(self) -> None:
         with self.assertRaises(ContinuityBriefError):
             ContinuityEvidence(
                 evidence_id="too_long",
@@ -184,15 +316,54 @@ class RangeContinuityBriefTests(unittest.TestCase):
                 source_start_us=0,
                 source_end_us=30_000_001,
             )
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(),
+            )
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested_a",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                    ContinuityEvidence(
+                        evidence_id="requested_b",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                ),
+            )
 
     def test_observations_and_other_structures_cannot_reference_unknown_evidence(self) -> None:
         with self.assertRaises(ContinuityBriefError):
             RangeContinuityBrief(
-                edit_id=self.accepted.edit_id,
-                source_path=self.accepted.source_path,
-                start_us=self.accepted.start_us,
-                end_us=self.accepted.end_us,
-                replacement_path=self.accepted.replacement_path,
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=(
+                    ContinuityEvidence(
+                        evidence_id="requested",
+                        role="requested",
+                        path="sources/source.mkv",
+                        source_start_us=1_000_000,
+                        source_end_us=2_000_000,
+                    ),
+                ),
                 observations=(
                     ContinuityObservation(
                         observation_id="obs_unknown",
@@ -204,16 +375,7 @@ class RangeContinuityBriefTests(unittest.TestCase):
                 ),
             )
 
-    def test_store_requires_exact_current_accepted_edit_identity(self) -> None:
-        brief = self._brief()
-        wrong_replacement = RangeContinuityBrief.from_dict(
-            {**brief.to_dict(), "replacement_path": "artifacts/other.mkv"}
-        )
-        (self.project_dir / "artifacts" / "other.mkv").write_bytes(b"other")
-        with self.assertRaises(ContinuityBriefError):
-            self.briefs.upsert(self.project.project_id, wrong_replacement)
-
-    def test_strict_json_rejects_provider_runtime_fields_and_wrong_scalar_types(self) -> None:
+    def test_strict_json_and_mechanical_fact_keys_reject_runtime_binding(self) -> None:
         data = self._brief().to_dict()
         data["provider_id"] = "forbidden-runtime-binding"
         with self.assertRaises(ContinuityBriefError):
@@ -224,9 +386,49 @@ class RangeContinuityBriefTests(unittest.TestCase):
         with self.assertRaises(ContinuityBriefError):
             RangeContinuityBrief.from_dict(data)
 
-    def test_removed_edit_leaves_brief_structurally_readable_and_removable(self) -> None:
+        with self.assertRaises(ContinuityBriefError):
+            MechanicalFact(
+                fact_id="bad_provider",
+                key="provider_id",
+                value="provider-x",
+            )
+        with self.assertRaises(ContinuityBriefError):
+            MechanicalFact(
+                fact_id="bad_runtime",
+                key="runtime_pid",
+                value=123,
+            )
+
+    def test_collection_sizes_are_bounded(self) -> None:
+        evidence = [
+            ContinuityEvidence(
+                evidence_id="requested",
+                role="requested",
+                path="sources/source.mkv",
+                source_start_us=1_000_000,
+                source_end_us=2_000_000,
+            )
+        ]
+        evidence.extend(
+            ContinuityEvidence(
+                evidence_id=f"ref_{index}",
+                role="reference",
+                path="assets/reference.txt",
+            )
+            for index in range(32)
+        )
+        with self.assertRaises(ContinuityBriefError):
+            RangeContinuityBrief(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                evidence=tuple(evidence),
+            )
+
+    def test_stale_source_is_structurally_readable_and_removable(self) -> None:
         self.briefs.upsert(self.project.project_id, self._brief())
-        RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
+        self.source.unlink()
 
         structural = self.briefs.load(self.project.project_id)
         self.assertEqual(structural.get("edit_1").edit_id, "edit_1")
@@ -234,7 +436,27 @@ class RangeContinuityBriefTests(unittest.TestCase):
             self.briefs.validate_project(self.project.project_id)
         repaired = self.briefs.remove(self.project.project_id, "edit_1")
         self.assertEqual(repaired, RangeContinuityBriefState())
-        self.assertEqual(self.briefs.validate_project(self.project.project_id), RangeContinuityBriefState())
+
+    def test_later_conflicting_accepted_edit_makes_brief_stale_without_hiding_it(self) -> None:
+        RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
+        self.briefs.upsert(self.project.project_id, self._brief())
+        RangeEditStateStore(self.store).accept(
+            self.project.project_id,
+            AcceptedRangeEdit(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=3_000_000,
+                end_us=4_000_000,
+                replacement_path="artifacts/replacement.mkv",
+            ),
+        )
+
+        self.assertEqual(
+            self.briefs.load(self.project.project_id).get("edit_1").start_us,
+            1_000_000,
+        )
+        with self.assertRaises(ContinuityBriefError):
+            self.briefs.validate_project(self.project.project_id)
 
 
 if __name__ == "__main__":
