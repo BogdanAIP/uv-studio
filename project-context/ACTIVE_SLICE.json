@@ -1,31 +1,37 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "stage-4-replacement-plan-gate",
+    "id": "stage-4-replacement-preparation",
     "kind": "stage",
     "roadmap_stage": "stage-4b",
-    "goal": "Persist a typed provider-neutral approved replacement plan for a validated RangeContinuityBrief before replacement preparation, binding the exact target and Brief digest while approving method class, change scope, audio strategy, sample-first policy and review traceability without provider/runtime identity.",
+    "goal": "Produce project-owned replacement candidates from a currently valid approved ReplacementPlan without auto-acceptance, preserving approved method class, enforcing sample-first generative preparation, and adding a trusted MCP output-path contract so external generators cannot nominate arbitrary host paths.",
     "base_branch": "main",
-    "branch": "stage-4/replacement-plan-gate",
-    "pull_request": 27,
+    "branch": "stage-4/replacement-preparation",
+    "pull_request": 28,
     "phase": "review",
     "write_scope": [
-      "uv_studio/projects/replacement_plan.py",
+      "uv_studio/projects/replacement_candidate.py",
       "uv_studio/projects/__init__.py",
-      "uv_studio/api/replacement_plan.py",
+      "uv_studio/api/replacement_preparation.py",
       "uv_studio/server.py",
-      "tests/test_replacement_plan.py",
-      "tests/test_replacement_plan_archive.py",
-      "tests_api/test_replacement_plan_api.py",
+      "uv_studio/mcp/models.py",
+      "uv_studio/capabilities/adapters/mcp_execution.py",
+      "tests/fixtures/mcp_test_server.py",
+      "tests/test_replacement_candidate.py",
+      "tests/test_replacement_candidate_archive.py",
+      "tests/test_mcp_project_outputs.py",
+      "tests_api/test_replacement_preparation_api.py",
+      "tests_api/test_mcp_execution_api.py",
+      "tests_real_media/test_replacement_preparation_real_media.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
       "project-context/PROJECT_HISTORY.md",
-      "project-context/decisions/D-030-replacement-plan-gate.md"
+      "project-context/decisions/D-031-replacement-candidate-preparation.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-replacement-preparation",
+    "next_slice_id": "stage-4-replacement-review-gate",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
