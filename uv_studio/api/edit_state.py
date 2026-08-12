@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.projects import get_project_store
 from uv_studio.projects import (
-    AcceptedRangeEdit,
     EditStateError,
     EditStateNotFound,
     ProjectStore,
@@ -36,16 +35,6 @@ class RangeEditStatePayload(BaseModel):
     edits: list[AcceptedRangeEditPayload]
 
 
-class AcceptRangeEditRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    edit_id: str
-    source_path: str
-    start_us: int = Field(ge=0)
-    end_us: int = Field(gt=0)
-    replacement_path: str
-
-
 def _payload(state: RangeEditState) -> RangeEditStatePayload:
     return RangeEditStatePayload.model_validate(state.to_dict())
 
@@ -70,30 +59,6 @@ def get_edit_state(
     try:
         store.load_project(project_id)
         return _payload(RangeEditStateStore(store).load(project_id))
-    except (ProjectNotFound, EditStateError, ProjectStoreError) as exc:
-        raise _translate(exc) from exc
-
-
-@router.post(
-    "/{project_id}/edits",
-    response_model=RangeEditStatePayload,
-    status_code=status.HTTP_201_CREATED,
-)
-def accept_edit(
-    project_id: str,
-    request: AcceptRangeEditRequest,
-    store: ProjectStore = Depends(get_project_store),
-) -> RangeEditStatePayload:
-    try:
-        store.load_project(project_id)
-        edit = AcceptedRangeEdit(
-            edit_id=request.edit_id,
-            source_path=request.source_path,
-            start_us=request.start_us,
-            end_us=request.end_us,
-            replacement_path=request.replacement_path,
-        )
-        return _payload(RangeEditStateStore(store).accept(project_id, edit))
     except (ProjectNotFound, EditStateError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
 

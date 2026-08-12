@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from uv_studio.api.projects import get_project_store
-from uv_studio.projects import EDIT_STATE_PATH, ProjectStore
+from uv_studio.projects import AcceptedRangeEdit, ProjectStore, RangeEditStateStore
 from uv_studio.server import app
 
 
@@ -19,7 +19,6 @@ class EditStateApiTests(unittest.TestCase):
         self.project_dir = self.store.project_directory(self.project.project_id)
         (self.project_dir / "sources" / "source.mkv").write_bytes(b"source")
         (self.project_dir / "artifacts" / "replacement-a.mkv").write_bytes(b"a")
-        (self.project_dir / "artifacts" / "replacement-b.mkv").write_bytes(b"b")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
 
@@ -31,9 +30,8 @@ class EditStateApiTests(unittest.TestCase):
     def _url(self) -> str:
         return f"/api/uv/projects/{self.project.project_id}/edits"
 
-    def test_accept_read_and_remove_edit_without_render_artifact(self) -> None:
-        before = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
-        accepted = self.client.post(
+    def test_direct_http_edit_creation_is_not_a_public_acceptance_path(self) -> None:
+        response = self.client.post(
             self._url(),
             json={
                 "edit_id": "edit_1",
@@ -43,79 +41,38 @@ class EditStateApiTests(unittest.TestCase):
                 "replacement_path": "artifacts/replacement-a.mkv",
             },
         )
-        self.assertEqual(accepted.status_code, 201, accepted.text)
-        self.assertEqual(accepted.json()["edits"][0]["edit_id"], "edit_1")
-        self.assertEqual(
-            sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
-            before,
-        )
-        self.assertTrue((self.project_dir / EDIT_STATE_PATH).is_file())
+        self.assertEqual(response.status_code, 405, response.text)
+        self.assertFalse((self.project_dir / "timeline" / "range-edits.json").exists())
 
+    def test_read_and_remove_remain_available_for_existing_internal_decisions(self) -> None:
+        RangeEditStateStore(self.store).accept(
+            self.project.project_id,
+            AcceptedRangeEdit(
+                edit_id="edit_1",
+                source_path="sources/source.mkv",
+                start_us=1_000_000,
+                end_us=2_000_000,
+                replacement_path="artifacts/replacement-a.mkv",
+            ),
+        )
         fetched = self.client.get(self._url())
         self.assertEqual(fetched.status_code, 200, fetched.text)
-        self.assertEqual(fetched.json(), accepted.json())
+        self.assertEqual(fetched.json()["edits"][0]["edit_id"], "edit_1")
 
         removed = self.client.delete(f"{self._url()}/edit_1")
         self.assertEqual(removed.status_code, 200, removed.text)
         self.assertEqual(removed.json()["edits"], [])
 
-    def test_overlap_and_missing_replacement_are_422(self) -> None:
-        first = self.client.post(
-            self._url(),
-            json={
-                "edit_id": "edit_1",
-                "source_path": "sources/source.mkv",
-                "start_us": 1_000_000,
-                "end_us": 2_000_000,
-                "replacement_path": "artifacts/replacement-a.mkv",
-            },
-        )
-        self.assertEqual(first.status_code, 201, first.text)
+    def test_empty_state_and_missing_project_or_edit(self) -> None:
+        empty = self.client.get(self._url())
+        self.assertEqual(empty.status_code, 200, empty.text)
+        self.assertEqual(empty.json()["edits"], [])
 
-        overlap = self.client.post(
-            self._url(),
-            json={
-                "edit_id": "edit_2",
-                "source_path": "sources/source.mkv",
-                "start_us": 1_500_000,
-                "end_us": 2_500_000,
-                "replacement_path": "artifacts/replacement-b.mkv",
-            },
-        )
-        self.assertEqual(overlap.status_code, 422, overlap.text)
-
-        missing = self.client.post(
-            self._url(),
-            json={
-                "edit_id": "edit_3",
-                "source_path": "sources/source.mkv",
-                "start_us": 3_000_000,
-                "end_us": 4_000_000,
-                "replacement_path": "artifacts/missing.mkv",
-            },
-        )
-        self.assertEqual(missing.status_code, 422, missing.text)
-
-    def test_missing_project_and_missing_edit_are_404(self) -> None:
         missing_project = self.client.get("/api/uv/projects/prj_missing/edits")
         self.assertEqual(missing_project.status_code, 404, missing_project.text)
 
         missing_edit = self.client.delete(f"{self._url()}/missing_edit")
         self.assertEqual(missing_edit.status_code, 404, missing_edit.text)
-
-    def test_request_rejects_unknown_fields_and_invalid_interval(self) -> None:
-        response = self.client.post(
-            self._url(),
-            json={
-                "edit_id": "edit_bad",
-                "source_path": "sources/source.mkv",
-                "start_us": 2_000_000,
-                "end_us": 1_000_000,
-                "replacement_path": "artifacts/replacement-a.mkv",
-                "provider": "should-not-exist",
-            },
-        )
-        self.assertEqual(response.status_code, 422, response.text)
 
 
 if __name__ == "__main__":
