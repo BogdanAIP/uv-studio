@@ -118,10 +118,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Provision FFmpeg on Windows
+      - name: Provision pinned FFmpeg on Windows
         if: runner.os == 'Windows'
-        shell: powershell
-        run: choco install ffmpeg -y --no-progress
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'autobuild-2026-07-29-13-36'
+          $asset = 'ffmpeg-master-latest-win64-gpl-shared.zip'
+          $expectedSha256 = '9211f801f2ee31f30cc343df7791ffee866a4053a5145b07191b280d2fb48f46'
+          $archive = Join-Path $env:RUNNER_TEMP $asset
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-ffmpeg'
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$tag/$asset"
+
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "FFmpeg archive SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
+          }
+
+          Expand-Archive -Path $archive -DestinationPath $extractRoot -Force
+          $ffmpeg = Get-ChildItem -Path $extractRoot -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ffmpeg) { throw 'Pinned FFmpeg archive did not contain ffmpeg.exe' }
+          $ffprobe = Join-Path $ffmpeg.Directory.FullName 'ffprobe.exe'
+          if (-not (Test-Path $ffprobe)) { throw 'Pinned FFmpeg archive did not contain ffprobe.exe beside ffmpeg.exe' }
+          $ffmpeg.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Record FFmpeg toolchain
         run: |
