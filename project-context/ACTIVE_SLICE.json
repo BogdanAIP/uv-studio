@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "chore/roadmap-runtime-gates",
     "pull_request": 21,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "ROADMAP.md",
       "project-context/ACTIVE_SLICE.json",
