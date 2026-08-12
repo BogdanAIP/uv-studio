@@ -1,19 +1,14 @@
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $VenvDir = Join-Path $RepoRoot ".venv"
-$BackendRequirements = Join-Path $RepoRoot "vendor/videoclaw-app/backend/requirements.txt"
-$UVRequirements = Join-Path $RepoRoot "requirements-uv.txt"
+$UVDevRequirements = Join-Path $RepoRoot "requirements-uv-dev.txt"
 $FrontendDir = Join-Path $RepoRoot "frontend"
 $FrontendPackage = Join-Path $FrontendDir "package.json"
 
 Set-Location $RepoRoot
 
-if (-not (Test-Path $BackendRequirements)) {
-    throw "Vendored runtime is missing. Run: python tools/vendor_videoclaw.py"
-}
-
-if (-not (Test-Path $UVRequirements)) {
-    throw "UV Studio dependency file is missing: requirements-uv.txt"
+if (-not (Test-Path $UVDevRequirements)) {
+    throw "UV Studio development dependency file is missing: requirements-uv-dev.txt"
 }
 
 if (-not (Test-Path $FrontendPackage)) {
@@ -34,10 +29,10 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 $Python = Join-Path $VenvDir "Scripts/python.exe"
-Write-Host "[uv-studio] Installing backend dependencies"
+Write-Host "[uv-studio] Installing product-owned Python dependencies"
 & $Python -m pip install --upgrade pip
-& $Python -m pip install -r $BackendRequirements
-& $Python -m pip install -r $UVRequirements
+& $Python -m pip install -r $UVDevRequirements
+& $Python -m pip check
 
 Write-Host "[uv-studio] Installing UV Studio frontend dependencies"
 Push-Location $FrontendDir
@@ -49,5 +44,6 @@ finally {
 }
 
 Write-Host "[uv-studio] Development environment is ready."
+Write-Host "Optional provider/runtime packages are installed separately when needed."
 Write-Host "Backend:  .\scripts\run-backend.ps1"
 Write-Host "Frontend: .\scripts\run-frontend.ps1"

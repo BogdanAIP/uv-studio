@@ -1,0 +1,5 @@
+# Development/test dependencies layered on the product-owned core runtime.
+-r requirements-uv.txt
+
+# FastAPI/Starlette TestClient transport used by tests_api.
+httpx>=0.27,<1

@@ -26,9 +26,6 @@ export default function ProjectPage() {
 
   useEffect(() => {
     let active = true;
-    setProject(null);
-    setExecutionPlan(null);
-    setError(null);
     Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])
       .then(([projectValue, planValue]) => {
         if (!active) return;
