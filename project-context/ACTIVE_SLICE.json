@@ -16,6 +16,7 @@
       "uv_studio/server.py",
       "uv_studio/mcp/models.py",
       "uv_studio/capabilities/adapters/mcp_execution.py",
+      "tests/fixtures/mcp_test_server.py",
       "tests/test_replacement_candidate.py",
       "tests/test_replacement_candidate_archive.py",
       "tests/test_mcp_project_outputs.py",
