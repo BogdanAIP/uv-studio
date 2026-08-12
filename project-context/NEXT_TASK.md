@@ -1,43 +1,53 @@
 # Next Task
 
-<!-- uv-next-slice: stage-4-range-continuity-brief -->
+<!-- uv-next-slice: stage-4-non-destructive-edit-state -->
 
 Updated: 2026-08-12
 
-## Expected handoff
+## Handoff
 
-If the active real-media slice passes without exposing a structural mechanical/state-model blocker, continue Stage 4B with:
+Cross-platform real-media evidence triggered the Stage 4A architecture override recorded in D-027.
+
+The next slice is:
 
 ```text
-stage-4-range-continuity-brief
-  -> typed provider-neutral bounded range/context evidence
-  -> observed vs inferred facts
-  -> exact requested-range identity
-  -> portable versioned project state
+stage-4-non-destructive-edit-state
+  -> canonical provider-neutral edit decisions
+  -> original source + exact range + accepted replacement references
+  -> multiple accepted edits without whole-source re-encode per acceptance
+  -> deterministic preview/render projection
+  -> portable archive/reopen proof
 ```
 
-## Evidence-controlled override
+## Why this now precedes RangeContinuityBrief
 
-The active `test-real-media-golden` slice must first measure the actual FFmpeg/FFprobe path on Ubuntu and Windows.
+The D-021/D-022 mechanical path is correct on the tested Ubuntu/Windows fixtures, but a one-second replacement in an eight-second 320x180 MPEG-4 source produced a complete FFV1 output **4.824x** the source size on both platforms.
 
-If that evidence shows either of the following, this file and `ACTIVE_SLICE.json` must be changed before merge so the next slice becomes a scoped media-edit-core refactor instead:
+That whole-output file is acceptable as a deterministic render/intermediate, but not as canonical repeated-edit project state. Persisting Stage 4B continuity/intelligence before fixing this state boundary would make richer durable data depend on a representation already shown to duplicate unchanged media.
 
-- exact range/timestamp behavior is structurally wrong for representative encoded inputs; or
-- whole-output FFV1/FLAC reinsertion is already impractical enough that repeated-edit state must become non-destructive before Stage 4B adds durable intelligence state.
+## Required next-slice outcome
 
-Do not choose the refactor merely because it is architecturally attractive; use the measured evidence recorded by this slice.
+The next slice must define and prove a small typed/versioned edit-state contract, not a new editor framework.
 
-## RangeContinuityBrief requirements if no override is needed
+Minimum requirements:
 
-- provider/model-neutral schema;
-- integer-microsecond requested range as immutable identity;
-- bounded context references only;
-- mechanical facts separated from observations/inference;
-- explicit continuity constraints and review targets;
-- no API keys, host paths, runtime IDs or provider selections in canonical state;
-- archive/export round-trip proof;
-- no VLM/provider execution required to construct valid baseline state.
+- project-relative original source reference;
+- immutable integer-microsecond requested range;
+- project-relative accepted prepared-replacement reference;
+- deterministic ordering/overlap rules for multiple accepted edits;
+- no API keys, host paths, provider IDs or runtime IDs in canonical state;
+- archive/export/import/reopen round-trip;
+- explicit projection of edit decisions into the existing deterministic composition/render path;
+- no automatic full-video FFV1 materialization merely because an edit is accepted;
+- rollback/validation if an edit decision references missing/incompatible project media;
+- tests for multiple non-overlapping edits and explicit rejection/policy for overlapping edits.
 
-## Scope control
+## Boundary
 
-Do not combine the next slice with the Stage 4C timeline UI, provider generation adapters, dubbing/music modes or Windows packaging.
+Do not weaken the existing D-021/D-022 exact FFmpeg mechanics and do not replace them with unsafe packet-copy concatenation.
+
+Do not combine this slice with provider generation, RangeContinuityBrief semantics, the Stage 4C full timeline UI, dubbing/music modes or Windows packaging.
+
+## Following task
+
+After the non-destructive edit-state boundary is proven portable and deterministic, return to `stage-4-range-continuity-brief` for Stage 4B provider-neutral bounded context/intelligence state.
