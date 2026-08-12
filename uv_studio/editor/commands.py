@@ -15,7 +15,11 @@ from uv_studio.projects.continuity_brief import (
 )
 from uv_studio.projects.media_ranges import MAX_CONTEXT_US, ProjectMediaRange, ResolvedProjectMediaRange
 from uv_studio.projects.models import ProjectValidationError
-from uv_studio.projects.source_media import ProjectSourceMediaStore, SourceMediaError
+from uv_studio.projects.source_media import (
+    ProjectSourceMediaStore,
+    SourceMediaError,
+    SourceMediaNotFound,
+)
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
 _MAX_CHANGE_REQUEST_LENGTH = 4000
@@ -119,9 +123,9 @@ class EditorCommandService:
                 context_after_us=command.context_after_us,
             )
             resolved = requested.resolve(source_duration_us)
-        except (ProjectNotFound, SourceMediaError, ProjectStoreError, ProjectValidationError) as exc:
-            if isinstance(exc, ProjectNotFound):
-                raise
+        except (ProjectNotFound, SourceMediaNotFound):
+            raise
+        except (SourceMediaError, ProjectStoreError, ProjectValidationError) as exc:
             raise EditorCommandError(str(exc)) from exc
 
         edit_id = self._new_edit_id()
