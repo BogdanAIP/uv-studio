@@ -10,10 +10,11 @@ Before changing files, read in this order:
 2. `project-context/PROJECT_STATE.md`
 3. `project-context/NEXT_TASK.md`
 4. `project-context/DECISIONS.md` and any detailed decisions linked from the current state
-5. `ROADMAP.md`
-6. `UPSTREAM.md`
-7. the active pull request, including its diff, checks and unresolved review threads
-8. recent commits on `main`
+5. `ARCHITECTURE_PRINCIPLES.md`
+6. `ROADMAP.md`
+7. `UPSTREAM.md`
+8. the active pull request, including its diff, checks and unresolved review threads
+9. recent commits on `main`
 
 Run `python tools/validate_development_context.py` before implementation. If the declared pull request has already merged, use the single handoff target in `ACTIVE_SLICE.json`/`NEXT_TASK.md` to initialize the next slice from current `main`; do not continue on the merged branch.
 
@@ -24,6 +25,16 @@ Run `python tools/validate_development_context.py` before implementation. If the
 - `NEXT_TASK.md` describes exactly one continuation target after the active slice.
 - `PROJECT_HISTORY.md`, decisions, merged pull requests and Git history hold completed detail. Keep historical narration out of `PROJECT_STATE.md`.
 - Exact head SHAs and check conclusions are live GitHub facts. Do not store a self-referential current head SHA in `ACTIVE_SLICE.json`.
+
+## Reuse-first and programmable editing
+
+`ARCHITECTURE_PRINCIPLES.md` is mandatory for product implementation.
+
+- Do not build a custom general-purpose editor/media primitive merely because writing one is locally convenient. Search, license-check and technically probe credible open-source implementations first.
+- Record a concrete rejection before replacing a suitable mature component with custom code.
+- Every meaningful editor mutation must have one programmatic UV Studio command contract. GUI, scripts, AI and MCP call that same command model.
+- AI/automation must not mutate canonical project/timeline files directly or bypass the command/domain validation layer.
+- Prefer small adapters around mature components over forks or copied subsystems when that preserves upgradeability and license boundaries.
 
 ## Slice and Git ownership
 

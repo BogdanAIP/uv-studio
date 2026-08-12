@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "required_capabilities": [
+    "open_source_media",
+    "create_timeline",
+    "add_clip",
+    "multiple_tracks_or_layers",
+    "move_clip",
+    "trim_clip",
+    "split_clip",
+    "ripple_or_reorder",
+    "query_timeline",
+    "serialize_state",
+    "roundtrip_state",
+    "external_programmatic_mutation",
+    "undo_redo_integration_surface",
+    "preview_frame",
+    "render_export",
+    "exact_range_replacement_expressible"
+  ],
+  "selection_gates": [
+    "license_compatible",
+    "maintained_or_stable_enough",
+    "windows_viable",
+    "adapter_boundary_possible",
+    "no_raw_state_bypass_required"
+  ],
+  "candidate_roles": {
+    "libopenshot": ["engine"],
+    "mlt": ["engine"],
+    "opencut": ["editor_ux_donor"]
+  }
+}

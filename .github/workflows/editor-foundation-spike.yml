@@ -1,0 +1,93 @@
+name: editor-foundation-spike
+
+on:
+  push:
+    branches:
+      - stage-4/editor-foundation-spike
+    paths:
+      - '.github/workflows/editor-foundation-spike.yml'
+      - 'spikes/editor-foundation/**'
+      - 'ARCHITECTURE_PRINCIPLES.md'
+      - 'project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine-probes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install distribution-packaged editor engines
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3-openshot python3-mlt melt
+
+      - name: Show binding versions
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import openshot
+          import mlt7
+          print('openshot:', getattr(openshot, 'OPENSHOT_VERSION_FULL', 'unknown'))
+          print('mlt:', getattr(mlt7, 'LIBMLT_VERSION', 'unknown'))
+          PY
+
+      - name: Generate deterministic source fixture
+        run: |
+          mkdir -p .spike-output
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i 'testsrc2=size=320x240:rate=30:duration=4' \
+            -c:v libx264 -pix_fmt yuv420p .spike-output/source.mp4
+
+      - name: Probe libopenshot
+        run: |
+          /usr/bin/python3 spikes/editor-foundation/probe_openshot.py \
+            .spike-output/source.mp4 \
+            .spike-output/openshot-output.mp4 \
+            .spike-output/openshot-report.json
+          ffprobe -v error -show_entries format=duration -of default=nw=1 .spike-output/openshot-output.mp4
+
+      - name: Probe MLT
+        run: |
+          /usr/bin/python3 spikes/editor-foundation/probe_mlt.py \
+            .spike-output/source.mp4 \
+            .spike-output/mlt-output.mp4 \
+            .spike-output/mlt-project.mlt \
+            .spike-output/mlt-report.json
+          ffprobe -v error -show_entries format=duration -of default=nw=1 .spike-output/mlt-output.mp4
+
+      - name: Upload engine evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-engine-spike-evidence
+          path: .spike-output
+
+  opencut-source-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out pinned OpenCut Classic donor candidate
+        run: |
+          git clone --filter=blob:none https://github.com/OpenCut-app/opencut-classic.git /tmp/opencut-classic
+          git -C /tmp/opencut-classic checkout --detach cf5e79e919144200294fb9fed22a222592a0aeea
+          test "$(git -C /tmp/opencut-classic rev-parse HEAD)" = "cf5e79e919144200294fb9fed22a222592a0aeea"
+
+      - name: Inspect implemented timeline/UI source and license
+        run: |
+          mkdir -p .spike-output
+          python3 spikes/editor-foundation/probe_opencut.py \
+            /tmp/opencut-classic \
+            .spike-output/opencut-report.json
+
+      - name: Upload OpenCut evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencut-source-spike-evidence
+          path: .spike-output/opencut-report.json

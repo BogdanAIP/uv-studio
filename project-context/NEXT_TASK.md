@@ -6,33 +6,33 @@ Updated: 2026-08-12
 
 ## Expected handoff
 
-After the replacement review gate is merged, continue with Stage 4C as `stage-4-range-edit-user-workflow`.
+After `stage-4-editor-foundation-spike` selects and proves the reusable editor foundation, continue Stage 4C as `stage-4-range-edit-user-workflow`.
 
-The next slice should turn the completed Stage 4 domain chain into the first complete user-facing targeted existing-video edit workflow rather than adding another backend-only gate.
+The implementation slice must consume the selected foundation and the product-owned Command API direction rather than writing a parallel custom timeline/editor stack.
 
-## Required direction
+## Required user outcome
 
 ```text
-open existing-video project
-  -> preview source
-  -> choose exact range on a microsecond-backed timeline
+open/import existing video
+  -> preview source in the editor workspace
+  -> select the exact requested range on the reusable timeline UX
   -> inspect bounded context / Brief / approved Plan
   -> prepare or select ReplacementCandidate
-  -> inspect review verdict and evidence
-  -> explicitly accept approved candidate or continue revision
+  -> review candidate in context
+  -> accept approved candidate or continue revision
+  -> keep edits non-destructive
   -> explicit final render/export
 ```
 
 Requirements:
 
-- add a UV Studio-owned range-edit workspace under the project UI rather than routing the user back to legacy production tools;
-- source preview and range selection must preserve integer-microsecond backend identity even if the browser UI uses human-readable time;
-- show bounded before/requested/after context and current Brief/Plan state without exposing provider/runtime secrets;
-- support deterministic/prepared candidate paths and optional generated candidates through existing capability/authorization APIs;
-- surface sample-first state and charge/remote consent before optional external generation;
-- display candidate review targets, observations/evidence and `approved` / `rejected` / `needs_revision` verdicts;
-- only expose acceptance for a current approved review; never recreate the removed caller-controlled replacement-path bypass;
-- preview the accepted decision in context before explicit final render/export;
-- keep original source immutable and canonical edit state non-destructive;
-- add frontend component/unit/accessibility coverage and browser E2E for the permanent 5–10 second targeted-edit regression scenario;
+- use the foundation selected by D-033 and keep third-party code behind explicit adapters/license boundaries;
+- expose meaningful edit mutations through one UV Studio command contract usable by GUI, scripts, AI and MCP;
+- do not allow scripts/AI to bypass Project Store path rules, review approval, execution authorization or canonical domain validation;
+- add source registration/import and safe browser-preview delivery if the selected foundation does not already solve them within the UV security boundary;
+- preserve integer-microsecond range identity even if the UI displays human-readable time/frame positions;
+- preserve original media and project-owned non-destructive edit state;
+- support deterministic/prepared replacements and optional generated replacements through the existing capability/authorization APIs;
+- expose review targets, evidence and `approved` / `rejected` / `needs_revision` states;
+- add frontend/unit/accessibility coverage and browser E2E for the permanent 5–10 second targeted-edit scenario;
 - do not begin dubbing, music-video mode or desktop packaging in this slice.
