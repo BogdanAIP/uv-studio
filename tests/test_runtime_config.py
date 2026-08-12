@@ -11,6 +11,7 @@ from unittest.mock import patch
 from uv_studio.config import (
     ROOT,
     allowed_frontend_origins,
+    configuration_root,
     runtime_config_path,
     runtime_secrets_path,
 )
@@ -47,6 +48,12 @@ class RuntimeConfigStoreTests(unittest.TestCase):
         self.assertEqual(secrets_path, (ROOT / "data" / "config" / "secrets.json").resolve())
         self.assertNotIn("vendor", config_path.parts)
         self.assertNotIn("vendor", secrets_path.parts)
+
+    def test_machine_config_override_cannot_point_into_vendor_tree(self) -> None:
+        forbidden = str(ROOT / "vendor" / "credential-store")
+        with patch.dict(os.environ, {"UV_STUDIO_CONFIG_DIR": forbidden}, clear=False):
+            with self.assertRaises(RuntimeError):
+                configuration_root()
 
     def test_secret_updates_are_separate_from_public_config(self) -> None:
         secret = "test-secret-never-return-this"
@@ -88,6 +95,28 @@ class RuntimeConfigStoreTests(unittest.TestCase):
                 values={"api_providers": {"openai": {"api_key": "forbidden"}}},
             )
 
+    def test_public_provider_urls_cannot_embed_credentials_or_query_secrets(self) -> None:
+        for base_url in (
+            "https://user:password@example.test/v1",
+            "https://example.test/v1?api_key=secret",
+            "https://example.test/v1#secret",
+        ):
+            with self.subTest(base_url=base_url):
+                with self.assertRaises(RuntimeConfigError):
+                    self.store.update(
+                        values={"api_providers": {"openai": {"base_url": base_url}}},
+                    )
+
+    def test_public_proxy_cannot_embed_credentials(self) -> None:
+        with self.assertRaises(RuntimeConfigError):
+            self.store.update(
+                values={
+                    "api_providers": {
+                        "common": {"proxy": "http://user:password@127.0.0.1:8080"}
+                    }
+                },
+            )
+
     def test_secret_replacement_does_not_require_old_value_and_null_clears(self) -> None:
         path = "api_providers.openai.api_key"
         self.store.update(secret_updates={path: "first-secret"})
@@ -118,6 +147,15 @@ class RuntimeConfigStoreTests(unittest.TestCase):
 
     def test_allowed_frontend_origins_rejects_wildcard(self) -> None:
         with patch.dict(os.environ, {"UV_STUDIO_ALLOWED_ORIGINS": "*"}, clear=False):
+            with self.assertRaises(RuntimeError):
+                allowed_frontend_origins()
+
+    def test_allowed_frontend_origins_rejects_userinfo(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"UV_STUDIO_ALLOWED_ORIGINS": "http://user:password@127.0.0.1:3000"},
+            clear=False,
+        ):
             with self.assertRaises(RuntimeError):
                 allowed_frontend_origins()
 
