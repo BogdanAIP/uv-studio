@@ -7,7 +7,7 @@
     "goal": "Persist provider-neutral evidence-based review verdicts for exact current ReplacementCandidates and make an approved current review the only product path that may create a new AcceptedRangeEdit, while preserving manual/local review as a first-class baseline and optional model-assisted analysis behind the existing Capability Registry and D-017 boundary.",
     "base_branch": "main",
     "branch": "stage-4/replacement-review-gate",
-    "pull_request": null,
+    "pull_request": 29,
     "phase": "draft",
     "write_scope": [
       "uv_studio/projects/replacement_review.py",
