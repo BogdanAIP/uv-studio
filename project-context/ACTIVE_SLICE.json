@@ -27,7 +27,7 @@
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-range-continuity-brief",
+    "next_slice_id": "stage-4-non-destructive-edit-state",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
