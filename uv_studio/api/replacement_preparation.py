@@ -28,6 +28,7 @@ from uv_studio.capabilities.authorization import OneShotAuthorizationStore
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.projects.models import ProjectReference, ProjectValidationError, validate_project_relative_path
 from uv_studio.projects.replacement_candidate import (
+    ReplacementCandidate,
     ReplacementCandidateError,
     ReplacementCandidateNotFound,
     ReplacementCandidateState,
@@ -95,6 +96,31 @@ def _current_plan(store: ProjectStore, project_id: str, edit_id: str) -> Replace
         raise _translate_error(exc) from exc
 
 
+def _candidate_from_plan(
+    plan: ReplacementPlan,
+    *,
+    candidate_id: str,
+    stage: str,
+    artifact_id: str,
+    artifact_path: str,
+    execution_run_id: str | None = None,
+) -> ReplacementCandidate:
+    """Bind a candidate to the exact plan that authorized its preparation."""
+    return ReplacementCandidate(
+        candidate_id=candidate_id,
+        edit_id=plan.edit_id,
+        source_path=plan.source_path,
+        start_us=plan.start_us,
+        end_us=plan.end_us,
+        plan_sha256=replacement_plan_sha256(plan),
+        method_class=plan.method_class,
+        stage=stage,
+        artifact_id=artifact_id,
+        artifact_path=artifact_path,
+        execution_run_id=execution_run_id,
+    )
+
+
 def _require_current_sample(store: ProjectStore, project_id: str, plan: ReplacementPlan) -> None:
     candidates = _candidate_store(store)
     state = candidates.load(project_id)
@@ -146,7 +172,7 @@ def _validate_capability_path(
     offer = prepared.get("selection", {}).get("offer")
     if not isinstance(offer, Mapping):
         raise HTTPException(status_code=409, detail="candidate preparation did not resolve an offer")
-    if MediaKind.VIDEO not in definition.outputs:
+    if MediaKind.VIDEO not in definition.output_kinds:
         raise HTTPException(
             status_code=409,
             detail={"code": "candidate_output_kind_rejected", "message": "replacement candidate capability must produce video"},
@@ -312,10 +338,9 @@ def prepare_project_asset_candidate(
         store.update_project(project_id, artifacts=(*project.artifacts, reference))
         registered = True
         candidates = _candidate_store(store)
-        candidate = candidates.make_candidate(
-            project_id,
+        candidate = _candidate_from_plan(
+            plan,
             candidate_id=candidate_id,
-            edit_id=plan.edit_id,
             stage="full",
             artifact_id=artifact_id,
             artifact_path=relative_path,
@@ -442,10 +467,9 @@ async def execute_candidate_capability(
     run_id = output.get("run_id") if isinstance(output, Mapping) and isinstance(output.get("run_id"), str) else None
     candidates = _candidate_store(store)
     try:
-        candidate = candidates.make_candidate(
-            project_id,
+        candidate = _candidate_from_plan(
+            plan,
             candidate_id=f"cand_{uuid.uuid4().hex}",
-            edit_id=plan.edit_id,
             stage=stage,
             artifact_id=artifact_id,
             artifact_path=artifact_path,
