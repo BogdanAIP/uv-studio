@@ -1,82 +1,62 @@
 # Project State
 
-<!-- uv-active-slice: stage-4-range-continuity-brief -->
+<!-- uv-active-slice: stage-4-replacement-plan-gate -->
 
 **Updated:** 2026-08-12
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 4B — Edit intelligence / RangeContinuityBrief
+**Active roadmap stage:** Stage 4B — Replacement plan gate
 
-**Last verified `main` baseline:** `3dcb03ec33600ca361064afcbc6e9121ed800b11`
+**Last verified `main` baseline:** `58ff29eb4f295bb890a0b6f1c76b2f2f5f08cd38`
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
 ## Product now
 
-UV Studio has a secure product-owned runtime/dependency boundary, canonical portable projects, semantic capabilities with D-017 authorization, real cross-platform exact range mechanics, and non-destructive accepted replacement decisions under D-028.
+Stage 4 now has three proven layers: exact local range mechanics, non-destructive accepted replacement decisions, and a provider-neutral pre-replacement `RangeContinuityBrief` under D-029. PR #26 corrected the workflow so continuity evidence and constraints exist before replacement preparation rather than describing an already-produced take.
 
-Accepted replacements live as lightweight typed `timeline/range-edits.json` decisions and are materialized only by explicit `video.render_edits`; PR #25 proved video-only and audio multi-edit rendering on Ubuntu and Windows without returning to whole-video-render-as-state.
-
-## Stage 4B RangeContinuityBrief — review-ready
-
-`stage-4-range-continuity-brief` adds a separate typed/versioned provider-neutral continuity/evidence document for a logical targeted edit intent. The brief is deliberately valid **before any replacement or accepted edit exists**.
-
-The product order is now:
+The current product order is:
 
 ```text
-exact targeted range intent
-  -> bounded project evidence
-  -> mechanical facts
-  -> observations / inferences
-  -> continuity constraints
-  -> review targets
-  -> replacement plan / preparation / generation
-  -> review
+targeted range intent
+  -> RangeContinuityBrief
+  -> approved replacement plan
+  -> replacement preparation / optional generation
+  -> evidence-based review
   -> accepted replacement decision
   -> explicit render/export
 ```
 
-Portable brief target identity is exactly:
+## Active slice
 
-```text
-edit_id + source_path + start_us + end_us
-```
+`stage-4-replacement-plan-gate` introduces a typed/versioned approved plan under `timeline/` for one logical `edit_id`.
 
-`replacement_path` is not part of continuity identity. If an accepted edit with the same `edit_id` exists later, its source/range must match; another replacement take for the same target may reuse the same brief.
+The plan must:
 
-The implemented boundary provides:
+- load and explicitly validate the current RangeContinuityBrief;
+- inherit exact `edit_id + source_path + start_us + end_us` from that Brief rather than trusting duplicate caller identity;
+- bind to a server-computed SHA-256 digest of canonical Brief JSON so later Brief changes make the plan stale;
+- approve a provider-neutral method class such as deterministic edit, prepared project asset or generative transform;
+- persist bounded required/allowed/forbidden change scope and an audio strategy;
+- automatically carry continuity constraint IDs and review target IDs from the Brief;
+- make sample-first mandatory for generative plans and unnecessary for non-generative plans;
+- contain no provider/model/offer/runtime/credential/host identity;
+- remain valid before any replacement media or `AcceptedRangeEdit` exists;
+- perform no media/provider execution when approved;
+- remain structurally readable/removable if the Brief later changes or disappears, while explicit validation fails closed.
 
-- creation and archive round-trip before replacement media exists;
-- exactly one requested evidence item anchoring the target range;
-- source-bound `before`, `requested` and `after` evidence with exact boundary adjacency;
-- bounded 30-second evidence spans and bounded collection counts;
-- project-relative evidence references with explicit current-file validation;
-- mechanical facts separate from observations/inferences and no runtime/provider-binding fact keys;
-- observations/inferences with explicit confidence and evidence references;
-- constraints/review targets linked to known evidence only;
-- structural readability/removal when files become stale plus explicit current-health validation;
-- absent accepted edit as valid pre-replacement state;
-- fail-closed conflict when a same-ID accepted edit points at another source/range;
-- replacement-only take changes that do not invalidate target continuity knowledge;
-- UV-owned CRUD API with no execution surface;
-- no FFmpeg/VLM/MCP/provider side effect from baseline brief persistence.
-
-D-029 is accepted.
-
-Draft functional head `0c7053f842bf767e58b9d8564035cbfc20ce6f04` passed all five required checks in CI run #678 (`31589049828`) on Ubuntu and Windows, including unit/API/HTTP, existing real-media Stage 4A regressions, frontend lint, zero high-severity npm audit and production build.
-
-The final state-only review head must repeat the same five required checks before merge.
+Persisting a plan is the approval gate. Draft editor form state does not become canonical project state in this slice.
 
 ## Expected following work
 
-After PR #26 merges, continue Stage 4B with `stage-4-replacement-plan-gate`: consume the validated target brief, choose and approve the replacement method/constraints, and only then prepare deterministic or optional generative replacement media.
+After this gate is proven, continue with `stage-4-replacement-preparation`: consume an approved current plan and produce candidate replacement media without automatically accepting it. Deterministic/prepared methods stay first-class; optional generative execution uses semantic capabilities and D-017, with sample-first enforced before full generation.
 
 ## Remaining cross-cutting gaps
 
-- D-023 still needs a post-merge/idle lifecycle state and live diff-vs-write-scope enforcement;
+- D-023 still needs post-merge/idle lifecycle and live diff-vs-write-scope enforcement;
 - general free-form project JSON fields still need proportionate recursive portability hardening;
-- Stage 4C still owns the complete timeline/preview/accept/export UI;
+- Stage 4C still owns complete timeline/preview/accept/export UI;
 - broader real-media codec/device coverage remains incremental hardening.
 
 ## Development invariant

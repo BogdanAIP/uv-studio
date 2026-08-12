@@ -1,40 +1,37 @@
 # Next Task
 
-<!-- uv-next-slice: stage-4-replacement-plan-gate -->
+<!-- uv-next-slice: stage-4-replacement-preparation -->
 
 Updated: 2026-08-12
 
 ## Expected handoff
 
-After the active RangeContinuityBrief slice is merged, continue Stage 4B with `stage-4-replacement-plan-gate`.
+After the active replacement-plan gate is merged, continue Stage 4B with `stage-4-replacement-preparation`.
 
-The next slice should consume a validated provider-neutral continuity brief for an exact targeted edit intent and persist an explicit approved replacement plan **before replacement preparation or generation begins**.
-
-An already accepted edit is not required to create the plan. If one exists for the same `edit_id`, its source/range identity must remain compatible with the brief.
+The next slice should consume a **currently valid approved replacement plan** and produce candidate replacement media without automatically creating an `AcceptedRangeEdit`.
 
 ## Required direction
 
 ```text
-validated RangeContinuityBrief
-  -> replacement method choice
-  -> required / allowed changes
-  -> audio / timing / continuity constraints
-  -> deterministic vs prepared vs generated path
-  -> sample-first requirement where generation is used
-  -> review targets
-  -> approved plan gate
-  -> replacement preparation / generation
+approved current ReplacementPlan
+  -> select implementation for approved method class
+  -> deterministic/prepared local path OR optional generative capability
+  -> sample-first gate when plan requires generation
+  -> bounded candidate artifact + portable provenance
+  -> later independent review
+  -> only then acceptance
 ```
 
 Requirements:
 
-- exact `edit_id + source_path + start_us + end_us` survives the plan unchanged;
-- deterministic/local methods stay first-class and do not require a provider;
-- generative preparation is optional, semantic-capability based and D-017 authorized when remote/non-free;
-- plan state describes the approved **method class and constraints**, not one provider/model/runtime instance;
-- runtime provider/model/offer choice remains outside portable canonical plan state;
-- no silent downgrade from an approved method class to a weaker path;
-- if generation is used, sample-first evidence is required before committing to full replacement generation;
-- review targets from the continuity brief remain traceable into the plan/review gate;
-- the plan must be usable before any `AcceptedRangeEdit` exists;
-- no full Stage 4C UI, dubbing/music mode or packaging work in this slice.
+- preparation must fail if the plan's bound RangeContinuityBrief digest or exact target identity is stale;
+- runtime implementation must not silently change the approved method class;
+- deterministic/local preparation remains first-class and provider-free;
+- prepared-asset handling remains project-scoped and does not become arbitrary host-file access;
+- generative execution remains optional and routes through semantic Capability Registry + D-017 authorization;
+- provider/model/offer/runtime selection is execution provenance, not canonical ReplacementPlan state;
+- generative plans must satisfy the persisted sample-first requirement before a full replacement candidate is produced;
+- candidate outputs are project-owned artifacts with non-secret provenance;
+- creating a candidate does not automatically accept it into `timeline/range-edits.json`;
+- independent evidence-based replacement review remains the following gate rather than being skipped;
+- no Stage 4C full editor UI, dubbing/music mode or packaging work in this slice.
