@@ -14,42 +14,56 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 ## Product now
 
-UV Studio has a secure product-owned runtime/dependency boundary, canonical portable projects, semantic capabilities with D-017 authorization, real cross-platform exact range mechanics, and non-destructive accepted edit decisions under D-028.
+UV Studio has a secure product-owned runtime/dependency boundary, canonical portable projects, semantic capabilities with D-017 authorization, real cross-platform exact range mechanics, and non-destructive accepted replacement decisions under D-028.
 
-Accepted edits now live as lightweight typed `timeline/range-edits.json` decisions and are materialized only by explicit `video.render_edits`; PR #25 proved video-only and audio multi-edit rendering on Ubuntu and Windows without returning to whole-video-render-as-state.
+Accepted replacements live as lightweight typed `timeline/range-edits.json` decisions and are materialized only by explicit `video.render_edits`; PR #25 proved video-only and audio multi-edit rendering on Ubuntu and Windows without returning to whole-video-render-as-state.
 
 ## Active Stage 4B slice
 
-`stage-4-range-continuity-brief` adds a separate typed/versioned provider-neutral continuity/evidence document attached to an exact accepted edit identity.
+`stage-4-range-continuity-brief` adds a separate typed/versioned provider-neutral continuity/evidence document for a logical targeted edit intent. The brief is deliberately valid **before any replacement or accepted edit exists**.
 
-The intended structure separates:
+The corrected product order is:
 
 ```text
-exact accepted edit identity
+exact targeted range intent
   -> bounded project evidence
   -> mechanical facts
   -> observations / inferences
   -> continuity constraints
   -> review targets
+  -> replacement plan / preparation / generation
+  -> review
+  -> accepted replacement decision
 ```
 
-The brief must remain useful without a VLM/provider call. Future model-assisted enrichment may populate observations/inferences only through existing capability/D-017 boundaries; provider/model/runtime identity never becomes canonical brief state.
+Portable brief target identity is exactly:
+
+```text
+edit_id + source_path + start_us + end_us
+```
+
+`replacement_path` is not part of continuity identity. If an accepted edit with the same `edit_id` exists later, its source/range must match; another replacement take for the same target may reuse the same brief.
 
 ## Invariants for this slice
 
-- exact `edit_id + source_path + start_us + end_us` must match an accepted D-028 edit;
-- evidence paths are project-relative regular files;
-- source-coordinate evidence windows are bounded and role-consistent around the target edit;
-- mechanical facts are typed separately from observations/inferences;
-- observations/inferences carry explicit confidence and evidence references;
+- a brief can be created and archived before replacement media exists;
+- exactly one requested evidence item anchors the target range;
+- `before`, `requested` and `after` evidence must reference the target source;
+- before/after windows must touch the exact edit boundaries and each evidence span is bounded to 30 seconds;
+- source-coordinate reference evidence is allowed only when the reference itself is the target source;
+- evidence paths are project-relative regular files when saved/validated;
+- mechanical facts are typed separately from observations/inferences and cannot encode provider/model/runtime binding keys;
+- observations/inferences carry explicit confidence and known evidence references;
 - constraints/review targets reference known evidence IDs only;
-- state remains structurally readable/removable if linked media/edit state later becomes stale, with explicit validation for current project health;
-- archive/export/import/fresh reopen preserves the typed brief exactly;
+- collection sizes are bounded at the domain boundary;
+- state remains structurally readable/removable if linked files later become stale, with explicit validation for current project health;
+- an absent accepted edit is valid pre-replacement state; a conflicting accepted source/range makes the brief stale;
+- archive/export/import/fresh reopen preserves the typed brief exactly without a replacement artifact;
 - constructing a valid baseline brief performs no FFmpeg/VLM/provider execution.
 
 ## Expected following work
 
-After this contract is proven, continue Stage 4B with `stage-4-replacement-plan-gate`: consume exact edit decisions + continuity briefs to define the approved replacement method/constraints before deterministic or optional generative preparation.
+After this contract is proven, continue Stage 4B with `stage-4-replacement-plan-gate`: consume the validated target brief, choose and approve the replacement method/constraints, and only then prepare deterministic or optional generative replacement media.
 
 ## Remaining cross-cutting gaps
 
