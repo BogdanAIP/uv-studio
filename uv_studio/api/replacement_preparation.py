@@ -21,17 +21,11 @@ from uv_studio.api.capability_execution import (
     prepare_project_capability_execution,
 )
 from uv_studio.api.projects import get_project_store
-from uv_studio.capabilities import (
-    CostClass,
-    LocalityClass,
-    MediaKind,
-    OperationKind,
-)
+from uv_studio.capabilities import CostClass, LocalityClass, MediaKind, OperationKind
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter, NativeVideoClawAdapter
 from uv_studio.capabilities.adapters.mcp_execution import MCPExecutionAdapter
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
-from uv_studio.mcp.manager import MCPManager
 from uv_studio.projects.models import ProjectReference, ProjectValidationError, validate_project_relative_path
 from uv_studio.projects.replacement_candidate import (
     ReplacementCandidateError,
@@ -50,14 +44,12 @@ _SAFE_SUFFIX_RE = re.compile(r"^\.[A-Za-z0-9][A-Za-z0-9._-]{0,15}$")
 
 class PreparedAssetRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     edit_id: StrictStr
     source_path: StrictStr
 
 
 class SampleApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     candidate_id: StrictStr
 
 
@@ -67,28 +59,32 @@ def _candidate_store(store: ProjectStore) -> ReplacementCandidateStore:
 
 def _translate_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
-        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        return HTTPException(status_code=404, detail="Project not found")
     if isinstance(exc, ReplacementCandidateNotFound):
-        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Replacement candidate not found")
-    if isinstance(exc, ReplacementCandidateError):
-        return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    if isinstance(exc, (ProjectValidationError, ProjectStoreError)):
-        return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        return HTTPException(status_code=404, detail="Replacement candidate not found")
+    if isinstance(exc, (ReplacementCandidateError, ProjectValidationError, ProjectStoreError)):
+        return HTTPException(status_code=422, detail=str(exc))
     return HTTPException(status_code=500, detail="Replacement preparation failed")
 
 
-def _request_parts(request: Mapping[str, Any], *, extra_allowed: set[str]) -> tuple[str, dict[str, Any]]:
+def _request_parts(
+    request: Mapping[str, Any], *, extra_allowed: set[str]
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
     if not isinstance(request, Mapping):
         raise HTTPException(status_code=422, detail="request body must be a JSON object")
     allowed = {"stage", "selection_policy", "offer_id", "input", *extra_allowed}
     unknown = set(request).difference(allowed)
     if unknown:
-        raise HTTPException(status_code=422, detail=f"unsupported candidate execution fields: {sorted(unknown)!r}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"unsupported candidate execution fields: {sorted(unknown)!r}",
+        )
     stage = request.get("stage")
     if stage not in {"sample", "full"}:
         raise HTTPException(status_code=422, detail="stage must be 'sample' or 'full'")
     generic = {key: value for key, value in request.items() if key != "stage"}
-    return stage, generic
+    preflight = {key: value for key, value in generic.items() if key not in extra_allowed}
+    return stage, generic, preflight
 
 
 def _current_plan(store: ProjectStore, project_id: str, edit_id: str) -> ReplacementPlan:
@@ -99,12 +95,9 @@ def _current_plan(store: ProjectStore, project_id: str, edit_id: str) -> Replace
         raise _translate_error(exc) from exc
 
 
-def _require_current_sample(
-    store: ProjectStore,
-    project_id: str,
-    plan: ReplacementPlan,
-) -> None:
-    state = _candidate_store(store).load(project_id)
+def _require_current_sample(store: ProjectStore, project_id: str, plan: ReplacementPlan) -> None:
+    candidates = _candidate_store(store)
+    state = candidates.load(project_id)
     digest = replacement_plan_sha256(plan)
     approval = next(
         (
@@ -116,21 +109,24 @@ def _require_current_sample(
     )
     if approval is None:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=409,
             detail={
                 "code": "sample_approval_required",
                 "message": "full generative preparation requires an approved sample for the current plan",
             },
         )
     try:
-        sample = _candidate_store(store).validate_candidate(project_id, approval.candidate_id)
+        sample = candidates.validate_candidate(project_id, approval.candidate_id)
     except ReplacementCandidateError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=409,
             detail={"code": "sample_approval_stale", "message": str(exc)},
         ) from exc
     if sample.stage != "sample" or sample.method_class != "generative_transform":
-        raise HTTPException(status_code=409, detail={"code": "sample_approval_stale", "message": "approved sample is not a current generative sample"})
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "sample_approval_stale", "message": "approved sample is not a current generative sample"},
+        )
 
 
 def _validate_capability_path(
@@ -140,7 +136,7 @@ def _validate_capability_path(
     plan: ReplacementPlan,
     stage: str,
     capability_id: str,
-    prepared: dict[str, Any],
+    prepared: Mapping[str, Any],
     registry: CapabilityRegistry,
 ) -> None:
     try:
@@ -149,36 +145,36 @@ def _validate_capability_path(
         raise HTTPException(status_code=404, detail="Capability not found") from exc
     offer = prepared.get("selection", {}).get("offer")
     if not isinstance(offer, Mapping):
-        raise HTTPException(status_code=409, detail="candidate preparation did not resolve an executable offer")
-
-    if stage == "full" and MediaKind.VIDEO not in definition.outputs:
-        raise HTTPException(status_code=409, detail={"code": "candidate_output_kind_rejected", "message": "full replacement candidate capability must produce video"})
-    if stage == "sample" and MediaKind.VIDEO not in definition.outputs:
-        raise HTTPException(status_code=409, detail={"code": "candidate_output_kind_rejected", "message": "this slice requires video sample outputs"})
+        raise HTTPException(status_code=409, detail="candidate preparation did not resolve an offer")
+    if MediaKind.VIDEO not in definition.outputs:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "candidate_output_kind_rejected", "message": "replacement candidate capability must produce video"},
+        )
 
     if plan.method_class == "prepared_asset":
-        raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "prepared_asset plans use the project-asset preparation endpoint, not capability execution"})
-
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "method_class_mismatch", "message": "prepared_asset plans use the project-asset endpoint"},
+        )
     if plan.method_class == "deterministic_edit":
         if stage != "full":
             raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "deterministic plans only produce full candidates"})
         if definition.operation_kind not in {OperationKind.DETERMINISTIC_MEDIA, OperationKind.ASSEMBLY}:
-            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "approved deterministic_edit plan requires a deterministic media or assembly capability"})
+            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "deterministic_edit requires deterministic media or assembly capability"})
         if offer.get("locality") != LocalityClass.LOCAL.value or offer.get("cost_class") != CostClass.FREE.value:
-            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "deterministic_edit preparation cannot widen to remote or non-free execution"})
+            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "deterministic_edit cannot widen to remote or non-free execution"})
         return
-
     if plan.method_class == "generative_transform":
         if definition.operation_kind not in {OperationKind.GENERATION, OperationKind.TRANSFORMATION}:
-            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "approved generative_transform plan requires a generation or transformation capability"})
+            raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "generative_transform requires generation or transformation capability"})
         if stage == "full":
             _require_current_sample(store, project_id, plan)
         return
+    raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": "unsupported approved method class"})
 
-    raise HTTPException(status_code=409, detail={"code": "method_class_mismatch", "message": f"unsupported approved method class: {plan.method_class}"})
 
-
-def _prepare_candidate_capability(
+def _candidate_preflight(
     *,
     project_id: str,
     edit_id: str,
@@ -188,12 +184,12 @@ def _prepare_candidate_capability(
     store: ProjectStore,
     registry: CapabilityRegistry,
 ) -> tuple[str, dict[str, Any], dict[str, Any], ReplacementPlan]:
-    stage, generic = _request_parts(request, extra_allowed=extra_allowed)
+    stage, generic, preflight = _request_parts(request, extra_allowed=extra_allowed)
     plan = _current_plan(store, project_id, edit_id)
     prepared = prepare_project_capability_execution(
         project_id,
         capability_id,
-        generic,
+        preflight,
         store=store,
         registry=registry,
     )
@@ -209,18 +205,17 @@ def _prepare_candidate_capability(
     return stage, generic, prepared, plan
 
 
-def _candidate_state_dict(state: ReplacementCandidateState) -> dict[str, Any]:
+def _state(state: ReplacementCandidateState) -> dict[str, Any]:
     return state.to_dict()
 
 
 @router.get("/{project_id}/replacement-candidates")
 def list_replacement_candidates(
-    project_id: str,
-    store: ProjectStore = Depends(get_project_store),
+    project_id: str, store: ProjectStore = Depends(get_project_store)
 ) -> dict[str, Any]:
     try:
         store.load_project(project_id)
-        return _candidate_state_dict(_candidate_store(store).load(project_id))
+        return _state(_candidate_store(store).load(project_id))
     except (ProjectNotFound, ReplacementCandidateError, ProjectStoreError) as exc:
         raise _translate_error(exc) from exc
 
@@ -246,7 +241,7 @@ def remove_replacement_candidate(
 ) -> dict[str, Any]:
     try:
         store.load_project(project_id)
-        return _candidate_state_dict(_candidate_store(store).remove(project_id, candidate_id))
+        return _state(_candidate_store(store).remove(project_id, candidate_id))
     except (ProjectNotFound, ReplacementCandidateError, ProjectStoreError) as exc:
         raise _translate_error(exc) from exc
 
@@ -262,7 +257,7 @@ def approve_replacement_sample(
         raise HTTPException(status_code=422, detail="URL candidate_id must match request candidate_id")
     try:
         store.load_project(project_id)
-        return _candidate_state_dict(_candidate_store(store).approve_sample(project_id, candidate_id))
+        return _state(_candidate_store(store).approve_sample(project_id, candidate_id))
     except (ProjectNotFound, ReplacementCandidateError, ProjectStoreError) as exc:
         raise _translate_error(exc) from exc
 
@@ -296,8 +291,6 @@ def prepare_project_asset_candidate(
     candidate_id = f"cand_{uuid.uuid4().hex}"
     relative_path = f"artifacts/{artifact_id}{suffix}"
     artifact_path = store.resolve_project_file(project_id, relative_path, allowed_roots=("artifacts",))
-    if artifact_path.exists() or artifact_path.is_symlink():
-        raise HTTPException(status_code=409, detail="allocated candidate artifact already exists")
     reference = ProjectReference(
         id=artifact_id,
         kind="video",
@@ -310,13 +303,16 @@ def prepare_project_asset_candidate(
     )
     registered = False
     try:
+        if artifact_path.exists() or artifact_path.is_symlink():
+            raise ReplacementCandidateError("allocated candidate artifact already exists")
         shutil.copyfile(source, artifact_path)
         if artifact_path.stat().st_size <= 0:
             raise ReplacementCandidateError("prepared candidate artifact must not be empty")
         project = store.load_project(project_id)
         store.update_project(project_id, artifacts=(*project.artifacts, reference))
         registered = True
-        candidate = _candidate_store(store).make_candidate(
+        candidates = _candidate_store(store)
+        candidate = candidates.make_candidate(
             project_id,
             candidate_id=candidate_id,
             edit_id=plan.edit_id,
@@ -324,13 +320,16 @@ def prepare_project_asset_candidate(
             artifact_id=artifact_id,
             artifact_path=relative_path,
         )
-        state = _candidate_store(store).register(project_id, candidate)
+        state = candidates.register(project_id, candidate)
         return {"candidate": candidate.to_dict(), "state": state.to_dict()}
     except Exception as exc:
         if registered:
             try:
                 project = store.load_project(project_id)
-                store.update_project(project_id, artifacts=tuple(item for item in project.artifacts if item.id != artifact_id))
+                store.update_project(
+                    project_id,
+                    artifacts=tuple(item for item in project.artifacts if item.id != artifact_id),
+                )
             except Exception:
                 pass
         try:
@@ -352,12 +351,11 @@ def prepare_candidate_capability_execution(
     store: ProjectStore = Depends(get_project_store),
     registry: CapabilityRegistry = Depends(get_capability_registry),
 ) -> dict[str, Any]:
-    body = {**request, "stage": stage}
-    _stage, _generic, prepared, plan = _prepare_candidate_capability(
+    _stage, _generic, prepared, plan = _candidate_preflight(
         project_id=project_id,
         edit_id=edit_id,
         capability_id=capability_id,
-        request=body,
+        request={**request, "stage": stage},
         extra_allowed=set(),
         store=store,
         registry=registry,
@@ -376,12 +374,11 @@ def authorize_candidate_capability_execution(
     registry: CapabilityRegistry = Depends(get_capability_registry),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
 ) -> dict[str, Any]:
-    body = {**request, "stage": stage}
-    _stage, generic, _prepared, plan = _prepare_candidate_capability(
+    _stage, generic, _prepared, plan = _candidate_preflight(
         project_id=project_id,
         edit_id=edit_id,
         capability_id=capability_id,
-        request=body,
+        request={**request, "stage": stage},
         extra_allowed={"acknowledgements"},
         store=store,
         registry=registry,
@@ -411,12 +408,11 @@ async def execute_candidate_capability(
     mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
 ) -> dict[str, Any]:
-    body = {**request, "stage": stage}
-    _stage, generic, _prepared, plan = _prepare_candidate_capability(
+    _stage, generic, _prepared, plan = _candidate_preflight(
         project_id=project_id,
         edit_id=edit_id,
         capability_id=capability_id,
-        request=body,
+        request={**request, "stage": stage},
         extra_allowed={"authorization_token"},
         store=store,
         registry=registry,
@@ -435,27 +431,27 @@ async def execute_candidate_capability(
     result = envelope.get("result")
     artifact = result.get("artifact") if isinstance(result, Mapping) else None
     if not isinstance(artifact, Mapping):
-        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_missing", "message": "approved capability execution did not return a project artifact"})
+        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_missing", "message": "capability execution did not return a project artifact"})
     if artifact.get("kind") != "video":
-        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_kind_invalid", "message": "replacement candidate execution must return a video project artifact"})
+        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_kind_invalid", "message": "replacement candidate must be a video artifact"})
     artifact_id = artifact.get("id")
     artifact_path = artifact.get("path")
     if not isinstance(artifact_id, str) or not isinstance(artifact_path, str):
-        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_invalid", "message": "returned project artifact is missing id/path"})
+        raise HTTPException(status_code=502, detail={"code": "candidate_artifact_invalid", "message": "project artifact is missing id/path"})
     output = result.get("output") if isinstance(result, Mapping) else None
     run_id = output.get("run_id") if isinstance(output, Mapping) and isinstance(output.get("run_id"), str) else None
-    candidate_id = f"cand_{uuid.uuid4().hex}"
+    candidates = _candidate_store(store)
     try:
-        candidate = _candidate_store(store).make_candidate(
+        candidate = candidates.make_candidate(
             project_id,
-            candidate_id=candidate_id,
+            candidate_id=f"cand_{uuid.uuid4().hex}",
             edit_id=plan.edit_id,
             stage=stage,
             artifact_id=artifact_id,
             artifact_path=artifact_path,
             execution_run_id=run_id,
         )
-        state = _candidate_store(store).register(project_id, candidate)
+        state = candidates.register(project_id, candidate)
     except ReplacementCandidateError as exc:
         raise _translate_error(exc) from exc
     return {
