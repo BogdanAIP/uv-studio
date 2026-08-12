@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from uv_studio.api.projects import get_project_store
 from uv_studio.projects import (
@@ -38,7 +38,7 @@ class MechanicalFactPayload(BaseModel):
     key: StrictStr
     value: StrictStr | StrictInt | StrictBool
     unit: StrictStr | None = None
-    evidence_ids: list[StrictStr] = []
+    evidence_ids: list[StrictStr] = Field(default_factory=list)
 
 
 class ContinuityObservationPayload(BaseModel):
@@ -57,7 +57,7 @@ class ContinuityConstraintPayload(BaseModel):
     constraint_id: StrictStr
     category: Literal["visual", "motion", "audio", "timing", "content", "technical", "style"]
     requirement: StrictStr
-    evidence_ids: list[StrictStr] = []
+    evidence_ids: list[StrictStr] = Field(default_factory=list)
 
 
 class ReviewTargetPayload(BaseModel):
@@ -66,7 +66,7 @@ class ReviewTargetPayload(BaseModel):
     target_id: StrictStr
     criterion: StrictStr
     required: StrictBool = True
-    evidence_ids: list[StrictStr] = []
+    evidence_ids: list[StrictStr] = Field(default_factory=list)
 
 
 class RangeContinuityBriefPayload(BaseModel):
@@ -78,11 +78,11 @@ class RangeContinuityBriefPayload(BaseModel):
     start_us: StrictInt
     end_us: StrictInt
     replacement_path: StrictStr
-    evidence: list[ContinuityEvidencePayload] = []
-    mechanical_facts: list[MechanicalFactPayload] = []
-    observations: list[ContinuityObservationPayload] = []
-    constraints: list[ContinuityConstraintPayload] = []
-    review_targets: list[ReviewTargetPayload] = []
+    evidence: list[ContinuityEvidencePayload] = Field(default_factory=list)
+    mechanical_facts: list[MechanicalFactPayload] = Field(default_factory=list)
+    observations: list[ContinuityObservationPayload] = Field(default_factory=list)
+    constraints: list[ContinuityConstraintPayload] = Field(default_factory=list)
+    review_targets: list[ReviewTargetPayload] = Field(default_factory=list)
 
 
 class RangeContinuityBriefStatePayload(BaseModel):
