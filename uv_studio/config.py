@@ -2,7 +2,7 @@
 
 Portable project state never reads credentials or host-only configuration from
 this module. Machine configuration lives under the UV Studio configuration root,
-not inside the vendored VideoClaw source tree.
+not inside the vendored VideoClaw source tree or canonical Project Store.
 """
 
 from __future__ import annotations
@@ -32,6 +32,11 @@ def _validate_configuration_root(path: Path) -> Path:
     resolved = path.expanduser().resolve()
     if resolved == VENDOR_ROOT or VENDOR_ROOT in resolved.parents:
         raise RuntimeError("UV Studio machine configuration must not live inside vendor/")
+    project_store = projects_root()
+    if resolved == project_store or project_store in resolved.parents:
+        raise RuntimeError(
+            "UV Studio machine configuration must not live inside the canonical Project Store"
+        )
     return resolved
 
 
