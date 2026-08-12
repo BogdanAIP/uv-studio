@@ -511,7 +511,7 @@ export default function SandboxPage() {
 
     try {
       let apiUrl = '';
-      let body: Record<string, unknown> = {
+      const body: Record<string, unknown> = {
         model: selectedModel,
         prompt: prompt,
       };
