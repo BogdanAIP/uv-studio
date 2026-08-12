@@ -9,6 +9,10 @@ code/data/
 results/
 logs/
 
+# Transitional legacy VideoClaw config may contain provider credentials.
+# UV Studio runtime configuration belongs under ignored data/config instead.
+vendor/videoclaw-app/backend/config.yaml
+
 # IDE/editor state.
 .vscode/
 .idea/
