@@ -7,11 +7,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from uv_studio.api.capabilities import get_capability_registry
-from uv_studio.api.capability_execution import get_execution_authorization_store
+from uv_studio.api.capability_execution import (
+    execute_project_capability as execute_generic_project_capability,
+    get_execution_authorization_store,
+)
 from uv_studio.api.mcp import get_mcp_manager
 from uv_studio.api.projects import get_project_store
 from uv_studio.capabilities import CostClass, LocalityClass, build_builtin_capability_registry
@@ -302,6 +306,58 @@ class ReplacementPreparationApiTests(unittest.TestCase):
         self.assertNotIn("fixture", serialized)
         self.assertNotIn(token, serialized)
         self.assertNotIn(full_token, serialized)
+
+    def test_candidate_result_is_not_rebound_if_plan_changes_after_preflight(self) -> None:
+        self._configure_output_mcp()
+        self._approve_plan("generative_transform")
+        body = {
+            "selection_policy": "pinned_offer",
+            "offer_id": "mcp.fixture.output",
+            "input": {"prompt": "candidate before plan revision"},
+        }
+        authorized = self.client.post(
+            self._candidate_capability_url("sample", "authorize-execution"),
+            json={**body, "acknowledgements": self._acknowledgements()},
+        )
+        self.assertEqual(authorized.status_code, 200, authorized.text)
+        old_plan_digest = authorized.json()["plan_sha256"]
+        token = authorized.json()["authorization_token"]
+
+        async def execute_then_reapprove(*args, **kwargs):
+            envelope = await execute_generic_project_capability(*args, **kwargs)
+            ReplacementPlanStore(self.store).approve(
+                self.project.project_id,
+                ReplacementPlanProposal(
+                    edit_id="edit_1",
+                    method_class="generative_transform",
+                    goal="Reapproved after the candidate execution preflight.",
+                    required_changes=("Use the revised approved intent.",),
+                ),
+            )
+            return envelope
+
+        with patch(
+            "uv_studio.api.replacement_preparation.execute_project_capability",
+            new=execute_then_reapprove,
+        ):
+            response = self.client.post(
+                self._candidate_capability_url("sample", "execute"),
+                json={**body, "authorization_token": token},
+            )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("stale because its approved plan changed", response.json()["detail"])
+        state = self.client.get(self._candidates_url())
+        self.assertEqual(state.status_code, 200, state.text)
+        self.assertEqual(state.json()["candidates"], [])
+        project = self.store.load_project(self.project.project_id)
+        self.assertEqual(len(project.artifacts), 1)
+        self.assertFalse((self.project_dir / "timeline" / "range-edits.json").exists())
+
+        current_plan = ReplacementPlanStore(self.store).validate_project(
+            self.project.project_id
+        ).get("edit_1")
+        self.assertNotEqual(old_plan_digest, json.dumps(current_plan.to_dict(), sort_keys=True))
 
     def test_full_generative_preflight_blocks_before_authorization_if_sample_missing(self) -> None:
         self._configure_output_mcp()
