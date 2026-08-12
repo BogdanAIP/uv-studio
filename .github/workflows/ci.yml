@@ -20,44 +20,6 @@ jobs:
       - name: Validate development context
         run: python tools/validate_development_context.py
 
-  frontend-lock-preview:
-    if: github.event_name == 'push' && github.ref_name == 'fix/dependency-ownership'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Regenerate frontend lockfile without installing scripts
-        working-directory: frontend
-        run: npm install --package-lock-only --ignore-scripts
-
-      - name: Publish generated lockfile to subordinate worker branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -C work/fix-dependency-ownership/lockfile
-          git add frontend/package-lock.json
-          git commit -m "chore: regenerate frontend lockfile"
-          git push --force origin HEAD:work/fix-dependency-ownership/lockfile
-
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-ownership-lockfile
-          path: frontend/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
-
   bootstrap:
     strategy:
       fail-fast: false
@@ -153,6 +115,14 @@ jobs:
       - name: Install UV Studio frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Lint UV Studio frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Audit UV Studio frontend high-severity dependencies
+        working-directory: frontend
+        run: npm run audit:high
 
       - name: Build UV Studio frontend
         working-directory: frontend
