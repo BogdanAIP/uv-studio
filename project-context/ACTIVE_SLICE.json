@@ -7,7 +7,7 @@
     "goal": "Prove exact range extraction and prepared-replacement reinsertion with real deterministic FFmpeg/FFprobe media on Ubuntu and Windows, including CFR, VFR, audio/no-audio and timestamp-offset evidence.",
     "base_branch": "main",
     "branch": "stage-4/real-media-golden",
-    "pull_request": null,
+    "pull_request": 24,
     "phase": "draft",
     "write_scope": [
       ".github/workflows/ci.yml",
