@@ -16,6 +16,7 @@
       "uv_studio/api/edit_state.py",
       "uv_studio/api/projects.py",
       "uv_studio/server.py",
+      "uv_studio/capabilities/__init__.py",
       "uv_studio/capabilities/builtin.py",
       "uv_studio/capabilities/adapters/edit_render.py",
       "uv_studio/capabilities/adapters/__init__.py",
