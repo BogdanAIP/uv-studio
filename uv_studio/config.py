@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+VENDOR_ROOT = (ROOT / "vendor").resolve()
 DEFAULT_PROJECTS_ROOT = ROOT / "data" / "projects"
 DEFAULT_CONFIGURATION_ROOT = ROOT / "data" / "config"
 DEFAULT_ALLOWED_FRONTEND_ORIGINS = (
@@ -27,11 +28,18 @@ def projects_root() -> Path:
     return DEFAULT_PROJECTS_ROOT.resolve()
 
 
+def _validate_configuration_root(path: Path) -> Path:
+    resolved = path.expanduser().resolve()
+    if resolved == VENDOR_ROOT or VENDOR_ROOT in resolved.parents:
+        raise RuntimeError("UV Studio machine configuration must not live inside vendor/")
+    return resolved
+
+
 def configuration_root() -> Path:
     configured = os.environ.get("UV_STUDIO_CONFIG_DIR", "").strip()
     if configured:
-        return Path(configured).expanduser().resolve()
-    return DEFAULT_CONFIGURATION_ROOT.resolve()
+        return _validate_configuration_root(Path(configured))
+    return _validate_configuration_root(DEFAULT_CONFIGURATION_ROOT)
 
 
 def runtime_config_path() -> Path:
@@ -63,6 +71,8 @@ def allowed_frontend_origins() -> tuple[str, ...]:
         parsed = urlsplit(origin)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError(f"invalid UV Studio frontend origin: {origin!r}")
+        if parsed.username is not None or parsed.password is not None:
+            raise RuntimeError("UV Studio frontend origins must not contain userinfo")
         if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
             raise RuntimeError(f"UV Studio frontend origin must not contain a path/query: {origin!r}")
         canonical = f"{parsed.scheme}://{parsed.netloc}"
