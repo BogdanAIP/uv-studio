@@ -21,6 +21,7 @@
       "spikes/editor-foundation/probe_mlt.py",
       "spikes/editor-foundation/probe_mlt_cli.py",
       "spikes/editor-foundation/probe_opencut.py",
+      "spikes/editor-foundation/summarize_probe.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
