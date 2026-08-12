@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from uv_studio.capabilities import build_builtin_capability_registry
 from uv_studio.projects import (
     EDIT_STATE_PATH,
     AcceptedRangeEdit,
@@ -141,6 +142,51 @@ class RangeEditStateTests(unittest.TestCase):
                 end_us=1_000_000,
                 replacement_path="../replacement.mkv",
             )
+
+    def test_canonical_json_does_not_coerce_wrong_types_or_unknown_fields(self) -> None:
+        with self.assertRaises(EditStateError):
+            RangeEditState.from_dict({"schema_version": True, "edits": []})
+        with self.assertRaises(EditStateError):
+            RangeEditState.from_dict(
+                {
+                    "schema_version": 1,
+                    "edits": [
+                        {
+                            "edit_id": 7,
+                            "source_path": "sources/source.mkv",
+                            "start_us": 0,
+                            "end_us": 1_000_000,
+                            "replacement_path": "artifacts/replacement-a.mkv",
+                        }
+                    ],
+                }
+            )
+        with self.assertRaises(EditStateError):
+            RangeEditState.from_dict(
+                {
+                    "schema_version": 1,
+                    "edits": [
+                        {
+                            "edit_id": "edit_1",
+                            "source_path": "sources/source.mkv",
+                            "start_us": 0,
+                            "end_us": 1_000_000,
+                            "replacement_path": "artifacts/replacement-a.mkv",
+                            "provider": "forbidden",
+                        }
+                    ],
+                }
+            )
+
+    def test_public_registry_contains_explicit_local_render_capability(self) -> None:
+        registry = build_builtin_capability_registry()
+        capability = registry.get_capability("video.render_edits")
+        offer = registry.get_offer("local_ffmpeg.video_render_edits")
+        self.assertEqual(capability.operation_kind.value, "deterministic_media")
+        self.assertEqual(offer.capability_id, capability.capability_id)
+        self.assertEqual(offer.adapter_id, "local_ffmpeg")
+        self.assertEqual(offer.locality.value, "local")
+        self.assertEqual(offer.cost_class.value, "free")
 
 
 if __name__ == "__main__":
