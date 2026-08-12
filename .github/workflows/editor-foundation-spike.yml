@@ -37,6 +37,9 @@ jobs:
             .spike-output/openshot-output.mp4 \
             .spike-output/openshot-report.json
           test -s .spike-output/openshot-report.json
+      - name: Publish libopenshot result
+        if: always()
+        run: python3 spikes/editor-foundation/summarize_probe.py "libopenshot probe" .spike-output/openshot-report.json
       - name: Upload libopenshot evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -67,7 +70,9 @@ jobs:
             .spike-output/mlt-project.mlt \
             .spike-output/mlt-report.json
           test -s .spike-output/mlt-report.json
-          ffprobe -v error -show_entries format=duration -of default=nw=1 .spike-output/mlt-output.mp4
+      - name: Publish MLT result
+        if: always()
+        run: python3 spikes/editor-foundation/summarize_probe.py "MLT probe" .spike-output/mlt-report.json
       - name: Upload MLT evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,6 +97,9 @@ jobs:
             /tmp/opencut-classic \
             .spike-output/opencut-report.json
           test -s .spike-output/opencut-report.json
+      - name: Publish OpenCut Classic result
+        if: always()
+        run: python3 spikes/editor-foundation/summarize_probe.py "OpenCut Classic donor probe" .spike-output/opencut-report.json
       - name: Upload OpenCut evidence
         if: always()
         uses: actions/upload-artifact@v4
