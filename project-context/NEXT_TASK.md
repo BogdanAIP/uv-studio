@@ -1,93 +1,97 @@
 # Next Task
 
-<!-- uv-next-slice: fix-dependency-ownership -->
+<!-- uv-next-slice: test-real-media-golden -->
 
 Updated: 2026-08-12
 
 ## Primary target
 
-Make UV Studio own its **core runtime dependency contract** after the application security boundary is closed.
-
-The current repository still installs the complete vendored VideoClaw backend requirements before `requirements-uv.txt`, and `requirements-uv.txt` itself declares only MCP. As a result FastAPI/Uvicorn/Pydantic and multiple provider SDKs are still obtained incidentally from the vendor dependency set.
+Prove Stage 4A targeted-range mechanics against **real encoded media**, not only fake subprocess contracts.
 
 The next slice is:
 
 ```text
-fix-dependency-ownership
-  -> explicit UV Studio core dependencies
-  -> optional provider/runtime extras
-  -> development setup uses product-owned dependency groups
-  -> frontend dependency/lint audit
-  -> CI verifies the declared baseline independently
+test-real-media-golden
+  -> deterministic tiny encoded fixtures
+  -> real ffprobe/ffmpeg execution
+  -> video.extract_range
+  -> video.replace_range
+  -> evidence assertions on Windows + Linux
 ```
 
-## Required outcomes
+This work starts only after the active dependency-ownership slice has made the baseline runtime reproducible and frontend dependency health explicit.
 
-### 1. UV Studio owns its core Python runtime requirements
+## Required fixture set
 
-Inventory imports under `uv_studio/`, tests and product launch tools and define the smallest justified core runtime set with bounded versions/constraints appropriate for reproducible development.
+Create or deterministically generate small media fixtures with documented provenance. Keep repository/CI weight proportionate.
 
-Acceptance:
+At minimum cover:
 
-- a clean environment can import and run the UV Studio-owned server/tests using product-owned requirements rather than relying on the vendor requirements file to provide missing packages;
-- FastAPI/Uvicorn/Pydantic and other actual UV Studio core imports are declared explicitly;
-- dependency choices are documented rather than copied wholesale from VideoClaw.
+1. CFR video with one audio stream;
+2. VFR video with one audio stream;
+3. video without audio;
+4. source with non-zero or offset timestamps where FFmpeg can generate the condition reproducibly;
+5. a prepared replacement clip matching the supported exact-reinsertion contract.
 
-### 2. Optional provider/runtime dependencies are truly optional
+Prefer fixture-generation scripts/commands from FFmpeg test sources over committing large binaries when generation is stable on both Ubuntu and Windows. If small binaries are more reliable, record their generation recipe and checksums.
 
-Separate provider/runtime extras such as Edge TTS and future provider SDKs from the baseline.
+## Real execution acceptance
 
-Acceptance:
+Run the actual product adapters with real `ffmpeg` and `ffprobe` binaries, not mocked runners.
 
-- baseline development does not install OpenAI, DashScope, Playwright, Edge TTS or another provider stack solely because VideoClaw contains it;
-- an unavailable optional adapter reports clear `configuration_required`/`unavailable` state rather than breaking server startup;
-- the existing optional Edge TTS path remains installable through its explicit extra requirement.
+For `video.extract_range`, prove:
 
-### 3. Vendor compatibility dependencies are isolated
+- canonical source path resolution;
+- requested integer-microsecond range identity survives;
+- requested/context artifacts are real playable video streams;
+- observed output durations stay within an explicit evidence-based tolerance;
+- VFR handling does not silently impose an undocumented CFR policy;
+- audio presence follows the declared extraction policy;
+- artifact registration occurs only after successful output probing;
+- failure cleanup leaves no registered/partial artifact.
 
-If retained legacy compatibility code still requires a subset of VideoClaw packages, model that as an explicit compatibility dependency group or documented temporary boundary rather than making `vendor/videoclaw-app/backend/requirements.txt` the implicit product baseline.
+For `video.replace_range`, prove:
 
-Do not modify the pinned vendor snapshot to solve dependency ownership.
+- source + exact requested interval + prepared replacement produce one real output video;
+- prefix/replacement/suffix ordering is correct using observable fixture evidence, not only filtergraph-string assertions;
+- source/replacement geometry and audio policy are enforced;
+- output duration matches the D-022 formula within an explicit evidence-based tolerance;
+- no hidden retiming is introduced to make an incompatible replacement pass;
+- failure cleanup remains atomic.
 
-### 4. Frontend dependency health is brought under control
+## CI requirements
 
-Audit the current Next/React/ESLint dependency graph and the advisories reported by `npm ci`.
+- install/provision FFmpeg explicitly in the test job rather than assuming a runner image detail;
+- run the real-media suite on Ubuntu and Windows;
+- keep existing fast mocked unit/API suites unchanged for contract-level feedback;
+- make the real-media test a named required evidence gate before Stage 4A mechanical work is treated as production-proven;
+- preserve useful failure diagnostics without writing absolute host paths or secrets into portable project state.
 
-Acceptance:
+## Investigation output
 
-- Next/ESLint configuration versions are mutually compatible;
-- `npm run lint` succeeds without blanket ignores over product source;
-- each high-severity advisory is either removed by a justified dependency update or recorded as a narrow accepted residual risk with package/path/reason;
-- frontend lint becomes an actual CI gate for subsequent product slices.
+Use the real fixtures to answer whether the current whole-output FFV1/FLAC reinsertion is acceptable only as a correctness intermediate or already creates unacceptable size/runtime behavior even on representative inputs.
 
-### 5. CI proves the new dependency boundary
-
-Acceptance:
-
-- at least one CI job installs UV Studio core requirements without first installing the full vendored backend requirements and successfully imports/compiles/tests product-owned code;
-- compatibility/app-baseline jobs may install an explicit compatibility group only where still required;
-- Ubuntu and Windows remain first-class;
-- existing capability, MCP, project and range tests stay green.
+If evidence shows the current model is unsuitable for repeated edits, the following slice should become a scoped non-destructive media-edit state/refactor. If not, record the evidence and proceed without inventing that refactor prematurely.
 
 ## Scope control
 
 Do not combine this slice with:
 
-- new providers;
 - `RangeContinuityBrief`;
-- real FFmpeg golden fixtures;
-- non-destructive timeline refactor;
-- desktop installer/packaging;
-- broad frontend redesign.
+- a VLM/generative provider;
+- the Stage 4C timeline UI;
+- dubbing/music modes;
+- Windows installer work;
+- a broad FFmpeg abstraction rewrite before the real-media evidence exists.
 
 ## Handoff after this slice
 
-Next intended order:
+Expected decision point:
 
 ```text
-fix-dependency-ownership
-  -> test-real-media-golden
-  -> refactor/non-destructive-media-edit-core if evidence justifies it
-  -> stage-4-range-continuity-brief
-  -> Stage 4C targeted-range user workflow
+real-media evidence
+  -> if needed: refactor/non-destructive-media-edit-core
+  -> otherwise: stage-4-range-continuity-brief
 ```
+
+The coordinator must record that decision from measured evidence rather than roadmap preference alone.
