@@ -7,7 +7,7 @@
     "goal": "Make UV Studio own its core runtime dependencies, keep provider/compatibility stacks optional, and add real frontend lint/dependency health gates.",
     "base_branch": "main",
     "branch": "fix/dependency-ownership",
-    "pull_request": null,
+    "pull_request": 23,
     "phase": "draft",
     "write_scope": [
       "requirements-uv.txt",
