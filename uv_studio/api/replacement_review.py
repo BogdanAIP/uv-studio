@@ -62,6 +62,7 @@ class ReplacementReviewPayload(BaseModel):
     end_us: int
     plan_sha256: str
     candidate_sha256: str
+    artifact_sha256: str
     verdict: str
     observations: list[ReplacementReviewObservationPayload]
     assessments: list[ReplacementReviewAssessmentPayload]
@@ -109,7 +110,10 @@ def _not_found_or_server(exc: Exception) -> HTTPException:
         return HTTPException(status_code=404, detail="Replacement review not found")
     if isinstance(exc, ProjectStoreError):
         return HTTPException(status_code=500, detail=str(exc))
-    return HTTPException(status_code=500, detail="Replacement review operation failed")
+    return HTTPException(
+        status_code=500,
+        detail="Replacement review operation failed",
+    )
 
 
 def _domain_observations(
@@ -143,7 +147,10 @@ def _domain_assessments(
     )
 
 
-@router.get("/{project_id}/replacement-reviews", response_model=ReplacementReviewStatePayload)
+@router.get(
+    "/{project_id}/replacement-reviews",
+    response_model=ReplacementReviewStatePayload,
+)
 def list_replacement_reviews(
     project_id: str,
     project_store: ProjectStore = Depends(get_project_store),
@@ -151,7 +158,11 @@ def list_replacement_reviews(
     try:
         project_store.load_project(project_id)
         return _state_payload(_store(project_store).load(project_id))
-    except (ProjectNotFound, ReplacementReviewError, ProjectStoreError) as exc:
+    except (
+        ProjectNotFound,
+        ReplacementReviewError,
+        ProjectStoreError,
+    ) as exc:
         if isinstance(exc, ReplacementReviewError):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         raise _not_found_or_server(exc) from exc
@@ -169,8 +180,15 @@ def get_replacement_review(
     try:
         project_store.load_project(project_id)
         return _review_payload(_store(project_store).load(project_id).get(review_id))
-    except (ProjectNotFound, ReplacementReviewNotFound, ReplacementReviewError, ProjectStoreError) as exc:
-        if isinstance(exc, ReplacementReviewError) and not isinstance(exc, ReplacementReviewNotFound):
+    except (
+        ProjectNotFound,
+        ReplacementReviewNotFound,
+        ReplacementReviewError,
+        ProjectStoreError,
+    ) as exc:
+        if isinstance(exc, ReplacementReviewError) and not isinstance(
+            exc, ReplacementReviewNotFound
+        ):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         raise _not_found_or_server(exc) from exc
 
@@ -187,13 +205,23 @@ def validate_replacement_review(
     try:
         project_store.load_project(project_id)
         review = _store(project_store).validate_review(project_id, review_id)
-        return ReplacementReviewValidationPayload(current=True, review=_review_payload(review))
-    except (ProjectNotFound, ReplacementReviewNotFound, ProjectStoreError) as exc:
+        return ReplacementReviewValidationPayload(
+            current=True,
+            review=_review_payload(review),
+        )
+    except (
+        ProjectNotFound,
+        ReplacementReviewNotFound,
+        ProjectStoreError,
+    ) as exc:
         raise _not_found_or_server(exc) from exc
     except ReplacementReviewError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "replacement_review_stale", "message": str(exc)},
+            detail={
+                "code": "replacement_review_stale",
+                "message": str(exc),
+            },
         ) from exc
 
 
@@ -239,10 +267,17 @@ def accept_replacement_review(
         project_store.load_project(project_id)
         state = _store(project_store).accept_review(project_id, review_id)
         return RangeEditStatePayload.model_validate(state.to_dict())
-    except (ProjectNotFound, ReplacementReviewNotFound, ProjectStoreError) as exc:
+    except (
+        ProjectNotFound,
+        ReplacementReviewNotFound,
+        ProjectStoreError,
+    ) as exc:
         raise _not_found_or_server(exc) from exc
     except ReplacementReviewError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "replacement_review_not_acceptable", "message": str(exc)},
+            detail={
+                "code": "replacement_review_not_acceptable",
+                "message": str(exc),
+            },
         ) from exc
