@@ -41,45 +41,48 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
-          def replace(path: str, old: str, new: str) -> None:
+          def sub(path: str, pattern: str, replacement: str, *, flags: int = 0) -> None:
               file = Path(path)
               text = file.read_text(encoding="utf-8")
-              if old not in text:
-                  raise SystemExit(f"expected remediation source not found in {path}")
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one remediation match in {path}; got {count}: {pattern}")
+              file.write_text(updated, encoding="utf-8")
 
           settings = "frontend/app/settings/page.tsx"
-          replace(settings, "type ConfigTree = Record<string, any>;", "type ConfigTree = Record<string, unknown>;")
-          replace(
+          sub(settings, r"type ConfigTree = Record<string, any>;", "type ConfigTree = Record<string, unknown>;")
+          sub(
               settings,
-              """function getValue(config: ConfigTree, path: string) {\n  return path.split('.').reduce((current, key) => current?.[key], config);\n}\n\nfunction setValue(config: ConfigTree, path: string, value: any): ConfigTree {\n  const next = structuredClone(config || {});\n  const parts = path.split('.');\n  let current = next;\n  for (const part of parts.slice(0, -1)) {\n    current[part] = current[part] || {};\n    current = current[part];\n  }\n  current[parts[parts.length - 1]] = value;\n  return next;\n}\n""",
-              """function isConfigTree(value: unknown): value is ConfigTree {\n  return typeof value === 'object' && value !== null && !Array.isArray(value);\n}\n\nfunction getValue(config: ConfigTree, path: string): unknown {\n  let current: unknown = config;\n  for (const key of path.split('.')) {\n    if (!isConfigTree(current)) return undefined;\n    current = current[key];\n  }\n  return current;\n}\n\nfunction setValue(config: ConfigTree, path: string, value: unknown): ConfigTree {\n  const next = structuredClone(config || {});\n  const parts = path.split('.');\n  let current: ConfigTree = next;\n  for (const part of parts.slice(0, -1)) {\n    const child = current[part];\n    if (!isConfigTree(child)) current[part] = {};\n    current = current[part] as ConfigTree;\n  }\n  current[parts[parts.length - 1]] = value;\n  return next;\n}\n\nfunction errorMessage(error: unknown, fallback: string) {\n  return error instanceof Error && error.message ? error.message : fallback;\n}\n""",
+              r"function getValue\(config: ConfigTree, path: string\) \{.*?\n\}\n\nfunction setValue\(config: ConfigTree, path: string, value: any\): ConfigTree \{.*?\n\}\n\n(?=function formatConfigPath)",
+              """function isConfigTree(value: unknown): value is ConfigTree {\n  return typeof value === 'object' && value !== null && !Array.isArray(value);\n}\n\nfunction getValue(config: ConfigTree, path: string): unknown {\n  let current: unknown = config;\n  for (const key of path.split('.')) {\n    if (!isConfigTree(current)) return undefined;\n    current = current[key];\n  }\n  return current;\n}\n\nfunction setValue(config: ConfigTree, path: string, value: unknown): ConfigTree {\n  const next = structuredClone(config || {});\n  const parts = path.split('.');\n  let current: ConfigTree = next;\n  for (const part of parts.slice(0, -1)) {\n    const child = current[part];\n    if (!isConfigTree(child)) current[part] = {};\n    current = current[part] as ConfigTree;\n  }\n  current[parts[parts.length - 1]] = value;\n  return next;\n}\n\nfunction errorMessage(error: unknown, fallback: string) {\n  return error instanceof Error && error.message ? error.message : fallback;\n}\n\n""",
+              flags=re.S,
           )
-          replace(
+          sub(
               settings,
-              """      } catch (e: any) {\n        setError(e.message || '读取配置失败');\n""",
-              """      } catch (error: unknown) {\n        setError(errorMessage(error, '读取配置失败'));\n""",
+              r"\} catch \(e: any\) \{\n\s*setError\(e\.message \|\| '读取配置失败'\);",
+              "} catch (error: unknown) {\n        setError(errorMessage(error, '读取配置失败'));",
           )
-          replace(
+          sub(
               settings,
-              """    } catch (e: any) {\n      setError(e.message || '保存配置失败');\n""",
-              """    } catch (error: unknown) {\n      setError(errorMessage(error, '保存配置失败'));\n""",
+              r"\} catch \(e: any\) \{\n\s*setError\(e\.message \|\| '保存配置失败'\);",
+              "} catch (error: unknown) {\n      setError(errorMessage(error, '保存配置失败'));",
           )
 
-          replace(
+          sub(
               "frontend/app/projects/[projectId]/page.tsx",
-              """  useEffect(() => {\n    let active = true;\n    setProject(null);\n    setExecutionPlan(null);\n    setError(null);\n    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])\n""",
-              """  useEffect(() => {\n    let active = true;\n    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])\n""",
+              r"(useEffect\(\(\) => \{\n\s*let active = true;)\n\s*setProject\(null\);\n\s*setExecutionPlan\(null\);\n\s*setError\(null\);",
+              r"\1",
           )
-          replace(
+          sub(
               "frontend/app/projects/page.tsx",
-              """  useEffect(() => {\n    void refresh();\n  }, []);\n""",
-              """  useEffect(() => {\n    const timer = window.setTimeout(() => {\n      void refresh();\n    }, 0);\n    return () => window.clearTimeout(timer);\n  }, []);\n""",
+              r"useEffect\(\(\) => \{\n\s*void refresh\(\);\n\s*\}, \[\]\);",
+              """useEffect(() => {\n    const timer = window.setTimeout(() => {\n      void refresh();\n    }, 0);\n    return () => window.clearTimeout(timer);\n  }, []);""",
           )
-          replace(
+          sub(
               "frontend/components/Sandbox/Sandbox.tsx",
-              "let body: Record<string, unknown> = {};",
+              r"let body: Record<string, unknown> = \{\};",
               "const body: Record<string, unknown> = {};",
           )
 
