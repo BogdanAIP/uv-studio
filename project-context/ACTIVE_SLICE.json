@@ -1,29 +1,26 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "chore-agent-development-workflow",
+    "id": "chore-roadmap-runtime-gates",
     "kind": "chore",
-    "roadmap_stage": "stage-4",
-    "goal": "Make cross-chat and multi-agent development state explicit and CI-checked.",
+    "roadmap_stage": "stage-3-5",
+    "goal": "Resequence UV Studio so runtime security, dependency ownership and real-media verification gate later product work.",
     "base_branch": "main",
-    "branch": "chore/agent-development-workflow",
-    "pull_request": 20,
-    "phase": "review",
+    "branch": "chore/roadmap-runtime-gates",
+    "pull_request": null,
+    "phase": "draft",
     "write_scope": [
-      "AGENTS.md",
-      ".github/pull_request_template.md",
-      ".github/workflows/ci.yml",
-      "tools/validate_development_context.py",
-      "tests/test_development_context.py",
-      "project-context/**",
-      "DEVELOPMENT_PROTOCOL.md",
-      "README.md",
       "ROADMAP.md",
-      "docs/DEVELOPMENT.md"
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md",
+      "project-context/NEXT_TASK.md",
+      "project-context/DECISIONS.md",
+      "project-context/ENGINEERING_BACKLOG.md",
+      "project-context/decisions/D-024-roadmap-runtime-gates.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-range-continuity-brief",
+    "next_slice_id": "fix-runtime-security-boundary",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
