@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-4/real-media-golden",
     "pull_request": 24,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       ".github/workflows/ci.yml",
       "tests_real_media/test_range_real_media.py",
