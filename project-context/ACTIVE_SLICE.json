@@ -19,6 +19,7 @@
       "tests/test_replacement_review_archive.py",
       "tests_api/test_replacement_review_api.py",
       "tests_api/test_edit_state_api.py",
+      "tests_real_media/test_edit_timeline_real_media.py",
       "tests_real_media/test_replacement_review_real_media.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",

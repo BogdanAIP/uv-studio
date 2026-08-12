@@ -11,7 +11,12 @@ from fastapi.testclient import TestClient
 
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.projects import get_project_store
-from uv_studio.projects import EDIT_STATE_PATH, ProjectStore
+from uv_studio.projects import (
+    AcceptedRangeEdit,
+    EDIT_STATE_PATH,
+    ProjectStore,
+    RangeEditStateStore,
+)
 from uv_studio.server import app
 
 WIDTH = 160
@@ -174,11 +179,16 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         )
 
     def _accept(self, payload: dict[str, object]) -> None:
-        response = self.client.post(
-            f"/api/uv/projects/{self.project.project_id}/edits",
-            json=payload,
+        RangeEditStateStore(self.store).accept(
+            self.project.project_id,
+            AcceptedRangeEdit(
+                edit_id=str(payload["edit_id"]),
+                source_path=str(payload["source_path"]),
+                start_us=int(payload["start_us"]),
+                end_us=int(payload["end_us"]),
+                replacement_path=str(payload["replacement_path"]),
+            ),
         )
-        self.assertEqual(response.status_code, 201, response.text)
 
     def test_accept_two_edits_stays_lightweight_until_one_explicit_render(self) -> None:
         artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
