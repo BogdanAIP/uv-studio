@@ -1,40 +1,31 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "stage-4-non-destructive-edit-state",
+    "id": "stage-4-range-continuity-brief",
     "kind": "stage",
-    "roadmap_stage": "stage-4a",
-    "goal": "Persist typed portable accepted range-edit decisions without whole-video materialization, enforce deterministic overlap/order rules, and project those decisions into an explicit real-media render path.",
+    "roadmap_stage": "stage-4b",
+    "goal": "Persist a typed provider-neutral bounded RangeContinuityBrief for an exact targeted edit intent before replacement creation, with mechanical facts separated from observations/inferences, constraints and review targets, and exact compatibility with any later accepted edit on the same source/range.",
     "base_branch": "main",
-    "branch": "stage-4/non-destructive-edit-state",
-    "pull_request": 25,
+    "branch": "stage-4/range-continuity-brief",
+    "pull_request": 26,
     "phase": "review",
     "write_scope": [
-      "uv_studio/projects/edit_state.py",
+      "uv_studio/projects/continuity_brief.py",
       "uv_studio/projects/__init__.py",
-      "uv_studio/projects/archive.py",
-      "uv_studio/api/edit_state.py",
-      "uv_studio/api/projects.py",
+      "uv_studio/api/continuity_brief.py",
       "uv_studio/server.py",
-      "uv_studio/capabilities/__init__.py",
-      "uv_studio/capabilities/builtin.py",
-      "uv_studio/capabilities/adapters/edit_render.py",
-      "uv_studio/capabilities/adapters/__init__.py",
-      "tests/test_edit_state.py",
-      "tests/test_edit_state_archive.py",
-      "tests_api/test_edit_state_api.py",
-      "tests_real_media/test_edit_timeline_real_media.py",
+      "tests/test_continuity_brief.py",
+      "tests/test_continuity_brief_archive.py",
+      "tests_api/test_continuity_brief_api.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
-      "project-context/ENGINEERING_BACKLOG.md",
       "project-context/PROJECT_HISTORY.md",
-      "project-context/DECISIONS.md",
-      "project-context/decisions/D-028-non-destructive-edit-state.md"
+      "project-context/decisions/D-029-range-continuity-brief.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-range-continuity-brief",
+    "next_slice_id": "stage-4-replacement-plan-gate",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

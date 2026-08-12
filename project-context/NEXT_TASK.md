@@ -1,38 +1,40 @@
 # Next Task
 
-<!-- uv-next-slice: stage-4-range-continuity-brief -->
+<!-- uv-next-slice: stage-4-replacement-plan-gate -->
 
 Updated: 2026-08-12
 
 ## Expected handoff
 
-After the active non-destructive edit-state slice is merged, continue Stage 4B with `stage-4-range-continuity-brief`.
+After the active RangeContinuityBrief slice is merged, continue Stage 4B with `stage-4-replacement-plan-gate`.
 
-The next slice should add a typed/versioned provider-neutral bounded evidence/continuity document attached to exact project edit ranges.
+The next slice should consume a validated provider-neutral continuity brief for an exact targeted edit intent and persist an explicit approved replacement plan **before replacement preparation or generation begins**.
+
+An already accepted edit is not required to create the plan. If one exists for the same `edit_id`, its source/range identity must remain compatible with the brief.
 
 ## Required direction
 
 ```text
-accepted exact edit decision
-  -> bounded before/after project evidence
-  -> mechanical source/probe facts
-  -> optional observations/inferences with confidence
-  -> replacement continuity constraints
+validated RangeContinuityBrief
+  -> replacement method choice
+  -> required / allowed changes
+  -> audio / timing / continuity constraints
+  -> deterministic vs prepared vs generated path
+  -> sample-first requirement where generation is used
   -> review targets
+  -> approved plan gate
+  -> replacement preparation / generation
 ```
 
 Requirements:
 
-- immutable integer-microsecond range identity;
-- project-relative evidence references only;
-- mechanical facts separated from observations/inferences;
-- no provider/model/runtime IDs, host paths or credentials in canonical state;
-- archive/import/reopen proof;
-- valid baseline brief does not require a remote VLM/provider call;
-- provider execution, when later used to enrich a brief, remains behind the existing capability/D-017 boundary.
-
-## Boundary
-
-Do not combine RangeContinuityBrief with the full Stage 4C editor UI, provider generation adapters, dubbing/music modes or Windows packaging.
-
-If the active edit-state slice exposes a structural blocker, change this handoff before merge rather than carrying an invalid assumption forward.
+- exact `edit_id + source_path + start_us + end_us` survives the plan unchanged;
+- deterministic/local methods stay first-class and do not require a provider;
+- generative preparation is optional, semantic-capability based and D-017 authorized when remote/non-free;
+- plan state describes the approved **method class and constraints**, not one provider/model/runtime instance;
+- runtime provider/model/offer choice remains outside portable canonical plan state;
+- no silent downgrade from an approved method class to a weaker path;
+- if generation is used, sample-first evidence is required before committing to full replacement generation;
+- review targets from the continuity brief remain traceable into the plan/review gate;
+- the plan must be usable before any `AcceptedRangeEdit` exists;
+- no full Stage 4C UI, dubbing/music mode or packaging work in this slice.
