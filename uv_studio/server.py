@@ -32,6 +32,7 @@ from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
 from uv_studio.api.recipes import router as recipes_router  # noqa: E402
 from uv_studio.api.replacement_plan import router as replacement_plan_router  # noqa: E402
 from uv_studio.api.replacement_preparation import router as replacement_preparation_router  # noqa: E402
+from uv_studio.api.replacement_review import router as replacement_review_router  # noqa: E402
 from uv_studio.config import allowed_frontend_origins  # noqa: E402
 from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
@@ -70,6 +71,7 @@ app.include_router(edit_state_router)
 app.include_router(continuity_brief_router)
 app.include_router(replacement_plan_router)
 app.include_router(replacement_preparation_router)
+app.include_router(replacement_review_router)
 
 
 @app.get("/api/health", tags=["Health"])
