@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-4/non-destructive-edit-state",
     "pull_request": 25,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "uv_studio/projects/edit_state.py",
       "uv_studio/projects/__init__.py",
