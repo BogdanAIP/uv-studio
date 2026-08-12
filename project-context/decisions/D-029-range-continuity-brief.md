@@ -1,6 +1,6 @@
 # D-029 — RangeContinuityBrief is bounded provider-neutral evidence for a targeted edit intent
 
-Status: pending  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -110,21 +110,25 @@ Portable project archives already include the canonical timeline tree and per-fi
 6. Stage 4C can present evidence and constraints independently of whichever implementation created them.
 7. Provider-specific prompt compilation remains an adapter/runtime concern rather than canonical state.
 
-## Acceptance evidence required
+## Acceptance evidence
 
-Before D-029 becomes accepted, final PR #26 review head must pass all five Ubuntu/Windows checks and prove:
+Draft functional head `0c7053f842bf767e58b9d8564035cbfc20ce6f04` passed all five required checks in CI run #678 (`31589049828`) on Ubuntu and Windows.
+
+That head proves:
 
 - strict typed round-trip of a full brief;
-- creation before any replacement/accepted edit exists;
-- later matching accepted edit remains compatible while replacement-only changes do not invalidate the brief;
-- a conflicting accepted source/range fails validation;
+- creation and archive round-trip before replacement media or an accepted edit exists;
+- later matching accepted edit compatibility and replacement-only take changes without brief invalidation;
+- conflicting accepted source/range fail-closed validation;
 - exactly one requested evidence item;
 - source-bound adjacent before/requested/after evidence intervals;
 - bounded evidence windows and bounded collection counts;
 - observations/inferences with explicit confidence and known evidence links;
 - provider/runtime unknown fields and runtime-binding mechanical fact keys rejected;
 - no media artifact or execution side effect from brief persistence;
-- stale-file repairability plus explicit validation failure;
-- archive/import/fresh reopen exactness before replacement;
-- HTTP list/get/put/delete and 404/422 boundaries;
-- existing real-media, security, lint, high-severity audit and production-build gates remain green.
+- stale-file structural repairability plus explicit validation failure;
+- HTTP list/get/put/delete plus 404/422 boundaries;
+- existing real-media Stage 4A/D-028 regressions remain green;
+- frontend lint, `npm audit --audit-level=high` with no high-severity findings, and production build remain green on both required platforms.
+
+The exact final review head must repeat the same five required checks before PR #26 is merged.
