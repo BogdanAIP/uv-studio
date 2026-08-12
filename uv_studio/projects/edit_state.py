@@ -198,7 +198,8 @@ class RangeEditStateStore:
         except (ProjectValidationError, ProjectStoreError) as exc:
             raise EditStateError(str(exc)) from exc
 
-    def load(self, project_id: str, *, validate_references: bool = True) -> RangeEditState:
+    def load(self, project_id: str, *, validate_references: bool = False) -> RangeEditState:
+        """Load structural state even if referenced media later disappeared."""
         path = self._path(project_id)
         if not path.exists():
             return RangeEditState()
@@ -215,26 +216,35 @@ class RangeEditStateStore:
             self._validate_references(project_id, state)
         return state
 
+    def _write(self, project_id: str, state: RangeEditState) -> RangeEditState:
+        path = self._path(project_id)
+        self.project_store._atomic_write_json(path, state.to_dict())
+        return state
+
     def save(self, project_id: str, state: RangeEditState) -> RangeEditState:
+        """Replace the full document only when all declared references are valid."""
         if not isinstance(state, RangeEditState):
             raise EditStateError("save requires RangeEditState")
         with self.project_store._lock:
             self._validate_references(project_id, state)
-            path = self._path(project_id)
-            self.project_store._atomic_write_json(path, state.to_dict())
-        return state
+            return self._write(project_id, state)
 
     def accept(self, project_id: str, edit: AcceptedRangeEdit) -> RangeEditState:
+        """Validate the new decision without making stale older decisions unreadable."""
+        if not isinstance(edit, AcceptedRangeEdit):
+            raise EditStateError("accept requires an AcceptedRangeEdit")
         with self.project_store._lock:
             current = self.load(project_id)
+            self._validate_references(project_id, RangeEditState(edits=(edit,)))
             updated = current.add(edit)
-            return self.save(project_id, updated)
+            return self._write(project_id, updated)
 
     def remove(self, project_id: str, edit_id: str) -> RangeEditState:
+        """Allow removal even when the removed decision's media is already stale."""
         with self.project_store._lock:
             current = self.load(project_id)
             updated = current.remove(edit_id)
-            return self.save(project_id, updated)
+            return self._write(project_id, updated)
 
     def validate_project(self, project_id: str) -> RangeEditState:
         return self.load(project_id, validate_references=True)
