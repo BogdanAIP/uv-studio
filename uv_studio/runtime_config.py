@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from .config import runtime_config_path, runtime_secrets_path
+from .config import VENDOR_ROOT, runtime_config_path, runtime_secrets_path
 
 
 class RuntimeConfigError(ValueError):
@@ -204,12 +204,17 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any], *, secret: bool) -> 
             try:
                 os.chmod(path, 0o600)
             except OSError:
-                # Windows ACLs are inherited from the machine-local configuration
-                # directory; chmod is only an additional best-effort restriction.
                 pass
     except Exception:
         temp.unlink(missing_ok=True)
         raise
+
+
+def _resolve_machine_config_file(path: Path | str) -> Path:
+    resolved = Path(path).expanduser().resolve()
+    if resolved == VENDOR_ROOT or VENDOR_ROOT in resolved.parents:
+        raise RuntimeConfigError("machine runtime configuration files must not live inside vendor/")
+    return resolved
 
 
 class RuntimeConfigStore:
@@ -221,8 +226,8 @@ class RuntimeConfigStore:
         config_path: Path | None = None,
         secrets_path: Path | None = None,
     ) -> None:
-        self.config_path = (config_path or runtime_config_path()).expanduser().resolve()
-        self.secrets_path = (secrets_path or runtime_secrets_path()).expanduser().resolve()
+        self.config_path = _resolve_machine_config_file(config_path or runtime_config_path())
+        self.secrets_path = _resolve_machine_config_file(secrets_path or runtime_secrets_path())
         if self.config_path == self.secrets_path:
             raise RuntimeConfigError("public runtime config and secret storage must be separate files")
         self._lock = threading.RLock()
@@ -279,8 +284,6 @@ class RuntimeConfigStore:
         with self._lock:
             current_public = self.public_config()
             updated_public = _deep_merge(current_public, validated_values)
-            # Validate the complete result again so manually edited stored files
-            # cannot preserve an invalid value outside the submitted partial tree.
             updated_public = _deep_merge(
                 DEFAULT_RUNTIME_CONFIG,
                 _validate_partial(updated_public, DEFAULT_RUNTIME_CONFIG),
