@@ -38,7 +38,12 @@ class ReplacementReviewTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _brief(self, *, suffix: str = "", include_targets: bool = True) -> RangeContinuityBrief:
+    def _brief(
+        self,
+        *,
+        suffix: str = "",
+        include_targets: bool = True,
+    ) -> RangeContinuityBrief:
         targets = (
             (
                 ReviewTarget(
@@ -125,16 +130,24 @@ class ReplacementReviewTests(unittest.TestCase):
         brief_evidence_id: str = "requested",
     ) -> ReplacementReviewObservation:
         evidence = [
-            ReviewEvidenceReference(kind="brief_evidence", ref_id=brief_evidence_id),
+            ReviewEvidenceReference(
+                kind="brief_evidence",
+                ref_id=brief_evidence_id,
+            ),
         ]
         if include_candidate:
             evidence.append(
-                ReviewEvidenceReference(kind="candidate_artifact", ref_id=artifact_id)
+                ReviewEvidenceReference(
+                    kind="candidate_artifact",
+                    ref_id=artifact_id,
+                )
             )
         return ReplacementReviewObservation(
             observation_id=observation_id,
             kind="observation",
-            statement="The candidate remains continuous with the requested source context.",
+            statement=(
+                "The candidate remains continuous with the requested source context."
+            ),
             confidence="high",
             evidence=tuple(evidence),
         )
@@ -182,11 +195,22 @@ class ReplacementReviewTests(unittest.TestCase):
         review = self._create_review(reference.id)
 
         self.assertEqual(review.candidate_id, "cand_full")
-        self.assertEqual(review.target_identity, ("edit_1", "sources/source.mkv", 1_000_000, 2_000_000))
-        self.assertFalse((self.project_dir / "timeline" / "range-edits.json").exists())
-        self.assertTrue((self.project_dir / "reviews" / "replacement-reviews.json").is_file())
+        self.assertEqual(
+            review.target_identity,
+            ("edit_1", "sources/source.mkv", 1_000_000, 2_000_000),
+        )
+        self.assertEqual(len(review.artifact_sha256), 64)
+        self.assertFalse(
+            (self.project_dir / "timeline" / "range-edits.json").exists()
+        )
+        self.assertTrue(
+            (self.project_dir / "reviews" / "replacement-reviews.json").is_file()
+        )
 
-        accepted = self.reviews.accept_review(self.project.project_id, review.review_id)
+        accepted = self.reviews.accept_review(
+            self.project.project_id,
+            review.review_id,
+        )
         self.assertEqual(len(accepted.edits), 1)
         edit = accepted.edits[0]
         self.assertEqual(edit.edit_id, "edit_1")
@@ -207,7 +231,10 @@ class ReplacementReviewTests(unittest.TestCase):
                 observations=(observation,),
                 assessments=(self._assessments()[0],),
             )
-        self.assertIn("exactly match current review targets", str(missing_target.exception))
+        self.assertIn(
+            "exactly match current review targets",
+            str(missing_target.exception),
+        )
 
         with self.assertRaises(ReplacementReviewError) as no_candidate_evidence:
             self.reviews.create_review(
@@ -215,10 +242,15 @@ class ReplacementReviewTests(unittest.TestCase):
                 review_id="review_context_only",
                 candidate_id="cand_full",
                 verdict="approved",
-                observations=(self._observation(reference.id, include_candidate=False),),
+                observations=(
+                    self._observation(reference.id, include_candidate=False),
+                ),
                 assessments=self._assessments(),
             )
-        self.assertIn("exact candidate artifact", str(no_candidate_evidence.exception))
+        self.assertIn(
+            "exact candidate artifact",
+            str(no_candidate_evidence.exception),
+        )
 
         with self.assertRaises(ReplacementReviewError) as unknown_evidence:
             self.reviews.create_review(
@@ -227,21 +259,40 @@ class ReplacementReviewTests(unittest.TestCase):
                 candidate_id="cand_full",
                 verdict="approved",
                 observations=(
-                    self._observation(reference.id, brief_evidence_id="missing_evidence"),
+                    self._observation(
+                        reference.id,
+                        brief_evidence_id="missing_evidence",
+                    ),
                 ),
                 assessments=self._assessments(),
             )
-        self.assertIn("unknown Brief evidence", str(unknown_evidence.exception))
+        self.assertIn(
+            "unknown Brief evidence",
+            str(unknown_evidence.exception),
+        )
 
     def test_verdict_must_match_persisted_assessments(self) -> None:
         reference = self._candidate()
 
         with self.assertRaises(ReplacementReviewError):
-            self._create_review(reference.id, review_id="bad_approved", verdict="approved", motion="fail")
+            self._create_review(
+                reference.id,
+                review_id="bad_approved",
+                verdict="approved",
+                motion="fail",
+            )
         with self.assertRaises(ReplacementReviewError):
-            self._create_review(reference.id, review_id="bad_rejected", verdict="rejected")
+            self._create_review(
+                reference.id,
+                review_id="bad_rejected",
+                verdict="rejected",
+            )
         with self.assertRaises(ReplacementReviewError):
-            self._create_review(reference.id, review_id="bad_revision", verdict="needs_revision")
+            self._create_review(
+                reference.id,
+                review_id="bad_revision",
+                verdict="needs_revision",
+            )
 
         rejected = self._create_review(
             reference.id,
@@ -250,8 +301,13 @@ class ReplacementReviewTests(unittest.TestCase):
             motion="fail",
         )
         with self.assertRaises(ReplacementReviewError):
-            self.reviews.accept_review(self.project.project_id, rejected.review_id)
-        self.assertFalse((self.project_dir / "timeline" / "range-edits.json").exists())
+            self.reviews.accept_review(
+                self.project.project_id,
+                rejected.review_id,
+            )
+        self.assertFalse(
+            (self.project_dir / "timeline" / "range-edits.json").exists()
+        )
 
         needs_revision = self._create_review(
             reference.id,
@@ -260,22 +316,66 @@ class ReplacementReviewTests(unittest.TestCase):
             style="uncertain",
         )
         with self.assertRaises(ReplacementReviewError):
-            self.reviews.accept_review(self.project.project_id, needs_revision.review_id)
+            self.reviews.accept_review(
+                self.project.project_id,
+                needs_revision.review_id,
+            )
 
     def test_plan_or_brief_revision_makes_review_stale_but_keeps_history_readable(self) -> None:
         reference = self._candidate()
         expected = self._create_review(reference.id)
 
-        self.briefs.upsert(self.project.project_id, self._brief(suffix=" after revision"))
+        self.briefs.upsert(
+            self.project.project_id,
+            self._brief(suffix=" after revision"),
+        )
         self._approve_plan()
 
-        structural = self.reviews.load(self.project.project_id).get(expected.review_id)
+        structural = self.reviews.load(self.project.project_id).get(
+            expected.review_id
+        )
         self.assertEqual(structural, expected)
         with self.assertRaises(ReplacementReviewError):
-            self.reviews.validate_review(self.project.project_id, expected.review_id)
+            self.reviews.validate_review(
+                self.project.project_id,
+                expected.review_id,
+            )
         with self.assertRaises(ReplacementReviewError):
-            self.reviews.accept_review(self.project.project_id, expected.review_id)
-        self.assertFalse((self.project_dir / "timeline" / "range-edits.json").exists())
+            self.reviews.accept_review(
+                self.project.project_id,
+                expected.review_id,
+            )
+        self.assertFalse(
+            (self.project_dir / "timeline" / "range-edits.json").exists()
+        )
+
+    def test_candidate_artifact_byte_change_makes_review_stale_without_erasing_history(self) -> None:
+        reference = self._candidate()
+        expected = self._create_review(reference.id)
+        artifact_path = self.project_dir / reference.path
+        artifact_path.write_bytes(b"candidate-video-tampered-after-review")
+
+        structural = self.reviews.load(self.project.project_id).get(
+            expected.review_id
+        )
+        self.assertEqual(structural, expected)
+        with self.assertRaises(ReplacementReviewError) as validation:
+            self.reviews.validate_review(
+                self.project.project_id,
+                expected.review_id,
+            )
+        self.assertIn(
+            "artifact bytes changed",
+            str(validation.exception),
+        )
+        with self.assertRaises(ReplacementReviewError):
+            self.reviews.accept_review(
+                self.project.project_id,
+                expected.review_id,
+            )
+        self.assertFalse(
+            (self.project_dir / "timeline" / "range-edits.json").exists()
+        )
 
     def test_final_review_rejects_sample_candidate(self) -> None:
         reference = self._candidate(
@@ -295,7 +395,10 @@ class ReplacementReviewTests(unittest.TestCase):
         self.assertIn("full candidate", str(ctx.exception))
 
     def test_final_review_requires_explicit_brief_review_targets(self) -> None:
-        self.briefs.upsert(self.project.project_id, self._brief(include_targets=False))
+        self.briefs.upsert(
+            self.project.project_id,
+            self._brief(include_targets=False),
+        )
         reference = self._candidate()
         with self.assertRaises(ReplacementReviewError) as ctx:
             self.reviews.create_review(
