@@ -1,6 +1,6 @@
 # D-032 — Accepted replacement edits require an exact current approved review
 
-Status: provisional  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -64,7 +64,7 @@ New accepted edit creation takes only an approved review identity. Under the pro
 
 Model assistance is optional execution provenance, not canonical review identity. Existing `media.understand` capability execution already provides semantic selection and D-017 authorization for remote/non-free analysis. Results from such execution may inform the observations later persisted in a review, but the review schema does not depend on a provider, model, MCP profile or execution run. Manual/local evidence entry remains a complete baseline path.
 
-This separation prevents an external analysis runtime from becoming a mandatory component of the portable project schema and keeps future reviewer implementations replaceable.
+A model-assisted reviewer may receive the exact candidate file only through an offer with an explicit trusted project-file input contract. Current Qwen cloud `media.understand` bindings do not declare such a D-019 input binding, so this slice does not pass arbitrary local candidate paths to them. That restriction is intentional and fail-closed; a future compatible binding or trusted adapter can enable model assistance without changing review state.
 
 ## Consequences
 
@@ -75,9 +75,9 @@ This separation prevents an external analysis runtime from becoming a mandatory 
 5. Provider choice remains execution provenance rather than portable review state.
 6. Stage 4C can build UI on a complete domain chain with a single safe acceptance path.
 
-## Acceptance evidence required
+## Acceptance evidence
 
-Before D-032 becomes accepted, the final review head must prove:
+The final implementation proves:
 
 - final reviews reject sample/stale/missing candidates;
 - criteria exactly trace the current Brief review targets;
@@ -89,6 +89,6 @@ Before D-032 becomes accepted, the final review head must prove:
 - changed candidate artifact bytes invalidate old approval even when candidate ID/path/metadata remain unchanged;
 - public caller-controlled edit creation cannot bypass review;
 - accepting an approved review writes the exact reviewed candidate artifact/range and cannot accept rejected/needs-revision reviews;
-- overlap/reference validation from D-028 still applies;
-- a real-media prepared candidate can be reviewed/accepted without mutating the original source and remains renderable by the existing one-pass edit renderer;
-- all existing Ubuntu/Windows unit/API/real-media/frontend/security gates remain green.
+- overlap/reference validation from D-028 still applies through the internal `RangeEditStateStore`;
+- a real-media prepared candidate is reviewed and accepted without mutating the original source, then rendered through the existing one-pass edit renderer with the expected prefix/replacement/suffix pixels;
+- the required Ubuntu/Windows unit/API/real-media/frontend/security matrix passes on the review head.

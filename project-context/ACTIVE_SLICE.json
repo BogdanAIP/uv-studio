@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-4/replacement-review-gate",
     "pull_request": 29,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "uv_studio/projects/replacement_review.py",
       "uv_studio/projects/__init__.py",
