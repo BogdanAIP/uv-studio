@@ -1,6 +1,6 @@
 # D-031 — Replacement preparation creates reviewable candidates, never accepted edits
 
-Status: pending  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -129,7 +129,7 @@ The following Stage 4B review gate is mandatory. It will consume a current candi
 
 ## Acceptance evidence required
 
-Before D-031 becomes accepted, final PR #28 review head must pass all required Ubuntu/Windows checks and prove:
+Final PR #28 review head must pass all required Ubuntu/Windows checks and prove:
 
 - prepared project asset becomes a distinct project candidate artifact without creating an accepted edit;
 - candidate exact target/method/digest are inherited from a current plan;
