@@ -55,6 +55,20 @@ class RuntimeConfigStoreTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 configuration_root()
 
+    def test_runtime_config_store_rejects_direct_vendor_paths(self) -> None:
+        vendor_runtime = ROOT / "vendor" / "runtime.json"
+        vendor_secrets = ROOT / "vendor" / "secrets.json"
+        with self.assertRaises(RuntimeConfigError):
+            RuntimeConfigStore(
+                config_path=vendor_runtime,
+                secrets_path=self.secrets_path,
+            )
+        with self.assertRaises(RuntimeConfigError):
+            RuntimeConfigStore(
+                config_path=self.config_path,
+                secrets_path=vendor_secrets,
+            )
+
     def test_secret_updates_are_separate_from_public_config(self) -> None:
         secret = "test-secret-never-return-this"
         public, status = self.store.update(
