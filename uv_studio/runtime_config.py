@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from .config import VENDOR_ROOT, runtime_config_path, runtime_secrets_path
+from .config import VENDOR_ROOT, projects_root, runtime_config_path, runtime_secrets_path
 
 
 class RuntimeConfigError(ValueError):
@@ -214,6 +214,11 @@ def _resolve_machine_config_file(path: Path | str) -> Path:
     resolved = Path(path).expanduser().resolve()
     if resolved == VENDOR_ROOT or VENDOR_ROOT in resolved.parents:
         raise RuntimeConfigError("machine runtime configuration files must not live inside vendor/")
+    project_store = projects_root()
+    if resolved == project_store or project_store in resolved.parents:
+        raise RuntimeConfigError(
+            "machine runtime configuration files must not live inside the canonical Project Store"
+        )
     return resolved
 
 
