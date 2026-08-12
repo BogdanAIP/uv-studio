@@ -61,12 +61,20 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Upload verified lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-ownership-audit-lockfile
+          path: frontend/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Publish verified lockfile to subordinate worker branch
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -C work/fix-dependency-ownership/audit-remediation
           git add frontend/package-lock.json
           git commit -m "fix: refresh vulnerable transitive frontend dependencies"
