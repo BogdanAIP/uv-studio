@@ -1,53 +1,38 @@
 # Next Task
 
-<!-- uv-next-slice: stage-4-non-destructive-edit-state -->
+<!-- uv-next-slice: stage-4-range-continuity-brief -->
 
 Updated: 2026-08-12
 
-## Handoff
+## Expected handoff
 
-Cross-platform real-media evidence triggered the Stage 4A architecture override recorded in D-027.
+After the active non-destructive edit-state slice is merged, continue Stage 4B with `stage-4-range-continuity-brief`.
 
-The next slice is:
+The next slice should add a typed/versioned provider-neutral bounded evidence/continuity document attached to exact project edit ranges.
+
+## Required direction
 
 ```text
-stage-4-non-destructive-edit-state
-  -> canonical provider-neutral edit decisions
-  -> original source + exact range + accepted replacement references
-  -> multiple accepted edits without whole-source re-encode per acceptance
-  -> deterministic preview/render projection
-  -> portable archive/reopen proof
+accepted exact edit decision
+  -> bounded before/after project evidence
+  -> mechanical source/probe facts
+  -> optional observations/inferences with confidence
+  -> replacement continuity constraints
+  -> review targets
 ```
 
-## Why this now precedes RangeContinuityBrief
+Requirements:
 
-The D-021/D-022 mechanical path is correct on the tested Ubuntu/Windows fixtures, but a one-second replacement in an eight-second 320x180 MPEG-4 source produced a complete FFV1 output **4.824x** the source size on both platforms.
-
-That whole-output file is acceptable as a deterministic render/intermediate, but not as canonical repeated-edit project state. Persisting Stage 4B continuity/intelligence before fixing this state boundary would make richer durable data depend on a representation already shown to duplicate unchanged media.
-
-## Required next-slice outcome
-
-The next slice must define and prove a small typed/versioned edit-state contract, not a new editor framework.
-
-Minimum requirements:
-
-- project-relative original source reference;
-- immutable integer-microsecond requested range;
-- project-relative accepted prepared-replacement reference;
-- deterministic ordering/overlap rules for multiple accepted edits;
-- no API keys, host paths, provider IDs or runtime IDs in canonical state;
-- archive/export/import/reopen round-trip;
-- explicit projection of edit decisions into the existing deterministic composition/render path;
-- no automatic full-video FFV1 materialization merely because an edit is accepted;
-- rollback/validation if an edit decision references missing/incompatible project media;
-- tests for multiple non-overlapping edits and explicit rejection/policy for overlapping edits.
+- immutable integer-microsecond range identity;
+- project-relative evidence references only;
+- mechanical facts separated from observations/inferences;
+- no provider/model/runtime IDs, host paths or credentials in canonical state;
+- archive/import/reopen proof;
+- valid baseline brief does not require a remote VLM/provider call;
+- provider execution, when later used to enrich a brief, remains behind the existing capability/D-017 boundary.
 
 ## Boundary
 
-Do not weaken the existing D-021/D-022 exact FFmpeg mechanics and do not replace them with unsafe packet-copy concatenation.
+Do not combine RangeContinuityBrief with the full Stage 4C editor UI, provider generation adapters, dubbing/music modes or Windows packaging.
 
-Do not combine this slice with provider generation, RangeContinuityBrief semantics, the Stage 4C full timeline UI, dubbing/music modes or Windows packaging.
-
-## Following task
-
-After the non-destructive edit-state boundary is proven portable and deterministic, return to `stage-4-range-continuity-brief` for Stage 4B provider-neutral bounded context/intelligence state.
+If the active edit-state slice exposes a structural blocker, change this handoff before merge rather than carrying an invalid assumption forward.
