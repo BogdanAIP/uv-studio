@@ -23,9 +23,13 @@ jobs:
   frontend-lock-preview:
     if: github.event_name == 'push' && github.ref_name == 'fix/dependency-ownership'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -34,6 +38,17 @@ jobs:
       - name: Regenerate frontend lockfile without installing scripts
         working-directory: frontend
         run: npm install --package-lock-only --ignore-scripts
+
+      - name: Publish generated lockfile to subordinate worker branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C work/fix-dependency-ownership/lockfile
+          git add frontend/package-lock.json
+          git commit -m "chore: regenerate frontend lockfile"
+          git push --force origin HEAD:work/fix-dependency-ownership/lockfile
 
       - name: Upload generated lockfile
         uses: actions/upload-artifact@v4
