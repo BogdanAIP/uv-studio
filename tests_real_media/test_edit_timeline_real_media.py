@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -45,22 +46,33 @@ def _color(
     duration_s: int,
     width: int = WIDTH,
     height: int = HEIGHT,
+    audio: bool = False,
+    tone_hz: int = 440,
 ) -> None:
-    _ffmpeg(
+    args = [
         "-f",
         "lavfi",
         "-i",
         f"color=c={color}:s={width}x{height}:r={FPS}:d={duration_s}",
-        "-map",
-        "0:v:0",
-        "-c:v",
-        "ffv1",
-        "-level",
-        "3",
-        "-pix_fmt",
-        "yuv420p",
-        str(path),
-    )
+    ]
+    if audio:
+        args += [
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={tone_hz}:sample_rate=48000:duration={duration_s}",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+        ]
+    else:
+        args += ["-map", "0:v:0"]
+    args += ["-c:v", "ffv1", "-level", "3", "-pix_fmt", "yuv420p"]
+    if audio:
+        args += ["-c:a", "flac", "-sample_fmt", "s16", "-shortest"]
+    args.append(str(path))
+    _ffmpeg(*args)
 
 
 def _sample_rgb(path: Path, timestamp_s: float) -> tuple[int, int, int]:
@@ -92,6 +104,27 @@ def _sample_rgb(path: Path, timestamp_s: float) -> tuple[int, int, int]:
     if len(completed.stdout) < 3:
         raise AssertionError(f"could not sample {path.name} at {timestamp_s}")
     return completed.stdout[0], completed.stdout[1], completed.stdout[2]
+
+
+def _stream_types(path: Path) -> list[str]:
+    completed = subprocess.run(
+        [
+            _tool("ffprobe"),
+            "-v",
+            "error",
+            "-show_streams",
+            "-of",
+            "json",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=90,
+        shell=False,
+    )
+    probe = json.loads(completed.stdout)
+    return [str(stream.get("codec_type")) for stream in probe.get("streams", [])]
 
 
 def _assert_color(test: unittest.TestCase, rgb: tuple[int, int, int], channel: str) -> None:
@@ -140,6 +173,13 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
             "/capabilities/video.render_edits/execute"
         )
 
+    def _accept(self, payload: dict[str, object]) -> None:
+        response = self.client.post(
+            f"/api/uv/projects/{self.project.project_id}/edits",
+            json=payload,
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+
     def test_accept_two_edits_stays_lightweight_until_one_explicit_render(self) -> None:
         artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
         for payload in (
@@ -158,11 +198,7 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
                 "replacement_path": "artifacts/green-replacement.mkv",
             },
         ):
-            accepted = self.client.post(
-                f"/api/uv/projects/{self.project.project_id}/edits",
-                json=payload,
-            )
-            self.assertEqual(accepted.status_code, 201, accepted.text)
+            self._accept(payload)
 
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
@@ -198,19 +234,68 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         ):
             _assert_color(self, _sample_rgb(output, timestamp), expected)
 
+    def test_multi_edit_audio_branch_renders_one_video_and_one_audio_stream(self) -> None:
+        source = self.project_dir / "sources" / "audio-blue-source.mkv"
+        red = self.project_dir / "artifacts" / "audio-red-replacement.mkv"
+        green = self.project_dir / "artifacts" / "audio-green-replacement.mkv"
+        _color(source, color="blue", duration_s=6, audio=True, tone_hz=440)
+        _color(red, color="red", duration_s=1, audio=True, tone_hz=660)
+        _color(green, color="green", duration_s=1, audio=True, tone_hz=880)
+        artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+
+        self._accept(
+            {
+                "edit_id": "audio_red",
+                "source_path": "sources/audio-blue-source.mkv",
+                "start_us": 1_000_000,
+                "end_us": 2_000_000,
+                "replacement_path": "artifacts/audio-red-replacement.mkv",
+            }
+        )
+        self._accept(
+            {
+                "edit_id": "audio_green",
+                "source_path": "sources/audio-blue-source.mkv",
+                "start_us": 4_000_000,
+                "end_us": 5_000_000,
+                "replacement_path": "artifacts/audio-green-replacement.mkv",
+            }
+        )
+        self.assertEqual(
+            sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
+            artifacts_before_accept,
+        )
+        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+
+        rendered = self.client.post(
+            self._render_url(),
+            json={"input": {"source_path": "sources/audio-blue-source.mkv"}},
+        )
+        self.assertEqual(rendered.status_code, 200, rendered.text)
+        result = rendered.json()["result"]
+        self.assertEqual(result["output"]["edit_ids"], ["audio_red", "audio_green"])
+        output = self.project_dir / result["output"]["path"]
+        self.assertEqual(sorted(_stream_types(output)), ["audio", "video"])
+        for timestamp, expected in (
+            (0.5, "blue"),
+            (1.5, "red"),
+            (2.5, "blue"),
+            (4.5, "green"),
+            (5.5, "blue"),
+        ):
+            _assert_color(self, _sample_rgb(output, timestamp), expected)
+
     def test_acceptance_is_storage_only_and_incompatible_media_fails_at_render(self) -> None:
         artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
-        accepted = self.client.post(
-            f"/api/uv/projects/{self.project.project_id}/edits",
-            json={
+        self._accept(
+            {
                 "edit_id": "edit_wrong_size",
                 "source_path": "sources/blue-source.mkv",
                 "start_us": 2_000_000,
                 "end_us": 3_000_000,
                 "replacement_path": "artifacts/wrong-size-replacement.mkv",
-            },
+            }
         )
-        self.assertEqual(accepted.status_code, 201, accepted.text)
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
             artifacts_before_accept,
