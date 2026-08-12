@@ -17,9 +17,14 @@ class ContinuityBriefApiTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         self.project = self.store.create_project(title="Continuity API")
         self.project_dir = self.store.project_directory(self.project.project_id)
-        (self.project_dir / "sources" / "source.mkv").write_bytes(b"source")
-        (self.project_dir / "artifacts" / "replacement.mkv").write_bytes(b"replacement")
-        (self.project_dir / "assets" / "reference.txt").write_text("reference", encoding="utf-8")
+        self.source = self.project_dir / "sources" / "source.mkv"
+        self.replacement = self.project_dir / "artifacts" / "replacement.mkv"
+        self.source.write_bytes(b"source")
+        self.replacement.write_bytes(b"replacement")
+        (self.project_dir / "assets" / "reference.txt").write_text(
+            "reference",
+            encoding="utf-8",
+        )
         self.edit = AcceptedRangeEdit(
             edit_id="edit_1",
             source_path="sources/source.mkv",
@@ -49,7 +54,6 @@ class ContinuityBriefApiTests(unittest.TestCase):
             "source_path": self.edit.source_path,
             "start_us": self.edit.start_us,
             "end_us": self.edit.end_us,
-            "replacement_path": self.edit.replacement_path,
             "evidence": [
                 {
                     "evidence_id": "ev_requested",
@@ -103,11 +107,14 @@ class ContinuityBriefApiTests(unittest.TestCase):
         }
 
     def test_put_list_get_and_delete_round_trip(self) -> None:
-        artifacts_before = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        artifacts_before = sorted(
+            path.name for path in (self.project_dir / "artifacts").iterdir()
+        )
         saved = self.client.put(self._item_url(), json=self._payload())
         self.assertEqual(saved.status_code, 200, saved.text)
         self.assertEqual(len(saved.json()["briefs"]), 1)
         self.assertEqual(saved.json()["briefs"][0]["edit_id"], "edit_1")
+        self.assertNotIn("replacement_path", saved.json()["briefs"][0])
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
             artifacts_before,
@@ -125,27 +132,44 @@ class ContinuityBriefApiTests(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200, deleted.text)
         self.assertEqual(deleted.json()["briefs"], [])
 
-    def test_url_identity_mismatch_and_accepted_edit_mismatch_are_422(self) -> None:
+    def test_brief_can_be_created_before_replacement_or_accepted_edit(self) -> None:
+        RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
+        self.replacement.unlink()
+
+        response = self.client.put(self._item_url(), json=self._payload())
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["briefs"][0]["edit_id"], "edit_1")
+        self.assertFalse(self.replacement.exists())
+
+    def test_url_identity_mismatch_and_accepted_target_mismatch_are_422(self) -> None:
         wrong_url = self.client.put(self._item_url("edit_other"), json=self._payload())
         self.assertEqual(wrong_url.status_code, 422, wrong_url.text)
 
         wrong_range = self._payload()
         wrong_range["start_us"] = 1_100_000
+        wrong_range["evidence"][0]["source_start_us"] = 1_100_000
         mismatch = self.client.put(self._item_url(), json=wrong_range)
         self.assertEqual(mismatch.status_code, 422, mismatch.text)
         self.assertIn("does not exactly match accepted edit", mismatch.text)
 
-    def test_unknown_provider_runtime_field_is_rejected_by_http_schema(self) -> None:
+    def test_unknown_provider_runtime_fields_and_fact_keys_are_rejected(self) -> None:
         payload = self._payload()
         payload["provider_id"] = "forbidden-runtime-binding"
         response = self.client.put(self._item_url(), json=payload)
         self.assertEqual(response.status_code, 422, response.text)
 
-    def test_unknown_evidence_reference_and_missing_evidence_file_are_422(self) -> None:
-        unknown = self._payload()
-        unknown["observations"][0]["evidence_ids"] = ["missing_evidence"]
-        response = self.client.put(self._item_url(), json=unknown)
+        payload = self._payload()
+        payload["mechanical_facts"][0]["key"] = "provider_id"
+        response = self.client.put(self._item_url(), json=payload)
         self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("runtime binding", response.text)
+
+    def test_temporal_evidence_wrong_source_and_missing_evidence_file_are_422(self) -> None:
+        wrong_source = self._payload()
+        wrong_source["evidence"][0]["path"] = "assets/reference.txt"
+        response = self.client.put(self._item_url(), json=wrong_source)
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("must reference target source", response.text)
 
         missing_file = self._payload()
         missing_file["evidence"][1]["path"] = "assets/missing.txt"
@@ -153,14 +177,22 @@ class ContinuityBriefApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertIn("valid existing project file", response.text)
 
+    def test_unknown_evidence_reference_is_422(self) -> None:
+        unknown = self._payload()
+        unknown["observations"][0]["evidence_ids"] = ["missing_evidence"]
+        response = self.client.put(self._item_url(), json=unknown)
+        self.assertEqual(response.status_code, 422, response.text)
+
     def test_missing_project_and_missing_brief_are_404(self) -> None:
-        missing_project = self.client.get("/api/uv/projects/prj_missing/continuity-briefs")
+        missing_project = self.client.get(
+            "/api/uv/projects/prj_missing/continuity-briefs"
+        )
         self.assertEqual(missing_project.status_code, 404, missing_project.text)
 
         missing_brief = self.client.get(self._item_url("edit_missing"))
         self.assertEqual(missing_brief.status_code, 404, missing_brief.text)
 
-    def test_stale_target_is_still_structurally_readable_and_deletable(self) -> None:
+    def test_removed_accepted_edit_does_not_destroy_reusable_brief(self) -> None:
         saved = self.client.put(self._item_url(), json=self._payload())
         self.assertEqual(saved.status_code, 200, saved.text)
         RangeEditStateStore(self.store).remove(self.project.project_id, "edit_1")
