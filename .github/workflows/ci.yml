@@ -20,6 +20,36 @@ jobs:
       - name: Validate development context
         run: python tools/validate_development_context.py
 
+  frontend-lint-report:
+    if: github.event_name == 'push' && github.ref_name == 'fix/dependency-ownership'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Generate complete ESLint JSON report
+        working-directory: frontend
+        shell: bash
+        run: npx eslint . --format json > eslint-report.json || true
+
+      - name: Upload ESLint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-ownership-eslint-report
+          path: frontend/eslint-report.json
+          if-no-files-found: error
+          retention-days: 1
+
   bootstrap:
     strategy:
       fail-fast: false
