@@ -83,8 +83,8 @@ jobs:
           )
           sub(
               "frontend/components/Sandbox/Sandbox.tsx",
-              r"let body: Record<string, unknown> = \{\};",
-              "const body: Record<string, unknown> = {};",
+              r"let body: Record<string, unknown> =",
+              "const body: Record<string, unknown> =",
           )
 
       - name: Install frontend dependencies
