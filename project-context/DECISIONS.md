@@ -314,11 +314,11 @@ Consequences: `fix-runtime-security-boundary` becomes the next implementation sl
 ---
 
 ## D-025 — UV Studio owns the application security boundary
-Status: proposed
+Status: accepted
 Date: 2026-08-12
 
 Decision: the default server is a UV Studio-owned FastAPI application. The complete vendored VideoClaw FastAPI route table is not mounted by default; provider-backed legacy routes may return only through explicit product-owned compatibility contracts that preserve the UV Studio authorization boundary. Machine public settings and provider secrets are stored separately, and credentials are write-only through HTTP.
 
 Reason: the full upstream application exposed wildcard-CORS configuration/sandbox/workflow/pipeline routes, returned provider credential fields through `/api/config`, stored configuration inside the vendor checkout and allowed remote provider execution outside D-017.
 
-Consequences: unsafe legacy provider routes fail closed until migrated; trusted local browser origins are explicit; untrusted Origin requests are rejected before routing; server host stays loopback-only; public URLs cannot embed credentials/query secrets; machine config cannot resolve into `vendor/`; dependency ownership remains the following Stage 3.5 slice. Full rationale: `project-context/decisions/D-025-runtime-security-boundary.md`.
+Consequences: unsafe legacy provider routes fail closed until migrated; trusted local browser origins are explicit; untrusted Origin requests are rejected before routing; server host stays loopback-only; public URLs cannot embed credentials/query secrets; machine config cannot resolve into `vendor/` or canonical Project Store; dependency ownership remains the following Stage 3.5 slice. Full rationale: `project-context/decisions/D-025-runtime-security-boundary.md`.
