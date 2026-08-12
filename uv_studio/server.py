@@ -1,10 +1,7 @@
 """UV Studio-owned FastAPI application boundary.
 
-The vendored VideoClaw tree remains a compatibility/source dependency, but its
-complete FastAPI application is intentionally not mounted here. In particular,
-legacy configuration, sandbox, workflow and pipeline routes may contact remote
-providers outside UV Studio's D-017 authorization boundary and therefore stay
-disabled by default until migrated behind explicit product-owned contracts.
+The pinned VideoClaw tree remains available to exact compatibility adapters, but
+the complete upstream FastAPI route table is not mounted by default.
 """
 
 from __future__ import annotations
@@ -15,14 +12,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_BACKEND = ROOT / "vendor" / "videoclaw-app" / "backend"
 
-# Exact compatibility adapters may still import pinned VideoClaw modules. Keep
-# that import seam available without inheriting the upstream FastAPI route table.
 if str(UPSTREAM_BACKEND) not in sys.path:
     sys.path.insert(0, str(UPSTREAM_BACKEND))
 
 import uvicorn  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
@@ -35,14 +31,28 @@ from uv_studio.api.recipes import router as recipes_router  # noqa: E402
 from uv_studio.config import allowed_frontend_origins  # noqa: E402
 from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
+TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
+
 app = FastAPI(title="UV Studio", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(allowed_frontend_origins()),
+    allow_origins=sorted(TRUSTED_FRONTEND_ORIGINS),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+@app.middleware("http")
+async def enforce_trusted_browser_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in TRUSTED_FRONTEND_ORIGINS:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "browser origin is not allowed by UV Studio"},
+        )
+    return await call_next(request)
+
 
 app.include_router(configuration_router)
 app.include_router(capabilities_router)
@@ -61,12 +71,6 @@ def health() -> dict[str, str]:
 
 @app.get("/api/stages", tags=["Compatibility metadata"])
 def legacy_stage_catalog() -> dict[str, list[dict[str, object]]]:
-    """Read-only legacy stage labels retained for the derived frontend.
-
-    This endpoint is UV Studio-owned and does not import or execute the upstream
-    workflow engine. Provider-backed legacy workflow execution remains disabled.
-    """
-
     return {
         "stages": [
             {"id": "script_generation", "name": "剧本生成", "order": 1, "description": "将灵感转化为结构化剧本"},
