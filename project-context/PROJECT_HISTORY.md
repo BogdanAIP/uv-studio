@@ -28,5 +28,6 @@ Compact record of completed development slices. Detailed rationale remains in th
 | 4B | PR #26, `58ff29e` | Provider-neutral pre-replacement RangeContinuityBrief with bounded source-bound evidence, observation/inference separation and archive/API proof | D-029 |
 | 4B | PR #27, `324a7de` | Explicit provider-neutral ReplacementPlan approval gate bound to the current continuity Brief | D-030 |
 | 4B | PR #28, `919baba` | Project-owned replacement candidates, sample-first generative preparation, trusted MCP project outputs and no automatic accepted edit | D-031 |
+| 4B | PR #29 | Evidence-based ReplacementReview bound to exact candidate metadata/content, removal of direct public accepted-edit creation, and approved-review-only acceptance | D-032 |
 
 This file is historical only. Current intent, coordination and handoff live in `ACTIVE_SLICE.json`, `PROJECT_STATE.md` and `NEXT_TASK.md`.

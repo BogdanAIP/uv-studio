@@ -118,10 +118,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Provision FFmpeg on Windows
+      - name: Provision pinned FFmpeg on Windows
         if: runner.os == 'Windows'
-        shell: powershell
-        run: choco install ffmpeg -y --no-progress
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://download.kde.org/stable/kdenlive/26.04/windows/kdenlive-26.04.3_standalone.exe'
+          $expectedSha256 = 'f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9'
+          $archive = Join-Path $env:RUNNER_TEMP 'kdenlive-26.04.3_standalone.exe'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-kdenlive-media-toolchain'
+
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Kdenlive standalone SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
+          }
+
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          & 7z x $archive "-o$extractRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z failed to extract pinned Windows media toolchain: exit $LASTEXITCODE" }
+
+          $ffmpeg = Get-ChildItem -Path $extractRoot -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ffmpeg) { throw 'Pinned Windows media toolchain did not contain ffmpeg.exe' }
+          $ffprobe = Join-Path $ffmpeg.Directory.FullName 'ffprobe.exe'
+          if (-not (Test-Path $ffprobe)) { throw 'Pinned Windows media toolchain did not contain ffprobe.exe beside ffmpeg.exe' }
+          $ffmpeg.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Record FFmpeg toolchain
         run: |
