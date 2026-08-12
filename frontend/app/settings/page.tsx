@@ -12,7 +12,7 @@ import {
   type ProviderGroup,
 } from '@/config/models';
 
-type ConfigTree = Record<string, any>;
+type ConfigTree = Record<string, unknown>;
 type SecretStatus = Record<string, boolean>;
 
 type Field = {
@@ -140,20 +140,34 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
 ];
 
-function getValue(config: ConfigTree, path: string) {
-  return path.split('.').reduce((current, key) => current?.[key], config);
+function isConfigTree(value: unknown): value is ConfigTree {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function setValue(config: ConfigTree, path: string, value: any): ConfigTree {
+function getValue(config: ConfigTree, path: string): unknown {
+  let current: unknown = config;
+  for (const key of path.split('.')) {
+    if (!isConfigTree(current)) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
+function setValue(config: ConfigTree, path: string, value: unknown): ConfigTree {
   const next = structuredClone(config || {});
   const parts = path.split('.');
-  let current = next;
+  let current: ConfigTree = next;
   for (const part of parts.slice(0, -1)) {
-    current[part] = current[part] || {};
-    current = current[part];
+    const child = current[part];
+    if (!isConfigTree(child)) current[part] = {};
+    current = current[part] as ConfigTree;
   }
   current[parts[parts.length - 1]] = value;
   return next;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function formatConfigPath(path: string) {
@@ -189,8 +203,8 @@ export default function SettingsPage() {
         setPath(data.path || 'data/config/runtime.json');
         setSecretDrafts({});
         setSecretClears({});
-      } catch (e: any) {
-        setError(e.message || '读取配置失败');
+      } catch (error: unknown) {
+        setError(errorMessage(error, '读取配置失败'));
       } finally {
         setLoading(false);
       }
@@ -293,8 +307,8 @@ export default function SettingsPage() {
       setSecretDrafts({});
       setSecretClears({});
       setMessage('配置已保存');
-    } catch (e: any) {
-      setError(e.message || '保存配置失败');
+    } catch (error: unknown) {
+      setError(errorMessage(error, '保存配置失败'));
     } finally {
       setSaving(false);
     }
