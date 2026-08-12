@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "required_capabilities": [
     "open_source_media",
     "create_timeline",
@@ -28,6 +28,68 @@
   "candidate_roles": {
     "libopenshot": ["engine"],
     "mlt": ["engine"],
-    "opencut": ["editor_ux_donor"]
+    "opencut-classic": ["editor_ux_donor"]
+  },
+  "evidence": {
+    "head_sha": "bc0433e0b2781ffca805f8e6644b65cf9a801764",
+    "workflow_run_id": 31608137802,
+    "artifacts": {
+      "mlt-linux": "sha256:dcac97a703bc1433467f81daa2ca75144e70561799fec14d026d409301ecc7ff",
+      "mlt-windows": "sha256:e864d85c6fc346c27970dea8f38bdf506530acd7a91f8cf644efaa4c4f977644",
+      "libopenshot": "sha256:babfe823a7d2dda6d903d16cdd7559af3f8dd356ffe1598d0d283f23aa7583c9",
+      "opencut-classic": "sha256:9ddfdfefcd1b719a7c361a26766b71a5cfc9008d87d34b101eec1b21b08a9e46"
+    }
+  },
+  "results": {
+    "mlt": {
+      "selected": true,
+      "role": "editing_engine",
+      "linux_binding_version": "7.22.0",
+      "all_required_capabilities": true,
+      "windows_deployment": {
+        "verified": true,
+        "runtime_version": "7.40.0",
+        "source_package": "kdenlive-26.04.3_standalone.exe",
+        "source_sha256": "f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9",
+        "capabilities_verified": [
+          "open_source_media",
+          "serialize_state",
+          "roundtrip_state",
+          "external_programmatic_mutation",
+          "render_export",
+          "exact_range_replacement_expressible"
+        ]
+      },
+      "reason": "The executable Linux probe passed all 16 required editing capabilities, and the pinned relocatable Windows runtime passed source-open, serialized-state round-trip, external mutation, exact replacement and real render evidence."
+    },
+    "opencut-classic": {
+      "selected": true,
+      "role": "editor_ux_donor",
+      "pinned_commit": "cf5e79e919144200294fb9fed22a222592a0aeea",
+      "license": "MIT",
+      "implemented_timeline_source_present": true,
+      "timeline_file_count": 142,
+      "editor_file_count": 39,
+      "reason": "The pinned source contains implemented timeline/editor primitives suitable for selective reuse behind a UV-owned adapter; roadmap-only API/MCP/headless claims are not credited."
+    },
+    "libopenshot": {
+      "selected": false,
+      "role": "engine_fallback",
+      "binding_version": "0.3.2",
+      "all_required_capabilities": false,
+      "failed_capabilities": [
+        "roundtrip_state",
+        "external_programmatic_mutation"
+      ],
+      "reason": "The executable probe rendered and handled ordinary timeline operations, but failed clean Timeline JSON round-trip and did not expose a reliable serialized clip identity for the tested ApplyJsonDiff mutation seam."
+    }
+  },
+  "selection": {
+    "engine": "mlt",
+    "editor_ux_donor": "opencut-classic",
+    "command_owner": "uv-studio",
+    "canonical_domain_owner": "uv-studio-project-store",
+    "initial_authoritative_export": "uv-studio-ffmpeg",
+    "rule": "GUI actions, scripts, AI and MCP invoke UV Studio command contracts; third-party timeline state is adapted and never becomes an alternate acceptance/security path."
   }
 }
