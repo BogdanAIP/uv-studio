@@ -41,6 +41,18 @@ from .media_ranges import (
     ResolvedProjectMediaRange,
 )
 from .models import PROJECT_SCHEMA_VERSION, ProjectDocument, ProjectReference
+from .replacement_candidate import (
+    CANDIDATE_STAGES,
+    REPLACEMENT_CANDIDATE_PATH,
+    REPLACEMENT_CANDIDATE_SCHEMA_VERSION,
+    ReplacementCandidate,
+    ReplacementCandidateError,
+    ReplacementCandidateNotFound,
+    ReplacementCandidateState,
+    ReplacementCandidateStore,
+    SampleApproval,
+    replacement_plan_sha256,
+)
 from .replacement_plan import (
     MAX_PLAN_CHANGE_ITEMS,
     REPLACEMENT_AUDIO_STRATEGIES,
@@ -62,6 +74,7 @@ __all__ = [
     "ARCHIVE_SCHEMA_VERSION",
     "AcceptedRangeEdit",
     "ArchiveLimits",
+    "CANDIDATE_STAGES",
     "CONTINUITY_BRIEF_PATH",
     "CONTINUITY_BRIEF_SCHEMA_VERSION",
     "ContinuityBriefError",
@@ -86,6 +99,8 @@ __all__ = [
     "ProjectReference",
     "ProjectStore",
     "REPLACEMENT_AUDIO_STRATEGIES",
+    "REPLACEMENT_CANDIDATE_PATH",
+    "REPLACEMENT_CANDIDATE_SCHEMA_VERSION",
     "REPLACEMENT_METHOD_CLASSES",
     "REPLACEMENT_PLAN_PATH",
     "REPLACEMENT_PLAN_SCHEMA_VERSION",
@@ -94,6 +109,11 @@ __all__ = [
     "RangeContinuityBriefStore",
     "RangeEditState",
     "RangeEditStateStore",
+    "ReplacementCandidate",
+    "ReplacementCandidateError",
+    "ReplacementCandidateNotFound",
+    "ReplacementCandidateState",
+    "ReplacementCandidateStore",
     "ReplacementPlan",
     "ReplacementPlanError",
     "ReplacementPlanNotFound",
@@ -104,8 +124,10 @@ __all__ = [
     "ReviewTarget",
     "SAMPLE_POLICY_NOT_REQUIRED",
     "SAMPLE_POLICY_REQUIRED",
+    "SampleApproval",
     "UnsupportedArchiveSchema",
     "create_backup",
     "export_project",
     "import_project",
+    "replacement_plan_sha256",
 ]
