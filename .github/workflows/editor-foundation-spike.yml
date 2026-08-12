@@ -46,6 +46,7 @@ jobs:
         with:
           name: libopenshot-spike-evidence
           path: .spike-output
+          include-hidden-files: true
 
   mlt-probe:
     runs-on: ubuntu-24.04
@@ -79,6 +80,72 @@ jobs:
         with:
           name: mlt-spike-evidence
           path: .spike-output
+          include-hidden-files: true
+
+  mlt-windows-deployment-probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Provision pinned KDE Windows MLT runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://download.kde.org/stable/kdenlive/26.04/windows/kdenlive-26.04.3_standalone.exe'
+          $expectedSha256 = 'f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9'
+          $archive = Join-Path $env:RUNNER_TEMP 'kdenlive-26.04.3_standalone.exe'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-kdenlive-standalone'
+
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Kdenlive standalone SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
+          }
+
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          & 7z x $archive "-o$extractRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z failed to extract Kdenlive standalone: exit $LASTEXITCODE" }
+
+          $melt = Get-ChildItem -Path $extractRoot -Recurse -Filter melt.exe | Select-Object -First 1
+          if (-not $melt) { throw 'Pinned Kdenlive standalone did not expose melt.exe' }
+          $ffmpeg = Get-ChildItem -Path $extractRoot -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $ffmpeg) { throw 'Pinned Kdenlive standalone did not expose ffmpeg.exe' }
+
+          "UV_MELT=$($melt.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_KDENLIVE_FFMPEG=$($ffmpeg.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Generate deterministic Windows source fixture
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .spike-output | Out-Null
+          & $env:UV_KDENLIVE_FFMPEG -hide_banner -loglevel error -y `
+            -f lavfi -i 'testsrc2=size=320x240:rate=30:duration=4' `
+            -c:v mpeg4 -pix_fmt yuv420p .spike-output/source-windows.mp4
+          if ($LASTEXITCODE -ne 0) { throw "Bundled FFmpeg fixture generation failed: exit $LASTEXITCODE" }
+      - name: Probe relocatable MLT runtime and serialized command seam
+        shell: pwsh
+        run: |
+          python spikes/editor-foundation/probe_mlt_cli.py `
+            $env:UV_MELT `
+            .spike-output/source-windows.mp4 `
+            .spike-output/mlt-windows-output.mp4 `
+            .spike-output/mlt-windows-project.mlt `
+            .spike-output/mlt-windows-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .spike-output/mlt-windows-report.json)) { throw 'MLT Windows report missing' }
+      - name: Publish MLT Windows result
+        if: always()
+        shell: pwsh
+        run: python spikes/editor-foundation/summarize_probe.py "MLT Windows deployment probe" .spike-output/mlt-windows-report.json
+      - name: Upload MLT Windows evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlt-windows-spike-evidence
+          path: .spike-output
+          include-hidden-files: true
 
   opencut-classic-probe:
     runs-on: ubuntu-24.04
@@ -106,3 +173,4 @@ jobs:
         with:
           name: opencut-classic-spike-evidence
           path: .spike-output/opencut-report.json
+          include-hidden-files: true
