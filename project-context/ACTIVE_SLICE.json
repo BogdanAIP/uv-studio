@@ -7,7 +7,7 @@
     "goal": "Select and prove a license-compatible reuse-first editor foundation for Stage 4C, including a single programmatic command boundary that can be invoked by GUI actions, scripts, AI and MCP without duplicating editing logic.",
     "base_branch": "main",
     "branch": "stage-4/editor-foundation-spike",
-    "pull_request": null,
+    "pull_request": 30,
     "phase": "draft",
     "write_scope": [
       "AGENTS.md",
