@@ -78,16 +78,23 @@ class AcceptedRangeEdit:
     def from_dict(cls, data: Mapping[str, Any]) -> "AcceptedRangeEdit":
         if not isinstance(data, Mapping):
             raise EditStateError("accepted range edit must be a JSON object")
-        required = ("edit_id", "source_path", "start_us", "end_us", "replacement_path")
-        missing = [field for field in required if field not in data]
+        allowed = {"edit_id", "source_path", "start_us", "end_us", "replacement_path"}
+        unknown = set(data).difference(allowed)
+        if unknown:
+            raise EditStateError(
+                f"unsupported accepted edit fields: {sorted(unknown)!r}"
+            )
+        missing = [field for field in allowed if field not in data]
         if missing:
-            raise EditStateError(f"accepted range edit is missing fields: {', '.join(missing)}")
+            raise EditStateError(
+                f"accepted range edit is missing fields: {', '.join(sorted(missing))}"
+            )
         return cls(
-            edit_id=str(data["edit_id"]),
-            source_path=str(data["source_path"]),
+            edit_id=data["edit_id"],
+            source_path=data["source_path"],
             start_us=data["start_us"],
             end_us=data["end_us"],
-            replacement_path=str(data["replacement_path"]),
+            replacement_path=data["replacement_path"],
         )
 
 
@@ -97,7 +104,11 @@ class RangeEditState:
     schema_version: int = EDIT_STATE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        if self.schema_version != EDIT_STATE_SCHEMA_VERSION:
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version != EDIT_STATE_SCHEMA_VERSION
+        ):
             raise EditStateError(
                 f"unsupported edit-state schema: {self.schema_version!r}; "
                 f"supported={EDIT_STATE_SCHEMA_VERSION}"
@@ -152,10 +163,9 @@ class RangeEditState:
     def from_dict(cls, data: Mapping[str, Any]) -> "RangeEditState":
         if not isinstance(data, Mapping):
             raise EditStateError("edit-state document must be a JSON object")
-        if set(data).difference({"schema_version", "edits"}):
-            raise EditStateError(
-                f"unsupported edit-state fields: {sorted(set(data).difference({'schema_version', 'edits'}))!r}"
-            )
+        unknown = set(data).difference({"schema_version", "edits"})
+        if unknown:
+            raise EditStateError(f"unsupported edit-state fields: {sorted(unknown)!r}")
         if "schema_version" not in data:
             raise EditStateError("edit-state document is missing schema_version")
         raw_edits = data.get("edits", [])
@@ -204,22 +214,27 @@ class RangeEditStateStore:
     def save(self, project_id: str, state: RangeEditState) -> RangeEditState:
         if not isinstance(state, RangeEditState):
             raise EditStateError("save requires RangeEditState")
-        self._validate_references(project_id, state)
-        path = self._path(project_id)
-        # ProjectStore owns the atomic JSON primitive used by canonical project.json;
-        # typed project documents reuse the same fsync + os.replace behavior.
-        self.project_store._atomic_write_json(path, state.to_dict())
+        with self.project_store._lock:
+            self._validate_references(project_id, state)
+            path = self._path(project_id)
+            # ProjectStore owns the atomic JSON primitive used by canonical project.json;
+            # typed project documents reuse the same fsync + os.replace behavior.
+            self.project_store._atomic_write_json(path, state.to_dict())
         return state
 
     def accept(self, project_id: str, edit: AcceptedRangeEdit) -> RangeEditState:
-        current = self.load(project_id)
-        updated = current.add(edit)
-        return self.save(project_id, updated)
+        # Serialize the read-modify-write pair under the ProjectStore RLock so
+        # concurrent local/API accepts cannot silently lose an already accepted edit.
+        with self.project_store._lock:
+            current = self.load(project_id)
+            updated = current.add(edit)
+            return self.save(project_id, updated)
 
     def remove(self, project_id: str, edit_id: str) -> RangeEditState:
-        current = self.load(project_id)
-        updated = current.remove(edit_id)
-        return self.save(project_id, updated)
+        with self.project_store._lock:
+            current = self.load(project_id)
+            updated = current.remove(edit_id)
+            return self.save(project_id, updated)
 
     def validate_project(self, project_id: str) -> RangeEditState:
         return self.load(project_id, validate_references=True)
