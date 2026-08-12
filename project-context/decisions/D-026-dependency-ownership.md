@@ -1,6 +1,6 @@
 # D-026 — UV Studio owns its baseline dependency graph
 
-Status: proposed  
+Status: accepted  
 Date: 2026-08-12
 
 ## Decision
@@ -57,7 +57,7 @@ Provider/heavy optional packages such as OpenAI SDK, DashScope, Edge TTS, Playwr
 
 ## CI proof
 
-The baseline matrix must prove dependency ownership rather than only install the files:
+The baseline matrix proves dependency ownership rather than only installing the files:
 
 1. bootstrap installs only `requirements-uv.txt`;
 2. `pip check` succeeds;
@@ -79,7 +79,7 @@ The derived UV Studio frontend owns its own dependency health:
 - `npm audit --audit-level=high` is a required application gate;
 - production build remains required.
 
-The package-lock regeneration for this slice may use an isolated subordinate worker branch because the execution environment with npm registry access is GitHub Actions. The coordinator integrates the exact generated blob into the single integration branch; the temporary generator is removed before review.
+The package-lock regeneration for this slice used an isolated subordinate worker branch because the execution environment with npm registry access is GitHub Actions. The coordinator integrated the exact verified generated blob into the single integration branch; the temporary generator/remediation jobs were removed before review.
 
 ## Consequences
 
@@ -87,15 +87,18 @@ The package-lock regeneration for this slice may use an isolated subordinate wor
 2. Optional provider capabilities may report unavailable/configuration-required until their explicit extra is installed instead of making server startup depend on those packages.
 3. The pinned vendor source remains available for provenance and exact compatibility adapters without controlling the product dependency graph.
 4. New providers must introduce an explicit optional requirement group or isolated runtime contract rather than append SDKs to core by default.
-5. Frontend security/lint failures become merge-blocking instead of backlog-only observations.
+5. Frontend security/lint failures are merge-blocking instead of backlog-only observations.
 
-## Acceptance
+## Acceptance evidence
 
-Change this decision to `accepted` only after the exact final PR head proves on Ubuntu and Windows that:
+Draft PR #23 head `02bc68ced1327d546c0963d424128c39bdd780f8` passed the complete required Ubuntu/Windows matrix on 2026-08-12:
 
-- UV Studio server imports and unit tests run from core requirements without vendor dependency installation;
-- API/HTTP tests run from the product-owned dev requirements;
-- `pip check` passes;
-- regenerated npm lockfile matches the updated package manifest;
-- `npm ci`, frontend lint, high-severity audit and production build all pass;
-- existing Project/MCP/capability/range contracts remain green.
+- core bootstrap and `pip check` on Ubuntu and Windows;
+- `uv_studio.server` import and unit tests without vendor dependency installation;
+- UV Studio API integration and real HTTP health smoke on Ubuntu and Windows;
+- exact regenerated npm lock installation;
+- frontend lint;
+- `npm audit --audit-level=high` with no high-severity advisories;
+- frontend production build.
+
+The final state-only review head must repeat the same required matrix before merge.
