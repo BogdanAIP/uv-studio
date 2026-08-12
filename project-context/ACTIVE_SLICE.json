@@ -1,26 +1,32 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "chore-roadmap-runtime-gates",
-    "kind": "chore",
+    "id": "fix-runtime-security-boundary",
+    "kind": "fix",
     "roadmap_stage": "stage-3-5",
-    "goal": "Resequence UV Studio so runtime security, dependency ownership and real-media verification gate later product work.",
+    "goal": "Make the running UV Studio application secret-safe, origin-restricted and unable to bypass product authorization through legacy provider routes.",
     "base_branch": "main",
-    "branch": "chore/roadmap-runtime-gates",
-    "pull_request": 21,
-    "phase": "review",
+    "branch": "fix/runtime-security-boundary",
+    "pull_request": null,
+    "phase": "draft",
     "write_scope": [
-      "ROADMAP.md",
+      ".gitignore",
+      "uv_studio/server.py",
+      "uv_studio/config.py",
+      "uv_studio/runtime_config.py",
+      "uv_studio/api/configuration.py",
+      "frontend/app/settings/page.tsx",
+      "tests/test_runtime_config.py",
+      "tests_api/test_runtime_security_api.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
       "project-context/DECISIONS.md",
-      "project-context/ENGINEERING_BACKLOG.md",
-      "project-context/decisions/D-024-roadmap-runtime-gates.md"
+      "project-context/decisions/D-025-runtime-security-boundary.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "fix-runtime-security-boundary",
+    "next_slice_id": "fix-dependency-ownership",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
