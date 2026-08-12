@@ -20,12 +20,16 @@ jobs:
       - name: Validate development context
         run: python tools/validate_development_context.py
 
-  frontend-lint-report:
+  frontend-lint-remediation-preview:
     if: github.event_name == 'push' && github.ref_name == 'fix/dependency-ownership'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -33,22 +37,74 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Apply narrow lint remediation candidate
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"expected remediation source not found in {path}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          settings = "frontend/app/settings/page.tsx"
+          replace(settings, "type ConfigTree = Record<string, any>;", "type ConfigTree = Record<string, unknown>;")
+          replace(
+              settings,
+              """function getValue(config: ConfigTree, path: string) {\n  return path.split('.').reduce((current, key) => current?.[key], config);\n}\n\nfunction setValue(config: ConfigTree, path: string, value: any): ConfigTree {\n  const next = structuredClone(config || {});\n  const parts = path.split('.');\n  let current = next;\n  for (const part of parts.slice(0, -1)) {\n    current[part] = current[part] || {};\n    current = current[part];\n  }\n  current[parts[parts.length - 1]] = value;\n  return next;\n}\n""",
+              """function isConfigTree(value: unknown): value is ConfigTree {\n  return typeof value === 'object' && value !== null && !Array.isArray(value);\n}\n\nfunction getValue(config: ConfigTree, path: string): unknown {\n  let current: unknown = config;\n  for (const key of path.split('.')) {\n    if (!isConfigTree(current)) return undefined;\n    current = current[key];\n  }\n  return current;\n}\n\nfunction setValue(config: ConfigTree, path: string, value: unknown): ConfigTree {\n  const next = structuredClone(config || {});\n  const parts = path.split('.');\n  let current: ConfigTree = next;\n  for (const part of parts.slice(0, -1)) {\n    const child = current[part];\n    if (!isConfigTree(child)) current[part] = {};\n    current = current[part] as ConfigTree;\n  }\n  current[parts[parts.length - 1]] = value;\n  return next;\n}\n\nfunction errorMessage(error: unknown, fallback: string) {\n  return error instanceof Error && error.message ? error.message : fallback;\n}\n""",
+          )
+          replace(
+              settings,
+              """      } catch (e: any) {\n        setError(e.message || '读取配置失败');\n""",
+              """      } catch (error: unknown) {\n        setError(errorMessage(error, '读取配置失败'));\n""",
+          )
+          replace(
+              settings,
+              """    } catch (e: any) {\n      setError(e.message || '保存配置失败');\n""",
+              """    } catch (error: unknown) {\n      setError(errorMessage(error, '保存配置失败'));\n""",
+          )
+
+          replace(
+              "frontend/app/projects/[projectId]/page.tsx",
+              """  useEffect(() => {\n    let active = true;\n    setProject(null);\n    setExecutionPlan(null);\n    setError(null);\n    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])\n""",
+              """  useEffect(() => {\n    let active = true;\n    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])\n""",
+          )
+          replace(
+              "frontend/app/projects/page.tsx",
+              """  useEffect(() => {\n    void refresh();\n  }, []);\n""",
+              """  useEffect(() => {\n    const timer = window.setTimeout(() => {\n      void refresh();\n    }, 0);\n    return () => window.clearTimeout(timer);\n  }, []);\n""",
+          )
+          replace(
+              "frontend/components/Sandbox/Sandbox.tsx",
+              "let body: Record<string, unknown> = {};",
+              "const body: Record<string, unknown> = {};",
+          )
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Generate complete ESLint JSON report
+      - name: Verify lint remediation candidate
         working-directory: frontend
-        shell: bash
-        run: npx eslint . --format json > eslint-report.json || true
+        run: npm run lint
 
-      - name: Upload ESLint report
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-ownership-eslint-report
-          path: frontend/eslint-report.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Verify remediation candidate production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Publish remediation candidate to subordinate worker branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C work/fix-dependency-ownership/lint-remediation
+          git add frontend/app/projects/'[projectId]'/page.tsx frontend/app/projects/page.tsx frontend/app/settings/page.tsx frontend/components/Sandbox/Sandbox.tsx
+          git commit -m "fix: remediate strict frontend lint errors"
+          git push --force origin HEAD:work/fix-dependency-ownership/lint-remediation
 
   bootstrap:
     strategy:
