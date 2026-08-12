@@ -7,7 +7,7 @@
     "goal": "Persist a typed provider-neutral bounded RangeContinuityBrief linked to an exact accepted edit decision, with mechanical facts separated from observations/inferences, constraints and review targets.",
     "base_branch": "main",
     "branch": "stage-4/range-continuity-brief",
-    "pull_request": null,
+    "pull_request": 26,
     "phase": "draft",
     "write_scope": [
       "uv_studio/projects/continuity_brief.py",
