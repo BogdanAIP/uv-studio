@@ -1,33 +1,37 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "test-real-media-golden",
+    "id": "stage-4-non-destructive-edit-state",
     "kind": "stage",
     "roadmap_stage": "stage-4a",
-    "goal": "Prove exact range extraction and prepared-replacement reinsertion with real deterministic FFmpeg/FFprobe media on Ubuntu and Windows, including CFR, VFR, audio/no-audio and timestamp-offset evidence.",
+    "goal": "Persist typed portable accepted range-edit decisions without whole-video materialization, enforce deterministic overlap/order rules, and project those decisions into an explicit real-media render path.",
     "base_branch": "main",
-    "branch": "stage-4/real-media-golden",
-    "pull_request": 24,
-    "phase": "review",
+    "branch": "stage-4/non-destructive-edit-state",
+    "pull_request": null,
+    "phase": "draft",
     "write_scope": [
-      ".github/workflows/ci.yml",
-      "tests_real_media/test_range_real_media.py",
-      "tests_real_media/test_compressed_reinsertion_evidence.py",
-      "uv_studio/capabilities/adapters/local_ffmpeg.py",
-      "uv_studio/capabilities/adapters/range_reinsertion.py",
-      "uv_studio/projects/media_ranges.py",
+      "uv_studio/projects/edit_state.py",
+      "uv_studio/projects/__init__.py",
+      "uv_studio/projects/archive.py",
+      "uv_studio/api/projects.py",
+      "uv_studio/capabilities/builtin.py",
+      "uv_studio/capabilities/adapters/edit_render.py",
+      "uv_studio/capabilities/adapters/__init__.py",
+      "tests/test_edit_state.py",
+      "tests/test_edit_state_archive.py",
+      "tests_api/test_edit_state_api.py",
+      "tests_real_media/test_edit_timeline_real_media.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md",
       "project-context/ENGINEERING_BACKLOG.md",
       "project-context/PROJECT_HISTORY.md",
       "project-context/DECISIONS.md",
-      "project-context/decisions/D-027-stage4a-real-media-evidence.md",
-      "project-context/evidence/STAGE_4A_REAL_MEDIA.md"
+      "project-context/decisions/D-028-non-destructive-edit-state.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-4-non-destructive-edit-state",
+    "next_slice_id": "stage-4-range-continuity-brief",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
