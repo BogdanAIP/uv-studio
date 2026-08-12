@@ -16,7 +16,7 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit D-017 authorization, bounded MCP/local/native adapters and deterministic targeted existing-video mechanics.
 
-Stage 3.5 is now merged. D-025 gives UV Studio the application security boundary, and D-026 gives UV Studio ownership of its core/dev dependency graph. The default application no longer inherits the complete VideoClaw runtime route/dependency surface, and frontend lint/high-severity dependency audit/build are permanent Ubuntu/Windows gates.
+Stage 3.5 is merged. D-025 gives UV Studio the application security boundary, D-026 gives UV Studio ownership of its core/dev dependency graph, and frontend lint/high-severity dependency audit/build are permanent Ubuntu/Windows gates.
 
 The stable product-owned execution path is:
 
@@ -32,37 +32,51 @@ Canonical Project
   -> portable artifact/provenance
 ```
 
-## Stage 4A status
+## Stage 4A real-media result
 
-D-021/D-022 already provide exact integer-microsecond extraction and deterministic prepared-replacement reinsertion contracts, but their detailed media behavior is still proven mainly with fake subprocess runners.
+PR #24 now executes the actual installed FFmpeg/FFprobe binaries through `LocalFFmpegAdapter` on both Ubuntu and Windows. Deterministic fixtures are generated at test time, so no binary media files are committed.
 
-The active slice `test-real-media-golden` turns that mechanical contract into real evidence by generating tiny deterministic media during CI and executing the actual installed `ffmpeg`/`ffprobe` binaries through `LocalFFmpegAdapter`.
+The current evidence proves the existing D-021/D-022 mechanical path across two different FFmpeg generations:
 
-Required evidence includes:
+- CFR + audio exact extraction and prepared-replacement reinsertion;
+- VFR extraction preserving observable 33/34 ms and 66/67 ms frame intervals;
+- no-audio extraction/reinsertion without introducing an audio stream;
+- source with `1.250000` second mux timestamp offset while project range coordinates remain zero-based;
+- visible blue/red/blue prefix/replacement/suffix ordering by decoded pixel sampling;
+- real produced-file rollback leaving no registered or on-disk artifact after a later injected FFmpeg failure.
 
-- CFR source with audio;
-- VFR source with audio and observable variable frame timestamps;
-- no-audio source;
-- reproducible non-zero/offset timestamp source;
-- compatible prepared replacement;
-- observable prefix/replacement/suffix ordering;
-- duration, geometry and audio-policy validation through real ffprobe;
-- real rollback/failure evidence in addition to the existing fast mocked unit contracts;
-- output size/runtime measurements for the current whole-output FFV1/FLAC reinsertion policy.
+No mechanical adapter defect was exposed by these deterministic representative fixtures.
 
-FFmpeg provisioning is explicit in CI on both Ubuntu and Windows rather than treated as an undocumented runner-image assumption.
+## D-027 measured state-model decision
 
-## Decision after evidence
+The first correctness fixture compared FFV1 input with FFV1 output and therefore could not answer whether whole-output FFV1 was appropriate for ordinary compressed media.
 
-The current handoff points to `stage-4-range-continuity-brief` only as the expected path if measured real-media evidence does not reveal a mechanical/state-model blocker.
+A separate 8-second 320x180 30-fps MPEG-4 source measurement now provides that evidence:
 
-If the real tests show that current whole-output FFV1/FLAC reinsertion is unsuitable even as an intermediate, or expose a structural range/timestamp defect, the coordinator will change the handoff before merge to a scoped media-edit-core refactor. The decision must follow measured evidence, not roadmap preference.
+| Platform | Source | Whole-output FFV1 | Ratio | Reinsertion |
+|---|---:|---:|---:|---:|
+| Ubuntu | 713,056 B | 3,440,122 B | **4.824x** | 389 ms |
+| Windows | 713,058 B | 3,440,072 B | **4.824x** | 397 ms |
+
+The output duration remained exactly 8 seconds on both platforms.
+
+D-027 therefore keeps the current FFV1/FLAC path as a deterministic correctness/render/intermediate mechanism but rejects a complete newly materialized lossless file as canonical state for every accepted short edit.
+
+The next slice is now `stage-4-non-destructive-edit-state`, not RangeContinuityBrief. It will persist provider-neutral source + exact range + accepted replacement edit decisions and render them explicitly only when preview/export requires media materialization.
+
+Complete evidence: `project-context/evidence/STAGE_4A_REAL_MEDIA.md`.
+
+## Following Stage 4 work
+
+After the non-destructive edit-state boundary is proven portable and deterministic, return to `stage-4-range-continuity-brief` for bounded provider-neutral continuity/intelligence state.
+
+Stage 4C still owns the later complete timeline/preview/accept/export user workflow.
 
 ## Remaining cross-cutting gaps
 
 - D-023 still needs an explicit post-merge/idle lifecycle state and live write-scope diff enforcement;
 - free-form canonical `settings`, `extensions` and reference `metadata` still need proportionate typed portability enforcement before durable Stage 4B intelligence state is added;
-- Stage 4C user timeline/preview/accept/export workflow remains later work.
+- device-specific phone/OBS/AAC-priming/H.264/H.265 GOP fixture coverage remains incremental hardening beyond the deterministic baseline.
 
 ## Development invariant
 
