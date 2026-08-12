@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "fix/dependency-ownership",
     "pull_request": 23,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "requirements-uv.txt",
       "requirements-uv-dev.txt",
