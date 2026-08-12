@@ -46,7 +46,7 @@ jobs:
         run: python -c "import uv_studio.server; print('uv_studio.server core import ok')"
 
       - name: Compile UV Studio Python
-        run: python -m compileall tools tests uv_studio
+        run: python -m compileall tools tests tests_real_media uv_studio
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
@@ -79,7 +79,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +111,36 @@ jobs:
 
       - name: Probe backend through UV Studio over real HTTP
         run: python tools/uv_dev.py health-smoke --startup-timeout 45
+
+      - name: Provision FFmpeg on Ubuntu
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Provision FFmpeg on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Record FFmpeg toolchain
+        run: |
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Run Stage 4A real-media golden suite
+        env:
+          UV_REAL_MEDIA_REPORT: stage4a-real-media-${{ runner.os }}.json
+        run: python -m unittest discover -s tests_real_media -v
+
+      - name: Upload Stage 4A real-media evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage4a-real-media-${{ matrix.os }}
+          path: stage4a-real-media-*.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Install UV Studio frontend dependencies
         working-directory: frontend
