@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-4/range-continuity-brief",
     "pull_request": 26,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "uv_studio/projects/continuity_brief.py",
       "uv_studio/projects/__init__.py",
