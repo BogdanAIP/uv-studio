@@ -322,3 +322,15 @@ Decision: the default server is a UV Studio-owned FastAPI application. The compl
 Reason: the full upstream application exposed wildcard-CORS configuration/sandbox/workflow/pipeline routes, returned provider credential fields through `/api/config`, stored configuration inside the vendor checkout and allowed remote provider execution outside D-017.
 
 Consequences: unsafe legacy provider routes fail closed until migrated; trusted local browser origins are explicit; untrusted Origin requests are rejected before routing; server host stays loopback-only; public URLs cannot embed credentials/query secrets; machine config cannot resolve into `vendor/` or canonical Project Store; dependency ownership remains the following Stage 3.5 slice. Full rationale: `project-context/decisions/D-025-runtime-security-boundary.md`.
+
+---
+
+## D-026 — UV Studio owns its baseline dependency graph
+Status: accepted
+Date: 2026-08-12
+
+Decision: UV Studio declares and verifies its own core runtime and development/test dependency graph. The complete vendored VideoClaw backend requirements are no longer an implicit application baseline; provider/heavy runtimes remain explicit optional dependencies.
+
+Reason: after D-025 the product server no longer requires the upstream application runtime, but installation and CI still inherited its broad provider stack. Frontend dependency/version drift and unblocked lint/security advisories also prevented a clean product-owned baseline.
+
+Consequences: core/bootstrap and app-baseline CI prove server/tests without vendor dependency installation; Next and `eslint-config-next` are aligned on 16.2.12; npm lock resolution is regenerated and high-severity audit, lint and production build are merge-blocking. Full rationale: `project-context/decisions/D-026-dependency-ownership.md`.
