@@ -1,204 +1,142 @@
 # Next Task
 
-<!-- uv-next-slice: stage-4-range-continuity-brief -->
+<!-- uv-next-slice: fix-runtime-security-boundary -->
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
-## Gate first
+## Primary target
 
-PR #19 — **deterministic exact range reinsertion foundation** — was independently audited and merged to `main` as `f9d850d6fb2ea5fbd84d071752139e151d494ea4` after its exact final head passed the complete Linux/Windows matrix.
+Close the application-wide **runtime security boundary** before adding `RangeContinuityBrief`, another provider, or new remote generation behavior.
 
-Do not start the product slice until the active agent-development guardrail slice in `ACTIVE_SLICE.json` has:
+The UV Studio-owned capability path already has strong selection and D-017 authorization semantics, but the running application still exposes legacy VideoClaw routes that can read/write provider configuration and invoke upstream model clients outside that boundary.
 
-- one coordinator-owned final head;
-- the `development-context` contract green;
-- Ubuntu and Windows bootstrap/unit green;
-- Ubuntu and Windows API + real HTTP smoke + frontend build green;
-- no unresolved review threads;
-- D-023 accepted;
-- merge to `main` confirmed.
-
-If that process slice is not merged, continue/fix it rather than opening a parallel Stage 4 branch.
-
-## Primary target after PR #19
-
-Build the first provider-neutral **range continuity / replacement brief** layer.
-
-The product already has the mechanical boundaries:
+The next slice is therefore:
 
 ```text
-ProjectMediaRange
-  -> exact requested interval
-
-video.extract_range
-  -> context_before
-  -> requested clip
-  -> context_after
-
-video.replace_range
-  -> deterministic reinsertion of a prepared replacement
+fix-runtime-security-boundary
+  -> protect provider secrets
+  -> restrict browser access to the local backend
+  -> stop legacy remote/non-free execution from bypassing UV Studio authorization
+  -> keep useful legacy UI/runtime compatibility only behind explicit safe boundaries
 ```
 
-The next missing piece is to describe **what a replacement must preserve** before any particular VLM/video generator is selected.
+This is a Stage 3.5 product prerequisite, not general release hardening.
 
-The next slice should therefore produce a portable structured brief from the exact range + nearby context rather than jumping directly to a provider-specific generation pipeline.
+## Required findings to close
 
-## Required product contract
+### 1. Raw provider secrets are exposed through legacy configuration
 
-Introduce a small versioned provider-neutral model, expected conceptually as:
+The current vendored `/api/config` returns `Config.as_dict()`, which includes provider credential fields. The derived frontend consumes that route and round-trips the returned configuration on save.
+
+Acceptance:
+
+- configuration reads never return raw stored credentials;
+- secret fields expose only presence/status or an explicit masked representation that cannot reconstruct the secret;
+- secret updates use write-only semantics and do not require the browser to resend an existing credential;
+- clearing/replacing a secret is explicit;
+- tests prove raw values do not appear in HTTP JSON responses or logs.
+
+### 2. Provider configuration is stored in a commit-prone vendor path
+
+VideoClaw currently writes `vendor/videoclaw-app/backend/config.yaml`. The project root ignore rules do not make that an acceptable long-term credential store.
+
+Acceptance:
+
+- real runtime/provider configuration moves to a UV Studio-owned machine-local configuration location outside `vendor/` source;
+- provider credentials cannot become ordinary untracked files inside the vendored source tree;
+- repository ignore rules defensively exclude any transitional legacy secret file;
+- portable Project Store archives never contain these credentials;
+- migration from an existing local legacy config is explicit and secret-safe if supported.
+
+Do not commit a real key at any point in testing.
+
+### 3. Wildcard CORS exposes sensitive localhost APIs to arbitrary browser origins
+
+The upstream application currently enables wildcard CORS while mutating configuration, sandbox, pipeline and file routes are mounted.
+
+Acceptance:
+
+- production/local app CORS allows only deliberate UV Studio frontend origins or disables cross-origin access where the same-origin frontend proxy is sufficient;
+- credentialed/wildcard combinations are not used;
+- tests prove an untrusted browser origin is not granted API access by CORS headers;
+- localhost binding remains the default unless a future explicit remote-access feature defines authentication and threat model.
+
+### 4. Legacy provider execution bypasses D-017
+
+Upstream sandbox/pipeline routes can create provider clients directly. D-017 currently protects `/api/uv` capability execution but not the whole mounted application.
+
+Acceptance:
+
+Choose and implement the smallest safe boundary that preserves useful compatibility:
+
+- preferred direction: UV Studio-owned application root, with only explicitly allowed legacy compatibility routers mounted;
+- legacy provider-generating routes are disabled by default, migrated behind semantic capabilities, or wrapped in an equivalent product-owned authorization gate;
+- no browser/API call can contact a remote or non-free provider without the applicable UV Studio execution preparation/consent flow;
+- local deterministic legacy functionality may remain available when it has no hidden remote/cost behavior;
+- tests exercise the actual application route table, not only adapter units.
+
+Do not add a second independent consent system inside VideoClaw.
+
+## Architectural direction
+
+Prefer this ownership shape:
 
 ```text
-RangeContinuityBrief
-  -> exact ProjectMediaRange identity
-  -> context artifact references
-  -> source technical facts
-  -> continuity observations
-  -> replacement constraints
-  -> review/check requirements
+UV Studio FastAPI app
+  -> UV Studio routers
+  -> explicit compatibility routers/sub-apps when still needed
+       -> safe local-only legacy route, or
+       -> product authorization/capability boundary
 ```
 
-Do not put provider/model/runtime IDs in the portable brief.
-
-The brief must be useful both to:
-
-- a later generative adapter constructing a replacement request;
-- a later review adapter comparing generated replacement with source context.
-
-## Separate evidence from interpretation
-
-Keep concrete evidence distinct from model conclusions.
-
-Example structure:
+rather than permanently:
 
 ```text
-evidence
-  -> source/context project paths
-  -> exact start/end microseconds
-  -> technical probe facts
-  -> sampled frame/time references when created
-
-observations
-  -> scene/subject/action/camera/lighting/audio continuity facts
-
-constraints
-  -> what must remain consistent across the replacement
-
-review_targets
-  -> what a later validator must compare
+complete VideoClaw FastAPI app
+  + UV Studio routers appended afterward
 ```
 
-A provider response should never overwrite or redefine the original requested range.
-
-## Context should stay bounded
-
-Reuse D-021 context rather than analyzing the whole source by default.
-
-The first continuity path should consume only the requested range and bounded context necessary for the edit. Whole-video analysis must be an explicit separate decision when genuinely needed.
-
-This keeps 5–10 second edits from turning into mandatory analysis of a 30-minute file.
-
-## Provider-neutral semantic capability
-
-Decide the clean semantic capability boundary before implementing an adapter. A likely shape is one of:
-
-```text
-video.range_understand
-media.range_understand
-```
-
-or a composition of the existing provider-neutral `media.understand` capability with the range-context model.
-
-Choose the smallest contract that avoids duplicating the Capability Registry.
-
-Do not create `qwen.*`, `gpt.*`, `gemini.*`, `videoclaw.*` or similar semantic capability IDs.
-
-## Execution policy
-
-The portable brief/model must exist independently of any one provider.
-
-If a concrete analysis adapter is added in this slice:
-
-- local/free remains preferred when a real tested local implementation exists;
-- remote execution must pass D-017;
-- potentially-paid execution must expose cost/unknown-cost consent as already defined;
-- no local failure may silently widen into remote/paid execution;
-- exact input project-file contracts must be explicit for MCP adapters.
-
-Do not mark an analysis offer `AVAILABLE` until its execution transport and file contract are real.
-
-## Structured observations
-
-The first useful continuity schema should cover at least fields needed for seamless short-scene replacement, without forcing every field to exist:
-
-```text
-scene / environment
-subjects / visible identity cues
-subject position and scale
-pose / motion direction
-camera framing
-camera motion
-depth / perspective
-lighting direction and intensity cues
-color / exposure continuity
-objects entering/leaving the range
-start-boundary state
-end-boundary state
-audio/speech/music state when relevant
-```
-
-Observations should support confidence/evidence references rather than pretending uncertain model output is ground truth.
-
-## Replacement constraints
-
-Derive a provider-neutral replacement brief containing explicit constraints such as:
-
-```text
-required duration / tolerance
-required resolution / media format contract
-start-boundary continuity
-end-boundary continuity
-camera/subject continuity
-whether source audio must be retained/replaced
-forbidden unintended changes
-```
-
-Mechanical duration/media constraints should come from D-021/D-022 facts, not be invented by an LLM/VLM.
-
-## No direct generation yet unless the brief contract is complete
-
-Do not add a video generator merely to demonstrate the flow.
-
-Generation may begin only after the portable brief can be created, stored, exported/imported and passed to a provider without losing the exact range identity or mechanical constraints.
-
-If time remains in the same PR after the brief is complete and tested, generation integration should still be a separate adapter path over existing `video.generate`/transformation semantics, not part of the brief model itself.
+Do not edit the pinned vendor snapshot unless a narrowly documented compatibility fix is unavoidable. Prefer UV Studio-owned app composition/wrappers.
 
 ## Tests required
 
 At minimum prove:
 
-1. exact `ProjectMediaRange` survives brief serialization unchanged;
-2. all file references remain canonical project-relative paths;
-3. host paths/provider credentials/tokens cannot enter portable brief state;
-4. context references cannot escape approved project roots;
-5. technical duration/resolution constraints are derived from project/probe facts rather than model prose;
-6. model observations can be absent/partial without corrupting mechanical constraints;
-7. uncertain observations have explicit confidence/evidence representation;
-8. provider/model IDs are not required by the portable schema;
-9. archive/export round-trip preserves the brief;
-10. any remote adapter path remains behind D-017 authorization;
-11. API tests cover creation/read/update or task output as appropriate;
-12. Ubuntu/Windows unit/API/frontend matrix stays green.
+1. `GET` configuration API never emits a configured raw provider key;
+2. replacing a key works without browser round-trip of the old value;
+3. saving configuration does not create a credential file under the vendored source tree;
+4. canonical project export does not contain machine/provider secrets;
+5. untrusted CORS origin does not receive permissive access headers;
+6. intended local frontend origin still works;
+7. at least one representative legacy remote-generation route cannot execute without product authorization or is no longer mounted by default;
+8. UV Studio-owned local/free capability execution remains frictionless;
+9. existing Projects, recipes, MCP, FFmpeg extraction/reinsertion and HTTP health tests remain green;
+10. Ubuntu and Windows required CI matrix stays green.
 
-## Explicit non-goals for the first continuity slice
+## Scope control
 
-Do not add yet:
+Do not combine this slice with:
 
-- automatic full-video analysis by default;
-- automatic scene generation before the brief exists;
-- provider-specific prompt fields in canonical project schema;
-- automatic replacement retiming hidden inside analysis;
-- final delivery/export codec policy;
-- timeline UI editor;
-- dubbing/music-specific workflow.
+- `RangeContinuityBrief`;
+- a new VLM/video provider;
+- real FFmpeg golden media work except tests necessary to prevent regression;
+- full dependency-ownership cleanup;
+- desktop packaging;
+- broad redesign of the frontend.
 
-The continuity/brief layer should make later generation/review swappable while keeping exact D-021/D-022 mechanics stable.
+A following Stage 3.5 slice will own dependency manifests/frontend dependency health. After the runtime security gate is trustworthy, Stage 4A real-media golden verification and then Stage 4B `RangeContinuityBrief` may continue in that order.
+
+## Handoff after this slice
+
+Expected next ordering:
+
+```text
+fix-runtime-security-boundary
+  -> fix-dependency-ownership
+  -> test-real-media-golden
+  -> refactor/non-destructive-media-edit-core as justified by evidence
+  -> stage-4-range-continuity-brief
+  -> Stage 4C user workflow
+```
+
+Do not jump directly to continuity or provider generation while an application route can still expose secrets or bypass authorization.

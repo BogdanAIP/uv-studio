@@ -298,3 +298,15 @@ Decision: use `AGENTS.md` as the automatic entrypoint, `ACTIVE_SLICE.json` as ma
 Reason: cross-chat Markdown handoff was strong but manual duplication allowed branch/PR status and descriptions to drift; parallel writers also lacked a repository-owned coordination contract.
 
 Consequences: stale markers, PR identity, draft/review phase or required body sections fail CI; exact head SHA remains a live GitHub fact rather than a self-referential file field. Full rationale: `project-context/decisions/D-023-agent-development-workflow.md`.
+
+---
+
+## D-024 — Runtime trust and real-media evidence gate later product intelligence
+Status: accepted
+Date: 2026-08-12
+
+Decision: insert Stage 3.5 Runtime Independence & Security before further provider/intelligence growth, and split Stage 4 completion into mechanical editing, edit intelligence and user-workflow gates. Security, dependency ownership and representative real-media verification are progressive prerequisites rather than work deferred wholesale to Stage 9.
+
+Reason: the product-owned Project/Recipe/Capability architecture is materially stronger than the currently mounted application boundary. Legacy VideoClaw configuration/provider routes can still expose secrets or bypass D-017, while real FFmpeg range behavior and the complete UI outcome are not yet production-proven.
+
+Consequences: `fix-runtime-security-boundary` becomes the next implementation slice; dependency ownership and real-media golden verification follow before `RangeContinuityBrief`; Stage 9 remains Windows productization/final release hardening rather than the first security/verification gate. Full rationale: `project-context/decisions/D-024-roadmap-runtime-gates.md`.
