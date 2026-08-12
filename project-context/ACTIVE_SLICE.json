@@ -7,7 +7,7 @@
     "goal": "Persist typed portable accepted range-edit decisions without whole-video materialization, enforce deterministic overlap/order rules, and project those decisions into an explicit real-media render path.",
     "base_branch": "main",
     "branch": "stage-4/non-destructive-edit-state",
-    "pull_request": null,
+    "pull_request": 25,
     "phase": "draft",
     "write_scope": [
       "uv_studio/projects/edit_state.py",
