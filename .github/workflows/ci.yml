@@ -123,24 +123,25 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = 'autobuild-2026-07-29-13-36'
-          $asset = 'ffmpeg-master-latest-win64-gpl-shared.zip'
-          $expectedSha256 = '9211f801f2ee31f30cc343df7791ffee866a4053a5145b07191b280d2fb48f46'
-          $archive = Join-Path $env:RUNNER_TEMP $asset
-          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-ffmpeg'
-          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/$tag/$asset"
+          $url = 'https://download.kde.org/stable/kdenlive/26.04/windows/kdenlive-26.04.3_standalone.exe'
+          $expectedSha256 = 'f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9'
+          $archive = Join-Path $env:RUNNER_TEMP 'kdenlive-26.04.3_standalone.exe'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-kdenlive-media-toolchain'
 
           Invoke-WebRequest -Uri $url -OutFile $archive
           $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actualSha256 -ne $expectedSha256) {
-            throw "FFmpeg archive SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
+            throw "Kdenlive standalone SHA-256 mismatch: expected $expectedSha256, got $actualSha256"
           }
 
-          Expand-Archive -Path $archive -DestinationPath $extractRoot -Force
+          New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
+          & 7z x $archive "-o$extractRoot" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z failed to extract pinned Windows media toolchain: exit $LASTEXITCODE" }
+
           $ffmpeg = Get-ChildItem -Path $extractRoot -Recurse -Filter ffmpeg.exe | Select-Object -First 1
-          if (-not $ffmpeg) { throw 'Pinned FFmpeg archive did not contain ffmpeg.exe' }
+          if (-not $ffmpeg) { throw 'Pinned Windows media toolchain did not contain ffmpeg.exe' }
           $ffprobe = Join-Path $ffmpeg.Directory.FullName 'ffprobe.exe'
-          if (-not (Test-Path $ffprobe)) { throw 'Pinned FFmpeg archive did not contain ffprobe.exe beside ffmpeg.exe' }
+          if (-not (Test-Path $ffprobe)) { throw 'Pinned Windows media toolchain did not contain ffprobe.exe beside ffmpeg.exe' }
           $ffmpeg.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Record FFmpeg toolchain
