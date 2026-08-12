@@ -20,6 +20,29 @@ jobs:
       - name: Validate development context
         run: python tools/validate_development_context.py
 
+  frontend-lock-preview:
+    if: github.event_name == 'push' && github.ref_name == 'fix/dependency-ownership'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Regenerate frontend lockfile without installing scripts
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-ownership-lockfile
+          path: frontend/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
   bootstrap:
     strategy:
       fail-fast: false
