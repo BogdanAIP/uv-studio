@@ -1,6 +1,6 @@
 """UV Studio semantic capabilities, offer selection and execution contracts."""
 
-from .builtin import ADAPTERS, CAPABILITIES, build_builtin_capability_registry
+from .builtin import ADAPTERS, CAPABILITIES, build_builtin_capability_registry as _build_builtin_registry
 from .execution import (
     CAPABILITY_EXECUTION_SCHEMA_VERSION,
     CapabilityExecutionEnvelope,
@@ -43,6 +43,18 @@ from .selection import (
     SelectionPolicy,
     select_offer,
 )
+
+
+def build_builtin_capability_registry() -> CapabilityRegistry:
+    registry = _build_builtin_registry()
+    # Kept outside the historical builtin tuple while Stage 4A establishes the
+    # typed edit-state boundary. Product callers still receive one complete
+    # registry through this public package function.
+    from .adapters.edit_render import register_edit_render_capability
+
+    register_edit_render_capability(registry)
+    return registry
+
 
 __all__ = [
     "ADAPTERS",

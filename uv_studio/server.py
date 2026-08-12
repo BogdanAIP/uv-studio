@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
+from uv_studio.api.edit_state import router as edit_state_router  # noqa: E402
 from uv_studio.api.execution import router as execution_router  # noqa: E402
 from uv_studio.api.mcp import router as mcp_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
@@ -62,6 +63,7 @@ app.include_router(qwen_mm_router)
 app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)
+app.include_router(edit_state_router)
 
 
 @app.get("/api/health", tags=["Health"])

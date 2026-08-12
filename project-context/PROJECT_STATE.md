@@ -1,82 +1,84 @@
 # Project State
 
-<!-- uv-active-slice: test-real-media-golden -->
+<!-- uv-active-slice: stage-4-non-destructive-edit-state -->
 
 **Updated:** 2026-08-12
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 4A — Mechanical editing foundation / real-media proof
+**Active roadmap stage:** Stage 4A — Non-destructive accepted edit state
 
-**Last verified `main` baseline:** `9b7e7cc13843aa0875836d8559d9d9492f67f3e5`
+**Last verified `main` baseline:** `93e0d62824bf72752499a8a3850c434ea7df7e08`
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
 ## Product now
 
-UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit D-017 authorization, bounded MCP/local/native adapters and deterministic targeted existing-video mechanics.
+UV Studio has a product-owned Project Store, recipe/policy and capability boundaries, D-017 authorization, secure UV-owned application/runtime dependencies, real cross-platform FFmpeg evidence for exact range mechanics, and a review-ready non-destructive accepted-edit boundary under D-028.
 
-Stage 3.5 is merged. D-025 gives UV Studio the application security boundary, D-026 gives UV Studio ownership of its core/dev dependency graph, and frontend lint/high-severity dependency audit/build are permanent Ubuntu/Windows gates.
+PR #24 / D-027 proved the D-021/D-022 FFmpeg mechanics are correct on representative deterministic CFR/VFR/audio/no-audio/timestamp-offset fixtures while whole-output FFV1 is unsuitable as canonical repeated-edit state. PR #25 addresses that state-model problem without weakening the proven render path.
 
-The stable product-owned execution path is:
+## Stage 4A non-destructive state — review-ready
+
+Canonical accepted edit state lives in the typed/versioned project document:
 
 ```text
-Canonical Project
-  -> Recipe / Production Policy
-  -> semantic capability
-  -> CapabilityOffer
-  -> SelectionPolicy
-  -> execution preparation
-  -> D-017 authorization when required
-  -> exact adapter
-  -> portable artifact/provenance
+timeline/range-edits.json
 ```
 
-## Stage 4A real-media result
+Each decision contains only:
 
-PR #24 now executes the actual installed FFmpeg/FFprobe binaries through `LocalFFmpegAdapter` on both Ubuntu and Windows. Deterministic fixtures are generated at test time, so no binary media files are committed.
+```text
+edit_id
+source_path
+start_us
+end_us
+replacement_path
+```
 
-The current evidence proves the existing D-021/D-022 mechanical path across two different FFmpeg generations:
+The implemented boundary now provides:
 
-- CFR + audio exact extraction and prepared-replacement reinsertion;
-- VFR extraction preserving observable 33/34 ms and 66/67 ms frame intervals;
-- no-audio extraction/reinsertion without introducing an audio stream;
-- source with `1.250000` second mux timestamp offset while project range coordinates remain zero-based;
-- visible blue/red/blue prefix/replacement/suffix ordering by decoded pixel sampling;
-- real produced-file rollback leaving no registered or on-disk artifact after a later injected FFmpeg failure.
+- immutable integer-microsecond intervals and project-relative media references;
+- deterministic ordering and unique edit IDs;
+- fail-closed same-source overlap policy with touching boundaries allowed;
+- serialized atomic accept/remove under the Project Store lock;
+- storage-only acceptance: no FFmpeg/FFprobe/provider execution and no rendered artifact;
+- existing-file validation for a newly accepted decision;
+- structural readability/removal after a referenced replacement later disappears, with explicit `validate_project()` for current-reference health;
+- UV-owned GET/POST/DELETE project edit-state API;
+- portable `.uvproj.zip` export/import/fresh-store reopen preserving typed decisions exactly;
+- explicit local/free semantic capability `video.render_edits` using the normal capability selection/execution path;
+- one-pass deterministic render of all accepted non-overlapping edits for one source;
+- render-time stream/resolution/duration/AV compatibility checks and rollback;
+- compositional package-level `LocalFFmpegAdapter` facade rather than further adapter inheritance growth.
 
-No mechanical adapter defect was exposed by these deterministic representative fixtures.
+## Real-media proof
 
-## D-027 measured state-model decision
+Draft PR #25 head `dee5f664f31879a048a7a4e7f79679eca2024e02` passed all five required checks in run #623 (`31585401479`).
 
-The first correctness fixture compared FFV1 input with FFV1 output and therefore could not answer whether whole-output FFV1 was appropriate for ordinary compressed media.
+The real-media suite on Ubuntu and Windows proves:
 
-A separate 8-second 320x180 30-fps MPEG-4 source measurement now provides that evidence:
+- two accepted video-only edits create no rendered media until one explicit `video.render_edits` call;
+- one render produces the expected `blue → red → blue → green → blue` content order;
+- the same multi-edit path with FLAC audio produces exactly one video and one audio stream and the same visual edit order;
+- a technically incompatible but existing replacement is accepted without hidden media analysis and then rejected with 422 at explicit render, with no output artifact registered;
+- the earlier Stage 4A CFR/VFR/audio/no-audio/timestamp/rollback golden cases remain green.
 
-| Platform | Source | Whole-output FFV1 | Ratio | Reinsertion |
-|---|---:|---:|---:|---:|
-| Ubuntu | 713,056 B | 3,440,122 B | **4.824x** | 389 ms |
-| Windows | 713,058 B | 3,440,072 B | **4.824x** | 397 ms |
+Unit/API tests additionally prove strict JSON typing, overlap rules, missing-reference rejection, stale-reference repairability and archive round-trip.
 
-The output duration remained exactly 8 seconds on both platforms.
+D-028 is accepted. The final state-only review head must repeat the same five required checks before merge.
 
-D-027 therefore keeps the current FFV1/FLAC path as a deterministic correctness/render/intermediate mechanism but rejects a complete newly materialized lossless file as canonical state for every accepted short edit.
+## Expected following work
 
-The next slice is now `stage-4-non-destructive-edit-state`, not RangeContinuityBrief. It will persist provider-neutral source + exact range + accepted replacement edit decisions and render them explicitly only when preview/export requires media materialization.
-
-Complete evidence: `project-context/evidence/STAGE_4A_REAL_MEDIA.md`.
-
-## Following Stage 4 work
-
-After the non-destructive edit-state boundary is proven portable and deterministic, return to `stage-4-range-continuity-brief` for bounded provider-neutral continuity/intelligence state.
-
-Stage 4C still owns the later complete timeline/preview/accept/export user workflow.
+After PR #25 merges, continue with `stage-4-range-continuity-brief`: bounded provider-neutral continuity/evidence state attached to exact accepted edit decisions, without provider/runtime identity in canonical state.
 
 ## Remaining cross-cutting gaps
 
-- D-023 still needs an explicit post-merge/idle lifecycle state and live write-scope diff enforcement;
-- free-form canonical `settings`, `extensions` and reference `metadata` still need proportionate typed portability enforcement before durable Stage 4B intelligence state is added;
-- device-specific phone/OBS/AAC-priming/H.264/H.265 GOP fixture coverage remains incremental hardening beyond the deterministic baseline.
+- D-023 still needs a post-merge/idle lifecycle state and live diff-vs-write-scope enforcement;
+- free-form general project `settings`, `extensions` and reference `metadata` still need proportionate recursive portable-JSON hardening;
+- semantic pre-commit validation of every future typed project document during archive import remains later archive hardening; typed reopen already fails closed;
+- broader device/container/codec real-media coverage remains incremental hardening;
+- Stage 4C still owns the complete timeline/preview/accept/export UI.
 
 ## Development invariant
 
