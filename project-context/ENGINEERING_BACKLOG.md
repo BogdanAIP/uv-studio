@@ -4,60 +4,63 @@ This is the durable queue behind the single active handoff in `NEXT_TASK.md`. It
 
 GitHub Issues are currently disabled for this repository, so these gaps remain repository-owned until issue tracking is enabled deliberately.
 
-## P0 — Stage 3.5 runtime trust boundary
+## Completed early gates
 
-### Runtime security boundary
+### Stage 3.5 runtime security boundary — completed
 
-Close the active next slice from `NEXT_TASK.md`:
+D-025 / PR #22 moved the product to a UV Studio-owned FastAPI root, separated machine secrets from public configuration, blocked untrusted browser origins before routing, removed unsafe legacy provider/sandbox/pipeline routes from the default application and kept runtime configuration outside `vendor/` and canonical Project Store data.
 
-- raw provider credentials must not be returned by configuration APIs;
-- real provider configuration must live outside the vendored source tree;
-- transitional legacy secret files must be ignored defensively;
-- wildcard CORS must not expose mutating localhost APIs to arbitrary browser origins;
-- legacy sandbox/pipeline/provider execution must not bypass the product-owned D-017 authorization boundary;
-- prefer a UV Studio-owned FastAPI root with explicitly mounted compatibility routes rather than permanent ownership by the complete upstream VideoClaw app.
+### Stage 3.5 dependency ownership — completed
 
-### Dependency ownership
+D-026 / PR #23 made UV Studio own its core/dev dependency graph, removed full vendored VideoClaw backend requirements from baseline setup/CI, aligned Next/ESLint on 16.2.12 and made frontend lint, high-severity npm audit and production build permanent Ubuntu/Windows gates.
 
-After the security slice:
+### Stage 4A deterministic real-media baseline — completed by the active PR after final merge gate
 
-- define UV Studio-owned core Python runtime requirements;
-- split optional provider/runtime extras from baseline dependencies;
-- stop receiving FastAPI/Uvicorn/Pydantic and provider SDKs only as incidental transitive state from vendored VideoClaw requirements;
-- make optional Edge TTS/provider stacks actually optional in development installation;
-- repair Next/ESLint compatibility and audit the known npm advisories;
-- add explicit dependency-health gates to CI.
+PR #24 executes real FFmpeg/FFprobe through `LocalFFmpegAdapter` on generated CFR/VFR/audio/no-audio/non-zero timestamp media on Ubuntu and Windows. It also proves observable replacement ordering, real produced-file rollback and records evidence under `project-context/evidence/STAGE_4A_REAL_MEDIA.md`.
+
+D-027 records the measured state-model consequence: a one-second replacement in an eight-second 320x180 MPEG-4 source produced a complete FFV1 output **4.824x** the source size on both platforms. Whole-output FFV1 remains a deterministic render/intermediate path, not canonical repeated-edit state.
+
+## P0 — Stage 4A non-destructive edit state
+
+### Canonical edit decisions
+
+The next active handoff is `stage-4-non-destructive-edit-state`.
+
+Implement a small product-owned, provider-neutral, versioned edit-state contract so accepting a short edit does not automatically materialize a new complete lossless video.
+
+Required direction:
+
+```text
+original project source
+  + immutable exact ProjectMediaRange
+  + accepted project replacement reference
+  + deterministic ordering/overlap policy
+  -> explicit preview/render/export projection
+```
+
+Required proof:
+
+- project-relative source/replacement references only;
+- multiple non-overlapping accepted edits remain lightweight;
+- overlapping edits follow one explicit fail-closed policy;
+- archive/export/import/reopen round trip preserves decisions exactly;
+- missing/incompatible referenced media fails clearly;
+- existing D-021/D-022 exact mechanics remain the render/correctness layer;
+- no full-video FFV1 output is created merely because an edit decision is accepted.
+
+### FFmpeg adapter shape
+
+Refactor the FFmpeg adapter shape before operation growth turns inheritance into an adapter-on-adapter chain: one facade, shared path/probe/subprocess primitives and operation-specific handlers. Do this only where it materially helps the non-destructive projection/render boundary; do not rewrite working D-021/D-022 mechanics for style alone.
 
 ### Development-state lifecycle
 
-The D-023 schema must gain a post-merge/idle or handoff-ready state so `main` cannot indefinitely declare an already-merged PR as active. Then extend validation toward trustworthy live diff-vs-write-scope enforcement and slice-specific quality gates.
-
-## P0 — Stage 4A real mechanical verification
-
-### Real FFmpeg golden E2E
-
-Before treating targeted range mechanics as production-proven:
-
-- create or generate small deterministic real fixtures with explicit provenance;
-- cover representative CFR, VFR, with/without audio and non-zero timestamp cases;
-- execute real `video.extract_range` and `video.replace_range` through the project adapters;
-- probe and assert actual boundaries, duration tolerance, geometry, stream presence and rollback behavior;
-- run without media downloads on Ubuntu and Windows;
-- preserve useful diagnostics without leaking host paths/secrets into portable state.
-
-### Media-edit state scalability
-
-Current reinsertion deliberately produces a whole FFV1/FLAC lossless intermediate. Preserve that correctness baseline, but do not make full lossless re-encoding after every edit the permanent project model.
-
-Evaluate and implement a project-owned non-destructive edit-decision/timeline representation so repeated short edits can remain lightweight and full media rendering happens at an explicit preview/export gate.
-
-Refactor the FFmpeg adapter shape before operation growth turns inheritance into an adapter-on-adapter chain: one facade, shared path/probe/subprocess primitives and operation-specific handlers.
+D-023 still needs a post-merge/idle or handoff-ready state so `main` cannot indefinitely declare an already-merged PR as active. Then extend validation toward trustworthy live diff-vs-write-scope enforcement and slice-specific quality gates.
 
 ## P1 — Stage 4B edit intelligence
 
 ### Provider-neutral range continuity brief
 
-Build a versioned provider-neutral exact-range evidence/continuity contract only after the Stage 3.5 runtime gate and Stage 4A real-media evidence are trustworthy.
+Build a versioned provider-neutral exact-range evidence/continuity contract after the non-destructive edit-state boundary is proven.
 
 Required direction:
 
@@ -116,16 +119,18 @@ Add proportionate typed portability enforcement:
 
 Do not turn the small general project schema into one universal media schema.
 
-## P1 — General quality gates
+## P1 — Remaining general quality gates
 
-The current matrix still lacks some product gates:
+Already permanent: Ubuntu/Windows unit/API/HTTP, frontend production build, frontend lint, high-severity npm audit and deterministic real encoded-media assertions.
+
+Still missing:
 
 - measured coverage policy;
 - proportionate Python lint/type checks;
-- frontend lint;
+- frontend unit tests;
+- accessibility checks;
 - browser E2E;
-- dependency audit;
-- real encoded-media assertions.
+- broader device/container/codec media fixtures as concrete failures appear.
 
 Add them as the corresponding product surfaces become real. Avoid blanket ignores over product source.
 
