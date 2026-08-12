@@ -7,7 +7,7 @@
     "goal": "Deliver the complete user-facing targeted existing-video editing workflow on the D-033 reusable foundation: safe source import and preview, reusable timeline range selection, one UV-owned Command API for GUI/scripts/AI/MCP, visible Brief/Plan/Candidate/Review state, approved non-destructive acceptance, multiple edits and explicit authoritative export.",
     "base_branch": "main",
     "branch": "stage-4/range-edit-user-workflow",
-    "pull_request": null,
+    "pull_request": 31,
     "phase": "draft",
     "write_scope": [
       ".github/workflows/ci.yml",
