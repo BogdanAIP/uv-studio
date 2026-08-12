@@ -7,7 +7,7 @@
     "goal": "Make the running UV Studio application secret-safe, origin-restricted and unable to bypass product authorization through legacy provider routes.",
     "base_branch": "main",
     "branch": "fix/runtime-security-boundary",
-    "pull_request": null,
+    "pull_request": 22,
     "phase": "draft",
     "write_scope": [
       ".gitignore",
