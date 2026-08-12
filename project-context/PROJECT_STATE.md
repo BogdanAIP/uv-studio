@@ -1,22 +1,22 @@
 # Project State
 
-<!-- uv-active-slice: fix-dependency-ownership -->
+<!-- uv-active-slice: test-real-media-golden -->
 
 **Updated:** 2026-08-12
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 3.5 — Runtime Independence & Security
+**Active roadmap stage:** Stage 4A — Mechanical editing foundation / real-media proof
 
-**Last verified `main` baseline:** `dfa4c6aad1ee08bbe8dc0d715c38e4f889936542`
+**Last verified `main` baseline:** `9b7e7cc13843aa0875836d8559d9d9492f67f3e5`
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
 ## Product now
 
-UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit D-017 execution authorization, bounded MCP/local/native adapters and deterministic targeted existing-video mechanics.
+UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit D-017 authorization, bounded MCP/local/native adapters and deterministic targeted existing-video mechanics.
 
-After PR #22 / D-025, UV Studio owns the default FastAPI security boundary. The complete VideoClaw route table is no longer inherited; unsafe legacy provider/configuration/file/pipeline surfaces fail closed by default, machine provider secrets are write-only and stay outside `vendor/` and canonical projects, browser origins are explicitly restricted, and the server remains loopback-only.
+Stage 3.5 is now merged. D-025 gives UV Studio the application security boundary, and D-026 gives UV Studio ownership of its core/dev dependency graph. The default application no longer inherits the complete VideoClaw runtime route/dependency surface, and frontend lint/high-severity dependency audit/build are permanent Ubuntu/Windows gates.
 
 The stable product-owned execution path is:
 
@@ -32,58 +32,37 @@ Canonical Project
   -> portable artifact/provenance
 ```
 
-Stage 4 mechanical work on `main` provides exact integer-microsecond range extraction and deterministic prepared-replacement reinsertion under D-021/D-022.
+## Stage 4A status
 
-## Stable capabilities on `main`
+D-021/D-022 already provide exact integer-microsecond extraction and deterministic prepared-replacement reinsertion contracts, but their detailed media behavior is still proven mainly with fake subprocess runners.
 
-- canonical project create/read/update with atomic persistence and migrations;
-- portable `.uvproj.zip` export/import with checksums, staging and traversal protection;
-- provider-neutral Recipe Registry and Production Policy;
-- Capability Registry with explicit availability/locality/cost facts and fail-closed selection;
-- D-017 exact one-shot authorization;
-- exact direct-MCP bindings and project-file contracts;
-- exact native VideoClaw Edge TTS compatibility path with optional dependency;
-- local FFprobe/FFmpeg media probe, assembly, exact range extraction and exact prepared-replacement reinsertion;
-- UV Studio-owned FastAPI root and secret-safe machine configuration under D-025;
-- Linux/Windows unit, API, real HTTP smoke and frontend production-build matrix;
-- D-023 repository-owned multi-agent development contract;
-- D-024 runtime/security and real-media gating roadmap.
+The active slice `test-real-media-golden` turns that mechanical contract into real evidence by generating tiny deterministic media during CI and executing the actual installed `ffmpeg`/`ffprobe` binaries through `LocalFFmpegAdapter`.
 
-## Stage 3.5 dependency ownership — review-ready
+Required evidence includes:
 
-PR #23 implements D-026 and removes the remaining implicit product dependency on `vendor/videoclaw-app/backend/requirements.txt`.
+- CFR source with audio;
+- VFR source with audio and observable variable frame timestamps;
+- no-audio source;
+- reproducible non-zero/offset timestamp source;
+- compatible prepared replacement;
+- observable prefix/replacement/suffix ordering;
+- duration, geometry and audio-policy validation through real ffprobe;
+- real rollback/failure evidence in addition to the existing fast mocked unit contracts;
+- output size/runtime measurements for the current whole-output FFV1/FLAC reinsertion policy.
 
-The review-ready result is:
+FFmpeg provisioning is explicit in CI on both Ubuntu and Windows rather than treated as an undocumented runner-image assumption.
 
-- `requirements-uv.txt` explicitly owns the UV Studio core runtime;
-- `requirements-uv-dev.txt` layers development/test-only transport on that core;
-- provider/heavy packages such as OpenAI SDK, DashScope, Edge TTS and Playwright are not baseline requirements;
-- `scripts/setup-dev.ps1` installs only UV Studio-owned development requirements and verifies them with `pip check`;
-- core CI installs only `requirements-uv.txt`, imports `uv_studio.server` and runs unit tests without vendor runtime dependency installation;
-- app-baseline installs only `requirements-uv-dev.txt` before UV API/HTTP tests; the pinned VideoClaw backend is syntax-compiled for provenance but not imported as the application runtime;
-- dependency-contract tests guard against reintroducing provider SDKs or the vendor requirements file into the baseline;
-- Next and `eslint-config-next` are aligned on 16.2.12;
-- the committed npm lockfile is registry-generated and includes npm-supported fixes for the previously remaining high-severity `brace-expansion` and `js-yaml` advisories;
-- permanent CI requires `npm ci`, frontend lint, `npm audit --audit-level=high` and production build on Ubuntu and Windows;
-- inherited VideoClaw-derived compatibility UI lint debt remains visible as scoped warnings instead of being globally disabled.
+## Decision after evidence
 
-Draft PR #23 head `02bc68ced1327d546c0963d424128c39bdd780f8` passed all five required checks, including both platform app baselines and zero high-severity npm audit findings. D-026 is accepted; the final state-only review head must repeat the same matrix before merge.
+The current handoff points to `stage-4-range-continuity-brief` only as the expected path if measured real-media evidence does not reveal a mechanical/state-model blocker.
 
-## Remaining Stage 3.5 gaps
+If the real tests show that current whole-output FFV1/FLAC reinsertion is unsuitable even as an intermediate, or expose a structural range/timestamp defect, the coordinator will change the handoff before merge to a scoped media-edit-core refactor. The decision must follow measured evidence, not roadmap preference.
 
-### Development-state lifecycle
+## Remaining cross-cutting gaps
 
-D-023 still needs an explicit post-merge/idle handoff state so `main` cannot retain a merged PR as the declared active slice indefinitely.
-
-### Project portable-state enforcement
-
-Free-form `settings`, `extensions` and reference `metadata` still need proportionate typed portability enforcement for future durable feature models.
-
-## Next product proof after Stage 3.5
-
-After PR #23 merges, Stage 4A must prove the existing extraction/reinsertion mechanics against deterministic real encoded media on Ubuntu and Windows. That work is the single handoff in `NEXT_TASK.md`.
-
-`RangeContinuityBrief` remains intentionally after real-media mechanical evidence; Stage 4C remains the later complete timeline/preview/accept/export user workflow.
+- D-023 still needs an explicit post-merge/idle lifecycle state and live write-scope diff enforcement;
+- free-form canonical `settings`, `extensions` and reference `metadata` still need proportionate typed portability enforcement before durable Stage 4B intelligence state is added;
+- Stage 4C user timeline/preview/accept/export workflow remains later work.
 
 ## Development invariant
 
