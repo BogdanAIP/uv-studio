@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -38,6 +39,8 @@ FIXTURE = Path(__file__).parents[1] / "tests" / "fixtures" / "mcp_test_server.py
 
 class ReplacementPreparationApiTests(unittest.TestCase):
     def setUp(self) -> None:
+        self._old_output_fixture = os.environ.get("UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL")
+        os.environ["UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL"] = "1"
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.store = ProjectStore(self.root / "projects")
@@ -59,6 +62,10 @@ class ReplacementPreparationApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client.close()
         self.tmp.cleanup()
+        if self._old_output_fixture is None:
+            os.environ.pop("UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL", None)
+        else:
+            os.environ["UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL"] = self._old_output_fixture
 
     def _brief(self) -> RangeContinuityBrief:
         return RangeContinuityBrief(
