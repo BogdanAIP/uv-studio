@@ -1,7 +1,7 @@
-"""UV Studio FastAPI entrypoint.
+"""UV Studio-owned FastAPI application boundary.
 
-The pinned VideoClaw application remains available, while UV Studio-owned
-routers are mounted from outside the vendored tree.
+The pinned VideoClaw tree remains available to exact compatibility adapters, but
+the complete upstream FastAPI route table is not mounted by default.
 """
 
 from __future__ import annotations
@@ -16,18 +16,45 @@ if str(UPSTREAM_BACKEND) not in sys.path:
     sys.path.insert(0, str(UPSTREAM_BACKEND))
 
 import uvicorn  # noqa: E402
-from api.app import app as upstream_app  # type: ignore  # noqa: E402
-from config import settings as upstream_settings  # type: ignore  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
+from uv_studio.api.configuration import router as configuration_router  # noqa: E402
 from uv_studio.api.execution import router as execution_router  # noqa: E402
 from uv_studio.api.mcp import router as mcp_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
 from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
 from uv_studio.api.recipes import router as recipes_router  # noqa: E402
+from uv_studio.config import allowed_frontend_origins  # noqa: E402
+from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
-app = upstream_app
+TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
+
+app = FastAPI(title="UV Studio", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=sorted(TRUSTED_FRONTEND_ORIGINS),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+
+@app.middleware("http")
+async def enforce_trusted_browser_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in TRUSTED_FRONTEND_ORIGINS:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "browser origin is not allowed by UV Studio"},
+        )
+    return await call_next(request)
+
+
+app.include_router(configuration_router)
 app.include_router(capabilities_router)
 app.include_router(capability_execution_router)
 app.include_router(mcp_router)
@@ -37,12 +64,43 @@ app.include_router(execution_router)
 app.include_router(projects_router)
 
 
+@app.get("/api/health", tags=["Health"])
+def health() -> dict[str, str]:
+    return {"status": "ok", "service": "uv-studio"}
+
+
+@app.get("/api/stages", tags=["Compatibility metadata"])
+def legacy_stage_catalog() -> dict[str, list[dict[str, object]]]:
+    return {
+        "stages": [
+            {"id": "script_generation", "name": "剧本生成", "order": 1, "description": "将灵感转化为结构化剧本"},
+            {"id": "character_design", "name": "角色/场景设计", "order": 2, "description": "生成角色设计图和场景背景"},
+            {"id": "storyboard", "name": "分镜设计", "order": 3, "description": "设计镜头语言和分镜脚本"},
+            {"id": "reference_generation", "name": "参考图生成", "order": 4, "description": "生成高精度参考图"},
+            {"id": "video_generation", "name": "视频生成", "order": 5, "description": "将参考图/分镜图生成视频"},
+            {"id": "post_production", "name": "后期剪辑", "order": 6, "description": "拼接视频片段为最终成片"},
+        ]
+    }
+
+
+@app.get("/", tags=["Health"])
+def root() -> dict[str, str]:
+    return {
+        "service": "UV Studio",
+        "version": "0.1.0",
+        "health": "/api/health",
+        "projects": "/api/uv/projects",
+    }
+
+
 def main() -> None:
+    server = RuntimeConfigStore().public_config()["server"]
     uvicorn.run(
         app,
-        host=upstream_settings.HOST,
-        port=upstream_settings.PORT,
-        access_log=upstream_settings.ACCESS_LOG,
+        host=server["host"],
+        port=server["port"],
+        access_log=server["access_log"],
+        log_level=str(server["log_level"]).lower(),
     )
 
 

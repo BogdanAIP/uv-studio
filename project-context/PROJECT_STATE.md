@@ -1,14 +1,14 @@
 # Project State
 
-<!-- uv-active-slice: chore-roadmap-runtime-gates -->
+<!-- uv-active-slice: fix-runtime-security-boundary -->
 
 **Updated:** 2026-08-12
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 3.5 preparation — Runtime Independence & Security
+**Active roadmap stage:** Stage 3.5 — Runtime Independence & Security
 
-**Last verified `main` baseline:** `3845af01f7c5a6d00f24b1a2dac681e36a66464f`
+**Last verified `main` baseline:** `13ae5b101109dead4c493d2aa8582f1db64ad4e3`
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
@@ -16,7 +16,7 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit execution authorization, bounded MCP/local/native adapters and early targeted existing-video mechanics.
 
-The product-owned execution path is already well structured:
+The stable product-owned execution path is:
 
 ```text
 Canonical Project
@@ -30,16 +30,9 @@ Canonical Project
   -> portable artifact/provenance
 ```
 
-Stage 4 mechanical work on `main` also provides:
+Stage 4 mechanical work on `main` provides exact integer-microsecond range extraction and deterministic prepared-replacement reinsertion under D-021/D-022.
 
-```text
-ProjectMediaRange
-  -> bounded exact extraction
-  -> prepared replacement
-  -> deterministic exact reinsertion
-```
-
-However, the running application still mounts UV Studio routers onto the complete vendored VideoClaw FastAPI app and the derived frontend still uses legacy VideoClaw configuration/sandbox/pipeline routes. The application-wide runtime boundary therefore does not yet guarantee the same authorization, secret handling and dependency independence as the UV Studio-owned capability path.
+PR #21/D-024 corrected the roadmap so application-wide runtime trust, dependency ownership and representative real-media evidence gate later product intelligence. Stage 4 is now separated into mechanical proof, edit intelligence and the complete user workflow.
 
 ## Stable capabilities on `main`
 
@@ -50,74 +43,73 @@ However, the running application still mounts UV Studio routers onto the complet
 - D-017 exact one-shot authorization inside UV Studio capability execution;
 - exact direct-MCP bindings, bounded stdio execution, project-file contracts and portable provenance;
 - exact native VideoClaw Edge TTS compatibility path;
-- local FFprobe/FFmpeg media probe and bounded timeline assembly;
-- `video.extract_range` under D-021;
-- `video.replace_range` under D-022;
+- local FFprobe/FFmpeg media probe, timeline assembly, range extraction and range replacement;
 - Linux/Windows unit, API, real HTTP smoke and frontend production-build matrix;
-- D-023 repository-owned multi-agent development contract.
+- D-023 repository-owned multi-agent development contract;
+- D-024 runtime/security and real-media gating roadmap.
 
 Completed slice history is recorded in `PROJECT_HISTORY.md`. Prioritized engineering debt is recorded in `ENGINEERING_BACKLOG.md`.
 
-## Current roadmap correction slice
+## Active Stage 3.5 security work
 
-The repository is correcting development order after a full repository audit found that backend/domain ownership has advanced farther than application/runtime ownership.
+The current slice is replacing the inherited application-wide VideoClaw runtime boundary with a UV Studio-owned boundary without editing the pinned vendor snapshot.
 
-The corrected roadmap introduces Stage 3.5 before additional product intelligence and makes two kinds of completion explicit:
+Implemented on the active slice so far:
 
-- engineering gates for runtime/security/portable-state/real execution;
-- user-outcome gates for workflows completed through the product UI rather than manual API calls.
+- machine runtime settings belong under UV Studio-owned `data/config` rather than the vendored source tree;
+- public runtime settings and provider secrets are stored separately;
+- provider secret fields are write-only through the new configuration API and reads expose only boolean configured/not-configured state;
+- public configuration cannot contain `api_key` fields;
+- secret replacement does not require sending the previous value and explicit `null` is required to clear a key;
+- local server host configuration is restricted to loopback;
+- allowed browser origins are explicit and wildcard CORS is rejected;
+- `uv_studio.server` is now an independent FastAPI root rather than `app = upstream_app`;
+- legacy VideoClaw sandbox, workflow, pipeline and raw configuration routers are not mounted by default;
+- a small read-only `/api/stages` compatibility endpoint remains UV Studio-owned without importing the workflow engine;
+- the root `.gitignore` defensively excludes transitional `vendor/videoclaw-app/backend/config.yaml`;
+- Settings UI uses separate `secret_updates` and never receives an existing raw credential;
+- focused unit/API tests cover secret separation, loopback/CORS restrictions and absence of legacy remote execution routes.
 
-Stage 4 is split into mechanical editing, edit intelligence and the complete user workflow. Real FFmpeg media evidence moves into Stage 4A rather than being deferred to release hardening.
+## Security invariant after this slice
 
-## Highest-priority runtime risks
+The slice is complete only when the exact final head proves through the normal app route table that:
 
-### P0 — secret exposure and commit-prone provider configuration
+- raw provider credentials do not appear in configuration HTTP responses;
+- machine secrets do not become normal files in the vendor source tree or portable projects;
+- arbitrary browser origins are not granted CORS access;
+- legacy provider-generating routes cannot bypass product authorization because they are not part of the default app boundary;
+- local/free UV Studio capabilities remain available without extra consent;
+- Linux/Windows unit, API, HTTP and frontend build regressions remain green.
 
-The vendored `/api/config` returns the complete VideoClaw configuration, including provider credential fields, and the frontend consumes that route. VideoClaw persists configuration to `vendor/videoclaw-app/backend/config.yaml`, which is not currently protected by the repository root ignore rules. Real credentials must not be used through this path until the Stage 3.5 security slice fixes storage and API semantics.
-
-### P0 — legacy execution can bypass product authorization
-
-D-017 protects UV Studio capability execution, but legacy VideoClaw sandbox/pipeline/provider routes remain mounted on the same application and can invoke upstream model clients without the product-owned authorization preparation/consent flow. The global product invariant is therefore not yet achieved.
-
-### P0 — wildcard browser access to the local backend
-
-The upstream FastAPI app enables wildcard CORS while also exposing mutating configuration, sandbox, file and pipeline APIs. The backend binds to localhost by default, but arbitrary browser origins must not receive unrestricted access to sensitive local APIs.
-
-## Important engineering gaps
+## Remaining important engineering gaps
 
 ### Dependency ownership
 
-`requirements-uv.txt` currently declares only MCP while UV Studio runtime imports are satisfied incidentally by the vendored VideoClaw backend dependency set. Core UV Studio dependencies and optional provider extras need product-owned declarations so optional providers are truly optional.
-
-### Project portable-state enforcement
-
-Canonical reference paths are validated, but free-form `settings`, `extensions` and reference `metadata` do not yet provide a central typed portability/secret contract. New durable models should use explicit versioned schemas rather than unvalidated provider/runtime blobs.
-
-### Real media verification
-
-FFmpeg unit/API tests strongly verify command and failure contracts, but CI does not yet execute `video.extract_range` and `video.replace_range` against representative real encoded CFR/VFR + audio fixtures on Windows and Linux.
-
-### Media-edit scalability
-
-Current deterministic reinsertion produces a whole lossless FFV1/FLAC intermediate. This is appropriate as a correctness foundation but should not become the permanent state model for repeated edits to long compressed sources. Stage 4A must move toward project-owned non-destructive edit decisions with full render at an explicit preview/export gate.
-
-### Frontend
-
-Projects UI exists, but the default production interface remains substantially VideoClaw-derived. Timeline/range selection, bounded context, brief/review state, preview, accept/reject and explicit export are still missing from the targeted-range user outcome.
-
-### Quality gates
-
-The current matrix does not yet enforce frontend lint, browser E2E, measured coverage, Python lint/type checks, dependency audit or real encoded-media assertions.
+`requirements-uv.txt` still does not own the complete UV Studio runtime dependency contract. The next Stage 3.5 slice must separate UV Studio core dependencies from optional provider/runtime extras and repair frontend dependency/lint health.
 
 ### Development lifecycle
 
-D-023 validates active-slice/PR consistency during PR events, but `main` can retain a merged PR as the declared active slice. Stage 3.5 includes an idle/handoff lifecycle fix so repository memory remains machine-correct after merge.
+D-023 still needs an explicit post-merge/idle handoff state so `main` cannot retain a merged PR as the declared active slice indefinitely.
+
+### Project portable-state enforcement
+
+Canonical reference paths are validated, but free-form `settings`, `extensions` and reference `metadata` still need proportionate typed portability enforcement for future durable feature models.
+
+### Real media verification
+
+Real encoded-media golden E2E for `video.extract_range` and `video.replace_range` remains the Stage 4A gate after Stage 3.5 dependency ownership.
+
+### Media-edit scalability
+
+Current reinsertion creates a whole lossless FFV1/FLAC intermediate. It remains the correctness foundation, not the final repeated-edit state model; non-destructive edit decisions are still planned.
+
+### Frontend user outcome
+
+Projects UI exists, but targeted range selection, context, brief/review state, preview, accept/reject and final export are not yet a complete Stage 4C user workflow.
 
 ## Next implementation slice
 
-After this roadmap correction is merged, execute `fix-runtime-security-boundary` from `NEXT_TASK.md` before `RangeContinuityBrief` or any new provider integration.
-
-The security slice must first close the two P0 boundaries: raw/commit-prone provider secrets and legacy remote execution that bypasses product authorization. Range continuity work remains the next Stage 4 intelligence target after the runtime gate is trustworthy.
+After the current runtime security boundary is merged, execute `fix-dependency-ownership` from `NEXT_TASK.md` before real-media golden work or `RangeContinuityBrief`.
 
 ## Development invariant
 

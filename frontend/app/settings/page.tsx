@@ -13,6 +13,7 @@ import {
 } from '@/config/models';
 
 type ConfigTree = Record<string, any>;
+type SecretStatus = Record<string, boolean>;
 
 type Field = {
   path: string;
@@ -44,7 +45,7 @@ const LOG_LEVEL_OPTIONS = [
 const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   {
     title: 'API Server',
-    description: '服务启动与日志配置。host / port 保存后需要重启后端完全生效。',
+    description: '服务启动与日志配置。安全边界要求服务保持在本机 loopback 地址。',
     fields: [
       { path: 'server.host', label: 'host 主机地址' },
       { path: 'server.port', label: 'port 端口', type: 'number' },
@@ -62,7 +63,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'OpenAI',
-    description: 'OpenAI / 兼容 OpenAI 接口配置。',
+    description: 'OpenAI / 兼容 OpenAI 接口配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.openai.api_key', label: 'api_key API 密钥', type: 'password' },
       { path: 'api_providers.openai.base_url', label: 'base_url 接口地址' },
@@ -71,7 +72,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'Gemini',
-    description: 'Gemini 及兼容接口配置。',
+    description: 'Gemini 及兼容接口配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.gemini.api_key', label: 'api_key API 密钥', type: 'password' },
       { path: 'api_providers.gemini.base_url', label: 'base_url 接口地址' },
@@ -80,7 +81,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'DeepSeek',
-    description: 'DeepSeek 接口配置。',
+    description: 'DeepSeek 接口配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.deepseek.api_key', label: 'api_key API 密钥', type: 'password' },
       { path: 'api_providers.deepseek.base_url', label: 'base_url 接口地址' },
@@ -89,7 +90,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'DashScope',
-    description: '通义千问、通义万相等 DashScope 服务配置。',
+    description: '通义千问、通义万相等 DashScope 服务配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.dashscope.api_key', label: 'api_key API 密钥', type: 'password' },
       { path: 'api_providers.dashscope.base_url', label: 'base_url 接口地址' },
@@ -98,7 +99,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'ARK',
-    description: 'Seedream / Seedance 使用的火山方舟配置。',
+    description: 'Seedream / Seedance 使用的火山方舟配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.ark.api_key', label: 'api_key API 密钥', type: 'password' },
       { path: 'api_providers.ark.base_url', label: 'base_url 接口地址' },
@@ -107,7 +108,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'Kling',
-    description: '可灵视频生成接口配置。',
+    description: '可灵视频生成接口配置。密钥为只写字段。',
     fields: [
       { path: 'api_providers.kling.base_url', label: 'base_url 接口地址' },
       { path: 'api_providers.kling.api_key', label: 'api_key API 密钥', type: 'password' },
@@ -116,7 +117,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: 'Default Models',
-    description: '主流程和 Pipeline 使用的默认模型。',
+    description: '主流程和未来经过授权的 Provider Adapter 使用的默认模型。',
     fields: [
       { path: 'models.llm', label: 'llm 文本模型', type: 'select', options: [] },
       { path: 'models.vlm', label: 'vlm 视觉语言模型', type: 'select', options: [] },
@@ -129,7 +130,7 @@ const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   },
   {
     title: '视频生成配置',
-    description: '只对主流程生效：选择视频生成方式、风格、画幅比例和视频分辨率。',
+    description: '默认生成方式、风格、画幅比例和视频分辨率。',
     fields: [
       { path: 'generation.video_generation_mode', label: 'video_generation_mode 视频生成方式', type: 'select', options: VIDEO_GENERATION_MODES },
       { path: 'generation.style', label: 'style 风格', type: 'select', options: STYLES },
@@ -156,21 +157,7 @@ function setValue(config: ConfigTree, path: string, value: any): ConfigTree {
 }
 
 function formatConfigPath(path: string) {
-  if (!path) return 'backend/config.yaml';
-  const normalized = path.replace(/\\/g, '/');
-  const marker = '/video-claw/video-claw/';
-  const markerIndex = normalized.lastIndexOf(marker);
-  if (markerIndex >= 0) return normalized.slice(markerIndex + marker.length);
-  const backendIndex = normalized.lastIndexOf('/backend/config.yaml');
-  if (backendIndex >= 0) return normalized.slice(backendIndex + 1);
-  return normalized;
-}
-
-function maskSecret(value: unknown) {
-  const text = String(value ?? '');
-  if (!text) return '';
-  if (text.length <= 10) return '*'.repeat(text.length);
-  return `${text.slice(0, 5)}${'*'.repeat(Math.min(12, text.length - 10))}${text.slice(-5)}`;
+  return (path || 'data/config/runtime.json').replace(/\\/g, '/');
 }
 
 function isProviderOptions(options: Field['options']): options is ProviderGroup[] {
@@ -179,12 +166,14 @@ function isProviderOptions(options: Field['options']): options is ProviderGroup[
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<ConfigTree>({});
-  const [path, setPath] = useState('');
+  const [path, setPath] = useState('data/config/runtime.json');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [secretStatus, setSecretStatus] = useState<SecretStatus>({});
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
+  const [secretClears, setSecretClears] = useState<Record<string, boolean>>({});
   const [modelSelects, setModelSelects] = useState<Record<ModelSelectKey, ProviderGroup[]>>(EMPTY_MODEL_SELECTS);
 
   useEffect(() => {
@@ -196,8 +185,10 @@ export default function SettingsPage() {
         if (!resp.ok) throw new Error('读取配置失败');
         const data = await resp.json();
         setConfig(data.config || {});
-        setPath(data.path || '');
+        setSecretStatus(data.secrets || {});
+        setPath(data.path || 'data/config/runtime.json');
         setSecretDrafts({});
+        setSecretClears({});
       } catch (e: any) {
         setError(e.message || '读取配置失败');
       } finally {
@@ -230,7 +221,10 @@ export default function SettingsPage() {
           video_reference: referenceVideo,
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        // Legacy /api/models is intentionally unavailable while provider routes
+        // are being migrated behind the UV Studio capability/authorization layer.
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -256,32 +250,54 @@ export default function SettingsPage() {
     setConfig(current => setValue(current, field.path, value));
   };
 
+  const updateSecretField = (field: Field, raw: string) => {
+    setSecretDrafts(current => ({ ...current, [field.path]: raw }));
+    setSecretClears(current => ({ ...current, [field.path]: false }));
+  };
+
+  const toggleSecretClear = (field: Field) => {
+    setSecretClears(current => {
+      const next = !current[field.path];
+      return { ...current, [field.path]: next };
+    });
+    setSecretDrafts(current => ({ ...current, [field.path]: '' }));
+  };
+
   const save = async () => {
     setSaving(true);
     setMessage('');
     setError('');
     try {
+      const secretUpdates: Record<string, string | null> = {};
+      for (const [secretPath, draft] of Object.entries(secretDrafts)) {
+        const normalized = draft.trim();
+        if (normalized) secretUpdates[secretPath] = normalized;
+      }
+      for (const [secretPath, clear] of Object.entries(secretClears)) {
+        if (clear) secretUpdates[secretPath] = null;
+      }
+
       const resp = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: config }),
+        body: JSON.stringify({ values: config, secret_updates: secretUpdates }),
       });
-      if (!resp.ok) throw new Error('保存配置失败');
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || '保存配置失败');
+      }
       const data = await resp.json();
       setConfig(data.config || {});
-      setPath(data.path || '');
+      setSecretStatus(data.secrets || {});
+      setPath(data.path || 'data/config/runtime.json');
       setSecretDrafts({});
+      setSecretClears({});
       setMessage('配置已保存');
     } catch (e: any) {
       setError(e.message || '保存配置失败');
     } finally {
       setSaving(false);
     }
-  };
-
-  const updateSecretField = (field: Field, raw: string) => {
-    setSecretDrafts(current => ({ ...current, [field.path]: raw }));
-    setConfig(current => setValue(current, field.path, raw));
   };
 
   return (
@@ -294,7 +310,7 @@ export default function SettingsPage() {
             <h1 className="text-2xl font-bold text-gray-800">设置</h1>
           </div>
           <p className="text-sm text-gray-500">
-            修改后端配置并保存到 <span className="font-mono">{formatConfigPath(path)}</span>
+            公开配置保存到 <span className="font-mono">{formatConfigPath(path)}</span>；API 密钥单独存储且不会从后端读回浏览器。
           </p>
         </div>
 
@@ -314,6 +330,9 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {group.fields.map(field => {
                     const value = getValue(config, field.path);
+                    const configuredSecret = Boolean(secretStatus[field.path]);
+                    const clearPending = Boolean(secretClears[field.path]);
+                    const secretDraft = secretDrafts[field.path] ?? '';
                     return (
                       <label key={field.path} className="flex flex-col gap-1.5 min-w-0">
                         <span className="text-xs font-medium text-gray-500">{field.label}</span>
@@ -333,9 +352,9 @@ export default function SettingsPage() {
                             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
                           >
                             {isProviderOptions(field.options) ? (
-                              field.options.map(group => (
-                                <optgroup key={group.provider} label={group.label}>
-                                  {group.models.map(model => (
+                              field.options.map(providerGroup => (
+                                <optgroup key={providerGroup.provider} label={providerGroup.label}>
+                                  {providerGroup.models.map(model => (
                                     <option key={model.id} value={model.id}>{model.label}</option>
                                   ))}
                                 </optgroup>
@@ -347,14 +366,35 @@ export default function SettingsPage() {
                             )}
                           </select>
                         ) : field.type === 'password' ? (
-                          <input
-                            type="text"
-                            value={secretDrafts[field.path] ?? maskSecret(value)}
-                            onFocus={event => event.currentTarget.select()}
-                            onChange={event => updateSecretField(field, event.target.value)}
-                            placeholder="输入新密钥覆盖"
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
-                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="password"
+                              autoComplete="new-password"
+                              value={secretDraft}
+                              onChange={event => updateSecretField(field, event.target.value)}
+                              placeholder={
+                                clearPending
+                                  ? '保存后将清除密钥'
+                                  : configuredSecret
+                                    ? '已配置 — 输入新密钥即可覆盖'
+                                    : '输入新密钥'
+                              }
+                              className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
+                            />
+                            {(configuredSecret || clearPending) && (
+                              <button
+                                type="button"
+                                onClick={() => toggleSecretClear(field)}
+                                className={`h-10 shrink-0 rounded-lg border px-3 text-xs transition ${
+                                  clearPending
+                                    ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                    : 'border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                                }`}
+                              >
+                                {clearPending ? '取消清除' : '清除'}
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <input
                             type={field.type === 'number' ? 'number' : 'text'}
@@ -362,6 +402,12 @@ export default function SettingsPage() {
                             onChange={event => updateField(field, event.target.value)}
                             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
                           />
+                        )}
+                        {field.type === 'password' && configuredSecret && !clearPending && !secretDraft && (
+                          <span className="text-[11px] text-green-600">密钥已配置；后端不会返回原值。</span>
+                        )}
+                        {field.type === 'password' && clearPending && (
+                          <span className="text-[11px] text-amber-600">清除将在保存配置后生效。</span>
                         )}
                       </label>
                     );
