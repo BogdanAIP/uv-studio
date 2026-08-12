@@ -115,6 +115,22 @@ class RangeEditStateTests(unittest.TestCase):
             self.state_store.accept(self.project.project_id, bad_replacement)
         self.assertFalse((self.project_dir / EDIT_STATE_PATH).exists())
 
+    def test_stale_replacement_remains_readable_validatable_and_removable(self) -> None:
+        self.state_store.accept(
+            self.project.project_id,
+            self._edit("edit_stale", 1_000_000, 2_000_000),
+        )
+        self.replacement_a.unlink()
+
+        structural = self.state_store.load(self.project.project_id)
+        self.assertEqual([edit.edit_id for edit in structural.edits], ["edit_stale"])
+        with self.assertRaises(EditStateError):
+            self.state_store.validate_project(self.project.project_id)
+
+        repaired = self.state_store.remove(self.project.project_id, "edit_stale")
+        self.assertEqual(repaired.edits, ())
+        self.assertEqual(self.state_store.validate_project(self.project.project_id).edits, ())
+
     def test_remove_is_typed_and_missing_edit_is_explicit(self) -> None:
         self.state_store.accept(
             self.project.project_id,
