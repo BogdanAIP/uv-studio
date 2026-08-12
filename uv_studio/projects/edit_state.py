@@ -37,11 +37,11 @@ class AcceptedRangeEdit:
     replacement_path: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "edit_id",
-            validate_identifier(self.edit_id, field_name="edit_id"),
-        )
+        try:
+            normalized_id = validate_identifier(self.edit_id, field_name="edit_id")
+        except ProjectValidationError as exc:
+            raise EditStateError(str(exc)) from exc
+        object.__setattr__(self, "edit_id", normalized_id)
         try:
             requested = ProjectMediaRange(
                 source_path=self.source_path,
@@ -81,9 +81,7 @@ class AcceptedRangeEdit:
         allowed = {"edit_id", "source_path", "start_us", "end_us", "replacement_path"}
         unknown = set(data).difference(allowed)
         if unknown:
-            raise EditStateError(
-                f"unsupported accepted edit fields: {sorted(unknown)!r}"
-            )
+            raise EditStateError(f"unsupported accepted edit fields: {sorted(unknown)!r}")
         missing = [field for field in allowed if field not in data]
         if missing:
             raise EditStateError(
@@ -138,7 +136,10 @@ class RangeEditState:
             previous_by_source[edit.source_path] = edit
 
     def for_source(self, source_path: str) -> tuple[AcceptedRangeEdit, ...]:
-        canonical = validate_project_relative_path(source_path)
+        try:
+            canonical = validate_project_relative_path(source_path)
+        except ProjectValidationError as exc:
+            raise EditStateError(str(exc)) from exc
         return tuple(edit for edit in self.edits if edit.source_path == canonical)
 
     def add(self, edit: AcceptedRangeEdit) -> "RangeEditState":
@@ -147,7 +148,10 @@ class RangeEditState:
         return RangeEditState(edits=(*self.edits, edit))
 
     def remove(self, edit_id: str) -> "RangeEditState":
-        normalized = validate_identifier(edit_id, field_name="edit_id")
+        try:
+            normalized = validate_identifier(edit_id, field_name="edit_id")
+        except ProjectValidationError as exc:
+            raise EditStateError(str(exc)) from exc
         remaining = tuple(edit for edit in self.edits if edit.edit_id != normalized)
         if len(remaining) == len(self.edits):
             raise EditStateNotFound(normalized)
@@ -217,14 +221,10 @@ class RangeEditStateStore:
         with self.project_store._lock:
             self._validate_references(project_id, state)
             path = self._path(project_id)
-            # ProjectStore owns the atomic JSON primitive used by canonical project.json;
-            # typed project documents reuse the same fsync + os.replace behavior.
             self.project_store._atomic_write_json(path, state.to_dict())
         return state
 
     def accept(self, project_id: str, edit: AcceptedRangeEdit) -> RangeEditState:
-        # Serialize the read-modify-write pair under the ProjectStore RLock so
-        # concurrent local/API accepts cannot silently lose an already accepted edit.
         with self.project_store._lock:
             current = self.load(project_id)
             updated = current.add(edit)
