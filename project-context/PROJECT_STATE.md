@@ -16,7 +16,7 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 UV Studio is a local-first, provider-neutral video-production foundation with a product-owned canonical Project Store, Recipe Registry, Production Policy, Capability Registry, explicit D-017 execution authorization, bounded MCP/local/native adapters and deterministic targeted existing-video mechanics.
 
-After PR #22 / D-025, UV Studio also owns the default FastAPI security boundary. The complete VideoClaw route table is no longer inherited; unsafe legacy provider/configuration/file/pipeline surfaces fail closed by default, machine provider secrets are write-only and stay outside `vendor/` and canonical projects, browser origins are explicitly restricted, and the server remains loopback-only.
+After PR #22 / D-025, UV Studio owns the default FastAPI security boundary. The complete VideoClaw route table is no longer inherited; unsafe legacy provider/configuration/file/pipeline surfaces fail closed by default, machine provider secrets are write-only and stay outside `vendor/` and canonical projects, browser origins are explicitly restricted, and the server remains loopback-only.
 
 The stable product-owned execution path is:
 
@@ -49,28 +49,27 @@ Stage 4 mechanical work on `main` provides exact integer-microsecond range extra
 - D-023 repository-owned multi-agent development contract;
 - D-024 runtime/security and real-media gating roadmap.
 
-## Active Stage 3.5 dependency-ownership work
+## Stage 3.5 dependency ownership — review-ready
 
-The current slice removes the remaining implicit dependency on `vendor/videoclaw-app/backend/requirements.txt` and brings frontend lint/security dependency health under CI.
+PR #23 implements D-026 and removes the remaining implicit product dependency on `vendor/videoclaw-app/backend/requirements.txt`.
 
-Implemented on the active branch so far:
+The review-ready result is:
 
-- `requirements-uv.txt` explicitly declares the UV Studio core runtime instead of only MCP;
-- `requirements-uv-dev.txt` layers test-only HTTP transport on the core requirements;
-- provider/heavy optional packages such as OpenAI, DashScope, Edge TTS and Playwright stay out of the baseline;
-- `scripts/setup-dev.ps1` installs only UV Studio-owned development requirements and runs `pip check`;
-- CI core bootstrap installs only `requirements-uv.txt` and imports `uv_studio.server` without vendor dependency installation;
-- app-baseline installs only `requirements-uv-dev.txt` before API/HTTP tests; the pinned VideoClaw snapshot is compiled for provenance but not imported as the application runtime;
-- dependency-contract unit tests guard against reintroducing the vendor requirements file or provider SDKs into core;
-- frontend `next` and `eslint-config-next` are being aligned on the security-patched 16.2.12 line;
-- ESLint flat config is being migrated to the supported Next 16 configuration;
-- a GitHub runner has regenerated the npm lockfile; integration of that generated lock and final lint/audit gates are still in progress.
+- `requirements-uv.txt` explicitly owns the UV Studio core runtime;
+- `requirements-uv-dev.txt` layers development/test-only transport on that core;
+- provider/heavy packages such as OpenAI SDK, DashScope, Edge TTS and Playwright are not baseline requirements;
+- `scripts/setup-dev.ps1` installs only UV Studio-owned development requirements and verifies them with `pip check`;
+- core CI installs only `requirements-uv.txt`, imports `uv_studio.server` and runs unit tests without vendor runtime dependency installation;
+- app-baseline installs only `requirements-uv-dev.txt` before UV API/HTTP tests; the pinned VideoClaw backend is syntax-compiled for provenance but not imported as the application runtime;
+- dependency-contract tests guard against reintroducing provider SDKs or the vendor requirements file into the baseline;
+- Next and `eslint-config-next` are aligned on 16.2.12;
+- the committed npm lockfile is registry-generated and includes npm-supported fixes for the previously remaining high-severity `brace-expansion` and `js-yaml` advisories;
+- permanent CI requires `npm ci`, frontend lint, `npm audit --audit-level=high` and production build on Ubuntu and Windows;
+- inherited VideoClaw-derived compatibility UI lint debt remains visible as scoped warnings instead of being globally disabled.
+
+Draft PR #23 head `02bc68ced1327d546c0963d424128c39bdd780f8` passed all five required checks, including both platform app baselines and zero high-severity npm audit findings. D-026 is accepted; the final state-only review head must repeat the same matrix before merge.
 
 ## Remaining Stage 3.5 gaps
-
-### Frontend lock/lint/audit
-
-The regenerated `package-lock.json` must be integrated, the temporary generation job removed, then `npm ci`, `npm run lint`, `npm audit --audit-level=high` and production build must all become real CI gates. Any actual lint violations must be fixed rather than globally ignored.
 
 ### Development-state lifecycle
 
@@ -82,7 +81,7 @@ Free-form `settings`, `extensions` and reference `metadata` still need proportio
 
 ## Next product proof after Stage 3.5
 
-After dependency ownership is merged, Stage 4A must prove the existing extraction/reinsertion mechanics against deterministic real encoded media on Ubuntu and Windows. That work is the single handoff in `NEXT_TASK.md`.
+After PR #23 merges, Stage 4A must prove the existing extraction/reinsertion mechanics against deterministic real encoded media on Ubuntu and Windows. That work is the single handoff in `NEXT_TASK.md`.
 
 `RangeContinuityBrief` remains intentionally after real-media mechanical evidence; Stage 4C remains the later complete timeline/preview/accept/export user workflow.
 
