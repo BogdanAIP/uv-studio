@@ -14,37 +14,69 @@ Machine-readable slice intent, branch scope, coordination ownership and required
 
 ## Product now
 
-UV Studio has a product-owned Project Store, recipe/policy and capability boundaries, D-017 authorization, secure UV-owned application/runtime dependencies, and real cross-platform FFmpeg evidence for exact range extraction and reinsertion.
+UV Studio has a product-owned Project Store, recipe/policy and capability boundaries, D-017 authorization, secure UV-owned application/runtime dependencies, real cross-platform FFmpeg evidence for exact range mechanics, and a review-ready non-destructive accepted-edit boundary under D-028.
 
-PR #24 / D-027 proved two separate facts: the current D-021/D-022 FFmpeg mechanics are correct on representative deterministic CFR/VFR/audio/no-audio/timestamp-offset fixtures, while materializing a complete FFV1 output after every accepted short edit is not an acceptable canonical repeated-edit state. The measured compressed-source output was 4.824x the source size on both Ubuntu and Windows.
+PR #24 / D-027 proved the D-021/D-022 FFmpeg mechanics are correct on representative deterministic CFR/VFR/audio/no-audio/timestamp-offset fixtures while whole-output FFV1 is unsuitable as canonical repeated-edit state. PR #25 addresses that state-model problem without weakening the proven render path.
 
-## Active slice
+## Stage 4A non-destructive state — review-ready
 
-`stage-4-non-destructive-edit-state` introduces a dedicated typed/versioned project document under `timeline/` rather than storing edit state in free-form `extensions`.
-
-The target state is:
+Canonical accepted edit state lives in the typed/versioned project document:
 
 ```text
-original project media
-  + immutable integer-microsecond requested interval
-  + accepted project replacement media
-  + deterministic ordering/overlap policy
-  -> lightweight canonical edit decisions
-  -> explicit preview/render/export projection only when media is needed
+timeline/range-edits.json
 ```
 
-Acceptance itself must not invoke FFmpeg or create a full rendered artifact.
+Each decision contains only:
 
-The slice also exposes the state through the UV-owned project API, validates it during archive import, and proves an explicit real-media render projection for multiple non-overlapping edits while preserving D-021/D-022 exactness and rollback expectations.
+```text
+edit_id
+source_path
+start_us
+end_us
+replacement_path
+```
+
+The implemented boundary now provides:
+
+- immutable integer-microsecond intervals and project-relative media references;
+- deterministic ordering and unique edit IDs;
+- fail-closed same-source overlap policy with touching boundaries allowed;
+- serialized atomic accept/remove under the Project Store lock;
+- storage-only acceptance: no FFmpeg/FFprobe/provider execution and no rendered artifact;
+- existing-file validation for a newly accepted decision;
+- structural readability/removal after a referenced replacement later disappears, with explicit `validate_project()` for current-reference health;
+- UV-owned GET/POST/DELETE project edit-state API;
+- portable `.uvproj.zip` export/import/fresh-store reopen preserving typed decisions exactly;
+- explicit local/free semantic capability `video.render_edits` using the normal capability selection/execution path;
+- one-pass deterministic render of all accepted non-overlapping edits for one source;
+- render-time stream/resolution/duration/AV compatibility checks and rollback;
+- compositional package-level `LocalFFmpegAdapter` facade rather than further adapter inheritance growth.
+
+## Real-media proof
+
+Draft PR #25 head `dee5f664f31879a048a7a4e7f79679eca2024e02` passed all five required checks in run #623 (`31585401479`).
+
+The real-media suite on Ubuntu and Windows proves:
+
+- two accepted video-only edits create no rendered media until one explicit `video.render_edits` call;
+- one render produces the expected `blue → red → blue → green → blue` content order;
+- the same multi-edit path with FLAC audio produces exactly one video and one audio stream and the same visual edit order;
+- a technically incompatible but existing replacement is accepted without hidden media analysis and then rejected with 422 at explicit render, with no output artifact registered;
+- the earlier Stage 4A CFR/VFR/audio/no-audio/timestamp/rollback golden cases remain green.
+
+Unit/API tests additionally prove strict JSON typing, overlap rules, missing-reference rejection, stale-reference repairability and archive round-trip.
+
+D-028 is accepted. The final state-only review head must repeat the same five required checks before merge.
 
 ## Expected following work
 
-If this boundary proves portable and deterministic, the next slice is `stage-4-range-continuity-brief`: bounded provider-neutral context/continuity intelligence attached to exact edit ranges, without provider/runtime identity in canonical state.
+After PR #25 merges, continue with `stage-4-range-continuity-brief`: bounded provider-neutral continuity/evidence state attached to exact accepted edit decisions, without provider/runtime identity in canonical state.
 
 ## Remaining cross-cutting gaps
 
 - D-023 still needs a post-merge/idle lifecycle state and live diff-vs-write-scope enforcement;
 - free-form general project `settings`, `extensions` and reference `metadata` still need proportionate recursive portable-JSON hardening;
+- semantic pre-commit validation of every future typed project document during archive import remains later archive hardening; typed reopen already fails closed;
 - broader device/container/codec real-media coverage remains incremental hardening;
 - Stage 4C still owns the complete timeline/preview/accept/export UI.
 
