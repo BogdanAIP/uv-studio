@@ -4,10 +4,18 @@ import json
 import os
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from uv_studio.config import allowed_frontend_origins
+from uv_studio.config import (
+    ROOT,
+    allowed_frontend_origins,
+    runtime_config_path,
+    runtime_secrets_path,
+)
+from uv_studio.projects.archive import export_project
+from uv_studio.projects.store import ProjectStore
 from uv_studio.runtime_config import RuntimeConfigError, RuntimeConfigStore
 
 
@@ -31,6 +39,15 @@ class RuntimeConfigStoreTests(unittest.TestCase):
         self.assertNotIn("api_key", encoded)
         self.assertFalse(any(self.store.secret_status().values()))
 
+    def test_default_machine_config_lives_outside_vendor_tree(self) -> None:
+        with patch.dict(os.environ, {"UV_STUDIO_CONFIG_DIR": ""}, clear=False):
+            config_path = runtime_config_path()
+            secrets_path = runtime_secrets_path()
+        self.assertEqual(config_path, (ROOT / "data" / "config" / "runtime.json").resolve())
+        self.assertEqual(secrets_path, (ROOT / "data" / "config" / "secrets.json").resolve())
+        self.assertNotIn("vendor", config_path.parts)
+        self.assertNotIn("vendor", secrets_path.parts)
+
     def test_secret_updates_are_separate_from_public_config(self) -> None:
         secret = "test-secret-never-return-this"
         public, status = self.store.update(
@@ -44,6 +61,26 @@ class RuntimeConfigStoreTests(unittest.TestCase):
         self.assertNotIn(secret, self.config_path.read_text(encoding="utf-8"))
         self.assertIn(secret, self.secrets_path.read_text(encoding="utf-8"))
         self.assertNotIn("api_key", json.dumps(public, sort_keys=True))
+
+    def test_machine_secret_is_not_exported_with_canonical_project(self) -> None:
+        secret = "machine-only-secret-never-in-project-archive"
+        self.store.update(
+            secret_updates={"api_providers.openai.api_key": secret},
+        )
+
+        root = Path(self.tempdir.name)
+        project_store = ProjectStore(root / "projects")
+        project = project_store.create_project(title="Portable project")
+        archive_path = export_project(
+            project_store,
+            project.project_id,
+            root / "portable.uvproj.zip",
+        )
+
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            for info in archive.infolist():
+                if not info.is_dir():
+                    self.assertNotIn(secret.encode("utf-8"), archive.read(info), info.filename)
 
     def test_public_values_cannot_smuggle_an_api_key(self) -> None:
         with self.assertRaises(RuntimeConfigError):
