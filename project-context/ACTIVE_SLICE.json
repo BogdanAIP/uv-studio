@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-4/editor-foundation-spike",
     "pull_request": 30,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       "AGENTS.md",
       "ARCHITECTURE_PRINCIPLES.md",
