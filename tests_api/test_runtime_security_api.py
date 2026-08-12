@@ -131,6 +131,32 @@ class RuntimeSecurityApiTests(unittest.TestCase):
                 response = self.client.post(path, json=payload)
                 self.assertEqual(response.status_code, 404, response.text)
 
+    def test_default_route_table_excludes_unsafe_legacy_surfaces(self) -> None:
+        route_paths = {
+            getattr(route, "path", "")
+            for route in app.routes
+            if isinstance(getattr(route, "path", None), str)
+        }
+        forbidden_exact = {
+            "/api/upload_file",
+            "/api/upload_media",
+            "/api/models",
+            "/code",
+        }
+        forbidden_prefixes = (
+            "/api/sandbox",
+            "/api/pipelines",
+            "/api/project/",
+            "/api/tasks",
+            "/api/cache/",
+        )
+        for path in route_paths:
+            self.assertNotIn(path, forbidden_exact, path)
+            self.assertFalse(
+                any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in forbidden_prefixes),
+                path,
+            )
+
     def test_uv_studio_capability_catalog_remains_available(self) -> None:
         response = self.client.get("/api/uv/capabilities")
         self.assertEqual(response.status_code, 200, response.text)
