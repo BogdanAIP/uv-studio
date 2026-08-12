@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from uv_studio.mcp.client import MCPCallError
 from uv_studio.mcp.manager import MCPManager
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
@@ -25,7 +26,7 @@ class MCPExecutionInputRejected(ValueError):
     code = "mcp_unsafe_file_argument"
 
 
-class MCPExecutionOutputRejected(ValueError):
+class MCPExecutionOutputRejected(MCPCallError):
     code = "mcp_invalid_project_output"
 
 
@@ -56,7 +57,6 @@ class MCPExecutionAdapter:
         allocated_outputs: list[tuple[Any, str, Path, str]] = []
         registered_ids: tuple[str, ...] = ()
         try:
-            # Reject caller-supplied host paths before any trusted translation occurs.
             self._reject_raw_host_paths(payload)
             arguments = self._translate_project_file_inputs(
                 project_id=project_id,
@@ -111,11 +111,7 @@ class MCPExecutionAdapter:
         binding,
         payload,
     ) -> dict[str, Any]:
-        """Translate only explicitly declared top-level project file arguments.
-
-        Authorization/provenance stay bound to the original portable payload. Absolute
-        paths exist only in this short-lived invocation dictionary.
-        """
+        """Translate only explicitly declared top-level project file arguments."""
         translated = dict(payload)
         for spec in binding.project_file_inputs:
             if spec.argument_name not in translated:
@@ -154,12 +150,7 @@ class MCPExecutionAdapter:
         binding,
         arguments: dict[str, Any],
     ) -> list[tuple[Any, str, Path, str]]:
-        """Allocate binding-owned output arguments under canonical project artifacts.
-
-        Caller input is never allowed to choose these host paths. The binding only
-        declares the argument, media kind and suffix; UV Studio allocates the exact
-        destination and injects it after authorization/provenance input binding.
-        """
+        """Allocate binding-owned output arguments under canonical project artifacts."""
         allocated: list[tuple[Any, str, Path, str]] = []
         for spec in binding.project_file_outputs:
             if spec.argument_name in arguments:
