@@ -34,6 +34,7 @@ REVIEW_CONFIDENCE_LEVELS = frozenset({"low", "medium", "high"})
 REVIEW_EVIDENCE_KINDS = frozenset({"brief_evidence", "candidate_artifact"})
 MAX_REVIEW_OBSERVATIONS = 64
 MAX_REVIEW_ASSESSMENTS = 64
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 
 class ReplacementReviewError(ProjectValidationError):
@@ -102,7 +103,11 @@ class ReviewEvidenceReference:
             raise ReplacementReviewError(
                 f"review evidence kind must be one of {sorted(REVIEW_EVIDENCE_KINDS)!r}"
             )
-        object.__setattr__(self, "ref_id", _identifier(self.ref_id, field_name="review evidence ref_id"))
+        object.__setattr__(
+            self,
+            "ref_id",
+            _identifier(self.ref_id, field_name="review evidence ref_id"),
+        )
 
     def to_dict(self) -> dict[str, str]:
         return {"kind": self.kind, "ref_id": self.ref_id}
@@ -139,16 +144,24 @@ class ReplacementReviewObservation:
             "statement",
             _text(self.statement, field_name="review observation statement"),
         )
-        if not isinstance(self.confidence, str) or self.confidence not in REVIEW_CONFIDENCE_LEVELS:
+        if (
+            not isinstance(self.confidence, str)
+            or self.confidence not in REVIEW_CONFIDENCE_LEVELS
+        ):
             raise ReplacementReviewError(
-                f"review observation confidence must be one of {sorted(REVIEW_CONFIDENCE_LEVELS)!r}"
+                "review observation confidence must be one of "
+                f"{sorted(REVIEW_CONFIDENCE_LEVELS)!r}"
             )
         evidence = tuple(self.evidence)
-        if not evidence or not all(isinstance(item, ReviewEvidenceReference) for item in evidence):
+        if not evidence or not all(
+            isinstance(item, ReviewEvidenceReference) for item in evidence
+        ):
             raise ReplacementReviewError("review observation must cite typed evidence")
         keys = [(item.kind, item.ref_id) for item in evidence]
         if len(keys) != len(set(keys)):
-            raise ReplacementReviewError("review observation evidence references must be unique")
+            raise ReplacementReviewError(
+                "review observation evidence references must be unique"
+            )
         object.__setattr__(self, "evidence", evidence)
 
     def to_dict(self) -> dict[str, Any]:
@@ -163,17 +176,29 @@ class ReplacementReviewObservation:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ReplacementReviewObservation":
         if not isinstance(data, Mapping):
-            raise ReplacementReviewError("replacement review observation must be an object")
-        allowed = {"observation_id", "kind", "statement", "confidence", "evidence"}
+            raise ReplacementReviewError(
+                "replacement review observation must be an object"
+            )
+        allowed = {
+            "observation_id",
+            "kind",
+            "statement",
+            "confidence",
+            "evidence",
+        }
         _strict_fields(data, allowed=allowed, kind="replacement review observation")
         if not isinstance(data["evidence"], list):
-            raise ReplacementReviewError("review observation evidence must be a list")
+            raise ReplacementReviewError(
+                "review observation evidence must be a list"
+            )
         return cls(
             observation_id=data["observation_id"],
             kind=data["kind"],
             statement=data["statement"],
             confidence=data["confidence"],
-            evidence=tuple(ReviewEvidenceReference.from_dict(item) for item in data["evidence"]),
+            evidence=tuple(
+                ReviewEvidenceReference.from_dict(item) for item in data["evidence"]
+            ),
         )
 
 
@@ -184,21 +209,31 @@ class ReplacementReviewAssessment:
     observation_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "target_id", _identifier(self.target_id, field_name="review target_id"))
+        object.__setattr__(
+            self,
+            "target_id",
+            _identifier(self.target_id, field_name="review target_id"),
+        )
         if not isinstance(self.outcome, str) or self.outcome not in REVIEW_OUTCOMES:
             raise ReplacementReviewError(
                 f"review outcome must be one of {sorted(REVIEW_OUTCOMES)!r}"
             )
         if not isinstance(self.observation_ids, (tuple, list)):
-            raise ReplacementReviewError("review assessment observation_ids must be a list")
+            raise ReplacementReviewError(
+                "review assessment observation_ids must be a list"
+            )
         observation_ids = tuple(
             _identifier(item, field_name="review assessment observation_id")
             for item in self.observation_ids
         )
         if not observation_ids:
-            raise ReplacementReviewError("review assessment must cite at least one observation")
+            raise ReplacementReviewError(
+                "review assessment must cite at least one observation"
+            )
         if len(observation_ids) != len(set(observation_ids)):
-            raise ReplacementReviewError("review assessment observation_ids must be unique")
+            raise ReplacementReviewError(
+                "review assessment observation_ids must be unique"
+            )
         object.__setattr__(self, "observation_ids", observation_ids)
 
     def to_dict(self) -> dict[str, Any]:
@@ -211,11 +246,15 @@ class ReplacementReviewAssessment:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ReplacementReviewAssessment":
         if not isinstance(data, Mapping):
-            raise ReplacementReviewError("replacement review assessment must be an object")
+            raise ReplacementReviewError(
+                "replacement review assessment must be an object"
+            )
         allowed = {"target_id", "outcome", "observation_ids"}
         _strict_fields(data, allowed=allowed, kind="replacement review assessment")
         if not isinstance(data["observation_ids"], list):
-            raise ReplacementReviewError("review assessment observation_ids must be a list")
+            raise ReplacementReviewError(
+                "review assessment observation_ids must be a list"
+            )
         return cls(**{key: data[key] for key in allowed})
 
 
@@ -229,6 +268,7 @@ class ReplacementReview:
     end_us: int
     plan_sha256: str
     candidate_sha256: str
+    artifact_sha256: str
     verdict: str
     observations: tuple[ReplacementReviewObservation, ...]
     assessments: tuple[ReplacementReviewAssessment, ...]
@@ -243,9 +283,21 @@ class ReplacementReview:
             raise ReplacementReviewError(
                 f"unsupported replacement review schema: {self.schema_version!r}"
             )
-        object.__setattr__(self, "review_id", _identifier(self.review_id, field_name="review_id"))
-        object.__setattr__(self, "candidate_id", _identifier(self.candidate_id, field_name="candidate_id"))
-        object.__setattr__(self, "edit_id", _identifier(self.edit_id, field_name="edit_id"))
+        object.__setattr__(
+            self,
+            "review_id",
+            _identifier(self.review_id, field_name="review_id"),
+        )
+        object.__setattr__(
+            self,
+            "candidate_id",
+            _identifier(self.candidate_id, field_name="candidate_id"),
+        )
+        object.__setattr__(
+            self,
+            "edit_id",
+            _identifier(self.edit_id, field_name="edit_id"),
+        )
         try:
             target = ProjectMediaRange(
                 source_path=self.source_path,
@@ -257,11 +309,20 @@ class ReplacementReview:
         object.__setattr__(self, "source_path", target.source_path)
         object.__setattr__(self, "start_us", target.start_us)
         object.__setattr__(self, "end_us", target.end_us)
-        object.__setattr__(self, "plan_sha256", _sha256(self.plan_sha256, field_name="plan_sha256"))
+        object.__setattr__(
+            self,
+            "plan_sha256",
+            _sha256(self.plan_sha256, field_name="plan_sha256"),
+        )
         object.__setattr__(
             self,
             "candidate_sha256",
             _sha256(self.candidate_sha256, field_name="candidate_sha256"),
+        )
+        object.__setattr__(
+            self,
+            "artifact_sha256",
+            _sha256(self.artifact_sha256, field_name="artifact_sha256"),
         )
         if not isinstance(self.verdict, str) or self.verdict not in REVIEW_VERDICTS:
             raise ReplacementReviewError(
@@ -309,6 +370,7 @@ class ReplacementReview:
             "end_us": self.end_us,
             "plan_sha256": self.plan_sha256,
             "candidate_sha256": self.candidate_sha256,
+            "artifact_sha256": self.artifact_sha256,
             "verdict": self.verdict,
             "observations": [item.to_dict() for item in self.observations],
             "assessments": [item.to_dict() for item in self.assessments],
@@ -328,13 +390,18 @@ class ReplacementReview:
             "end_us",
             "plan_sha256",
             "candidate_sha256",
+            "artifact_sha256",
             "verdict",
             "observations",
             "assessments",
         }
         _strict_fields(data, allowed=allowed, kind="replacement review")
-        if not isinstance(data["observations"], list) or not isinstance(data["assessments"], list):
-            raise ReplacementReviewError("review observations and assessments must be lists")
+        if not isinstance(data["observations"], list) or not isinstance(
+            data["assessments"], list
+        ):
+            raise ReplacementReviewError(
+                "review observations and assessments must be lists"
+            )
         return cls(
             schema_version=data["schema_version"],
             review_id=data["review_id"],
@@ -345,9 +412,16 @@ class ReplacementReview:
             end_us=data["end_us"],
             plan_sha256=data["plan_sha256"],
             candidate_sha256=data["candidate_sha256"],
+            artifact_sha256=data["artifact_sha256"],
             verdict=data["verdict"],
-            observations=tuple(ReplacementReviewObservation.from_dict(item) for item in data["observations"]),
-            assessments=tuple(ReplacementReviewAssessment.from_dict(item) for item in data["assessments"]),
+            observations=tuple(
+                ReplacementReviewObservation.from_dict(item)
+                for item in data["observations"]
+            ),
+            assessments=tuple(
+                ReplacementReviewAssessment.from_dict(item)
+                for item in data["assessments"]
+            ),
         )
 
 
@@ -367,11 +441,17 @@ class ReplacementReviewState:
             )
         reviews = tuple(self.reviews)
         if not all(isinstance(item, ReplacementReview) for item in reviews):
-            raise ReplacementReviewError("reviews must contain ReplacementReview values")
+            raise ReplacementReviewError(
+                "reviews must contain ReplacementReview values"
+            )
         ids = [item.review_id for item in reviews]
         if len(ids) != len(set(ids)):
             raise ReplacementReviewError("review_id values must be unique")
-        object.__setattr__(self, "reviews", tuple(sorted(reviews, key=lambda item: item.review_id)))
+        object.__setattr__(
+            self,
+            "reviews",
+            tuple(sorted(reviews, key=lambda item: item.review_id)),
+        )
 
     def get(self, review_id: str) -> ReplacementReview:
         normalized = _identifier(review_id, field_name="review_id")
@@ -394,14 +474,20 @@ class ReplacementReviewState:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "ReplacementReviewState":
         if not isinstance(data, Mapping):
-            raise ReplacementReviewError("replacement review state must be an object")
+            raise ReplacementReviewError(
+                "replacement review state must be an object"
+            )
         allowed = {"schema_version", "reviews"}
         _strict_fields(data, allowed=allowed, kind="replacement review state")
         if not isinstance(data["reviews"], list):
-            raise ReplacementReviewError("replacement review state reviews must be a list")
+            raise ReplacementReviewError(
+                "replacement review state reviews must be a list"
+            )
         return cls(
             schema_version=data["schema_version"],
-            reviews=tuple(ReplacementReview.from_dict(item) for item in data["reviews"]),
+            reviews=tuple(
+                ReplacementReview.from_dict(item) for item in data["reviews"]
+            ),
         )
 
 
@@ -427,17 +513,29 @@ class ReplacementReviewStore:
         if not path.exists():
             return ReplacementReviewState()
         if not path.is_file() or path.is_symlink():
-            raise ReplacementReviewError("replacement review state path must be a regular project file")
+            raise ReplacementReviewError(
+                "replacement review state path must be a regular project file"
+            )
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise ReplacementReviewError("replacement review state is malformed JSON") from exc
+            raise ReplacementReviewError(
+                "replacement review state is malformed JSON"
+            ) from exc
         except OSError as exc:
-            raise ReplacementReviewError("replacement review state could not be read") from exc
+            raise ReplacementReviewError(
+                "replacement review state could not be read"
+            ) from exc
         return ReplacementReviewState.from_dict(data)
 
-    def _write(self, project_id: str, state: ReplacementReviewState) -> ReplacementReviewState:
-        self.project_store._atomic_write_json(self._state_path(project_id), state.to_dict())
+    def _write(
+        self,
+        project_id: str,
+        state: ReplacementReviewState,
+    ) -> ReplacementReviewState:
+        self.project_store._atomic_write_json(
+            self._state_path(project_id), state.to_dict()
+        )
         return state
 
     def _current_candidate_and_brief(
@@ -446,30 +544,81 @@ class ReplacementReviewStore:
         candidate_id: str,
     ) -> tuple[ReplacementCandidate, RangeContinuityBrief]:
         try:
-            candidate = ReplacementCandidateStore(self.project_store).validate_candidate(
-                project_id, candidate_id
-            )
-        except (ReplacementCandidateError, ReplacementCandidateNotFound, ProjectStoreError) as exc:
+            candidate = ReplacementCandidateStore(
+                self.project_store
+            ).validate_candidate(project_id, candidate_id)
+        except (
+            ReplacementCandidateError,
+            ReplacementCandidateNotFound,
+            ProjectStoreError,
+        ) as exc:
             raise ReplacementReviewError(
-                f"replacement review requires a current valid ReplacementCandidate: {exc}"
+                "replacement review requires a current valid ReplacementCandidate: "
+                f"{exc}"
             ) from exc
         if candidate.stage != "full":
-            raise ReplacementReviewError("final replacement review requires a full candidate")
-        try:
-            brief = RangeContinuityBriefStore(self.project_store).validate_project(project_id).get(
-                candidate.edit_id
-            )
-        except (ContinuityBriefError, ContinuityBriefNotFound, ProjectStoreError) as exc:
             raise ReplacementReviewError(
-                f"replacement review requires a current valid RangeContinuityBrief: {exc}"
+                "final replacement review requires a full candidate"
+            )
+        try:
+            brief = RangeContinuityBriefStore(
+                self.project_store
+            ).validate_project(project_id).get(candidate.edit_id)
+        except (
+            ContinuityBriefError,
+            ContinuityBriefNotFound,
+            ProjectStoreError,
+        ) as exc:
+            raise ReplacementReviewError(
+                "replacement review requires a current valid RangeContinuityBrief: "
+                f"{exc}"
             ) from exc
         if candidate.target_identity != brief.target_identity:
-            raise ReplacementReviewError("candidate target no longer matches the current continuity brief")
+            raise ReplacementReviewError(
+                "candidate target no longer matches the current continuity brief"
+            )
         if not brief.review_targets:
             raise ReplacementReviewError(
-                "current continuity brief must define at least one review target before final review"
+                "current continuity brief must define at least one review target "
+                "before final review"
             )
         return candidate, brief
+
+    def _candidate_artifact_sha256(
+        self,
+        project_id: str,
+        candidate: ReplacementCandidate,
+    ) -> str:
+        try:
+            path = self.project_store.resolve_project_file(
+                project_id,
+                candidate.artifact_path,
+                must_exist=True,
+                allowed_roots=("artifacts",),
+            )
+            if not path.is_file() or path.is_symlink():
+                raise ReplacementReviewError(
+                    "reviewed candidate artifact must be a regular project file"
+                )
+            before = path.stat()
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                while chunk := handle.read(_HASH_CHUNK_BYTES):
+                    digest.update(chunk)
+            after = path.stat()
+        except ReplacementReviewError:
+            raise
+        except (OSError, ProjectStoreError, ProjectValidationError) as exc:
+            raise ReplacementReviewError(
+                f"reviewed candidate artifact could not be hashed: {exc}"
+            ) from exc
+        before_signature = (before.st_size, before.st_mtime_ns)
+        after_signature = (after.st_size, after.st_mtime_ns)
+        if before_signature != after_signature:
+            raise ReplacementReviewError(
+                "reviewed candidate artifact changed while its digest was being computed"
+            )
+        return digest.hexdigest()
 
     def create_review(
         self,
@@ -482,7 +631,9 @@ class ReplacementReviewStore:
         assessments: tuple[ReplacementReviewAssessment, ...],
     ) -> ReplacementReviewState:
         with self.project_store._lock:
-            candidate, brief = self._current_candidate_and_brief(project_id, candidate_id)
+            candidate, brief = self._current_candidate_and_brief(
+                project_id, candidate_id
+            )
             review = ReplacementReview(
                 review_id=review_id,
                 candidate_id=candidate.candidate_id,
@@ -492,27 +643,50 @@ class ReplacementReviewStore:
                 end_us=candidate.end_us,
                 plan_sha256=candidate.plan_sha256,
                 candidate_sha256=replacement_candidate_sha256(candidate),
+                artifact_sha256=self._candidate_artifact_sha256(
+                    project_id, candidate
+                ),
                 verdict=verdict,
                 observations=observations,
                 assessments=assessments,
             )
-            self._validate_review_against_current(review, candidate, brief)
+            self._validate_review_against_current(
+                project_id, review, candidate, brief
+            )
             current = self.load(project_id)
             return self._write(project_id, current.add(review))
 
-    def validate_review(self, project_id: str, review_id: str) -> ReplacementReview:
+    def validate_review(
+        self,
+        project_id: str,
+        review_id: str,
+    ) -> ReplacementReview:
         review = self.load(project_id).get(review_id)
-        candidate, brief = self._current_candidate_and_brief(project_id, review.candidate_id)
-        self._validate_review_against_current(review, candidate, brief)
+        candidate, brief = self._current_candidate_and_brief(
+            project_id, review.candidate_id
+        )
+        self._validate_review_against_current(
+            project_id, review, candidate, brief
+        )
         return review
 
-    def accept_review(self, project_id: str, review_id: str) -> RangeEditState:
+    def accept_review(
+        self,
+        project_id: str,
+        review_id: str,
+    ) -> RangeEditState:
         with self.project_store._lock:
             review = self.load(project_id).get(review_id)
-            candidate, brief = self._current_candidate_and_brief(project_id, review.candidate_id)
-            self._validate_review_against_current(review, candidate, brief)
+            candidate, brief = self._current_candidate_and_brief(
+                project_id, review.candidate_id
+            )
+            self._validate_review_against_current(
+                project_id, review, candidate, brief
+            )
             if review.verdict != "approved":
-                raise ReplacementReviewError("only an approved current replacement review can be accepted")
+                raise ReplacementReviewError(
+                    "only an approved current replacement review can be accepted"
+                )
             edit = AcceptedRangeEdit(
                 edit_id=candidate.edit_id,
                 source_path=candidate.source_path,
@@ -521,55 +695,94 @@ class ReplacementReviewStore:
                 replacement_path=candidate.artifact_path,
             )
             try:
-                return RangeEditStateStore(self.project_store).accept(project_id, edit)
+                return RangeEditStateStore(self.project_store).accept(
+                    project_id, edit
+                )
             except EditStateError as exc:
-                raise ReplacementReviewError(f"approved replacement review could not be accepted: {exc}") from exc
+                raise ReplacementReviewError(
+                    f"approved replacement review could not be accepted: {exc}"
+                ) from exc
 
     def _validate_review_against_current(
         self,
+        project_id: str,
         review: ReplacementReview,
         candidate: ReplacementCandidate,
         brief: RangeContinuityBrief,
     ) -> None:
         if review.candidate_id != candidate.candidate_id:
-            raise ReplacementReviewError("review candidate_id does not match current candidate")
+            raise ReplacementReviewError(
+                "review candidate_id does not match current candidate"
+            )
         if review.target_identity != candidate.target_identity:
-            raise ReplacementReviewError("review target no longer matches current candidate")
+            raise ReplacementReviewError(
+                "review target no longer matches current candidate"
+            )
         if review.plan_sha256 != candidate.plan_sha256:
-            raise ReplacementReviewError("review is stale because the approved plan changed")
+            raise ReplacementReviewError(
+                "review is stale because the approved plan changed"
+            )
         if review.candidate_sha256 != replacement_candidate_sha256(candidate):
-            raise ReplacementReviewError("review is stale because the candidate changed")
+            raise ReplacementReviewError(
+                "review is stale because the candidate changed"
+            )
+        current_artifact_sha256 = self._candidate_artifact_sha256(
+            project_id, candidate
+        )
+        if review.artifact_sha256 != current_artifact_sha256:
+            raise ReplacementReviewError(
+                "review is stale because the candidate artifact bytes changed"
+            )
         if review.target_identity != brief.target_identity:
-            raise ReplacementReviewError("review target no longer matches current continuity brief")
+            raise ReplacementReviewError(
+                "review target no longer matches current continuity brief"
+            )
 
-        expected_targets = {item.target_id: item for item in brief.review_targets}
+        expected_targets = {
+            item.target_id: item for item in brief.review_targets
+        }
         actual_targets = {item.target_id for item in review.assessments}
         if actual_targets != set(expected_targets):
             missing = sorted(set(expected_targets).difference(actual_targets))
             extra = sorted(actual_targets.difference(expected_targets))
             raise ReplacementReviewError(
-                f"review assessments must exactly match current review targets (missing={missing!r}, extra={extra!r})"
+                "review assessments must exactly match current review targets "
+                f"(missing={missing!r}, extra={extra!r})"
             )
 
         brief_evidence = {item.evidence_id for item in brief.evidence}
-        observations = {item.observation_id: item for item in review.observations}
+        observations = {
+            item.observation_id: item for item in review.observations
+        }
         for observation in review.observations:
             for evidence in observation.evidence:
-                if evidence.kind == "brief_evidence" and evidence.ref_id not in brief_evidence:
+                if (
+                    evidence.kind == "brief_evidence"
+                    and evidence.ref_id not in brief_evidence
+                ):
                     raise ReplacementReviewError(
-                        f"review observation {observation.observation_id!r} references unknown Brief evidence {evidence.ref_id!r}"
+                        f"review observation {observation.observation_id!r} "
+                        "references unknown Brief evidence "
+                        f"{evidence.ref_id!r}"
                     )
-                if evidence.kind == "candidate_artifact" and evidence.ref_id != candidate.artifact_id:
+                if (
+                    evidence.kind == "candidate_artifact"
+                    and evidence.ref_id != candidate.artifact_id
+                ):
                     raise ReplacementReviewError(
-                        f"review observation {observation.observation_id!r} references a different candidate artifact"
+                        f"review observation {observation.observation_id!r} "
+                        "references a different candidate artifact"
                     )
 
         referenced_observations: set[str] = set()
         for assessment in review.assessments:
-            missing_observations = set(assessment.observation_ids).difference(observations)
+            missing_observations = set(assessment.observation_ids).difference(
+                observations
+            )
             if missing_observations:
                 raise ReplacementReviewError(
-                    f"review target {assessment.target_id!r} references unknown observations: {sorted(missing_observations)!r}"
+                    f"review target {assessment.target_id!r} references unknown "
+                    f"observations: {sorted(missing_observations)!r}"
                 )
             referenced_observations.update(assessment.observation_ids)
             candidate_grounded = any(
@@ -582,29 +795,45 @@ class ReplacementReviewStore:
             )
             if not candidate_grounded:
                 raise ReplacementReviewError(
-                    f"review target {assessment.target_id!r} must cite at least one observation of the exact candidate artifact"
+                    f"review target {assessment.target_id!r} must cite at least "
+                    "one observation of the exact candidate artifact"
                 )
-        orphan_observations = set(observations).difference(referenced_observations)
+        orphan_observations = set(observations).difference(
+            referenced_observations
+        )
         if orphan_observations:
             raise ReplacementReviewError(
-                f"replacement review contains observations not used by any assessment: {sorted(orphan_observations)!r}"
+                "replacement review contains observations not used by any "
+                f"assessment: {sorted(orphan_observations)!r}"
             )
 
-        outcomes = {item.target_id: item.outcome for item in review.assessments}
-        required_targets = [item.target_id for item in brief.review_targets if item.required]
+        outcomes = {
+            item.target_id: item.outcome for item in review.assessments
+        }
+        required_targets = [
+            item.target_id for item in brief.review_targets if item.required
+        ]
         has_fail = any(outcome == "fail" for outcome in outcomes.values())
-        has_uncertain = any(outcome == "uncertain" for outcome in outcomes.values())
-        required_pass = all(outcomes[target_id] == "pass" for target_id in required_targets)
+        has_uncertain = any(
+            outcome == "uncertain" for outcome in outcomes.values()
+        )
+        required_pass = all(
+            outcomes[target_id] == "pass" for target_id in required_targets
+        )
         if review.verdict == "approved":
             if not required_pass or has_fail:
                 raise ReplacementReviewError(
-                    "approved review requires every required target to pass and no target to fail"
+                    "approved review requires every required target to pass "
+                    "and no target to fail"
                 )
         elif review.verdict == "rejected":
             if not has_fail:
-                raise ReplacementReviewError("rejected review requires at least one failed target")
+                raise ReplacementReviewError(
+                    "rejected review requires at least one failed target"
+                )
         elif review.verdict == "needs_revision":
             if not (has_fail or has_uncertain):
                 raise ReplacementReviewError(
-                    "needs_revision review requires at least one failed or uncertain target"
+                    "needs_revision review requires at least one failed or "
+                    "uncertain target"
                 )
