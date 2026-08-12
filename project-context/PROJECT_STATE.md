@@ -18,11 +18,11 @@ UV Studio has a secure product-owned runtime/dependency boundary, canonical port
 
 Accepted replacements live as lightweight typed `timeline/range-edits.json` decisions and are materialized only by explicit `video.render_edits`; PR #25 proved video-only and audio multi-edit rendering on Ubuntu and Windows without returning to whole-video-render-as-state.
 
-## Active Stage 4B slice
+## Stage 4B RangeContinuityBrief — review-ready
 
 `stage-4-range-continuity-brief` adds a separate typed/versioned provider-neutral continuity/evidence document for a logical targeted edit intent. The brief is deliberately valid **before any replacement or accepted edit exists**.
 
-The corrected product order is:
+The product order is now:
 
 ```text
 exact targeted range intent
@@ -34,6 +34,7 @@ exact targeted range intent
   -> replacement plan / preparation / generation
   -> review
   -> accepted replacement decision
+  -> explicit render/export
 ```
 
 Portable brief target identity is exactly:
@@ -44,26 +45,32 @@ edit_id + source_path + start_us + end_us
 
 `replacement_path` is not part of continuity identity. If an accepted edit with the same `edit_id` exists later, its source/range must match; another replacement take for the same target may reuse the same brief.
 
-## Invariants for this slice
+The implemented boundary provides:
 
-- a brief can be created and archived before replacement media exists;
-- exactly one requested evidence item anchors the target range;
-- `before`, `requested` and `after` evidence must reference the target source;
-- before/after windows must touch the exact edit boundaries and each evidence span is bounded to 30 seconds;
-- source-coordinate reference evidence is allowed only when the reference itself is the target source;
-- evidence paths are project-relative regular files when saved/validated;
-- mechanical facts are typed separately from observations/inferences and cannot encode provider/model/runtime binding keys;
-- observations/inferences carry explicit confidence and known evidence references;
-- constraints/review targets reference known evidence IDs only;
-- collection sizes are bounded at the domain boundary;
-- state remains structurally readable/removable if linked files later become stale, with explicit validation for current project health;
-- an absent accepted edit is valid pre-replacement state; a conflicting accepted source/range makes the brief stale;
-- archive/export/import/fresh reopen preserves the typed brief exactly without a replacement artifact;
-- constructing a valid baseline brief performs no FFmpeg/VLM/provider execution.
+- creation and archive round-trip before replacement media exists;
+- exactly one requested evidence item anchoring the target range;
+- source-bound `before`, `requested` and `after` evidence with exact boundary adjacency;
+- bounded 30-second evidence spans and bounded collection counts;
+- project-relative evidence references with explicit current-file validation;
+- mechanical facts separate from observations/inferences and no runtime/provider-binding fact keys;
+- observations/inferences with explicit confidence and evidence references;
+- constraints/review targets linked to known evidence only;
+- structural readability/removal when files become stale plus explicit current-health validation;
+- absent accepted edit as valid pre-replacement state;
+- fail-closed conflict when a same-ID accepted edit points at another source/range;
+- replacement-only take changes that do not invalidate target continuity knowledge;
+- UV-owned CRUD API with no execution surface;
+- no FFmpeg/VLM/MCP/provider side effect from baseline brief persistence.
+
+D-029 is accepted.
+
+Draft functional head `0c7053f842bf767e58b9d8564035cbfc20ce6f04` passed all five required checks in CI run #678 (`31589049828`) on Ubuntu and Windows, including unit/API/HTTP, existing real-media Stage 4A regressions, frontend lint, zero high-severity npm audit and production build.
+
+The final state-only review head must repeat the same five required checks before merge.
 
 ## Expected following work
 
-After this contract is proven, continue Stage 4B with `stage-4-replacement-plan-gate`: consume the validated target brief, choose and approve the replacement method/constraints, and only then prepare deterministic or optional generative replacement media.
+After PR #26 merges, continue Stage 4B with `stage-4-replacement-plan-gate`: consume the validated target brief, choose and approve the replacement method/constraints, and only then prepare deterministic or optional generative replacement media.
 
 ## Remaining cross-cutting gaps
 
