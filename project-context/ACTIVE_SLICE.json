@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "fix/runtime-security-boundary",
     "pull_request": 22,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       ".gitignore",
       "uv_studio/server.py",
