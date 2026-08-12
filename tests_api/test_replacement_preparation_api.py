@@ -35,6 +35,7 @@ from uv_studio.projects import (
     RangeContinuityBriefStore,
     ReplacementPlanProposal,
     ReplacementPlanStore,
+    replacement_plan_sha256,
 )
 from uv_studio.server import app
 
@@ -357,7 +358,7 @@ class ReplacementPreparationApiTests(unittest.TestCase):
         current_plan = ReplacementPlanStore(self.store).validate_project(
             self.project.project_id
         ).get("edit_1")
-        self.assertNotEqual(old_plan_digest, json.dumps(current_plan.to_dict(), sort_keys=True))
+        self.assertNotEqual(old_plan_digest, replacement_plan_sha256(current_plan))
 
     def test_full_generative_preflight_blocks_before_authorization_if_sample_missing(self) -> None:
         self._configure_output_mcp()
