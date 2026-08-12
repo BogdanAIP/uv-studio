@@ -111,6 +111,7 @@ class ReplacementPreparationApiTests(unittest.TestCase):
             title="Fixture",
             command=sys.executable,
             args=(str(FIXTURE),),
+            env_refs=(("UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL", "UV_MCP_FIXTURE_PROJECT_OUTPUT_TOOL"),),
             startup_timeout_sec=10,
             discovery_timeout_sec=10,
         )
