@@ -4,7 +4,7 @@
     "id": "stage-4-range-continuity-brief",
     "kind": "stage",
     "roadmap_stage": "stage-4b",
-    "goal": "Persist a typed provider-neutral bounded RangeContinuityBrief linked to an exact accepted edit decision, with mechanical facts separated from observations/inferences, constraints and review targets.",
+    "goal": "Persist a typed provider-neutral bounded RangeContinuityBrief for an exact targeted edit intent before replacement creation, with mechanical facts separated from observations/inferences, constraints and review targets, and exact compatibility with any later accepted edit on the same source/range.",
     "base_branch": "main",
     "branch": "stage-4/range-continuity-brief",
     "pull_request": 26,
