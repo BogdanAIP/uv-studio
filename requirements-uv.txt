@@ -1,1 +1,8 @@
+# UV Studio-owned core runtime dependencies.
+# Keep provider SDKs and compatibility runtimes out of the baseline.
+anyio>=4.5,<5
+fastapi>=0.115,<1
 mcp>=2.0,<3
+pydantic>=2.7,<3
+starlette>=0.40,<1
+uvicorn>=0.23.1,<1
