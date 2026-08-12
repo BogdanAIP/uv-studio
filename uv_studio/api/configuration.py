@@ -10,7 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from uv_studio.runtime_config import RuntimeConfigError, RuntimeConfigStore
 
@@ -22,7 +22,7 @@ class RuntimeConfigUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     values: dict[str, Any] = Field(default_factory=dict)
-    secret_updates: dict[str, str | None] = Field(default_factory=dict)
+    secret_updates: dict[str, SecretStr | None] = Field(default_factory=dict)
 
 
 @lru_cache(maxsize=1)
@@ -60,10 +60,14 @@ def update_runtime_config(
     request: RuntimeConfigUpdateRequest,
     store: RuntimeConfigStore = Depends(get_runtime_config_store),
 ) -> dict[str, Any]:
+    normalized_secrets = {
+        path: value.get_secret_value() if value is not None else None
+        for path, value in request.secret_updates.items()
+    }
     try:
         config, secrets = store.update(
             values=request.values,
-            secret_updates=request.secret_updates,
+            secret_updates=normalized_secrets,
         )
         return {
             "config": config,
