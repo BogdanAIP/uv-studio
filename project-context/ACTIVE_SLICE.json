@@ -12,6 +12,7 @@
     "write_scope": [
       ".github/workflows/ci.yml",
       "tests_real_media/test_range_real_media.py",
+      "tests_real_media/test_compressed_reinsertion_evidence.py",
       "uv_studio/capabilities/adapters/local_ffmpeg.py",
       "uv_studio/capabilities/adapters/range_reinsertion.py",
       "uv_studio/projects/media_ranges.py",
