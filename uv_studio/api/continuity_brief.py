@@ -77,7 +77,6 @@ class RangeContinuityBriefPayload(BaseModel):
     source_path: StrictStr
     start_us: StrictInt
     end_us: StrictInt
-    replacement_path: StrictStr
     evidence: list[ContinuityEvidencePayload] = Field(default_factory=list)
     mechanical_facts: list[MechanicalFactPayload] = Field(default_factory=list)
     observations: list[ContinuityObservationPayload] = Field(default_factory=list)
@@ -109,7 +108,10 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, ProjectStoreError):
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
-    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Continuity brief operation failed")
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Continuity brief operation failed",
+    )
 
 
 @router.get("/{project_id}/continuity-briefs", response_model=RangeContinuityBriefStatePayload)
