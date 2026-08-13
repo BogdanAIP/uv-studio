@@ -95,7 +95,7 @@ class ArgosTranslateAdapterTests(unittest.TestCase):
         self.assertEqual(offer.availability, OfferAvailability.CONFIGURATION_REQUIRED)
         self.assertEqual(offer.locality, LocalityClass.LOCAL)
         self.assertEqual(offer.cost_class, CostClass.FREE)
-        self.assertIn("optional", offer.features)
+        self.assertIn("runtime.optional", offer.features)
 
     def test_available_adapter_preserves_segment_identity_and_normalizes_language_tags(self) -> None:
         store = _Store()
