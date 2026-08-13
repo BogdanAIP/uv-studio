@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import re
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,6 +36,7 @@ from ..registry import CapabilityRegistry
 _ADAPTER_ID = "local_webvtt"
 _CAPABILITY_ID = "subtitle.export_webvtt"
 _OFFER_ID = "local_webvtt.subtitle_export"
+_BLANK_LINE_RE = re.compile(r"^[\t ]*$")
 
 
 def register_webvtt_subtitle_adapter(registry: CapabilityRegistry) -> None:
@@ -85,15 +87,24 @@ def _timestamp(value_us: int) -> str:
 
 def _cue_text(value: str) -> str:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+    # A blank line terminates a WebVTT cue. Preserve meaningful multiline text while
+    # removing blank-only lines so transcript content cannot inject a second cue block.
+    normalized = "\n".join(
+        line for line in normalized.split("\n") if not _BLANK_LINE_RE.fullmatch(line)
+    )
     return html.escape(normalized, quote=False)
 
 
 def _render_webvtt(segments: tuple[tuple[str, int, int, str], ...]) -> str:
     lines = ["WEBVTT", ""]
-    previous_end = -1
+    previous_start = -1
     for segment_id, start_us, end_us, text in segments:
-        if start_us < previous_end:
-            raise InvalidCapabilityInput("subtitle segments must not overlap and must be chronological")
+        if start_us < 0 or end_us <= start_us:
+            raise InvalidCapabilityInput("subtitle cue range must be non-negative and forward")
+        if start_us < previous_start:
+            raise InvalidCapabilityInput(
+                "subtitle cues must be ordered by non-decreasing start time"
+            )
         start_ms = start_us // 1000
         end_ms = (end_us + 999) // 1000
         if end_ms <= start_ms:
@@ -106,7 +117,7 @@ def _render_webvtt(segments: tuple[tuple[str, int, int, str], ...]) -> str:
                 "",
             ]
         )
-        previous_end = end_us
+        previous_start = start_us
     return "\n".join(lines)
 
 
@@ -139,7 +150,9 @@ class WebVTTSubtitleAdapter:
         translation_id = payload.get("translation_id")
         if not isinstance(dubbing_id, str) or not dubbing_id.strip():
             raise InvalidCapabilityInput("subtitle export requires non-empty dubbing_id")
-        if translation_id is not None and (not isinstance(translation_id, str) or not translation_id.strip()):
+        if translation_id is not None and (
+            not isinstance(translation_id, str) or not translation_id.strip()
+        ):
             raise InvalidCapabilityInput("translation_id must be null or a non-empty string")
         try:
             state = self.dubbing.validate_project(project_id)
@@ -154,15 +167,22 @@ class WebVTTSubtitleAdapter:
             else:
                 translation = state.get_translation(translation_id.strip())
                 if translation.dubbing_id != transcript.dubbing_id:
-                    raise InvalidCapabilityInput("translation_id belongs to a different dubbing transcript")
+                    raise InvalidCapabilityInput(
+                        "translation_id belongs to a different dubbing transcript"
+                    )
                 script_kind = "translation"
                 script_id = translation.translation_id
                 script_sha = canonical_revision_sha256(translation.to_dict())
                 language = translation.target_language
                 text_by_id = {item.segment_id: item.text for item in translation.segments}
             segments = tuple(
-                (item.segment_id, item.start_us, item.end_us, text_by_id[item.segment_id])
-                for item in transcript.segments
+                sorted(
+                    (
+                        (item.segment_id, item.start_us, item.end_us, text_by_id[item.segment_id])
+                        for item in transcript.segments
+                    ),
+                    key=lambda item: (item[1], item[2], item[0]),
+                )
             )
         except InvalidCapabilityInput:
             raise
