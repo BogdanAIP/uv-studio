@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,19 +14,32 @@ from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Project Artifacts"])
+_SAFE_MEDIA_TYPE_RE = re.compile(r"^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$")
+_MAX_DOWNLOAD_NAME_LENGTH = 255
 
 
 def _download_name(reference, path: Path) -> str:
     original = reference.metadata.get("original_name")
-    if isinstance(original, str) and original.strip():
-        return Path(original.replace("\\", "/").rsplit("/", 1)[-1]).name
+    if isinstance(original, str):
+        candidate = original.replace("\\", "/").rsplit("/", 1)[-1].strip()
+        if (
+            candidate
+            and candidate not in {".", ".."}
+            and len(candidate) <= _MAX_DOWNLOAD_NAME_LENGTH
+            and not any(ord(char) < 32 or ord(char) == 127 for char in candidate)
+        ):
+            safe = Path(candidate).name
+            if safe and safe not in {".", ".."}:
+                return safe
     return path.name
 
 
 def _media_type(reference, path: Path) -> str:
     value = reference.metadata.get("content_type")
-    if isinstance(value, str) and value.strip():
-        return value.split(";", 1)[0].strip()
+    if isinstance(value, str):
+        candidate = value.split(";", 1)[0].strip()
+        if _SAFE_MEDIA_TYPE_RE.fullmatch(candidate):
+            return candidate
     guessed, _encoding = mimetypes.guess_type(path.name)
     return guessed or "application/octet-stream"
 
