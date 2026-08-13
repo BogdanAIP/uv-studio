@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "active_slice": {
-    "id": "stage-4-range-edit-user-workflow",
+    "id": "stage-5-dubbing-translation",
     "kind": "stage",
-    "roadmap_stage": "stage-4c",
-    "goal": "Deliver the complete user-facing targeted existing-video editing workflow on the D-033 reusable foundation: safe source import and preview, reusable timeline range selection, one UV-owned Command API for GUI/scripts/AI/MCP, visible Brief/Plan/Candidate/Review state, approved non-destructive acceptance, multiple edits and explicit authoritative export.",
+    "roadmap_stage": "stage-5",
+    "goal": "Deliver professional dubbing and translation as a user-facing workflow on the existing UV Studio editor foundation: project-owned source media, provider-neutral transcript/translation/speech/alignment capabilities, explicit review and acceptance, non-destructive audio state, deterministic preview/render/export, and no second project or timeline model.",
     "base_branch": "main",
-    "branch": "stage-4/range-edit-user-workflow",
-    "pull_request": 31,
-    "phase": "review",
+    "branch": "stage-5/dubbing-translation",
+    "pull_request": null,
+    "phase": "draft",
     "write_scope": [
       ".github/workflows/ci.yml",
       "frontend/**",
@@ -19,11 +19,13 @@
       "tests/**",
       "tests_api/**",
       "tests_real_media/**",
-      "project-context/**"
+      "docs/**",
+      "project-context/**",
+      "ROADMAP.md"
     ]
   },
   "handoff": {
-    "next_slice_id": "stage-5-dubbing-translation",
+    "next_slice_id": "stage-6-sequence-continuity-review",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
