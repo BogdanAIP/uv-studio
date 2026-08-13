@@ -29,6 +29,7 @@ from uv_studio.api.editor_commands import router as editor_commands_router  # no
 from uv_studio.api.execution import router as execution_router  # noqa: E402
 from uv_studio.api.mcp import router as mcp_router  # noqa: E402
 from uv_studio.api.prepared_audio import router as prepared_audio_router  # noqa: E402
+from uv_studio.api.prepared_audio_promotion import router as prepared_audio_promotion_router  # noqa: E402
 from uv_studio.api.project_media import router as project_media_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
 from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
@@ -72,6 +73,7 @@ app.include_router(execution_router)
 app.include_router(projects_router)
 app.include_router(project_media_router)
 app.include_router(prepared_audio_router)
+app.include_router(prepared_audio_promotion_router)
 app.include_router(editor_commands_router)
 app.include_router(edit_state_router)
 app.include_router(continuity_brief_router)
