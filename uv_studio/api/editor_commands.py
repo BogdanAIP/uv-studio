@@ -72,6 +72,16 @@ class ImportDubbingTranscriptCommandPayload(_StrictModel):
     dubbing_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class AcceptAsrTranscriptCommandPayload(_StrictModel):
+    command: Literal["accept_asr_transcript"]
+    source_id: str = Field(min_length=1, max_length=128)
+    language: str = Field(min_length=2, max_length=64)
+    start_us: int = Field(ge=0)
+    end_us: int = Field(gt=0)
+    segments: list[TranscriptSegmentCommandPayload] = Field(min_length=1, max_length=100_000)
+    dubbing_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 class TranslationSegmentCommandPayload(_StrictModel):
     segment_id: str = Field(min_length=1, max_length=128)
     text: str = Field(min_length=1, max_length=8000)
@@ -89,6 +99,7 @@ EditorCommandPayload = Annotated[
     Union[
         SelectRangeCommandPayload,
         ImportDubbingTranscriptCommandPayload,
+        AcceptAsrTranscriptCommandPayload,
         UpsertDubbingTranslationCommandPayload,
     ],
     Field(discriminator="command"),
@@ -109,6 +120,12 @@ class ImportDubbingTranscriptResultPayload(_StrictModel):
     payload: dict
 
 
+class AcceptAsrTranscriptResultPayload(_StrictModel):
+    command: Literal["accept_asr_transcript"]
+    dubbing_id: str
+    payload: dict
+
+
 class UpsertDubbingTranslationResultPayload(_StrictModel):
     command: Literal["upsert_dubbing_translation"]
     dubbing_id: str
@@ -118,6 +135,7 @@ class UpsertDubbingTranslationResultPayload(_StrictModel):
 EditorCommandResultPayload = Union[
     SelectRangeCommandResultPayload,
     ImportDubbingTranscriptResultPayload,
+    AcceptAsrTranscriptResultPayload,
     UpsertDubbingTranslationResultPayload,
 ]
 
@@ -165,6 +183,27 @@ def _translate(exc: Exception) -> HTTPException:
     )
 
 
+def _transcript_command(payload: ImportDubbingTranscriptCommandPayload | AcceptAsrTranscriptCommandPayload) -> ImportDubbingTranscriptCommand:
+    return ImportDubbingTranscriptCommand(
+        source_id=payload.source_id,
+        language=payload.language,
+        start_us=payload.start_us,
+        end_us=payload.end_us,
+        dubbing_id=payload.dubbing_id,
+        segments=tuple(
+            ImportTranscriptSegmentInput(
+                segment_id=item.segment_id,
+                start_us=item.start_us,
+                end_us=item.end_us,
+                text=item.text,
+                speaker_label=item.speaker_label,
+                confidence=item.confidence,
+            )
+            for item in payload.segments
+        ),
+    )
+
+
 @router.post(
     "/{project_id}/editor/commands",
     response_model=EditorCommandResultPayload,
@@ -194,26 +233,15 @@ def execute_editor_command(
         if isinstance(payload, ImportDubbingTranscriptCommandPayload):
             result = DubbingCommandService(store).import_transcript(
                 project_id,
-                ImportDubbingTranscriptCommand(
-                    source_id=payload.source_id,
-                    language=payload.language,
-                    start_us=payload.start_us,
-                    end_us=payload.end_us,
-                    dubbing_id=payload.dubbing_id,
-                    segments=tuple(
-                        ImportTranscriptSegmentInput(
-                            segment_id=item.segment_id,
-                            start_us=item.start_us,
-                            end_us=item.end_us,
-                            text=item.text,
-                            speaker_label=item.speaker_label,
-                            confidence=item.confidence,
-                        )
-                        for item in payload.segments
-                    ),
-                ),
+                _transcript_command(payload),
             )
             return ImportDubbingTranscriptResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, AcceptAsrTranscriptCommandPayload):
+            result = DubbingCommandService(store).accept_asr_transcript(
+                project_id,
+                _transcript_command(payload),
+            )
+            return AcceptAsrTranscriptResultPayload.model_validate(result.to_dict())
         if isinstance(payload, UpsertDubbingTranslationCommandPayload):
             result = DubbingCommandService(store).upsert_translation(
                 project_id,
