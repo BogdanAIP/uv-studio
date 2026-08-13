@@ -1,112 +1,45 @@
 # UV Studio Frontend
 
-UV Studio's user-facing frontend lives at top-level `frontend/`.
+Top-level `frontend/` is UV Studio-owned product source. It began as a reproducible derived copy of the pinned VideoClaw frontend, whose untouched comparison snapshot remains under `vendor/videoclaw-app/frontend/` with provenance/attribution metadata.
 
-It started as an exact derived copy of the pinned VideoClaw frontend, but it is now **UV Studio-owned product source** and is expected to diverge as projects, recipes and editing workflows are added.
+## Supported product surfaces
 
-## Source provenance
+Current canonical UV-owned user paths are:
 
-The initial frontend baseline came from:
+- `/projects` — project list/create/import;
+- `/projects/[projectId]` — canonical project/editor workspace;
+- targeted existing-video range editing through the Stage 4C UI;
+- Stage 5 dubbing/translation/precision/subtitle panels mounted inside the canonical project page.
 
-- repository: `HITsz-TMG/VideoClaw`
-- pinned commit: `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`
-- source subtree: `video-claw/video-claw/frontend`
-- license: MIT
+These surfaces use `/api/uv/*` product APIs and canonical UV project IDs.
 
-The exact initial source digest and file count are stored in:
+## Legacy root workspace
 
-```text
-frontend/.uv-derived.json
-```
+The historical VideoClaw `WorkflowPanel` and related source still exist in the derived frontend, but D-025 deliberately stopped mounting the complete legacy VideoClaw backend route table. Therefore `/` must not be described as a fully supported working production workflow merely because the UI source is still present.
 
-The upstream MIT license is preserved in:
+The post-Stage-5 hardening slice must either:
 
-```text
-frontend/UPSTREAM_LICENSE
-```
+1. make the root route a UV-owned landing/redirect into supported project surfaces; or
+2. explicitly isolate a separate compatibility runtime with its own security/authorization contract.
 
-The untouched comparison snapshot remains under:
-
-```text
-vendor/videoclaw-app/frontend/
-```
-
-## Promotion/reset tool
-
-`tools/promote_frontend.py` exists to reproduce the original pinned frontend baseline.
-
-Safe inspection:
-
-```text
-python tools/promote_frontend.py --check
-```
-
-This does not change files.
-
-### Important: resetting is destructive
-
-Once `frontend/` exists, this command intentionally fails:
-
-```text
-python tools/promote_frontend.py
-```
-
-Replacing the existing UV Studio frontend requires an explicit destructive flag:
-
-```text
-python tools/promote_frontend.py --force
-```
-
-`--force` deletes current UV Studio frontend changes and restores the pinned upstream-derived baseline. It should not be used as part of ordinary development.
-
-The GitHub workflow `Reset frontend to pinned baseline` is therefore manual-only (`workflow_dispatch`) and also performs an explicit forced reset.
-
-## Product boundary
-
-The backend and frontend use different upstream strategies:
-
-```text
-Pinned backend runtime
-    vendor/videoclaw-app/backend
-          │
-          ▼
-    UV Studio wrappers/APIs
-
-Pinned frontend snapshot
-    vendor/videoclaw-app/frontend
-          │ one-time derivation
-          ▼
-    frontend/   ← product source
-```
-
-The backend is kept close to upstream and wrapped where possible. The user-facing frontend is expected to change substantially, so continuously patching the immutable vendor snapshot would be counterproductive.
-
-## Current UV Studio additions
-
-The first product-owned frontend additions are:
-
-- `/projects` — canonical project list/create screen;
-- `/projects/[projectId]` — canonical project shell using stable UV Studio project IDs;
-- `lib/projectsApi.ts` — client for `/api/uv/projects`;
-- `/api/uv/*` Next.js proxy route;
-- UV Studio metadata/title;
-- a link from the existing production workspace to the canonical Projects screen.
-
-The old production workspace remains available at `/` while it is migrated gradually.
+It must not silently remount the old provider/pipeline/sandbox backend and weaken D-025.
 
 ## Identity rule
 
-UV Studio `project_id` and legacy VideoClaw session IDs are different identifiers.
+UV `project_id` and legacy VideoClaw session IDs are different identifiers. Do not substitute one for the other.
 
-Do not silently map or substitute one for the other. Future Recipe Registry/workflow binding must model that relationship explicitly.
+## Source provenance
 
-## Current migration policy
+Initial donor:
 
-Do not rewrite all existing UI at once.
+- `HITsz-TMG/VideoClaw`
+- commit `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`
+- MIT
 
-Prefer:
+`frontend/.uv-derived.json` records the source baseline and `frontend/UPSTREAM_LICENSE` preserves the license. `tools/promote_frontend.py --force` is destructive and must not be used during ordinary development.
 
-1. establish canonical UV Studio project/workflow surfaces;
-2. keep useful existing production screens reachable;
-3. move or adapt screens when a product requirement needs them;
-4. remove obsolete upstream UI only after replacement behavior is verified.
+Stage 4C also selectively adapts MIT OpenCut Classic timeline interaction ideas while keeping UV Project Store/Command boundaries authoritative.
+
+## Testing state
+
+Permanent CI currently runs frontend lint, high-severity dependency audit and production build on Windows/Ubuntu. Browser E2E and frontend unit/accessibility coverage remain incomplete; browser E2E for the existing-video and dubbing user outcomes is the next Stage 5 quality gate.
