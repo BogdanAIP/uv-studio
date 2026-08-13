@@ -51,11 +51,13 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     # receive one complete semantic registry through this public function.
     from .adapters.artifact_preview import register_artifact_preview_capability
     from .adapters.audio_loudness import register_audio_loudness_capability
+    from .adapters.dubbing_render import register_dubbing_render_capability
     from .adapters.edit_render import register_edit_render_capability
 
     register_edit_render_capability(registry)
     register_artifact_preview_capability(registry)
     register_audio_loudness_capability(registry)
+    register_dubbing_render_capability(registry)
     return registry
 
 
