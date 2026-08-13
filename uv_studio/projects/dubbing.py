@@ -15,7 +15,7 @@ from .source_media import ProjectSourceMediaStore, SourceMediaError, SourceMedia
 from .store import ProjectStore, ProjectStoreError
 
 DUBBING_SCHEMA_VERSION = 1
-DUBBING_STATE_PATH = "audio/dubbing-state.json"
+DUBBING_STATE_PATH = "timeline/dubbing-state.json"
 MAX_DUBBING_SEGMENTS = 100_000
 MAX_SEGMENT_TEXT = 8_000
 MAX_SPEAKER_LABEL = 128
@@ -492,7 +492,7 @@ class DubbingStore:
                 project_id,
                 DUBBING_STATE_PATH,
                 must_exist=False,
-                allowed_roots=("audio",),
+                allowed_roots=("timeline",),
             )
         except (ProjectValidationError, ProjectStoreError) as exc:
             raise DubbingError(str(exc)) from exc
