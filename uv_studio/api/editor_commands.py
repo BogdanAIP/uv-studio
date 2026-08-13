@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.editor import MLTTimelineAdapter
 from uv_studio.editor.commands import EditorCommandError, EditorCommandService, SelectRangeCommand
 from uv_studio.projects.continuity_brief import (
     ContinuityBriefError,
@@ -61,6 +62,7 @@ class EditorStatePayload(_StrictModel):
     sample_approvals: list[dict]
     replacement_reviews: list[dict]
     accepted_edits: list[dict]
+    engine: dict
 
 
 def _translate(exc: Exception) -> HTTPException:
@@ -132,11 +134,11 @@ def get_editor_state(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
 ) -> EditorStatePayload:
-    """Return canonical state needed to reconstruct the complete Stage 4C workspace.
+    """Return canonical state plus a bounded MLT-derived projection summary.
 
-    This endpoint aggregates existing typed stores for display only. Mutations still
-    go through their original Plan/Candidate/Review/Accept boundaries so the editor
-    cannot bypass D-017 authorization or D-032 acceptance review.
+    Raw MLT XML and resolved host paths never leave the adapter. Mutations still
+    go through their original Command/Plan/Candidate/Review/Accept boundaries so
+    the engine cannot become a second canonical project model.
     """
 
     try:
@@ -146,6 +148,7 @@ def get_editor_state(
         candidates = ReplacementCandidateStore(store).load(project_id)
         reviews = ReplacementReviewStore(store).load(project_id)
         accepted = RangeEditStateStore(store).load(project_id)
+        engine = MLTTimelineAdapter(store).project_summary(project_id)
         return EditorStatePayload(
             sources=[
                 ProjectReferencePayload.model_validate(reference.to_dict())
@@ -163,6 +166,7 @@ def get_editor_state(
             sample_approvals=[approval.to_dict() for approval in candidates.sample_approvals],
             replacement_reviews=[review.to_dict() for review in reviews.reviews],
             accepted_edits=[edit.to_dict() for edit in accepted.edits],
+            engine=engine,
         )
     except (
         ProjectNotFound,

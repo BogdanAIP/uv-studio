@@ -112,13 +112,13 @@ jobs:
       - name: Probe backend through UV Studio over real HTTP
         run: python tools/uv_dev.py health-smoke --startup-timeout 45
 
-      - name: Provision FFmpeg on Ubuntu
+      - name: Provision FFmpeg and MLT on Ubuntu
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg melt
 
-      - name: Provision pinned FFmpeg on Windows
+      - name: Provision pinned FFmpeg and MLT on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -142,12 +142,16 @@ jobs:
           if (-not $ffmpeg) { throw 'Pinned Windows media toolchain did not contain ffmpeg.exe' }
           $ffprobe = Join-Path $ffmpeg.Directory.FullName 'ffprobe.exe'
           if (-not (Test-Path $ffprobe)) { throw 'Pinned Windows media toolchain did not contain ffprobe.exe beside ffmpeg.exe' }
+          $melt = Get-ChildItem -Path $extractRoot -Recurse -Filter melt.exe | Select-Object -First 1
+          if (-not $melt) { throw 'Pinned Windows media toolchain did not contain melt.exe' }
           $ffmpeg.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $melt.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Record FFmpeg toolchain
+      - name: Record media toolchain
         run: |
           ffmpeg -version
           ffprobe -version
+          melt -version
 
       - name: Run Stage 4A real-media golden suite
         env:
