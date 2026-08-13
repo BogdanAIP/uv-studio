@@ -60,4 +60,4 @@ After Stage 5 hardening, remaining non-blocking debt includes recursive portabil
 
 D-038 upgrades repository context to an explicit `idle -> draft -> review -> idle` lifecycle. `ACTIVE_SLICE.json` may have `active_slice = null` only in `idle`; `last_completed` records the exact merged slice/PR/merge commit. A new development slice must start from an idle `main`, not from a merged branch that still claims to be active.
 
-The active maintenance slice changes development memory/documentation only. Its handoff is `stage-5-correctness-browser-e2e`; Stage 6 remains after that closure.
+Repository-memory closure is process/documentation-only; its declared handoff is `stage-5-correctness-browser-e2e`. Stage 6 remains blocked until that hardening slice is merged and the repository returns to idle.
