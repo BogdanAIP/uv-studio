@@ -6,6 +6,7 @@ import hashlib
 import html
 import uuid
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from uv_studio.projects.dubbing import DubbingError, DubbingStore, canonical_revision_sha256
@@ -71,10 +72,10 @@ def register_webvtt_subtitle_adapter(registry: CapabilityRegistry) -> None:
     )
 
 
-def _timestamp(value_us: int, *, ceil: bool = False) -> str:
+def _timestamp(value_us: int) -> str:
     if value_us < 0:
         raise InvalidCapabilityInput("subtitle timestamp must be non-negative")
-    millis = (value_us + 999) // 1000 if ceil else value_us // 1000
+    millis = value_us // 1000
     hours, remainder = divmod(millis, 3_600_000)
     minutes, remainder = divmod(remainder, 60_000)
     seconds, milliseconds = divmod(remainder, 1000)
@@ -171,6 +172,7 @@ class WebVTTSubtitleAdapter:
         encoded = webvtt.encode("utf-8")
         artifact_id = f"sub_{uuid.uuid4().hex}"
         relative_path = f"artifacts/{artifact_id}.vtt"
+        output: Path | None = None
         try:
             output = self.store.resolve_project_file(
                 project_id,
@@ -208,7 +210,8 @@ class WebVTTSubtitleAdapter:
             project = self.store.load_project(project_id)
             self.store.update_project(project_id, artifacts=(*project.artifacts, artifact))
         except Exception:
-            output.unlink(missing_ok=True)
+            if output is not None:
+                output.unlink(missing_ok=True)
             raise
 
         return CapabilityExecutionResult.from_offer(
