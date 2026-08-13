@@ -132,6 +132,11 @@ export interface DubbingEditorState {
   accepted_dubbing: AcceptedDubbingEdit[];
 }
 
+export interface CurrentDubbingReviews {
+  current_by_take: Record<string, string>;
+  ambiguous_legacy_take_ids: string[];
+}
+
 export interface AsrDraft {
   source_id: string;
   source_sha256: string;
@@ -179,15 +184,21 @@ async function apiError(response: Response, fallback: string): Promise<Error> {
 }
 
 async function editorCommand<T>(projectId: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/editor/commands`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-  );
+  const response = await fetch(`/api/uv/projects/${encodeURIComponent(projectId)}/editor/commands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!response.ok) throw await apiError(response, 'Команда дубляжа не выполнена');
+  return response.json();
+}
+
+export async function getCurrentDubbingReviews(projectId: string): Promise<CurrentDubbingReviews> {
+  const response = await fetch(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/dubbing-reviews/current`,
+    { cache: 'no-store' },
+  );
+  if (!response.ok) throw await apiError(response, 'Не удалось определить текущий Review');
   return response.json();
 }
 
@@ -196,7 +207,18 @@ export async function getDubbingEditorState(projectId: string): Promise<DubbingE
     cache: 'no-store',
   });
   if (!response.ok) throw await apiError(response, 'Не удалось загрузить состояние дубляжа');
-  return response.json();
+  const state: DubbingEditorState = await response.json();
+  const current = await getCurrentDubbingReviews(projectId);
+  const ambiguous = new Set(current.ambiguous_legacy_take_ids);
+  // The panel needs the current Review, not a UUID-sorted history. Durable history
+  // remains in Project Store; ambiguous legacy histories intentionally expose none.
+  return {
+    ...state,
+    dubbing_reviews: state.dubbing_reviews.filter(review => {
+      if (ambiguous.has(review.take_id)) return false;
+      return current.current_by_take[review.take_id] === review.review_id;
+    }),
+  };
 }
 
 export async function transcribeProjectSource(
@@ -239,7 +261,16 @@ export async function saveDubbingTranslation(
     translation_id?: string;
   },
 ): Promise<{ command: 'upsert_dubbing_translation'; dubbing_id: string; payload: { translation: DubbingTranslation } }> {
-  return editorCommand(projectId, { command: 'upsert_dubbing_translation', ...input });
+  let safeInput = input;
+  if (input.translation_id) {
+    const state = await getDubbingEditorState(projectId);
+    const existing = state.dubbing.translations.find(item => item.translation_id === input.translation_id);
+    if (!existing || existing.dubbing_id !== input.dubbing_id || existing.target_language !== input.target_language.trim().toLowerCase()) {
+      const { translation_id: _ignored, ...withoutIdentity } = input;
+      safeInput = withoutIdentity;
+    }
+  }
+  return editorCommand(projectId, { command: 'upsert_dubbing_translation', ...safeInput });
 }
 
 export async function uploadPreparedAudio(
@@ -285,7 +316,7 @@ export async function reviewPreparedSpeech(
     synchronization_confirmed: boolean;
     note?: string;
   },
-): Promise<{ command: 'review_prepared_speech'; payload: { review: DubbingReview } }> {
+): Promise<{ command: 'review_prepared_speech'; payload: { review: DubbingReview; current_review_id: string } }> {
   return editorCommand(projectId, { command: 'review_prepared_speech', ...input });
 }
 
@@ -309,10 +340,7 @@ export async function renderAcceptedDubbing(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        selection_policy: 'local_free_first',
-        input: { source_id: sourceId },
-      }),
+      body: JSON.stringify({ selection_policy: 'local_free_first', input: { source_id: sourceId } }),
     },
   );
   if (!response.ok) throw await apiError(response, 'Не удалось собрать мастер с дубляжом');
