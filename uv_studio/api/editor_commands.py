@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Union
+from collections.abc import Mapping
+from typing import Annotated, Any, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from uv_studio.api.capabilities import get_capability_registry
+from uv_studio.api.capability_execution import get_local_ffmpeg_adapter
 from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.capabilities import CapabilityRegistry
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.execution import (
+    CapabilityToolFailed,
+    CapabilityToolUnavailable,
+    InvalidCapabilityInput,
+    UnsupportedCapabilityExecution,
+)
 from uv_studio.editor import MLTTimelineAdapter
 from uv_studio.editor.commands import EditorCommandError, EditorCommandService, SelectRangeCommand
 from uv_studio.editor.dubbing_commands import (
@@ -19,6 +30,13 @@ from uv_studio.editor.dubbing_commands import (
     TranslationSegmentInput,
     UpsertDubbingTranslationCommand,
 )
+from uv_studio.editor.dubbing_review_commands import (
+    AcceptDubbingReviewCommand,
+    DubbingReviewCommandError,
+    DubbingReviewCommandService,
+    LoudnessMeasure,
+    ReviewPreparedSpeechCommand,
+)
 from uv_studio.projects.continuity_brief import (
     ContinuityBriefError,
     RangeContinuityBriefStore,
@@ -28,6 +46,11 @@ from uv_studio.projects.dubbing import (
     DubbingStore,
     DubbingTranscriptNotFound,
     DubbingTranslationNotFound,
+)
+from uv_studio.projects.dubbing_review import (
+    DubbingReviewError,
+    DubbingReviewNotFound,
+    DubbingReviewStore,
 )
 from uv_studio.projects.edit_state import EditStateError, RangeEditStateStore
 from uv_studio.projects.models import ProjectValidationError
@@ -44,6 +67,7 @@ from uv_studio.projects.source_media import SourceMediaError, SourceMediaNotFoun
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Editor"])
+_AUDIO_LOUDNESS_OFFER_ID = "local_ffmpeg.audio_measure_loudness"
 
 
 class _StrictModel(BaseModel):
@@ -111,6 +135,25 @@ class AttachPreparedSpeechCommandPayload(_StrictModel):
     take_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class ReviewPreparedSpeechCommandPayload(_StrictModel):
+    command: Literal["review_prepared_speech"]
+    take_id: str = Field(min_length=1, max_length=128)
+    verdict: Literal["approved", "needs_revision", "rejected"]
+    content_fidelity_confirmed: bool
+    synchronization_confirmed: bool
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class AcceptDubbingReviewCommandPayload(_StrictModel):
+    command: Literal["accept_dubbing_review"]
+    review_id: str = Field(min_length=1, max_length=128)
+    composition_policy: Literal[
+        "replace_source_audio_range",
+        "duck_source_mix",
+        "replace_dialogue_preserve_background",
+    ]
+
+
 EditorCommandPayload = Annotated[
     Union[
         SelectRangeCommandPayload,
@@ -118,6 +161,8 @@ EditorCommandPayload = Annotated[
         AcceptAsrTranscriptCommandPayload,
         UpsertDubbingTranslationCommandPayload,
         AttachPreparedSpeechCommandPayload,
+        ReviewPreparedSpeechCommandPayload,
+        AcceptDubbingReviewCommandPayload,
     ],
     Field(discriminator="command"),
 ]
@@ -155,12 +200,24 @@ class AttachPreparedSpeechResultPayload(_StrictModel):
     payload: dict
 
 
+class ReviewPreparedSpeechResultPayload(_StrictModel):
+    command: Literal["review_prepared_speech"]
+    payload: dict
+
+
+class AcceptDubbingReviewResultPayload(_StrictModel):
+    command: Literal["accept_dubbing_review"]
+    payload: dict
+
+
 EditorCommandResultPayload = Union[
     SelectRangeCommandResultPayload,
     ImportDubbingTranscriptResultPayload,
     AcceptAsrTranscriptResultPayload,
     UpsertDubbingTranslationResultPayload,
     AttachPreparedSpeechResultPayload,
+    ReviewPreparedSpeechResultPayload,
+    AcceptDubbingReviewResultPayload,
 ]
 
 
@@ -176,7 +233,27 @@ class EditorStatePayload(_StrictModel):
     accepted_edits: list[dict]
     dubbing: dict
     prepared_speech: dict
+    dubbing_reviews: list[dict]
+    accepted_dubbing: list[dict]
     engine: dict
+
+
+def get_dubbing_loudness_measure(
+    local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
+    registry: CapabilityRegistry = Depends(get_capability_registry),
+) -> LoudnessMeasure:
+    """Return a server-owned analyzer; callers never provide measured values."""
+
+    def measure(project_id: str, audio_id: str) -> Mapping[str, Any]:
+        offer = registry.get_offer(_AUDIO_LOUDNESS_OFFER_ID)
+        result = local_ffmpeg.execute(
+            project_id=project_id,
+            offer=offer,
+            payload={"audio_id": audio_id},
+        )
+        return dict(result.output)
+
+    return measure
 
 
 def _translate(exc: Exception) -> HTTPException:
@@ -192,12 +269,28 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing translation not found")
     if isinstance(exc, PreparedSpeechTakeNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prepared speech take not found")
+    if isinstance(exc, DubbingReviewNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing review not found")
+    if isinstance(exc, (CapabilityToolUnavailable, UnsupportedCapabilityExecution)):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local audio review tooling is unavailable in this installation",
+        )
+    if isinstance(exc, CapabilityToolFailed):
+        return HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Local audio review measurement failed",
+        )
+    if isinstance(exc, InvalidCapabilityInput):
+        return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(
         exc,
         (
             EditorCommandError,
             DubbingCommandError,
+            DubbingReviewCommandError,
             DubbingError,
+            DubbingReviewError,
             PreparedAudioError,
             PreparedSpeechError,
             SourceMediaError,
@@ -247,6 +340,7 @@ def execute_editor_command(
     project_id: str,
     payload: EditorCommandPayload,
     store: ProjectStore = Depends(get_project_store),
+    loudness_measure: LoudnessMeasure = Depends(get_dubbing_loudness_measure),
 ) -> EditorCommandResultPayload:
     """Execute one semantic editor mutation through the shared product boundary."""
 
@@ -302,6 +396,27 @@ def execute_editor_command(
                 ),
             )
             return AttachPreparedSpeechResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, ReviewPreparedSpeechCommandPayload):
+            result = DubbingReviewCommandService(store, loudness_measure).review_prepared_speech(
+                project_id,
+                ReviewPreparedSpeechCommand(
+                    take_id=payload.take_id,
+                    verdict=payload.verdict,
+                    content_fidelity_confirmed=payload.content_fidelity_confirmed,
+                    synchronization_confirmed=payload.synchronization_confirmed,
+                    note=payload.note,
+                ),
+            )
+            return ReviewPreparedSpeechResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, AcceptDubbingReviewCommandPayload):
+            result = DubbingReviewCommandService(store, loudness_measure).accept_dubbing_review(
+                project_id,
+                AcceptDubbingReviewCommand(
+                    review_id=payload.review_id,
+                    composition_policy=payload.composition_policy,
+                ),
+            )
+            return AcceptDubbingReviewResultPayload.model_validate(result.to_dict())
         raise EditorCommandError("unsupported editor command")
     except (
         ProjectNotFound,
@@ -310,9 +425,16 @@ def execute_editor_command(
         DubbingTranscriptNotFound,
         DubbingTranslationNotFound,
         PreparedSpeechTakeNotFound,
+        DubbingReviewNotFound,
+        CapabilityToolUnavailable,
+        UnsupportedCapabilityExecution,
+        CapabilityToolFailed,
+        InvalidCapabilityInput,
         EditorCommandError,
         DubbingCommandError,
+        DubbingReviewCommandError,
         DubbingError,
+        DubbingReviewError,
         PreparedAudioError,
         PreparedSpeechError,
         SourceMediaError,
@@ -329,12 +451,7 @@ def get_editor_state(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
 ) -> EditorStatePayload:
-    """Return canonical state plus a bounded MLT-derived projection summary.
-
-    Raw MLT XML and resolved host paths never leave the adapter. Mutations still
-    go through their original Command/Plan/Candidate/Review/Accept boundaries so
-    the engine cannot become a second canonical project model.
-    """
+    """Return canonical state plus bounded derived engine/workflow summaries."""
 
     try:
         project = store.load_project(project_id)
@@ -345,6 +462,9 @@ def get_editor_state(
         accepted = RangeEditStateStore(store).load(project_id)
         dubbing = DubbingStore(store).load(project_id, validate_current=True)
         prepared_speech = PreparedSpeechStore(store).load(project_id, validate_current=True)
+        dubbing_review_store = DubbingReviewStore(store)
+        dubbing_reviews = dubbing_review_store.load_reviews(project_id)
+        accepted_dubbing = dubbing_review_store.load_accepted(project_id, validate_current=True)
         engine = MLTTimelineAdapter(store).project_summary(project_id)
         return EditorStatePayload(
             sources=[
@@ -371,11 +491,14 @@ def get_editor_state(
             accepted_edits=[edit.to_dict() for edit in accepted.edits],
             dubbing=dubbing.to_dict(),
             prepared_speech=prepared_speech.to_dict(),
+            dubbing_reviews=[review.to_dict() for review in dubbing_reviews.reviews],
+            accepted_dubbing=[edit.to_dict() for edit in accepted_dubbing.edits],
             engine=engine,
         )
     except (
         ProjectNotFound,
         DubbingError,
+        DubbingReviewError,
         PreparedSpeechError,
         ContinuityBriefError,
         EditStateError,
