@@ -75,7 +75,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
             "audio.align",
             "Align",
             "Forced alignment",
-            OperationKind.ANALYSIS,
+            OperationKind.UNDERSTANDING,
             (MediaKind.AUDIO, MediaKind.TEXT),
             (MediaKind.TEXT,),
         )
@@ -129,7 +129,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project_store = ProjectStore(root / "projects")
-            project_store.create_project(title="WhisperX")
+            project = project_store.create_project(title="WhisperX")
             audio_path = root / "voice.wav"
             audio_path.write_bytes(b"fake-audio")
             model_dir = root / "models"
@@ -164,7 +164,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
             adapter.dubbing = _DubbingFacade()
             adapter.audio = _AudioFacade(audio_path)
             result = adapter.execute(
-                project_id=next(project_store.root.iterdir()).name,
+                project_id=project.project_id,
                 offer=self._offer(),
                 payload={"take_id": "take_1"},
             )
