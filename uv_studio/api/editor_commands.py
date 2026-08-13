@@ -21,6 +21,12 @@ from uv_studio.capabilities.execution import (
 )
 from uv_studio.editor import MLTTimelineAdapter
 from uv_studio.editor.commands import EditorCommandError, EditorCommandService, SelectRangeCommand
+from uv_studio.editor.dubbing_alignment_commands import (
+    AcceptDubbingAlignmentCommand,
+    AlignmentMarkInput,
+    DubbingAlignmentCommandError,
+    DubbingAlignmentCommandService,
+)
 from uv_studio.editor.dubbing_commands import (
     AttachPreparedSpeechCommand,
     DubbingCommandError,
@@ -46,6 +52,11 @@ from uv_studio.projects.dubbing import (
     DubbingStore,
     DubbingTranscriptNotFound,
     DubbingTranslationNotFound,
+)
+from uv_studio.projects.dubbing_alignment import (
+    DubbingAlignmentError,
+    DubbingAlignmentNotFound,
+    DubbingAlignmentStore,
 )
 from uv_studio.projects.dubbing_review import (
     DubbingReviewError,
@@ -135,6 +146,22 @@ class AttachPreparedSpeechCommandPayload(_StrictModel):
     take_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class AlignmentMarkCommandPayload(_StrictModel):
+    mark_id: str = Field(min_length=1, max_length=128)
+    unit: Literal["word", "token", "phoneme"]
+    text: str = Field(min_length=1, max_length=512)
+    audio_start_us: int = Field(ge=0)
+    audio_end_us: int = Field(gt=0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class AcceptDubbingAlignmentCommandPayload(_StrictModel):
+    command: Literal["accept_dubbing_alignment"]
+    take_id: str = Field(min_length=1, max_length=128)
+    marks: list[AlignmentMarkCommandPayload] = Field(min_length=1, max_length=100_000)
+    alignment_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 class ReviewPreparedSpeechCommandPayload(_StrictModel):
     command: Literal["review_prepared_speech"]
     take_id: str = Field(min_length=1, max_length=128)
@@ -161,6 +188,7 @@ EditorCommandPayload = Annotated[
         AcceptAsrTranscriptCommandPayload,
         UpsertDubbingTranslationCommandPayload,
         AttachPreparedSpeechCommandPayload,
+        AcceptDubbingAlignmentCommandPayload,
         ReviewPreparedSpeechCommandPayload,
         AcceptDubbingReviewCommandPayload,
     ],
@@ -200,6 +228,11 @@ class AttachPreparedSpeechResultPayload(_StrictModel):
     payload: dict
 
 
+class AcceptDubbingAlignmentResultPayload(_StrictModel):
+    command: Literal["accept_dubbing_alignment"]
+    payload: dict
+
+
 class ReviewPreparedSpeechResultPayload(_StrictModel):
     command: Literal["review_prepared_speech"]
     payload: dict
@@ -216,6 +249,7 @@ EditorCommandResultPayload = Union[
     AcceptAsrTranscriptResultPayload,
     UpsertDubbingTranslationResultPayload,
     AttachPreparedSpeechResultPayload,
+    AcceptDubbingAlignmentResultPayload,
     ReviewPreparedSpeechResultPayload,
     AcceptDubbingReviewResultPayload,
 ]
@@ -233,6 +267,7 @@ class EditorStatePayload(_StrictModel):
     accepted_edits: list[dict]
     dubbing: dict
     prepared_speech: dict
+    dubbing_alignments: dict
     dubbing_reviews: list[dict]
     accepted_dubbing: list[dict]
     engine: dict
@@ -269,6 +304,8 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing translation not found")
     if isinstance(exc, PreparedSpeechTakeNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prepared speech take not found")
+    if isinstance(exc, DubbingAlignmentNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing alignment not found")
     if isinstance(exc, DubbingReviewNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing review not found")
     if isinstance(exc, (CapabilityToolUnavailable, UnsupportedCapabilityExecution)):
@@ -288,8 +325,10 @@ def _translate(exc: Exception) -> HTTPException:
         (
             EditorCommandError,
             DubbingCommandError,
+            DubbingAlignmentCommandError,
             DubbingReviewCommandError,
             DubbingError,
+            DubbingAlignmentError,
             DubbingReviewError,
             PreparedAudioError,
             PreparedSpeechError,
@@ -396,6 +435,26 @@ def execute_editor_command(
                 ),
             )
             return AttachPreparedSpeechResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, AcceptDubbingAlignmentCommandPayload):
+            result = DubbingAlignmentCommandService(store).accept_alignment(
+                project_id,
+                AcceptDubbingAlignmentCommand(
+                    take_id=payload.take_id,
+                    alignment_id=payload.alignment_id,
+                    marks=tuple(
+                        AlignmentMarkInput(
+                            mark_id=item.mark_id,
+                            unit=item.unit,
+                            text=item.text,
+                            audio_start_us=item.audio_start_us,
+                            audio_end_us=item.audio_end_us,
+                            confidence=item.confidence,
+                        )
+                        for item in payload.marks
+                    ),
+                ),
+            )
+            return AcceptDubbingAlignmentResultPayload.model_validate(result.to_dict())
         if isinstance(payload, ReviewPreparedSpeechCommandPayload):
             result = DubbingReviewCommandService(store, loudness_measure).review_prepared_speech(
                 project_id,
@@ -425,6 +484,7 @@ def execute_editor_command(
         DubbingTranscriptNotFound,
         DubbingTranslationNotFound,
         PreparedSpeechTakeNotFound,
+        DubbingAlignmentNotFound,
         DubbingReviewNotFound,
         CapabilityToolUnavailable,
         UnsupportedCapabilityExecution,
@@ -432,8 +492,10 @@ def execute_editor_command(
         InvalidCapabilityInput,
         EditorCommandError,
         DubbingCommandError,
+        DubbingAlignmentCommandError,
         DubbingReviewCommandError,
         DubbingError,
+        DubbingAlignmentError,
         DubbingReviewError,
         PreparedAudioError,
         PreparedSpeechError,
@@ -462,6 +524,7 @@ def get_editor_state(
         accepted = RangeEditStateStore(store).load(project_id)
         dubbing = DubbingStore(store).load(project_id, validate_current=True)
         prepared_speech = PreparedSpeechStore(store).load(project_id, validate_current=True)
+        dubbing_alignments = DubbingAlignmentStore(store).load(project_id, validate_current=True)
         dubbing_review_store = DubbingReviewStore(store)
         dubbing_reviews = dubbing_review_store.load_reviews(project_id)
         accepted_dubbing = dubbing_review_store.load_accepted(project_id, validate_current=True)
@@ -491,6 +554,7 @@ def get_editor_state(
             accepted_edits=[edit.to_dict() for edit in accepted.edits],
             dubbing=dubbing.to_dict(),
             prepared_speech=prepared_speech.to_dict(),
+            dubbing_alignments=dubbing_alignments.to_dict(),
             dubbing_reviews=[review.to_dict() for review in dubbing_reviews.reviews],
             accepted_dubbing=[edit.to_dict() for edit in accepted_dubbing.edits],
             engine=engine,
@@ -498,6 +562,7 @@ def get_editor_state(
     except (
         ProjectNotFound,
         DubbingError,
+        DubbingAlignmentError,
         DubbingReviewError,
         PreparedSpeechError,
         ContinuityBriefError,
