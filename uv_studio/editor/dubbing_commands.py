@@ -154,13 +154,16 @@ class DubbingCommandService:
     def _new_translation_id() -> str:
         return f"translation_{uuid.uuid4().hex}"
 
-    def import_transcript(
+    def _store_transcript(
         self,
         project_id: str,
         command: ImportDubbingTranscriptCommand,
+        *,
+        origin: str,
+        command_name: str,
     ) -> DubbingCommandResult:
         if not isinstance(command, ImportDubbingTranscriptCommand):
-            raise DubbingCommandError("import_dubbing_transcript requires ImportDubbingTranscriptCommand")
+            raise DubbingCommandError(f"{command_name} requires ImportDubbingTranscriptCommand")
         try:
             source = self.source_media.get(project_id, command.source_id)
             transcript = DubbingTranscript(
@@ -170,7 +173,7 @@ class DubbingCommandService:
                 language=command.language,
                 start_us=command.start_us,
                 end_us=command.end_us,
-                origin="imported",
+                origin=origin,
                 segments=tuple(item.to_domain() for item in command.segments),
             )
             state = self.dubbing.upsert_transcript(project_id, transcript)
@@ -180,9 +183,35 @@ class DubbingCommandService:
         except (DubbingError, SourceMediaError, ProjectStoreError, ProjectValidationError) as exc:
             raise DubbingCommandError(str(exc)) from exc
         return DubbingCommandResult(
-            command="import_dubbing_transcript",
+            command=command_name,
             dubbing_id=stored.dubbing_id,
             payload={"transcript": stored.to_dict(), "transcript_sha256": stored.digest},
+        )
+
+    def import_transcript(
+        self,
+        project_id: str,
+        command: ImportDubbingTranscriptCommand,
+    ) -> DubbingCommandResult:
+        return self._store_transcript(
+            project_id,
+            command,
+            origin="imported",
+            command_name="import_dubbing_transcript",
+        )
+
+    def accept_asr_transcript(
+        self,
+        project_id: str,
+        command: ImportDubbingTranscriptCommand,
+    ) -> DubbingCommandResult:
+        """Persist a reviewed ASR draft without trusting engine-side project identity."""
+
+        return self._store_transcript(
+            project_id,
+            command,
+            origin="asr",
+            command_name="accept_asr_transcript",
         )
 
     def upsert_translation(
