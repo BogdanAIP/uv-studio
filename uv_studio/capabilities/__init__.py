@@ -47,13 +47,15 @@ from .selection import (
 
 def build_builtin_capability_registry() -> CapabilityRegistry:
     registry = _build_builtin_registry()
-    # Stage 4 editor projections stay explicit operation modules while callers
+    # Editor/media projections stay explicit operation modules while callers
     # receive one complete semantic registry through this public function.
     from .adapters.artifact_preview import register_artifact_preview_capability
+    from .adapters.audio_loudness import register_audio_loudness_capability
     from .adapters.edit_render import register_edit_render_capability
 
     register_edit_render_capability(registry)
     register_artifact_preview_capability(registry)
+    register_audio_loudness_capability(registry)
     return registry
 
 
