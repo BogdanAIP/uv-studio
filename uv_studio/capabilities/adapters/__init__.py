@@ -12,6 +12,7 @@ from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
 from .native_videoclaw import NativeVideoClawAdapter
 from .range_reinsertion import LocalFFmpegRangeAdapter
+from .whisper_cpp import WhisperCppAdapter
 
 
 class LocalFFmpegAdapter:
@@ -60,4 +61,9 @@ class LocalFFmpegAdapter:
         )
 
 
-__all__ = ["LocalFFmpegAdapter", "MCPBindingOfferAdapter", "NativeVideoClawAdapter"]
+__all__ = [
+    "LocalFFmpegAdapter",
+    "MCPBindingOfferAdapter",
+    "NativeVideoClawAdapter",
+    "WhisperCppAdapter",
+]
