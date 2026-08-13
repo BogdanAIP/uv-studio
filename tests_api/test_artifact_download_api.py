@@ -57,10 +57,34 @@ class ArtifactDownloadApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.content, body)
-        self.assertEqual(response.headers["content-type"], "text/vtt; charset=utf-8")
+        self.assertTrue(response.headers["content-type"].lower().startswith("text/vtt"))
         disposition = response.headers.get("content-disposition", "")
         self.assertIn("attachment", disposition.lower())
         self.assertIn("dialogue.en.vtt", disposition)
+
+    def test_untrusted_download_metadata_falls_back_to_registered_artifact_filename_and_type(self) -> None:
+        body = b"WEBVTT\n"
+        reference = ProjectReference(
+            id="sub_metadata",
+            kind="subtitle",
+            path="artifacts/sub_metadata.vtt",
+            metadata={
+                "content_type": "text/vtt\r\nx-injected: yes",
+                "original_name": "bad\r\nname.vtt",
+            },
+        )
+        self._register(reference, body)
+
+        response = self.client.get(
+            f"/api/uv/projects/{self.project.project_id}/artifacts/{reference.id}/file"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, body)
+        self.assertTrue(response.headers["content-type"].lower().startswith("text/vtt"))
+        disposition = response.headers.get("content-disposition", "")
+        self.assertIn("sub_metadata.vtt", disposition)
+        self.assertNotIn("bad", disposition)
+        self.assertNotIn("x-injected", str(response.headers).lower())
 
     def test_unknown_artifact_and_registered_non_artifacts_path_fail_closed(self) -> None:
         missing = self.client.get(
