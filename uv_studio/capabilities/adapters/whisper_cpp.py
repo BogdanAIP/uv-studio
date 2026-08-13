@@ -174,8 +174,12 @@ class WhisperCppAdapter:
 
         try:
             source, source_path = self.source_media.resolve(project_id, source_id)
-        except (ProjectNotFound, SourceMediaNotFound):
+        except ProjectNotFound:
             raise
+        except SourceMediaNotFound as exc:
+            raise InvalidCapabilityInput(
+                f"speech.transcribe source_id {source_id!r} is not registered in this project"
+            ) from exc
         except (SourceMediaError, ProjectStoreError) as exc:
             raise InvalidCapabilityInput(str(exc)) from exc
 
