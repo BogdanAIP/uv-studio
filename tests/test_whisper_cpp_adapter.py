@@ -183,6 +183,26 @@ class WhisperCppAdapterTests(unittest.TestCase):
                         payload={"source_id": source.id, forbidden: "attacker-controlled"},
                     )
 
+    def test_unknown_source_is_invalid_capability_input_before_runtime_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store, project_id, source, runtime, model, ffmpeg = self._fixture(root)
+            runner = FakeWhisperRunner()
+            adapter = WhisperCppAdapter(
+                store,
+                runner=runner,
+                binary_path=runtime,
+                model_path=model,
+                ffmpeg_path=ffmpeg,
+            )
+            with self.assertRaises(InvalidCapabilityInput):
+                adapter.execute(
+                    project_id=project_id,
+                    offer=self._offer(),
+                    payload={"source_id": "src_missing"},
+                )
+            self.assertEqual(runner.commands, [])
+
     def test_partial_or_out_of_bounds_ranges_are_rejected_before_runner(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
