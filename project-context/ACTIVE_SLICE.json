@@ -1,14 +1,40 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "stage-5-correctness-browser-e2e",
+    "kind": "stage",
+    "roadmap_stage": "stage-5",
+    "goal": "Close the post-merge Stage 5 correctness findings and the Stage 4C/5 browser user-outcome gate before sequence continuity begins.",
+    "base_branch": "main",
+    "branch": "stage-5/correctness-browser-e2e",
+    "pull_request": null,
+    "write_scope": [
+      ".github/workflows/ci.yml",
+      "THIRD_PARTY_NOTICES.md",
+      "docs/**",
+      "e2e/**",
+      "frontend/app/**",
+      "frontend/components/editor/**",
+      "frontend/lib/**",
+      "frontend/next.config.ts",
+      "project-context/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_real_media/**",
+      "uv_studio/api/**",
+      "uv_studio/capabilities/adapters/**",
+      "uv_studio/editor/**",
+      "uv_studio/projects/**"
+    ]
+  },
   "last_completed": {
     "id": "chore-context-lifecycle-closure",
     "pull_request": 33,
     "merge_commit": "c9031f2cc1b63ed2a8bc950167c2365f7e9893ea"
   },
   "handoff": {
-    "next_slice_id": "stage-5-correctness-browser-e2e",
+    "next_slice_id": "stage-6-sequence-continuity-review",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
