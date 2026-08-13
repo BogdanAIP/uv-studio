@@ -14,6 +14,7 @@ import type {
 } from '@/lib/editorApi';
 import type { ProjectReference } from '@/lib/projectsApi';
 import { formatTimelineTime } from '@/lib/timelineMath';
+import { EditorRenderPanel } from './EditorRenderPanel';
 import { RangeTimeline } from './RangeTimeline';
 import type { TimelineSelection } from './RangeTimeline';
 import { ReplacementWorkflowPanel } from './ReplacementWorkflowPanel';
@@ -401,6 +402,18 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 sourcePath={activeSource.path}
                 preferredEditId={latestResult?.edit_id}
                 onStateChanged={refreshState}
+              />
+            </div>
+          )}
+
+          {activeSource && (
+            <div className="mt-4">
+              <EditorRenderPanel
+                projectId={projectId}
+                editorState={editorState}
+                source={activeSource}
+                onStateChanged={refreshState}
+                onProjectChanged={onProjectChanged}
               />
             </div>
           )}
