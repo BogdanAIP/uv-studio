@@ -19,6 +19,23 @@ and provenance metadata to:
 
 The upstream copyright and permission notice must be retained when distributing substantial portions of VideoClaw-derived code.
 
+## OpenCut Classic timeline interaction
+
+Project: `OpenCut-app/opencut-classic`  
+License: MIT  
+Pinned source revision: `cf5e79e919144200294fb9fed22a222592a0aeea`
+
+Stage 4C selectively adapts timeline interaction/layout ideas and portions from the pinned OpenCut Classic timeline implementation, including its ruler/playhead separation, ruler interval strategy and visible-tick buffering. UV Studio does **not** adopt OpenCut project persistence or browser storage as canonical state; the UV Project Store and Command API remain authoritative.
+
+The exact upstream MIT license distributed with these adaptations is retained at:
+
+`third_party/opencut-classic/LICENSE`
+
+Primary adapted UV files:
+
+- `frontend/lib/timelineMath.ts`
+- `frontend/components/editor/RangeTimeline.tsx`
+
 ## edge-tts (optional)
 
 Project: `rany2/edge-tts`  

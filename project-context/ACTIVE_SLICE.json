@@ -14,6 +14,7 @@
       "frontend/**",
       "requirements-uv*.txt",
       "third_party/**",
+      "THIRD_PARTY_NOTICES.md",
       "uv_studio/**",
       "tests/**",
       "tests_api/**",
