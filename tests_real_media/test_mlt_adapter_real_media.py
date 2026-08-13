@@ -48,9 +48,9 @@ def _color(path: Path, color: str, duration_s: int) -> None:
         "-map",
         "0:v:0",
         "-c:v",
-        "mpeg4",
-        "-q:v",
-        "7",
+        "ffv1",
+        "-level",
+        "3",
         "-pix_fmt",
         "yuv420p",
         str(path),
@@ -126,9 +126,9 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
             store = ProjectStore(Path(tmp) / "projects")
             project = store.create_project(title="MLT adapter parity")
             project_dir = store.project_directory(project.project_id)
-            source = project_dir / "sources" / "blue.mp4"
-            red = project_dir / "artifacts" / "red.mp4"
-            green = project_dir / "artifacts" / "green.mp4"
+            source = project_dir / "sources" / "blue.mkv"
+            red = project_dir / "artifacts" / "red.mkv"
+            green = project_dir / "artifacts" / "green.mkv"
             _color(source, "blue", 6)
             _color(red, "red", 1)
             _color(green, "green", 1)
@@ -136,7 +136,7 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
             source_ref = ProjectReference(
                 id="src_blue",
                 kind="video",
-                path="sources/blue.mp4",
+                path="sources/blue.mkv",
                 metadata={
                     "duration_us": 6_000_000,
                     "width": WIDTH,
@@ -145,8 +145,8 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
                     "has_audio": False,
                 },
             )
-            red_ref = ProjectReference(id="art_red", kind="video", path="artifacts/red.mp4")
-            green_ref = ProjectReference(id="art_green", kind="video", path="artifacts/green.mp4")
+            red_ref = ProjectReference(id="art_red", kind="video", path="artifacts/red.mkv")
+            green_ref = ProjectReference(id="art_green", kind="video", path="artifacts/green.mkv")
             store.update_project(
                 project.project_id,
                 sources=(source_ref,),
