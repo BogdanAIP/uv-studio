@@ -198,6 +198,10 @@ class MLTTimelineAdapter:
         )
         _add_property(source_producer, "mlt_service", "avformat-novalidate")
         _add_property(source_producer, "resource", source_absolute.as_posix())
+        # avformat-novalidate intentionally starts with a tiny provisional length.
+        # MLT clamps requested in/out against producer length, so the validated UV
+        # duration must be inherited before those in/out attributes are applied.
+        _add_property(source_producer, "length", str(source_frames))
 
         playlist = ET.SubElement(root, "playlist", {"id": "uv_playlist0"})
         segments: list[MLTProjectionSegment] = []
@@ -243,6 +247,9 @@ class MLTTimelineAdapter:
             )
             _add_property(replacement_producer, "mlt_service", "avformat-novalidate")
             _add_property(replacement_producer, "resource", replacement_absolute.as_posix())
+            # Replacement candidates are already duration-validated by the D-032
+            # acceptance path. Preserve that exact range length inside MLT as well.
+            _add_property(replacement_producer, "length", str(replacement_frames))
             ET.SubElement(
                 playlist,
                 "entry",
