@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
+from pathlib import Path
 
 from .models import (
     AdapterDefinition,
@@ -24,6 +26,15 @@ CAPABILITIES = (
         "Генерация текста",
         "Создание или преобразование текста для сценариев и производственных планов.",
         OperationKind.GENERATION,
+        (MediaKind.TEXT,),
+        (MediaKind.TEXT,),
+        asynchronous=True,
+    ),
+    CapabilityDefinition(
+        "text.translate",
+        "Перевод текста",
+        "Перевод подготовленного текста между языками без привязки проектного состояния к конкретному провайдеру.",
+        OperationKind.TRANSFORMATION,
         (MediaKind.TEXT,),
         (MediaKind.TEXT,),
         asynchronous=True,
@@ -80,6 +91,15 @@ CAPABILITIES = (
         OperationKind.SPEECH,
         (MediaKind.AUDIO, MediaKind.VIDEO),
         (MediaKind.TEXT, MediaKind.SUBTITLE, MediaKind.METADATA),
+        asynchronous=True,
+    ),
+    CapabilityDefinition(
+        "audio.align",
+        "Выравнивание речи",
+        "Уточнение временной привязки подготовленного текста или речи к проектному аудио.",
+        OperationKind.SPEECH,
+        (MediaKind.AUDIO, MediaKind.TEXT),
+        (MediaKind.METADATA,),
         asynchronous=True,
     ),
     CapabilityDefinition(
@@ -158,6 +178,12 @@ ADAPTERS = (
         "local_ffmpeg",
         "Локальный FFmpeg",
         "Локальные детерминированные медиаоперации без платного ИИ API.",
+        AdapterKind.LOCAL,
+    ),
+    AdapterDefinition(
+        "local_whisper_cpp",
+        "Локальный whisper.cpp",
+        "Локальное распознавание речи через отдельно устанавливаемый whisper.cpp без платного API.",
         AdapterKind.LOCAL,
     ),
     AdapterDefinition(
@@ -254,6 +280,56 @@ def _range_replace_offer() -> CapabilityOffer:
     )
 
 
+def _whisper_cpp_binary() -> str | None:
+    configured = os.environ.get("UV_WHISPER_CPP_BIN")
+    if configured:
+        candidate = Path(configured).expanduser()
+        return str(candidate) if candidate.is_file() else None
+    return shutil.which("whisper-cli")
+
+
+def _whisper_cpp_offer() -> CapabilityOffer:
+    binary = _whisper_cpp_binary()
+    configured_model = os.environ.get("UV_WHISPER_CPP_MODEL")
+    model_ok = False
+    if configured_model:
+        model = Path(configured_model).expanduser()
+        model_ok = model.is_file() and not model.is_symlink()
+
+    if not binary:
+        availability = OfferAvailability.UNAVAILABLE
+        reason = (
+            "whisper-cli не найден; установите pinned whisper.cpp runtime или задайте "
+            "UV_WHISPER_CPP_BIN."
+        )
+    elif not model_ok:
+        availability = OfferAvailability.CONFIGURATION_REQUIRED
+        reason = (
+            "whisper.cpp runtime найден, но локальная модель не настроена; "
+            "задайте UV_WHISPER_CPP_MODEL на существующий model file."
+        )
+    else:
+        availability = OfferAvailability.AVAILABLE
+        reason = "Локальный whisper.cpp runtime и модель настроены; распознавание речи доступно."
+
+    return CapabilityOffer(
+        offer_id="local_whisper_cpp.speech_transcribe",
+        capability_id="speech.transcribe",
+        adapter_id="local_whisper_cpp",
+        title="whisper.cpp local transcription",
+        availability=availability,
+        reason=reason,
+        locality=LocalityClass.LOCAL,
+        cost_class=CostClass.FREE,
+        asynchronous=False,
+        features=(
+            "speech.timestamps",
+            "speech.language_detection",
+            "speech.local_cpu",
+        ),
+    )
+
+
 def _native_model_offer(
     *,
     offer_id: str,
@@ -320,6 +396,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     )
     registry.register_offer(_range_extract_offer())
     registry.register_offer(_range_replace_offer())
+    registry.register_offer(_whisper_cpp_offer())
     registry.register_offer(
         _native_model_offer(
             offer_id="native_videoclaw.text_generate",
@@ -350,8 +427,6 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
         )
     )
     registry.register_offer(_edge_tts_offer())
-    # Intentionally no native offer for video.digital_human: Stage 2 proved that
-    # the pinned product-promo contract does not match portrait + supplied speech.
-    # Likewise speech.transcribe/media.understand/audio.mix/subtitle.render stay
-    # definition-only until a concrete, tested adapter is registered.
+    # Intentionally no native offer for video.digital_human. text.translate and
+    # audio.align stay definition-only until a concrete tested adapter is accepted.
     return registry
