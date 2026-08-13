@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
+import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
+import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import {
   getProjectExecutionPlan,
@@ -41,6 +44,10 @@ export default function ProjectPage() {
     };
   }, [projectId]);
 
+  const refreshProject = async () => {
+    setProject(await getUVProject(projectId));
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
@@ -70,9 +77,22 @@ export default function ProjectPage() {
 
             <ProjectEditor
               projectId={project.project_id}
-              onProjectChanged={async () => {
-                setProject(await getUVProject(project.project_id));
-              }}
+              onProjectChanged={refreshProject}
+            />
+
+            <DubbingWorkflowPanel
+              projectId={project.project_id}
+              onProjectChanged={refreshProject}
+            />
+
+            <DubbingPrecisionPanel
+              projectId={project.project_id}
+              onProjectChanged={refreshProject}
+            />
+
+            <DubbingSubtitleExportPanel
+              projectId={project.project_id}
+              onProjectChanged={refreshProject}
             />
 
             <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">

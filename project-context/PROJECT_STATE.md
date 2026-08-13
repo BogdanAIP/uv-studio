@@ -1,102 +1,89 @@
 # Project State
 
-<!-- uv-active-slice: stage-4-range-edit-user-workflow -->
+<!-- uv-active-slice: stage-5-dubbing-translation -->
 
 **Updated:** 2026-08-13
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 4C targeted range-edit user workflow — PR #31 review
+**Active roadmap stage:** Stage 5 dubbing / translation — review
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
 ## Product now
 
-The targeted existing-video workflow is implemented end to end through the product UI:
+Stage 4C is merged through PR #31. UV Studio has a complete existing-video range-edit workflow on the reusable D-033 editor foundation and Stage 5 now composes professional dubbing/translation on that same Project Store, Command API, Capability Registry, review and render boundary.
+
+The Stage 5 user path is implemented as:
 
 ```text
-project-owned source import
-  -> browser preview + exact integer-microsecond timeline selection
-  -> RangeContinuityBrief (D-029)
-  -> approved ReplacementPlan (D-030)
-  -> ReplacementCandidate (D-031)
-  -> evidence-based ReplacementReview (D-032)
-  -> AcceptedRangeEdit (D-028)
-  -> explicit authoritative FFmpeg render
-  -> deterministic H.264/AAC browser-preview projection from that master
+project-owned source / selected dialogue range
+  -> imported transcript or local whisper.cpp ASR draft
+  -> explicit transcript acceptance
+  -> manual/imported or optional local Argos translation draft
+  -> imported/recorded speech or D-017-authorized TTS
+  -> project-owned PreparedAudio / PreparedSpeech
+  -> optional WhisperX forced-alignment draft
+  -> server-measured timing/loudness evidence
+  -> explicit Review
+  -> explicit AcceptedDubbingEdit
+  -> deterministic accepted visual+dubbing materialization
+  -> browser preview / export
+  -> optional project-owned WebVTT subtitle artifact
 ```
 
-The UI does not create a second editing model. GUI actions use UV-owned command/workflow contracts, Project Store/domain state remains canonical, and AI/scripts/MCP are required to share the same boundary rather than mutating raw MLT or project JSON.
+## Stage 5 canonical boundaries
 
-## Stage 4C reusable foundation
+- Project Store/domain state remains canonical; there is no second dubbing project or timeline model.
+- Transcript, translation, PreparedSpeech, forced alignment, review and accepted dubbing state are typed/versioned and provider-neutral.
+- GUI, scripts, AI and MCP share the same semantic capabilities and editor Command API rather than mutating project JSON or raw MLT.
+- `whisper.cpp` is the local/free ASR baseline; ASR output remains a draft until explicit `accept_asr_transcript`.
+- Argos Translate is an optional local/free translation runtime; language packages remain outside portable project state.
+- Existing Edge TTS is reused instead of creating another synthesis subsystem; remote execution requires D-017 one-shot consent for the exact text.
+- TTS output is re-copied into `assets/`, re-hashed and re-probed before it can become PreparedSpeech.
+- WhisperX is an optional heavy precision `audio.align` layer with explicit local model-cache configuration and no hidden downloads; alignment output remains a draft until accepted through the Command API.
+- Review binds exact source/script/take/audio revisions and server-measured timing/loudness evidence plus explicit human content/synchronization confirmation.
+- Same-source accepted dubbing ranges cannot overlap; stale revisions fail closed.
+- `video.render_dubbing` accepts only canonical project identity, maps source-time dubbing through preceding accepted visual duration deltas and does not accept caller filtergraphs/host paths.
+- `replace_source_audio_range` is the only currently materialized composition policy. Background-preserving/mix policies remain fail-closed until D-036 real-media separation evaluation is completed.
+- WebVTT is a deterministic projection of canonical transcript/translation state, supports overlapping dialogue cues, and is downloaded only through a bounded registered-artifact route.
 
-D-033 is accepted and PR #30 is merged. Stage 4C uses:
+## Stage 5 decisions
 
-```text
-OpenCut Classic-derived editor UX
-              |
-GUI --------- |
-Scripts ------+--> UV Studio Command API --> domain validation/transaction --> MLT adapter
-AI -----------|                                         |
-MCP ----------|                                         +--> derived timeline/preview representation
-                                                        |
-                                                        +--> UV Project Store remains canonical
+- D-034: local ASR baseline.
+- D-035: evidence-based dubbing Review/Accept boundary.
+- D-036: dialogue/background separation evaluation gate.
+- D-037: reusable language/audio precision stack and optional-runtime policy.
 
-approved replacement workflow --> D-032 review --> D-028 AcceptedRangeEdit --> UV FFmpeg final render
-```
+## Draft implementation gate
 
-- MLT is the selected editing/timeline engine behind a UV-owned adapter.
-- OpenCut Classic commit `cf5e79e919144200294fb9fed22a222592a0aeea` remains the selected MIT editor-UX/component donor.
-- UV Project Store/domain state is the single canonical project state.
-- raw MLT XML is ephemeral engine input and is not exposed by `/editor/state`; absolute host paths do not cross that API boundary.
-- the existing UV FFmpeg one-pass renderer remains authoritative final export; browser MP4 preview is encoded from the authoritative master rather than repeating the edit from source media.
+Final draft implementation head:
 
-## PR #31 implementation outcome
+`1b98c936d1b1ddf3945da10ee1985b5b4f001363`
 
-The normal-user Stage 4C path now includes:
+CI #1103 / run `31694526656` passed all five required checks:
 
-- project-owned streaming source import with media inspection, portable metadata and cleanup on failure;
-- ID-based source/artifact HTTP media delivery with byte Range support and no arbitrary host-path API;
-- player, reusable timeline, zoom, playhead and exact microsecond range selection;
-- AI/change-request panel bound to canonical `select_range` command state;
-- visible Brief -> Plan -> Candidate -> Review -> Accept workflow with D-032 approval still mandatory;
-- accepted non-destructive edits shown back on the timeline, including multiple edits;
-- explicit one-pass authoritative render/export rather than automatic heavy render after acceptance;
-- render revision detection so an older master is marked stale when Accepted edits change;
-- deterministic `video.preview_artifact` H.264/AAC MP4 projection from the registered authoritative master for browser playback;
-- real MLT adapter derived from canonical accepted edits, not a second project file format;
-- typed public MLT projection summary while raw XML and resolved machine paths remain adapter-private.
+- `development-context`
+- `bootstrap (ubuntu-latest, 3.11)`
+- `bootstrap (windows-latest, 3.11)`
+- `app-baseline (ubuntu-latest)`
+- `app-baseline (windows-latest)`
 
-## MLT parity evidence
+The app-baseline jobs include API integration, real FFmpeg/MLT media evidence and frontend lint/audit/build on Ubuntu and Windows.
 
-The Stage 4C integration test deliberately compares the derived MLT timeline against the authoritative FFmpeg render on real encoded media.
+## Reusable evidence retained
 
-During PR #31 this test exposed two real adapter defects that the earlier foundation spike could not detect because the spike only proved a non-empty render:
-
-1. `avformat-novalidate` began with a tiny provisional producer length, causing requested ranges to be clamped. The adapter now provides explicit frame length from already validated UV metadata.
-2. replacement producers were serialized after playlist entries that referenced them. MLT resolves producer IDs sequentially while parsing XML, so the replacement entries disappeared and a 6-second composition became 4 seconds. All producers are now declared before the playlist.
-
-After both fixes, the real-media parity suite passes on Ubuntu and Windows. The strict parity fixture uses FFV1/MKV source and replacement media, verifies full duration and samples the expected source/replacement colors at five timeline positions. The authoritative export remains a separate UV FFmpeg path.
-
-## Review gate
-
-PR #31 is ready for review only after its code head proves all required checks on the exact commit. The final review-context commit must then receive the same five required green checks before merge:
-
-- `development-context`;
-- `bootstrap (ubuntu-latest, 3.11)`;
-- `bootstrap (windows-latest, 3.11)`;
-- `app-baseline (ubuntu-latest)`;
-- `app-baseline (windows-latest)`.
-
-## Next product slice
-
-After PR #31 merges, continue with `stage-5-dubbing-translation` using the same Project Store, Command API, MLT adapter, semantic Capability Registry and explicit review/render boundaries. Do not introduce another timeline/project model for dubbing.
+Stage 4C remains authoritative for visual editing/timeline materialization. Stage 5 adds audio/text state and composition without reopening D-033. Real-media Stage 5 coverage proves accepted dubbing replacement while preserving source audio before/after the target range and preserving expected media duration on both supported CI platforms.
 
 ## Cross-cutting debt retained outside this slice
 
 - D-023 still needs an explicit merged/idle lifecycle and live PR diff-vs-write-scope enforcement;
-- the aggregate decision index needs lifecycle/process maintenance;
+- the aggregate decision index still needs lifecycle/process maintenance;
 - broader free-form project JSON fields still need recursive portability hardening outside newly typed boundaries;
 - broader accepted-file/content-addressing integrity remains future hardening;
 - the compatibility `/api/stages` catalog should be retired when no UV-owned screen needs it;
 - broader codec/device fixtures remain incremental hardening.
+
+## Next product slice
+
+After the exact review-context head passes the same five required checks and PR #32 merges, continue with `stage-6-sequence-continuity-review` using the same canonical Project Store, Capability Registry, Command API and explicit Review/Accept boundaries.
