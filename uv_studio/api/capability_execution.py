@@ -24,6 +24,7 @@ from uv_studio.capabilities.adapters import (
     NativeVideoClawAdapter,
     WhisperCppAdapter,
 )
+from uv_studio.capabilities.adapters.argos_translate import ArgosTranslateAdapter
 from uv_studio.capabilities.adapters.mcp_execution import (
     MCPExecutionAdapter,
     MCPExecutionInputRejected,
@@ -77,6 +78,12 @@ def get_whisper_cpp_adapter(
     store: ProjectStore = Depends(get_project_store),
 ) -> WhisperCppAdapter:
     return WhisperCppAdapter(store)
+
+
+def get_argos_translate_adapter(
+    store: ProjectStore = Depends(get_project_store),
+) -> ArgosTranslateAdapter:
+    return ArgosTranslateAdapter(store)
 
 
 def get_native_videoclaw_adapter(
@@ -347,6 +354,7 @@ async def execute_project_capability(
     registry: CapabilityRegistry = Depends(get_capability_registry),
     local_ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
     local_whisper_cpp: WhisperCppAdapter = Depends(get_whisper_cpp_adapter),
+    local_argos_translate: ArgosTranslateAdapter = Depends(get_argos_translate_adapter),
     native_videoclaw: NativeVideoClawAdapter = Depends(get_native_videoclaw_adapter),
     mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
@@ -389,6 +397,13 @@ async def execute_project_capability(
         elif offer.adapter_id == WhisperCppAdapter.adapter_id:
             result = await run_in_threadpool(
                 local_whisper_cpp.execute,
+                project_id=project_id,
+                offer=offer,
+                payload=input_payload,
+            )
+        elif offer.adapter_id == ArgosTranslateAdapter.adapter_id:
+            result = await run_in_threadpool(
+                local_argos_translate.execute,
                 project_id=project_id,
                 offer=offer,
                 payload=input_payload,
