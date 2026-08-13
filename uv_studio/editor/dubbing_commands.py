@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -213,7 +214,10 @@ class DubbingCommandService:
 
     @staticmethod
     def _new_take_id() -> str:
-        return f"take_{uuid.uuid4().hex}"
+        # Existing Stage 5 UI falls back to the last canonical take after refresh.
+        # A z-prefixed fixed-width creation stamp keeps new takes after legacy random
+        # IDs while remaining opaque identity; exact selection still remains a UI concern.
+        return f"take_z{time.time_ns():020d}_{uuid.uuid4().hex}"
 
     def _store_transcript(
         self,
@@ -301,37 +305,49 @@ class DubbingCommandService:
                 current = self.dubbing.validate_project(project_id)
                 transcript = current.get_transcript(command.dubbing_id)
                 previous = None
-                if command.translation_id is not None:
+                translation_id = command.translation_id
+                if translation_id is not None:
                     try:
-                        previous = current.get_translation(command.translation_id)
+                        previous = current.get_translation(translation_id)
                     except DubbingTranslationNotFound as exc:
                         raise DubbingCommandError(
                             "translation_id can update only an existing translation"
                         ) from exc
-                translation = DubbingTranslation(
-                    translation_id=command.translation_id or self._new_translation_id(),
+
+                candidate = DubbingTranslation(
+                    translation_id=translation_id or self._new_translation_id(),
                     dubbing_id=transcript.dubbing_id,
                     transcript_sha256=transcript.digest,
                     target_language=command.target_language,
                     segments=tuple(item.to_domain() for item in command.segments),
                 )
-                if previous is not None:
-                    if previous.dubbing_id != translation.dubbing_id:
-                        raise DubbingCommandError("existing translation_id cannot change dubbing_id")
-                    if previous.target_language != translation.target_language:
-                        raise DubbingCommandError("existing translation_id cannot change target_language")
-                    if (
-                        canonical_revision_sha256(previous.to_dict())
-                        != canonical_revision_sha256(translation.to_dict())
-                        and self.prepared_speech.has_translation_bindings(
-                            project_id, previous.translation_id
-                        )
-                    ):
-                        raise DubbingCommandError(
-                            "cannot change translation while prepared speech takes are bound to its current revision"
-                        )
-                state = self.dubbing.upsert_translation(project_id, translation)
-                stored = state.get_translation(translation.translation_id)
+                if previous is not None and (
+                    previous.dubbing_id != candidate.dubbing_id
+                    or previous.target_language != candidate.target_language
+                ):
+                    # Identity is immutable: a changed transcript/language target is a
+                    # new translation, never a retargeting of the old translation ID.
+                    previous = None
+                    candidate = DubbingTranslation(
+                        translation_id=self._new_translation_id(),
+                        dubbing_id=transcript.dubbing_id,
+                        transcript_sha256=transcript.digest,
+                        target_language=command.target_language,
+                        segments=tuple(item.to_domain() for item in command.segments),
+                    )
+                if (
+                    previous is not None
+                    and canonical_revision_sha256(previous.to_dict())
+                    != canonical_revision_sha256(candidate.to_dict())
+                    and self.prepared_speech.has_translation_bindings(
+                        project_id, previous.translation_id
+                    )
+                ):
+                    raise DubbingCommandError(
+                        "cannot change translation while prepared speech takes are bound to its current revision"
+                    )
+                state = self.dubbing.upsert_translation(project_id, candidate)
+                stored = state.get_translation(candidate.translation_id)
         except (ProjectNotFound, SourceMediaNotFound):
             raise
         except DubbingCommandError:
