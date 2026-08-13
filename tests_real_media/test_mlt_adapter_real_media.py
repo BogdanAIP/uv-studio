@@ -57,6 +57,27 @@ def _color(path: Path, color: str, duration_s: int) -> None:
     )
 
 
+def _probe(path: Path) -> dict:
+    completed = subprocess.run(
+        [
+            _tool("ffprobe"),
+            "-v",
+            "error",
+            "-show_format",
+            "-show_streams",
+            "-of",
+            "json",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=90,
+        shell=False,
+    )
+    return json.loads(completed.stdout)
+
+
 def _sample_rgb(path: Path, timestamp_s: float) -> tuple[int, int, int]:
     completed = subprocess.run(
         [
@@ -83,6 +104,10 @@ def _sample_rgb(path: Path, timestamp_s: float) -> tuple[int, int, int]:
         timeout=90,
         shell=False,
     )
+    if len(completed.stdout) < 3:
+        raise AssertionError(
+            f"could not sample {path.name} at {timestamp_s}s; probe={_probe(path)!r}"
+        )
     return completed.stdout[0], completed.stdout[1], completed.stdout[2]
 
 
@@ -157,8 +182,18 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
                 [segment.role for segment in projection.segments],
                 ["source", "replacement", "source", "replacement", "source"],
             )
-            mlt_output = Path(tmp) / "mlt-derived.mkv"
+            mlt_output = Path(tmp) / "mlt-derived.mp4"
             mlt.render_projection(projection, mlt_output)
+            mlt_probe = _probe(mlt_output)
+            self.assertEqual(
+                next(
+                    stream.get("codec_name")
+                    for stream in mlt_probe.get("streams", [])
+                    if stream.get("codec_type") == "video"
+                ),
+                "mpeg4",
+            )
+            self.assertAlmostEqual(float(mlt_probe["format"]["duration"]), 6.0, delta=0.15)
 
             registry = build_builtin_capability_registry()
             authoritative = LocalFFmpegAdapter(store).execute(

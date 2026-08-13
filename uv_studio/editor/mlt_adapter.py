@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 import tempfile
@@ -172,7 +173,7 @@ class MLTTimelineAdapter:
             raise MLTAdapterError("MLT source duration maps to zero frames")
 
         root = ET.Element("mlt", {"LC_NUMERIC": "C"})
-        gcd_width_height = __import__("math").gcd(width, height)
+        gcd_width_height = math.gcd(width, height)
         ET.SubElement(
             root,
             "profile",
@@ -351,7 +352,7 @@ class MLTTimelineAdapter:
                     str(temp_path),
                     "-consumer",
                     f"avformat:{output}",
-                    "vcodec=ffv1",
+                    "vcodec=mpeg4",
                     "an=1",
                     "real_time=-1",
                     "terminate_on_pause=1",
