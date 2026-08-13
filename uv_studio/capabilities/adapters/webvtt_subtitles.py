@@ -9,8 +9,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from uv_studio.projects.dubbing import DubbingError, DubbingStore, canonical_revision_sha256
+from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.models import ProjectReference
+from uv_studio.projects.prepared_speech import canonical_revision_sha256
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 
 from ..execution import (
