@@ -1,28 +1,28 @@
 # Next Task
 
-<!-- uv-next-slice: stage-6-sequence-continuity-review -->
+<!-- uv-next-slice: stage-5-correctness-browser-e2e -->
 
 Updated: 2026-08-13
 
-## Expected handoff
+## Goal
 
-After `stage-5-dubbing-translation` proves its engineering and user exits and merges, continue with Stage 6 optional sequence continuity and review on the same canonical editor/capability foundation.
+Close the concrete Stage 5 correctness and user-quality gaps found by the post-merge audit before beginning Stage 6 sequence continuity.
 
-Stage 6 must remain optional for projects that do not need linked-shot continuity. It must compose accepted project state and evidence rather than introducing another project model or mandatory generation pipeline.
+## Required work
 
-## Stage 6 starting constraints
+- give dubbing Review history an explicit chronological/current-review contract; never use UUID lexical order as recency;
+- make translation identity immutable across `dubbing_id` and target language, and create a new translation ID for a new language;
+- select a newly created TTS PreparedSpeech take explicitly;
+- make transcript/translation mutation vs PreparedSpeech binding checks transaction-sized under the Project Store lock;
+- verify current source/prepared-audio bytes at Review/Accept/render trust boundaries where stored SHA identity is relied on;
+- stop presenting the legacy VideoClaw root workspace as a working UV-owned product surface unless its backend is deliberately isolated and supported;
+- add real browser E2E for the targeted existing-video and dubbing user outcomes using a maintained reusable browser-testing framework;
+- keep the existing Project Store, Command API, Capability Registry, D-017, MLT and FFmpeg boundaries intact.
 
-- UV Studio Project Store/domain state remains canonical;
-- MLT remains behind the UV-owned editor adapter;
-- GUI, scripts, AI and MCP continue to share UV-owned command/workflow boundaries;
-- provider/model choice remains behind semantic Capability Registry offers;
-- remote/non-free execution remains subject to D-017 authorization;
-- planned/observed continuity state must be typed, versioned and provider-neutral;
-- accepted/rejected takes must remain explicit;
-- re-anchor and lock/allowed-change policies must be reviewable rather than hidden prompting behavior;
-- evidence-based review may use optional VLM capabilities but must preserve human confirmation fallback;
-- simple standalone clips must not inherit sequence-continuity complexity.
+## Completion proof
 
-## Stage 6 product outcome
+The slice is complete only when focused regression tests cover the discovered defects, browser E2E runs in CI, all declared checks are green on the exact review head, and the repository returns to `idle` after merge.
 
-Allow linked shots or generated sequences to continue from accepted observed state when continuity matters, while keeping continuity machinery out of simple projects.
+## After this slice
+
+Proceed to `stage-6-sequence-continuity-review` only after this hardening slice merges and repository context is closed to idle.
