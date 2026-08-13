@@ -5,14 +5,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getEditorState,
   projectSourceMediaUrl,
-  RangeContinuityBrief,
   selectProjectRange,
-  SelectRangeResult,
   uploadProjectSource,
+} from '@/lib/editorApi';
+import type {
+  RangeContinuityBrief,
+  SelectRangeResult,
 } from '@/lib/editorApi';
 import type { ProjectReference } from '@/lib/projectsApi';
 import { formatTimelineTime } from '@/lib/timelineMath';
-import { RangeTimeline, TimelineSelection } from './RangeTimeline';
+import { RangeTimeline } from './RangeTimeline';
+import type { TimelineSelection } from './RangeTimeline';
 
 interface ProjectEditorProps {
   projectId: string;
@@ -42,7 +45,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
   const [contextBeforeSeconds, setContextBeforeSeconds] = useState(5);
   const [contextAfterSeconds, setContextAfterSeconds] = useState(5);
   const [latestResult, setLatestResult] = useState<SelectRangeResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -62,18 +65,17 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     getEditorState(projectId)
       .then(next => {
         if (!active) return;
         setEditorState(next);
         setSelectedSourceId(next.sources[0]?.id ?? null);
+        setLoadedProjectId(projectId);
       })
       .catch(err => {
-        if (active) setError(err instanceof Error ? err.message : 'Не удалось загрузить редактор');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (!active) return;
+        setError(err instanceof Error ? err.message : 'Не удалось загрузить редактор');
+        setLoadedProjectId(projectId);
       });
     return () => {
       active = false;
@@ -101,13 +103,16 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
     [activeSource, editorState],
   );
 
-  useEffect(() => {
+  const activateSource = (sourceId: string) => {
+    if (sourceId === selectedSourceId) return;
+    videoRef.current?.pause();
+    setSelectedSourceId(sourceId);
     setSelection(null);
     setPlayheadUs(0);
     setLatestResult(null);
     setPreviewError(null);
     setPlaying(false);
-  }, [selectedSourceId]);
+  };
 
   const seekTo = (timeUs: number) => {
     const safeUs = Math.min(durationUs, Math.max(0, Math.round(timeUs)));
@@ -134,7 +139,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
     try {
       const imported = await uploadProjectSource(projectId, file);
       await refreshState();
-      setSelectedSourceId(imported.id);
+      activateSource(imported.id);
       await onProjectChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось импортировать видео');
@@ -166,6 +171,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
     }
   };
 
+  const loading = loadedProjectId !== projectId;
   if (loading) {
     return (
       <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
@@ -239,7 +245,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                     <button
                       type="button"
                       key={source.id}
-                      onClick={() => setSelectedSourceId(source.id)}
+                      onClick={() => activateSource(source.id)}
                       className={`w-full rounded-xl border p-3 text-left transition ${
                         source.id === selectedSourceId
                           ? 'border-sky-500/70 bg-sky-950/40'

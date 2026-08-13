@@ -77,11 +77,10 @@ export function RangeTimeline({
     const element = scrollRef.current;
     if (!element) return;
 
-    const update = () => {
+    const updateFromResize = () => {
       setViewport({ scrollLeft: element.scrollLeft, width: element.clientWidth });
     };
-    update();
-    const observer = new ResizeObserver(update);
+    const observer = new ResizeObserver(updateFromResize);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
