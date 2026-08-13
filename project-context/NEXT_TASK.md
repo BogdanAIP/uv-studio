@@ -1,30 +1,28 @@
 # Next Task
 
-<!-- uv-next-slice: stage-5-dubbing-translation -->
+<!-- uv-next-slice: stage-6-sequence-continuity-review -->
 
 Updated: 2026-08-13
 
 ## Expected handoff
 
-After `stage-4-range-edit-user-workflow` / PR #31 merges, continue with Stage 5 dubbing and translation on the reusable editor/media foundation selected by D-033.
+After `stage-5-dubbing-translation` proves its engineering and user exits and merges, continue with Stage 6 optional sequence continuity and review on the same canonical editor/capability foundation.
 
-Stage 5 must compose the permanent primitives delivered by Stage 4C rather than introducing a second project model, timeline, media importer or automation path.
+Stage 6 must remain optional for projects that do not need linked-shot continuity. It must compose accepted project state and evidence rather than introducing another project model or mandatory generation pipeline.
 
-## Stage 5 starting constraints
+## Stage 6 starting constraints
 
 - UV Studio Project Store/domain state remains canonical;
-- MLT remains the reusable editing/timeline engine behind the UV adapter;
-- OpenCut-derived editor UX remains behind UV-owned adapters;
-- GUI, scripts, AI and MCP continue to use the same UV Studio Command API;
-- source media stays project-owned and ID-addressed rather than exposed by host paths;
+- MLT remains behind the UV-owned editor adapter;
+- GUI, scripts, AI and MCP continue to share UV-owned command/workflow boundaries;
 - provider/model choice remains behind semantic Capability Registry offers;
-- paid/remote execution remains subject to D-017 authorization;
-- generated/replacement media that changes accepted source content must preserve the existing review/acceptance boundary where applicable;
-- final render/export remains explicit and deterministic;
-- browser preview is a deterministic projection of an accepted/rendered artifact, not a parallel editing authority.
+- remote/non-free execution remains subject to D-017 authorization;
+- planned/observed continuity state must be typed, versioned and provider-neutral;
+- accepted/rejected takes must remain explicit;
+- re-anchor and lock/allowed-change policies must be reviewable rather than hidden prompting behavior;
+- evidence-based review may use optional VLM capabilities but must preserve human confirmation fallback;
+- simple standalone clips must not inherit sequence-continuity complexity.
 
-## Stage 5 product outcome
+## Stage 6 product outcome
 
-Add professional dubbing/translation workflows on top of the Stage 4C editor so a user can select media/ranges, create or import transcript/translation, prepare speech/audio replacements, review synchronization and resulting media, and explicitly accept/render the final result without manual API calls.
-
-Do not begin Stage 5 until PR #31 proves the complete Stage 4C normal-user targeted-edit workflow and merges.
+Allow linked shots or generated sequences to continue from accepted observed state when continuity matters, while keeping continuity machinery out of simple projects.
