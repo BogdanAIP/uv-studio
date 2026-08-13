@@ -72,7 +72,7 @@ export interface DubbingLoudnessEvidence {
   threshold_lufs: number | null;
 }
 
-export interface DubbingReview {
+export interface DubbingReview extends Record<string, unknown> {
   schema_version: number;
   review_id: string;
   take_id: string;
