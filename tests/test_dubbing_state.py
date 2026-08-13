@@ -8,6 +8,7 @@ from pathlib import Path
 from uv_studio.projects.dubbing import (
     DUBBING_STATE_PATH,
     DubbingError,
+    DubbingState,
     DubbingStore,
     DubbingTranscript,
     DubbingTranslation,
@@ -105,16 +106,17 @@ class DubbingStateTests(unittest.TestCase):
             reloaded = dubbing.validate_project(project_id)
             self.assertEqual(reloaded.to_dict(), state.to_dict())
 
-    def test_translation_must_cover_exact_current_transcript_revision(self) -> None:
+    def test_state_requires_translation_to_cover_exact_transcript_revision(self) -> None:
         transcript = self._transcript()
+        incomplete = DubbingTranslation(
+            translation_id="translation_ru",
+            dubbing_id=transcript.dubbing_id,
+            transcript_sha256=transcript.digest,
+            target_language="ru",
+            segments=(TranslationSegment(segment_id="seg_001", text="Привет"),),
+        )
         with self.assertRaises(DubbingError):
-            DubbingTranslation(
-                translation_id="translation_ru",
-                dubbing_id=transcript.dubbing_id,
-                transcript_sha256=transcript.digest,
-                target_language="ru",
-                segments=(TranslationSegment(segment_id="seg_001", text="Привет"),),
-            )
+            DubbingState(transcripts=(transcript,), translations=(incomplete,))
 
     def test_store_rejects_translation_with_missing_segment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
