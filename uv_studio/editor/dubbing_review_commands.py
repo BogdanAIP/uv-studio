@@ -10,6 +10,7 @@ from typing import Any
 from uv_studio.projects.dubbing_review import (
     AcceptedDubbingState,
     DubbingLoudnessEvidence,
+    DubbingReview,
     DubbingReviewError,
     DubbingReviewStore,
 )
@@ -20,7 +21,7 @@ LoudnessMeasure = Callable[[str, str], Mapping[str, Any]]
 
 
 class DubbingReviewCommandError(DubbingReviewError):
-    """A dubbing review command cannot be applied to current project state."""
+    """A semantic dubbing review command cannot be applied to current project state."""
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,34 @@ class DubbingReviewCommandService:
     def _new_accepted_id() -> str:
         return f"dedit_{uuid.uuid4().hex}"
 
+    @staticmethod
+    def _ranges_overlap(start_a: int, end_a: int, start_b: int, end_b: int) -> bool:
+        return start_a < end_b and end_a > start_b
+
+    @classmethod
+    def _reject_overlapping_acceptance(
+        cls,
+        review: DubbingReview,
+        accepted: AcceptedDubbingState,
+    ) -> None:
+        for existing in accepted.edits:
+            if existing.review_id == review.review_id:
+                raise DubbingReviewCommandError(
+                    f"dubbing review {review.review_id!r} is already accepted"
+                )
+            if existing.source_id != review.source_id:
+                continue
+            if cls._ranges_overlap(
+                review.target_start_us,
+                review.target_end_us,
+                existing.target_start_us,
+                existing.target_end_us,
+            ):
+                raise DubbingReviewCommandError(
+                    "accepted dubbing ranges for one source must not overlap: "
+                    f"existing={existing.accepted_id!r}, review={review.review_id!r}"
+                )
+
     def review_prepared_speech(
         self,
         project_id: str,
@@ -143,13 +172,22 @@ class DubbingReviewCommandService:
                 "accept_dubbing_review requires AcceptDubbingReviewCommand"
             )
         try:
-            state: AcceptedDubbingState = self.reviews.accept_review(
-                project_id,
-                review_id=command.review_id,
-                accepted_id=command.accepted_id or self._new_accepted_id(),
-                composition_policy=command.composition_policy,
-            )
-            edit = next(item for item in state.edits if item.review_id == command.review_id)
+            # Hold the canonical project lock across conflict validation and acceptance.
+            # ProjectStore uses RLock, so DubbingReviewStore may safely re-enter it while
+            # revalidating exact review/take/script/audio revisions before the write.
+            with self.project_store._lock:
+                review = self.reviews.validate_review(project_id, command.review_id)
+                accepted = self.reviews.load_accepted(project_id, validate_current=True)
+                self._reject_overlapping_acceptance(review, accepted)
+                state: AcceptedDubbingState = self.reviews.accept_review(
+                    project_id,
+                    review_id=command.review_id,
+                    accepted_id=command.accepted_id or self._new_accepted_id(),
+                    composition_policy=command.composition_policy,
+                )
+                edit = next(
+                    item for item in state.edits if item.review_id == command.review_id
+                )
         except ProjectNotFound:
             raise
         except (DubbingReviewError, PreparedSpeechError, ProjectStoreError) as exc:
