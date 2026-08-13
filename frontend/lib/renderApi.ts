@@ -10,33 +10,38 @@ export interface RenderAcceptedEditsOutput {
   audio_policy: string;
 }
 
-export interface RenderAcceptedEditsResult {
+export interface CapabilityVideoResult {
   schema_version: number;
   project_id: string;
-  capability_id: 'video.render_edits';
+  capability_id: string;
   offer_id: string;
   adapter_id: string;
-  output: RenderAcceptedEditsOutput;
+  output: Record<string, unknown>;
   artifact: ProjectReference;
 }
 
-export interface RenderAcceptedEditsEnvelope {
+export interface CapabilityVideoEnvelope<T extends CapabilityVideoResult = CapabilityVideoResult> {
   selection: Record<string, unknown>;
-  result: RenderAcceptedEditsResult;
+  result: T;
 }
 
-async function renderError(response: Response): Promise<Error> {
+export interface RenderAcceptedEditsResult extends CapabilityVideoResult {
+  capability_id: 'video.render_edits';
+  output: RenderAcceptedEditsOutput & Record<string, unknown>;
+}
+
+async function capabilityError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
   const detail = body?.detail;
   if (typeof detail === 'string') return new Error(detail);
   if (detail !== undefined) return new Error(JSON.stringify(detail));
-  return new Error('Не удалось собрать мастер-рендер');
+  return new Error(fallback);
 }
 
 export async function renderAcceptedEdits(
   projectId: string,
   sourcePath: string,
-): Promise<RenderAcceptedEditsEnvelope> {
+): Promise<CapabilityVideoEnvelope<RenderAcceptedEditsResult>> {
   const response = await fetch(
     `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.render_edits/execute`,
     {
@@ -45,6 +50,22 @@ export async function renderAcceptedEdits(
       body: JSON.stringify({ input: { source_path: sourcePath } }),
     },
   );
-  if (!response.ok) throw await renderError(response);
+  if (!response.ok) throw await capabilityError(response, 'Не удалось собрать мастер-рендер');
+  return response.json();
+}
+
+export async function createBrowserPreview(
+  projectId: string,
+  artifactId: string,
+): Promise<CapabilityVideoEnvelope> {
+  const response = await fetch(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.preview_artifact/execute`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: { artifact_id: artifactId } }),
+    },
+  );
+  if (!response.ok) throw await capabilityError(response, 'Не удалось создать browser preview');
   return response.json();
 }
