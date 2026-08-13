@@ -16,6 +16,7 @@ import type { ProjectReference } from '@/lib/projectsApi';
 import { formatTimelineTime } from '@/lib/timelineMath';
 import { RangeTimeline } from './RangeTimeline';
 import type { TimelineSelection } from './RangeTimeline';
+import { ReplacementWorkflowPanel } from './ReplacementWorkflowPanel';
 
 interface ProjectEditorProps {
   projectId: string;
@@ -388,6 +389,18 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 onSeek={seekTo}
                 onSelectionChange={setSelection}
                 onZoomChange={setZoomLevel}
+              />
+            </div>
+          )}
+
+          {activeSource && (
+            <div className="mt-4">
+              <ReplacementWorkflowPanel
+                projectId={projectId}
+                editorState={editorState}
+                sourcePath={activeSource.path}
+                preferredEditId={latestResult?.edit_id}
+                onStateChanged={refreshState}
               />
             </div>
           )}
