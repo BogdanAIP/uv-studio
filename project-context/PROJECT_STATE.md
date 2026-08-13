@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: chore-context-lifecycle-closure -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: stage-5-correctness-browser-e2e -->
 
 **Updated:** 2026-08-13
 
@@ -40,17 +40,19 @@ PR #32's final implementation and review-context heads passed the five permanent
 
 Real-media Stage 5 evidence proves that accepted dubbing replaces only the accepted target range, preserves original audio before/after the range and preserves expected output duration.
 
-## Known gaps before Stage 6
+PR #33 then established the explicit idle/draft/review lifecycle. Its post-merge closure head `453832323bcf992714863a4ccc7675c8102b6ba2` passed all five permanent checks while `active_slice` was null.
 
-The repository audit after PR #32 found a bounded hardening slice that must close before sequence continuity starts:
+## Stage 5 hardening in progress
 
-- dubbing Review history has no explicit chronological identity; frontend selection must not infer recency from UUID ordering;
-- an existing translation ID must not be silently retargeted to another language/dubbing identity;
-- newly created TTS takes must become the explicit selected take instead of relying on ID-order fallback;
-- transcript/translation binding checks and PreparedSpeech attachment need one transaction-sized Project Store lock boundary;
-- accepted/review/render trust boundaries need verification against current media bytes rather than only stored metadata hashes;
-- the legacy root VideoClaw workspace is still exposed by the product frontend although the UV-owned server intentionally does not mount its old backend routes;
-- Stage 4C/5 roadmap user-outcome gates still lack browser E2E coverage.
+This slice closes the bounded post-merge audit findings before Stage 6:
+
+- explicit current/superseded semantics for dubbing Review history;
+- immutable translation identity across target language and dubbing identity;
+- explicit selection of newly created TTS takes;
+- transaction-sized transcript/translation mutation versus PreparedSpeech binding checks;
+- current-byte source/prepared-audio integrity at Review/Accept/render trust boundaries;
+- removal or explicit isolation of the unsupported legacy VideoClaw root workspace;
+- browser E2E for the targeted existing-video and dubbing user outcomes.
 
 ## Cross-cutting backlog
 
@@ -58,6 +60,4 @@ After Stage 5 hardening, remaining non-blocking debt includes recursive portabil
 
 ## Development-memory lifecycle
 
-D-038 upgrades repository context to an explicit `idle -> draft -> review -> idle` lifecycle. `ACTIVE_SLICE.json` may have `active_slice = null` only in `idle`; `last_completed` records the exact merged slice/PR/merge commit. A new development slice must start from an idle `main`, not from a merged branch that still claims to be active.
-
-Repository-memory closure is process/documentation-only; its declared handoff is `stage-5-correctness-browser-e2e`. Stage 6 remains blocked until that hardening slice is merged and the repository returns to idle.
+D-038 keeps the repository in `draft` for this single active slice. The declared handoff is `stage-6-sequence-continuity-review`, but Stage 6 remains blocked until this slice merges, closes back to `idle`, and its closure CI is green.
