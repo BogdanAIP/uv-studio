@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: chore-context-lifecycle-closure -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: chore-context-lifecycle-closure -->
 
 **Updated:** 2026-08-13
 
