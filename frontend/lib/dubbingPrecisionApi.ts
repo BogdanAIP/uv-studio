@@ -5,6 +5,8 @@ import type {
   PreparedSpeechTake,
 } from './dubbingApi';
 
+const EDGE_TTS_OFFER_ID = 'native_videoclaw.edge_tts';
+
 export interface TranslationDraft {
   source_language: string;
   target_language: string;
@@ -174,7 +176,8 @@ export async function prepareSpeechSynthesis(
   input: { text: string; voice: string; speed: number },
 ): Promise<PreparationEnvelope> {
   return capabilityPost(projectId, 'speech.synthesize', 'prepare-execution', {
-    selection_policy: 'local_free_first',
+    selection_policy: 'pinned_offer',
+    offer_id: EDGE_TTS_OFFER_ID,
     input,
   });
 }
@@ -186,7 +189,8 @@ export async function synthesizeSpeechWithExplicitRemoteConsent(
   const preparation = await prepareSpeechSynthesis(projectId, input);
   if (!preparation.authorization.authorization_required) {
     return capabilityPost(projectId, 'speech.synthesize', 'execute', {
-      selection_policy: 'local_free_first',
+      selection_policy: 'pinned_offer',
+      offer_id: EDGE_TTS_OFFER_ID,
       input,
     });
   }
@@ -207,13 +211,15 @@ export async function synthesizeSpeechWithExplicitRemoteConsent(
     'speech.synthesize',
     'authorize-execution',
     {
-      selection_policy: 'local_free_first',
+      selection_policy: 'pinned_offer',
+      offer_id: EDGE_TTS_OFFER_ID,
       input,
       acknowledgements: ['remote_execution'],
     },
   );
   return capabilityPost(projectId, 'speech.synthesize', 'execute', {
-    selection_policy: 'local_free_first',
+    selection_policy: 'pinned_offer',
+    offer_id: EDGE_TTS_OFFER_ID,
     input,
     authorization_token: authorization.authorization_token,
   });
