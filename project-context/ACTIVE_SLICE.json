@@ -7,7 +7,7 @@
     "goal": "Deliver professional dubbing and translation as a user-facing workflow on the existing UV Studio editor foundation: project-owned source media, provider-neutral transcript/translation/speech/alignment capabilities, explicit review and acceptance, non-destructive audio state, deterministic preview/render/export, and no second project or timeline model.",
     "base_branch": "main",
     "branch": "stage-5/dubbing-translation",
-    "pull_request": null,
+    "pull_request": 32,
     "phase": "draft",
     "write_scope": [
       ".github/workflows/ci.yml",
