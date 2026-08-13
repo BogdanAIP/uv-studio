@@ -1,35 +1,21 @@
 # Project History
 
-Compact record of completed development slices. Detailed rationale remains in the linked pull requests and decision records.
+Compact record of completed development slices. Detailed rationale remains in the linked pull requests and decision records. Current intent is never inferred from this table; use `ACTIVE_SLICE.json`, `PROJECT_STATE.md` and `NEXT_TASK.md`.
 
 | Stage | Pull request / commit | Result | Durable decisions |
 | --- | --- | --- | --- |
 | 0 | `af24ed1`, `8d175c2` | Reproducible pinned VideoClaw baseline and runtime smoke boundary | D-002, D-003, D-007, D-008 |
-| 1 | `2276a85` | Canonical local Project Store | D-009 |
-| 1 | `2101606` | UV Studio Projects API | D-009 |
-| 1 | `9570658` | Product-owned derived frontend and Projects UI | D-010 |
-| 1 | `3214cec` | Portable project archives and provider-neutral media architecture | D-011, D-012 |
-| 2 | `49dcef6` | Provider-neutral Recipe Registry and Production Policy | D-004, D-005 |
-| 2 | `dff8fc1` | Truthful recipe execution planning | D-004, D-006 |
-| 3 | `7fb0ca8`, `4cbe383` | Semantic Capability Registry, safe selection and local execution | D-013, D-014 |
-| 3 | `3e2b603`, `4108db2` | Direct MCP discovery and optional pinned Qwen-MM pack | D-015, D-016 |
-| 3 | PR #13, `416677c` | Exact one-shot external execution authorization | D-017 |
-| 3 | PR #14, `bb7929d` | Authorized MCP execution and portable provenance | D-018 |
-| 3 | PR #15, `b76c25c` | Binding-owned MCP project-file inputs | D-019 |
-| 3 | PR #17, `757cd1c` | Exact native VideoClaw Edge TTS execution | D-020 |
-| 4 | PR #18, `155f2e8` | Exact local existing-video range extraction | D-021 |
-| 4 | PR #19, `f9d850d` | Deterministic exact range reinsertion | D-022 |
-| Process | PR #20, `3845af0` | CI-checked multi-agent development context and handoff discipline | D-023 |
+| 1 | `2276a85`, `2101606`, `9570658`, `3214cec` | Canonical Project Store, Projects API/UI and portable archives | D-009, D-010, D-011, D-012 |
+| 2 | `49dcef6`, `dff8fc1` | Provider-neutral Recipe Registry, Production Policy and truthful execution planning | D-004, D-005, D-006 |
+| 3 | `7fb0ca8`, `4cbe383`, `3e2b603`, `4108db2` | Capability Registry, safe selection, local execution, direct MCP and optional Qwen-MM pack | D-013–D-016 |
+| 3 | PR #13–#17 | Exact D-017 authorization, authorized MCP/file bindings and exact native Edge TTS compatibility | D-017–D-020 |
+| 4 | PR #18–#19 | Exact local range extraction and deterministic range reinsertion | D-021, D-022 |
+| Process | PR #20, `3845af0` | CI-checked multi-agent development context | D-023 |
 | Roadmap | PR #21, `13ae5b1` | Runtime/security/real-media gates moved before later product intelligence | D-024 |
-| 3.5 | PR #22, `dfa4c6a` | UV Studio-owned FastAPI/security/configuration boundary | D-025 |
-| 3.5 | PR #23, `9b7e7cc` | Product-owned Python/frontend dependency graph, lint/audit/build gates | D-026 |
-| 4A | PR #24, `93e0d62` | Cross-platform real FFmpeg evidence; whole-output FFV1 measured at 4.824x compressed source and rejected as canonical repeated-edit state | D-027 |
-| 4A | PR #25, `3dcb03e` | Non-destructive accepted range-edit decisions plus explicit one-pass multi-edit render, proven with video-only and audio fixtures on Ubuntu/Windows | D-028 |
-| 4B | PR #26, `58ff29e` | Provider-neutral pre-replacement RangeContinuityBrief with bounded source-bound evidence, observation/inference separation and archive/API proof | D-029 |
-| 4B | PR #27, `324a7de` | Explicit provider-neutral ReplacementPlan approval gate bound to the current continuity Brief | D-030 |
-| 4B | PR #28, `919baba` | Project-owned replacement candidates, sample-first generative preparation, trusted MCP project outputs and no automatic accepted edit | D-031 |
-| 4B | PR #29 | Evidence-based ReplacementReview bound to exact candidate metadata/content, removal of direct public accepted-edit creation, and approved-review-only acceptance | D-032 |
-| 4C foundation | PR #30, `1064576` | Reuse-first scriptable editor foundation selected: MLT engine behind UV adapter plus selective MIT OpenCut Classic editor UX donor; one Command API required for GUI/scripts/AI/MCP | D-033 |
-| 4C workflow | PR #31, `03b3c0b` | Complete targeted existing-video workflow: project-owned import/preview, exact timeline selection, Brief → Plan → Candidate → Review → Accept, MLT projection, authoritative FFmpeg render and cross-platform real-media parity | D-032, D-033 |
-
-This file is historical only. Current intent, coordination and handoff live in `ACTIVE_SLICE.json`, `PROJECT_STATE.md` and `NEXT_TASK.md`.
+| 3.5 | PR #22–#23 | UV-owned runtime/security/configuration and dependency ownership | D-025, D-026 |
+| 4A | PR #24, `93e0d62` | Cross-platform real-media evidence and measured FFV1 tradeoff | D-027 |
+| 4A | PR #25, `3dcb03e` | Non-destructive accepted range-edit decisions and one-pass materialization | D-028 |
+| 4B | PR #26–#29 | RangeContinuityBrief -> ReplacementPlan -> Candidate -> evidence-based Review/Accept | D-029–D-032 |
+| 4C foundation | PR #30, `1064576` | MLT engine + selective OpenCut Classic UX donor + one UV Command API direction | D-033 |
+| 4C workflow | PR #31, `03b3c0b` | Complete targeted existing-video UI workflow and strict MLT/FFmpeg real-media parity | D-032, D-033 |
+| 5 | PR #32, `6f7531d9` | Dubbing/translation: ASR, translation, PreparedSpeech, alignment, Review/Accept, render, subtitles and real-media evidence | D-034–D-037 |
