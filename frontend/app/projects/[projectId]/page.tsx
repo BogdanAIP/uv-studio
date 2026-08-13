@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import {
@@ -79,6 +80,11 @@ export default function ProjectPage() {
             />
 
             <DubbingWorkflowPanel
+              projectId={project.project_id}
+              onProjectChanged={refreshProject}
+            />
+
+            <DubbingPrecisionPanel
               projectId={project.project_id}
               onProjectChanged={refreshProject}
             />
