@@ -11,6 +11,7 @@ from uv_studio.api.projects import ProjectReferencePayload, get_project_store
 from uv_studio.editor import MLTTimelineAdapter
 from uv_studio.editor.commands import EditorCommandError, EditorCommandService, SelectRangeCommand
 from uv_studio.editor.dubbing_commands import (
+    AttachPreparedSpeechCommand,
     DubbingCommandError,
     DubbingCommandService,
     ImportDubbingTranscriptCommand,
@@ -30,6 +31,12 @@ from uv_studio.projects.dubbing import (
 )
 from uv_studio.projects.edit_state import EditStateError, RangeEditStateStore
 from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.prepared_audio import PreparedAudioError, PreparedAudioNotFound
+from uv_studio.projects.prepared_speech import (
+    PreparedSpeechError,
+    PreparedSpeechStore,
+    PreparedSpeechTakeNotFound,
+)
 from uv_studio.projects.replacement_candidate import ReplacementCandidateStore
 from uv_studio.projects.replacement_plan import ReplacementPlanStore
 from uv_studio.projects.replacement_review import ReplacementReviewStore
@@ -95,12 +102,22 @@ class UpsertDubbingTranslationCommandPayload(_StrictModel):
     translation_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class AttachPreparedSpeechCommandPayload(_StrictModel):
+    command: Literal["attach_prepared_speech"]
+    dubbing_id: str = Field(min_length=1, max_length=128)
+    audio_id: str = Field(min_length=1, max_length=128)
+    translation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    segment_id: str | None = Field(default=None, min_length=1, max_length=128)
+    take_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 EditorCommandPayload = Annotated[
     Union[
         SelectRangeCommandPayload,
         ImportDubbingTranscriptCommandPayload,
         AcceptAsrTranscriptCommandPayload,
         UpsertDubbingTranslationCommandPayload,
+        AttachPreparedSpeechCommandPayload,
     ],
     Field(discriminator="command"),
 ]
@@ -132,17 +149,25 @@ class UpsertDubbingTranslationResultPayload(_StrictModel):
     payload: dict
 
 
+class AttachPreparedSpeechResultPayload(_StrictModel):
+    command: Literal["attach_prepared_speech"]
+    dubbing_id: str
+    payload: dict
+
+
 EditorCommandResultPayload = Union[
     SelectRangeCommandResultPayload,
     ImportDubbingTranscriptResultPayload,
     AcceptAsrTranscriptResultPayload,
     UpsertDubbingTranslationResultPayload,
+    AttachPreparedSpeechResultPayload,
 ]
 
 
 class EditorStatePayload(_StrictModel):
     sources: list[ProjectReferencePayload]
     artifacts: list[ProjectReferencePayload]
+    prepared_audio: list[ProjectReferencePayload]
     briefs: list[dict]
     replacement_plans: list[dict]
     replacement_candidates: list[dict]
@@ -150,6 +175,7 @@ class EditorStatePayload(_StrictModel):
     replacement_reviews: list[dict]
     accepted_edits: list[dict]
     dubbing: dict
+    prepared_speech: dict
     engine: dict
 
 
@@ -158,16 +184,22 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     if isinstance(exc, SourceMediaNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source media not found")
+    if isinstance(exc, PreparedAudioNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prepared audio not found")
     if isinstance(exc, DubbingTranscriptNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing transcript not found")
     if isinstance(exc, DubbingTranslationNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dubbing translation not found")
+    if isinstance(exc, PreparedSpeechTakeNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prepared speech take not found")
     if isinstance(
         exc,
         (
             EditorCommandError,
             DubbingCommandError,
             DubbingError,
+            PreparedAudioError,
+            PreparedSpeechError,
             SourceMediaError,
             ContinuityBriefError,
             EditStateError,
@@ -183,7 +215,9 @@ def _translate(exc: Exception) -> HTTPException:
     )
 
 
-def _transcript_command(payload: ImportDubbingTranscriptCommandPayload | AcceptAsrTranscriptCommandPayload) -> ImportDubbingTranscriptCommand:
+def _transcript_command(
+    payload: ImportDubbingTranscriptCommandPayload | AcceptAsrTranscriptCommandPayload,
+) -> ImportDubbingTranscriptCommand:
     return ImportDubbingTranscriptCommand(
         source_id=payload.source_id,
         language=payload.language,
@@ -256,15 +290,31 @@ def execute_editor_command(
                 ),
             )
             return UpsertDubbingTranslationResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, AttachPreparedSpeechCommandPayload):
+            result = DubbingCommandService(store).attach_prepared_speech(
+                project_id,
+                AttachPreparedSpeechCommand(
+                    dubbing_id=payload.dubbing_id,
+                    audio_id=payload.audio_id,
+                    translation_id=payload.translation_id,
+                    segment_id=payload.segment_id,
+                    take_id=payload.take_id,
+                ),
+            )
+            return AttachPreparedSpeechResultPayload.model_validate(result.to_dict())
         raise EditorCommandError("unsupported editor command")
     except (
         ProjectNotFound,
         SourceMediaNotFound,
+        PreparedAudioNotFound,
         DubbingTranscriptNotFound,
         DubbingTranslationNotFound,
+        PreparedSpeechTakeNotFound,
         EditorCommandError,
         DubbingCommandError,
         DubbingError,
+        PreparedAudioError,
+        PreparedSpeechError,
         SourceMediaError,
         ContinuityBriefError,
         EditStateError,
@@ -294,6 +344,7 @@ def get_editor_state(
         reviews = ReplacementReviewStore(store).load(project_id)
         accepted = RangeEditStateStore(store).load(project_id)
         dubbing = DubbingStore(store).load(project_id, validate_current=True)
+        prepared_speech = PreparedSpeechStore(store).load(project_id, validate_current=True)
         engine = MLTTimelineAdapter(store).project_summary(project_id)
         return EditorStatePayload(
             sources=[
@@ -306,6 +357,12 @@ def get_editor_state(
                 for reference in project.artifacts
                 if reference.kind == "video"
             ],
+            prepared_audio=[
+                ProjectReferencePayload.model_validate(reference.to_dict())
+                for reference in project.artifacts
+                if reference.kind == "audio"
+                and reference.metadata.get("role") == "prepared-speech"
+            ],
             briefs=[brief.to_dict() for brief in briefs.briefs],
             replacement_plans=[plan.to_dict() for plan in plans.plans],
             replacement_candidates=[candidate.to_dict() for candidate in candidates.candidates],
@@ -313,11 +370,13 @@ def get_editor_state(
             replacement_reviews=[review.to_dict() for review in reviews.reviews],
             accepted_edits=[edit.to_dict() for edit in accepted.edits],
             dubbing=dubbing.to_dict(),
+            prepared_speech=prepared_speech.to_dict(),
             engine=engine,
         )
     except (
         ProjectNotFound,
         DubbingError,
+        PreparedSpeechError,
         ContinuityBriefError,
         EditStateError,
         ProjectValidationError,
