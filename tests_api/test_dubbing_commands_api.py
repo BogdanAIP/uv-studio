@@ -96,6 +96,45 @@ class DubbingCommandsApiTests(unittest.TestCase):
         self.assertEqual([item["dubbing_id"] for item in dubbing["transcripts"]], [result["dubbing_id"]])
         self.assertEqual(dubbing["translations"], [])
 
+    def test_accept_asr_transcript_requires_explicit_command_and_rebinds_source_revision(self) -> None:
+        response = self.client.post(
+            f"/api/uv/projects/{self.project_id}/editor/commands",
+            json={
+                "command": "accept_asr_transcript",
+                "source_id": self.source.id,
+                "language": "en",
+                "start_us": 2_000_000,
+                "end_us": 6_000_000,
+                "segments": [
+                    {
+                        "segment_id": "seg_000001",
+                        "start_us": 2_000_000,
+                        "end_us": 3_250_000,
+                        "text": "Reviewed and corrected ASR text",
+                        "confidence": 0.91,
+                    },
+                    {
+                        "segment_id": "seg_000002",
+                        "start_us": 3_500_000,
+                        "end_us": 5_500_000,
+                        "text": "Second reviewed segment",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        result = response.json()
+        self.assertEqual(result["command"], "accept_asr_transcript")
+        transcript = result["payload"]["transcript"]
+        self.assertEqual(transcript["origin"], "asr")
+        self.assertEqual(transcript["source_id"], self.source.id)
+        self.assertEqual(transcript["source_sha256"], "1" * 64)
+        self.assertEqual(transcript["segments"][0]["text"], "Reviewed and corrected ASR text")
+        self.assertEqual(len(result["payload"]["transcript_sha256"]), 64)
+
+        persisted = DubbingStore(self.store).validate_project(self.project_id)
+        self.assertEqual(persisted.get_transcript(result["dubbing_id"]).origin, "asr")
+
     def test_translation_command_binds_exact_current_transcript_revision(self) -> None:
         imported = self._import_transcript()
         dubbing_id = imported["dubbing_id"]
@@ -153,29 +192,31 @@ class DubbingCommandsApiTests(unittest.TestCase):
         )
         self.assertEqual(missing.status_code, 404, missing.text)
 
-    def test_command_rejects_client_controlled_source_revision_and_raw_path(self) -> None:
-        bypass = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "import_dubbing_transcript",
-                "source_id": self.source.id,
-                "source_path": "sources/attacker.wav",
-                "source_sha256": "f" * 64,
-                "offer_id": "remote.magic",
-                "language": "en",
-                "start_us": 0,
-                "end_us": 2_000_000,
-                "segments": [
-                    {
-                        "segment_id": "seg_001",
+    def test_transcript_commands_reject_client_controlled_source_revision_and_raw_path(self) -> None:
+        for command in ("import_dubbing_transcript", "accept_asr_transcript"):
+            with self.subTest(command=command):
+                bypass = self.client.post(
+                    f"/api/uv/projects/{self.project_id}/editor/commands",
+                    json={
+                        "command": command,
+                        "source_id": self.source.id,
+                        "source_path": "sources/attacker.wav",
+                        "source_sha256": "f" * 64,
+                        "offer_id": "remote.magic",
+                        "language": "en",
                         "start_us": 0,
-                        "end_us": 1_000_000,
-                        "text": "Bypass",
-                    }
-                ],
-            },
-        )
-        self.assertEqual(bypass.status_code, 422, bypass.text)
+                        "end_us": 2_000_000,
+                        "segments": [
+                            {
+                                "segment_id": "seg_001",
+                                "start_us": 0,
+                                "end_us": 1_000_000,
+                                "text": "Bypass",
+                            }
+                        ],
+                    },
+                )
+                self.assertEqual(bypass.status_code, 422, bypass.text)
         self.assertEqual(DubbingStore(self.store).load(self.project_id).transcripts, ())
 
     def test_import_rejects_range_outside_registered_source_duration(self) -> None:
