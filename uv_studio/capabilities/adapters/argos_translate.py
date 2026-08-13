@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -15,11 +16,68 @@ from ..execution import (
     InvalidCapabilityInput,
     UnsupportedCapabilityExecution,
 )
-from ..models import CapabilityOffer, CostClass, LocalityClass, OfferAvailability
+from ..models import (
+    AdapterDefinition,
+    AdapterKind,
+    CapabilityOffer,
+    CostClass,
+    LocalityClass,
+    OfferAvailability,
+)
+from ..registry import CapabilityRegistry
 
+_ARGOS_ADAPTER_ID = "local_argos_translate"
+_ARGOS_OFFER_ID = "local_argos_translate.text_translate"
 _MAX_SEGMENTS = 100_000
 _MAX_TEXT_LENGTH = 8_000
 LoadLanguages = Callable[[], list[Any]]
+
+
+def _runtime_installed() -> bool:
+    try:
+        return importlib.util.find_spec("argostranslate") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
+def register_argos_translate_adapter(registry: CapabilityRegistry) -> None:
+    """Expose Argos without making its Python/model runtime a core dependency."""
+
+    registry.register_adapter(
+        AdapterDefinition(
+            adapter_id=_ARGOS_ADAPTER_ID,
+            title="Argos Translate local runtime",
+            description=(
+                "Опциональный локальный MIT-движок перевода. Языковые пакеты и runtime "
+                "остаются вне переносимого проекта; в Project Store сохраняется только результат."
+            ),
+            kind=AdapterKind.LOCAL,
+        )
+    )
+    installed = _runtime_installed()
+    registry.register_offer(
+        CapabilityOffer(
+            offer_id=_ARGOS_OFFER_ID,
+            capability_id="text.translate",
+            adapter_id=_ARGOS_ADAPTER_ID,
+            title="Argos Translate offline text translation",
+            availability=(
+                OfferAvailability.AVAILABLE
+                if installed
+                else OfferAvailability.CONFIGURATION_REQUIRED
+            ),
+            reason=(
+                "Argos Translate runtime найден; доступность конкретной языковой пары "
+                "проверяется при выполнении."
+                if installed
+                else "Установите optional Argos Translate runtime и нужные языковые пакеты."
+            ),
+            locality=LocalityClass.LOCAL,
+            cost_class=CostClass.FREE,
+            asynchronous=False,
+            features=("text.translate", "text.segment_preservation", "runtime.optional"),
+        )
+    )
 
 
 def _default_language_loader() -> list[Any]:
@@ -67,7 +125,7 @@ def _segment(value: Any, *, index: int) -> dict[str, str]:
 class ArgosTranslateAdapter:
     """Translate bounded text segments without persisting provider/model identity in project state."""
 
-    adapter_id = "local_argos_translate"
+    adapter_id = _ARGOS_ADAPTER_ID
 
     def __init__(
         self,
