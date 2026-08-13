@@ -1,89 +1,63 @@
 # Project State
 
-<!-- uv-active-slice: stage-5-dubbing-translation -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: chore-context-lifecycle-closure -->
 
 **Updated:** 2026-08-13
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 5 dubbing / translation — review
-
-Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
-
 ## Product now
 
-Stage 4C is merged through PR #31. UV Studio has a complete existing-video range-edit workflow on the reusable D-033 editor foundation and Stage 5 now composes professional dubbing/translation on that same Project Store, Command API, Capability Registry, review and render boundary.
+Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`.
 
-The Stage 5 user path is implemented as:
+UV Studio currently has:
 
-```text
-project-owned source / selected dialogue range
-  -> imported transcript or local whisper.cpp ASR draft
-  -> explicit transcript acceptance
-  -> manual/imported or optional local Argos translation draft
-  -> imported/recorded speech or D-017-authorized TTS
-  -> project-owned PreparedAudio / PreparedSpeech
-  -> optional WhisperX forced-alignment draft
-  -> server-measured timing/loudness evidence
-  -> explicit Review
-  -> explicit AcceptedDubbingEdit
-  -> deterministic accepted visual+dubbing materialization
-  -> browser preview / export
-  -> optional project-owned WebVTT subtitle artifact
-```
+- UV-owned FastAPI runtime and secret/configuration boundary;
+- canonical file-first Project Store and portable `.uvproj.zip` archives;
+- provider-neutral Recipe Registry and Production Policy;
+- semantic Capability Registry with local, MCP and exact native compatibility adapters;
+- D-017 exact one-shot authorization for remote/non-free execution;
+- MLT behind a UV-owned editor adapter and FFmpeg as the deterministic authoritative media/render layer;
+- complete targeted existing-video range workflow through Brief -> Plan -> Candidate -> Review -> Accept -> render/preview;
+- Stage 5 transcript/translation/PreparedSpeech/alignment/review/accepted-dubbing state;
+- local whisper.cpp ASR baseline, optional Argos translation and optional WhisperX alignment;
+- D-017-protected Edge TTS reuse;
+- deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download.
 
-## Stage 5 canonical boundaries
+## Architecture invariants
 
-- Project Store/domain state remains canonical; there is no second dubbing project or timeline model.
-- Transcript, translation, PreparedSpeech, forced alignment, review and accepted dubbing state are typed/versioned and provider-neutral.
-- GUI, scripts, AI and MCP share the same semantic capabilities and editor Command API rather than mutating project JSON or raw MLT.
-- `whisper.cpp` is the local/free ASR baseline; ASR output remains a draft until explicit `accept_asr_transcript`.
-- Argos Translate is an optional local/free translation runtime; language packages remain outside portable project state.
-- Existing Edge TTS is reused instead of creating another synthesis subsystem; remote execution requires D-017 one-shot consent for the exact text.
-- TTS output is re-copied into `assets/`, re-hashed and re-probed before it can become PreparedSpeech.
-- WhisperX is an optional heavy precision `audio.align` layer with explicit local model-cache configuration and no hidden downloads; alignment output remains a draft until accepted through the Command API.
-- Review binds exact source/script/take/audio revisions and server-measured timing/loudness evidence plus explicit human content/synchronization confirmation.
-- Same-source accepted dubbing ranges cannot overlap; stale revisions fail closed.
-- `video.render_dubbing` accepts only canonical project identity, maps source-time dubbing through preceding accepted visual duration deltas and does not accept caller filtergraphs/host paths.
-- `replace_source_audio_range` is the only currently materialized composition policy. Background-preserving/mix policies remain fail-closed until D-036 real-media separation evaluation is completed.
-- WebVTT is a deterministic projection of canonical transcript/translation state, supports overlapping dialogue cues, and is downloaded only through a bounded registered-artifact route.
+- Project Store/domain state is canonical. MLT, FFmpeg, VideoClaw compatibility code and optional model runtimes are adapters/engines, not second project authorities.
+- Reuse-first/orchestration-first is mandatory for general editor/media primitives.
+- GUI, scripts, AI and MCP must converge on UV-owned semantic commands/workflows; direct canonical-state mutation is not an automation API.
+- Remote/non-free execution stays behind D-017.
+- Optional continuity, dubbing, music and other specialized workflows must remain optional.
+- Windows and Linux remain continuous engineering targets.
 
-## Stage 5 decisions
+## What is verified
 
-- D-034: local ASR baseline.
-- D-035: evidence-based dubbing Review/Accept boundary.
-- D-036: dialogue/background separation evaluation gate.
-- D-037: reusable language/audio precision stack and optional-runtime policy.
+PR #32's final implementation and review-context heads passed the five permanent CI checks on Ubuntu and Windows. The app-baseline jobs run unit/API integration, real FFmpeg/MLT media suites, HTTP smoke, frontend lint, high-severity dependency audit and production build.
 
-## Draft implementation gate
+Real-media Stage 5 evidence proves that accepted dubbing replaces only the accepted target range, preserves original audio before/after the range and preserves expected output duration.
 
-Final draft implementation head:
+## Known gaps before Stage 6
 
-`1b98c936d1b1ddf3945da10ee1985b5b4f001363`
+The repository audit after PR #32 found a bounded hardening slice that must close before sequence continuity starts:
 
-CI #1103 / run `31694526656` passed all five required checks:
+- dubbing Review history has no explicit chronological identity; frontend selection must not infer recency from UUID ordering;
+- an existing translation ID must not be silently retargeted to another language/dubbing identity;
+- newly created TTS takes must become the explicit selected take instead of relying on ID-order fallback;
+- transcript/translation binding checks and PreparedSpeech attachment need one transaction-sized Project Store lock boundary;
+- accepted/review/render trust boundaries need verification against current media bytes rather than only stored metadata hashes;
+- the legacy root VideoClaw workspace is still exposed by the product frontend although the UV-owned server intentionally does not mount its old backend routes;
+- Stage 4C/5 roadmap user-outcome gates still lack browser E2E coverage.
 
-- `development-context`
-- `bootstrap (ubuntu-latest, 3.11)`
-- `bootstrap (windows-latest, 3.11)`
-- `app-baseline (ubuntu-latest)`
-- `app-baseline (windows-latest)`
+## Cross-cutting backlog
 
-The app-baseline jobs include API integration, real FFmpeg/MLT media evidence and frontend lint/audit/build on Ubuntu and Windows.
+After Stage 5 hardening, remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
 
-## Reusable evidence retained
+## Development-memory lifecycle
 
-Stage 4C remains authoritative for visual editing/timeline materialization. Stage 5 adds audio/text state and composition without reopening D-033. Real-media Stage 5 coverage proves accepted dubbing replacement while preserving source audio before/after the target range and preserving expected media duration on both supported CI platforms.
+D-038 upgrades repository context to an explicit `idle -> draft -> review -> idle` lifecycle. `ACTIVE_SLICE.json` may have `active_slice = null` only in `idle`; `last_completed` records the exact merged slice/PR/merge commit. A new development slice must start from an idle `main`, not from a merged branch that still claims to be active.
 
-## Cross-cutting debt retained outside this slice
-
-- D-023 still needs an explicit merged/idle lifecycle and live PR diff-vs-write-scope enforcement;
-- the aggregate decision index still needs lifecycle/process maintenance;
-- broader free-form project JSON fields still need recursive portability hardening outside newly typed boundaries;
-- broader accepted-file/content-addressing integrity remains future hardening;
-- the compatibility `/api/stages` catalog should be retired when no UV-owned screen needs it;
-- broader codec/device fixtures remain incremental hardening.
-
-## Next product slice
-
-After the exact review-context head passes the same five required checks and PR #32 merges, continue with `stage-6-sequence-continuity-review` using the same canonical Project Store, Capability Registry, Command API and explicit Review/Accept boundaries.
+Repository-memory closure is process/documentation-only; its declared handoff is `stage-5-correctness-browser-e2e`. Stage 6 remains blocked until that hardening slice is merged and the repository returns to idle.

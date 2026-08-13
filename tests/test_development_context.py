@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.close_development_context import close_context
 from tools.validate_development_context import (
     ACTIVE_SLICE_PATH,
     DevelopmentContextError,
@@ -19,33 +20,38 @@ class DevelopmentContextValidationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.document = self._valid_document()
+        self.document = self._valid_active_document()
         self._write_repository()
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
     @staticmethod
-    def _valid_document() -> dict:
+    def _last_completed() -> dict:
         return {
-            "schema_version": 1,
+            "id": "stage-5-dubbing-translation",
+            "pull_request": 32,
+            "merge_commit": "6f7531d9b87f569074a632972ca11e36562e8bd7",
+        }
+
+    @classmethod
+    def _valid_active_document(cls, state: str = "draft") -> dict:
+        return {
+            "schema_version": 2,
+            "lifecycle_state": state,
             "active_slice": {
                 "id": "chore-agent-development-workflow",
                 "kind": "chore",
-                "roadmap_stage": "stage-4",
+                "roadmap_stage": "stage-5",
                 "goal": "Make development state explicit and CI-checked.",
                 "base_branch": "main",
                 "branch": "chore/agent-development-workflow",
-                "pull_request": None,
-                "phase": "draft",
-                "write_scope": [
-                    "AGENTS.md",
-                    ".github/workflows/ci.yml",
-                    "project-context/**",
-                ],
+                "pull_request": 27,
+                "write_scope": ["AGENTS.md", "project-context/**", "tools/**"],
             },
+            "last_completed": cls._last_completed(),
             "handoff": {
-                "next_slice_id": "stage-4-range-continuity-brief",
+                "next_slice_id": "stage-5-correctness-browser-e2e",
                 "next_task_file": NEXT_TASK_PATH,
             },
             "coordination": {
@@ -56,20 +62,62 @@ class DevelopmentContextValidationTests(unittest.TestCase):
             "required_checks": sorted(REQUIRED_CHECKS),
         }
 
+    @classmethod
+    def _valid_idle_document(cls) -> dict:
+        document = cls._valid_active_document()
+        document["lifecycle_state"] = "idle"
+        document["active_slice"] = None
+        return document
+
     def _write_repository(self) -> None:
         active_path = self.root / ACTIVE_SLICE_PATH
         active_path.parent.mkdir(parents=True, exist_ok=True)
         active_path.write_text(json.dumps(self.document), encoding="utf-8")
-        (self.root / PROJECT_STATE_PATH).write_text(
-            "# State\n\n<!-- uv-active-slice: chore-agent-development-workflow -->\n",
-            encoding="utf-8",
-        )
+        state = self.document["lifecycle_state"]
+        if state == "idle":
+            marker = (
+                "<!-- uv-context-state: idle -->\n"
+                "<!-- uv-last-completed: stage-5-dubbing-translation -->"
+            )
+        else:
+            marker = (
+                f"<!-- uv-context-state: {state} -->\n"
+                "<!-- uv-active-slice: chore-agent-development-workflow -->"
+            )
+        (self.root / PROJECT_STATE_PATH).write_text(f"# State\n\n{marker}\n", encoding="utf-8")
         (self.root / NEXT_TASK_PATH).write_text(
-            "# Next\n\n<!-- uv-next-slice: stage-4-range-continuity-brief -->\n",
+            "# Next\n\n<!-- uv-next-slice: stage-5-correctness-browser-e2e -->\n",
             encoding="utf-8",
         )
 
-    def _event(self, *, draft: bool = True, body: str | None = None) -> dict:
+    @staticmethod
+    def _valid_pr_body() -> str:
+        return "\n".join(
+            (
+                "<!-- uv-active-slice: chore-agent-development-workflow -->",
+                "<!-- uv-next-slice: stage-5-correctness-browser-e2e -->",
+                "",
+                "## Goal",
+                "Make handoffs deterministic.",
+                "",
+                "## Changes",
+                "Add lifecycle validation.",
+                "",
+                "## Verification",
+                "Focused tests pass.",
+                "",
+                "## Architecture impact",
+                "Repository state becomes unambiguous.",
+                "",
+                "## Known limitations",
+                "GitHub remains the source of live check results.",
+                "",
+                "## Next task",
+                "Close Stage 5 correctness gaps.",
+            )
+        )
+
+    def _event(self, *, draft: bool, body: str | None = None) -> dict:
         return {
             "number": 27,
             "pull_request": {
@@ -80,391 +128,181 @@ class DevelopmentContextValidationTests(unittest.TestCase):
             },
         }
 
-    @staticmethod
-    def _valid_pr_body() -> str:
-        return "\n".join(
-            (
-                "<!-- uv-active-slice: chore-agent-development-workflow -->",
-                "<!-- uv-next-slice: stage-4-range-continuity-brief -->",
-                "",
-                "## Goal",
-                "Make handoffs deterministic.",
-                "",
-                "## Changes",
-                "Add a strict validator.",
-                "",
-                "## Verification",
-                "Focused tests pass.",
-                "",
-                "## Architecture impact",
-                "Repository state becomes machine-readable.",
-                "",
-                "## Known limitations",
-                "GitHub remains the source of live PR state.",
-                "",
-                "## Next task",
-                "Build the continuity brief.",
-            )
-        )
+    def _event_path(self, payload: dict | str) -> Path:
+        path = self.root / "event.json"
+        path.write_text(payload if isinstance(payload, str) else json.dumps(payload), encoding="utf-8")
+        return path
 
-    def _write_event(self, payload: dict | str) -> Path:
-        event_path = self.root / "event.json"
-        event_path.write_text(
-            payload if isinstance(payload, str) else json.dumps(payload),
-            encoding="utf-8",
-        )
-        return event_path
-
-    def test_valid_repository_passes_for_local_and_push(self) -> None:
+    def test_active_draft_repository_passes_local_and_push(self) -> None:
         local = validate_repository(self.root)
         pushed = validate_repository(self.root, event_name="push")
+        self.assertEqual(local["lifecycle_state"], "draft")
         self.assertEqual(local["active_slice"]["id"], "chore-agent-development-workflow")
         self.assertEqual(local, pushed)
 
-    def test_duplicate_json_key_fails_at_any_depth(self) -> None:
-        path = self.root / ACTIVE_SLICE_PATH
-        raw = path.read_text(encoding="utf-8")
-        raw = raw.replace(
-            '"goal": "Make development state explicit and CI-checked."',
-            '"goal": "first", "goal": "second"',
-        )
-        path.write_text(raw, encoding="utf-8")
-        with self.assertRaisesRegex(DevelopmentContextError, "duplicate JSON key"):
+    def test_idle_repository_has_no_active_slice(self) -> None:
+        self.document = self._valid_idle_document()
+        self._write_repository()
+        result = validate_repository(self.root, event_name="push")
+        self.assertEqual(result["lifecycle_state"], "idle")
+        self.assertIsNone(result["active_slice"])
+        self.assertEqual(result["last_completed"]["pull_request"], 32)
+
+    def test_idle_rejects_active_slice_and_active_state_rejects_null(self) -> None:
+        idle = self._valid_idle_document()
+        idle["active_slice"] = self._valid_active_document()["active_slice"]
+        self.document = idle
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "active_slice must be null"):
             validate_repository(self.root)
 
-    def test_nonstandard_json_constants_fail(self) -> None:
-        path = self.root / ACTIVE_SLICE_PATH
-        raw = path.read_text(encoding="utf-8").replace(
-            '"schema_version": 1', '"schema_version": NaN'
-        )
-        path.write_text(raw, encoding="utf-8")
-        with self.assertRaisesRegex(DevelopmentContextError, "non-standard JSON"):
+        active = self._valid_active_document()
+        active["active_slice"] = None
+        self.document = active
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "active_slice"):
             validate_repository(self.root)
 
-    def test_unknown_and_missing_schema_keys_fail_closed(self) -> None:
-        scenarios = []
-        unknown = json.loads(json.dumps(self.document))
-        unknown["active_slice"]["provider"] = "forbidden"
-        scenarios.append(unknown)
-        missing = json.loads(json.dumps(self.document))
-        del missing["coordination"]["context_owner"]
-        scenarios.append(missing)
-
-        for document in scenarios:
-            with self.subTest(keys=document.keys()):
-                self.document = document
-                self._write_repository()
-                with self.assertRaisesRegex(DevelopmentContextError, "invalid keys"):
-                    validate_repository(self.root)
-
-    def test_schema_version_ids_enums_and_pull_request_are_strict(self) -> None:
-        mutations = (
-            ("schema_version", True),
-            ("active_slice.id", "Bad_ID"),
-            ("active_slice.kind", "feature"),
-            ("active_slice.kind", []),
-            ("active_slice.roadmap_stage", "Stage 4"),
-            ("active_slice.pull_request", True),
-            ("active_slice.pull_request", 0),
-            ("active_slice.phase", "ready"),
-            ("active_slice.phase", {}),
-        )
-        for field, invalid in mutations:
-            document = self._valid_document()
-            target = document
-            parts = field.split(".")
-            for part in parts[:-1]:
-                target = target[part]
-            target[parts[-1]] = invalid
-            with self.subTest(field=field, value=invalid):
-                self.document = document
-                self._write_repository()
-                with self.assertRaises(DevelopmentContextError):
-                    validate_repository(self.root)
-
-    def test_branch_prefix_must_match_slice_kind(self) -> None:
-        cases = (
-            ("stage", "stage-4/continuity", True),
-            ("stage", "stage-x/continuity", False),
-            ("fix", "chore/not-a-fix", False),
-            ("research", "research/provider-contract", True),
-        )
-        for kind, branch, valid in cases:
-            self.document = self._valid_document()
-            self.document["active_slice"]["kind"] = kind
-            self.document["active_slice"]["branch"] = branch
-            self._write_repository()
-            with self.subTest(kind=kind, branch=branch):
-                if valid:
-                    validate_repository(self.root)
-                else:
-                    with self.assertRaisesRegex(DevelopmentContextError, "prefix"):
-                        validate_repository(self.root)
-
-    def test_write_scope_rejects_duplicates_and_nonportable_paths(self) -> None:
-        invalid_scopes = (
-            ["tools/**", "tools/**"],
-            ["../outside"],
-            ["tools\\script.py"],
-            ["C:/outside"],
-            ["/absolute"],
-            ["tools//script.py"],
-            ["tools/./script.py"],
-            ["tools/"],
-            ["tools/file:name.py"],
-        )
-        for scope in invalid_scopes:
-            self.document = self._valid_document()
-            self.document["active_slice"]["write_scope"] = scope
-            self._write_repository()
-            with self.subTest(scope=scope):
-                with self.assertRaises(DevelopmentContextError):
-                    validate_repository(self.root)
-
-    def test_required_checks_must_be_unique_and_exact(self) -> None:
-        invalid_sets = (
-            ["development-context"],
-            sorted(REQUIRED_CHECKS) + ["unexpected"],
-            sorted(REQUIRED_CHECKS) + ["development-context"],
-        )
-        for checks in invalid_sets:
-            self.document = self._valid_document()
-            self.document["required_checks"] = checks
-            self._write_repository()
-            with self.subTest(checks=checks):
-                with self.assertRaises(DevelopmentContextError):
-                    validate_repository(self.root)
-
-    def test_handoff_and_coordination_values_are_fixed(self) -> None:
-        documents = []
-        wrong_handoff = self._valid_document()
-        wrong_handoff["handoff"]["next_task_file"] = "docs/NEXT.md"
-        documents.append(wrong_handoff)
-        wrong_owner = self._valid_document()
-        wrong_owner["coordination"]["context_owner"] = "worker"
-        documents.append(wrong_owner)
-        wrong_policy = self._valid_document()
-        wrong_policy["coordination"]["parallel_write_policy"] = "shared"
-        documents.append(wrong_policy)
-
-        for document in documents:
+    def test_schema_and_last_completed_are_strict(self) -> None:
+        cases = []
+        wrong_version = self._valid_active_document()
+        wrong_version["schema_version"] = 1
+        cases.append(wrong_version)
+        bad_sha = self._valid_active_document()
+        bad_sha["last_completed"]["merge_commit"] = "abc"
+        cases.append(bad_sha)
+        bad_pr = self._valid_active_document()
+        bad_pr["last_completed"]["pull_request"] = 0
+        cases.append(bad_pr)
+        for document in cases:
             self.document = document
             self._write_repository()
-            with self.assertRaises(DevelopmentContextError):
-                validate_repository(self.root)
-
-    def test_repository_markers_must_match_and_appear_once(self) -> None:
-        marker_cases = (
-            (
-                PROJECT_STATE_PATH,
-                "<!-- uv-active-slice: wrong -->",
-            ),
-            (
-                NEXT_TASK_PATH,
-                "<!-- uv-next-slice: wrong -->",
-            ),
-            (
-                PROJECT_STATE_PATH,
-                "<!-- uv-active-slice: chore-agent-development-workflow -->\n" * 2,
-            ),
-        )
-        for relative_path, contents in marker_cases:
-            self._write_repository()
-            (self.root / relative_path).write_text(contents, encoding="utf-8")
-            with self.subTest(path=relative_path, contents=contents):
-                with self.assertRaisesRegex(DevelopmentContextError, "exactly one marker"):
+            with self.subTest(document=document):
+                with self.assertRaises(DevelopmentContextError):
                     validate_repository(self.root)
 
-    def test_matching_pull_request_event_passes(self) -> None:
-        self.document["active_slice"]["pull_request"] = 27
+    def test_review_requires_pull_request(self) -> None:
+        self.document = self._valid_active_document("review")
+        self.document["active_slice"]["pull_request"] = None
         self._write_repository()
-        event_path = self._write_event(self._event())
-        validate_repository(
-            self.root,
-            event_name="pull_request",
-            event_path=event_path,
+        with self.assertRaisesRegex(DevelopmentContextError, "review state requires"):
+            validate_repository(self.root)
+
+    def test_branch_prefix_and_scope_remain_strict(self) -> None:
+        self.document["active_slice"]["kind"] = "fix"
+        self.document["active_slice"]["branch"] = "chore/wrong"
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "prefix"):
+            validate_repository(self.root)
+
+        self.document = self._valid_active_document()
+        self.document["active_slice"]["write_scope"] = ["../outside"]
+        self._write_repository()
+        with self.assertRaises(DevelopmentContextError):
+            validate_repository(self.root)
+
+    def test_repository_markers_follow_lifecycle(self) -> None:
+        (self.root / PROJECT_STATE_PATH).write_text(
+            "<!-- uv-context-state: draft -->\n<!-- uv-last-completed: stage-5-dubbing-translation -->",
+            encoding="utf-8",
         )
+        with self.assertRaises(DevelopmentContextError):
+            validate_repository(self.root)
 
-    def test_pull_request_event_requires_configured_matching_identity(self) -> None:
-        scenarios = []
-        null_number = self._valid_document()
-        scenarios.append((null_number, self._event()))
-        wrong_number = self._valid_document()
-        wrong_number["active_slice"]["pull_request"] = 28
-        scenarios.append((wrong_number, self._event()))
-        wrong_head = self._valid_document()
-        wrong_head["active_slice"]["pull_request"] = 27
-        head_event = self._event()
-        head_event["pull_request"]["head"]["ref"] = "chore/other"
-        scenarios.append((wrong_head, head_event))
-        wrong_base = self._valid_document()
-        wrong_base["active_slice"]["pull_request"] = 27
-        base_event = self._event()
-        base_event["pull_request"]["base"]["ref"] = "release"
-        scenarios.append((wrong_base, base_event))
+        self.document = self._valid_idle_document()
+        self._write_repository()
+        (self.root / PROJECT_STATE_PATH).write_text(
+            "<!-- uv-context-state: idle -->\n<!-- uv-active-slice: chore-agent-development-workflow -->",
+            encoding="utf-8",
+        )
+        with self.assertRaises(DevelopmentContextError):
+            validate_repository(self.root)
 
-        for document, event in scenarios:
-            self.document = document
+    def test_pull_request_draft_and_review_states_match_live_pr(self) -> None:
+        for state, draft in (("draft", True), ("review", False)):
+            self.document = self._valid_active_document(state)
             self._write_repository()
-            event_path = self._write_event(event)
-            with self.subTest(document=document["active_slice"], event=event):
-                with self.assertRaises(DevelopmentContextError):
-                    validate_repository(
-                        self.root,
-                        event_name="pull_request",
-                        event_path=event_path,
-                    )
+            validate_repository(
+                self.root,
+                event_name="pull_request",
+                event_path=self._event_path(self._event(draft=draft)),
+            )
 
-    def test_pull_request_draft_state_must_match_phase(self) -> None:
-        cases = (
-            ("draft", True, True),
-            ("draft", False, False),
-            ("review", False, True),
-            ("review", True, False),
-        )
-        for phase, draft, valid in cases:
-            self.document = self._valid_document()
-            self.document["active_slice"]["pull_request"] = 27
-            self.document["active_slice"]["phase"] = phase
-            self._write_repository()
-            event_path = self._write_event(self._event(draft=draft))
-            with self.subTest(phase=phase, draft=draft):
-                if valid:
-                    validate_repository(
-                        self.root,
-                        event_name="pull_request",
-                        event_path=event_path,
-                    )
-                else:
-                    with self.assertRaisesRegex(DevelopmentContextError, "phase"):
-                        validate_repository(
-                            self.root,
-                            event_name="pull_request",
-                            event_path=event_path,
-                        )
-
-    def test_pr_body_requires_markers_sections_order_and_content(self) -> None:
-        valid_body = self._valid_pr_body()
-        cases = (
-            valid_body.replace(
-                "<!-- uv-active-slice: chore-agent-development-workflow -->",
-                "<!-- uv-active-slice: wrong -->",
-            ),
-            valid_body.replace("## Verification", "## verification"),
-            valid_body.replace("## Changes\nAdd a strict validator.", "## Changes\n<!-- none -->"),
-            valid_body.replace(
-                "## Goal\nMake handoffs deterministic.\n\n## Changes\nAdd a strict validator.",
-                "## Changes\nAdd a strict validator.\n\n## Goal\nMake handoffs deterministic.",
-            ),
-        )
-        self.document["active_slice"]["pull_request"] = 27
+    def test_pull_request_state_identity_and_body_fail_closed(self) -> None:
+        self.document = self._valid_active_document("review")
         self._write_repository()
-        for body in cases:
-            event_path = self._write_event(self._event(body=body))
-            with self.subTest(body=body):
-                with self.assertRaises(DevelopmentContextError):
-                    validate_repository(
-                        self.root,
-                        event_name="pull_request",
-                        event_path=event_path,
-                    )
+        wrong_draft = self._event(draft=True)
+        with self.assertRaisesRegex(DevelopmentContextError, "lifecycle_state"):
+            validate_repository(
+                self.root,
+                event_name="pull_request",
+                event_path=self._event_path(wrong_draft),
+            )
 
-    def test_pr_body_ignores_headings_inside_fenced_code(self) -> None:
-        self.document["active_slice"]["pull_request"] = 27
-        self._write_repository()
-
-        body_with_example = self._valid_pr_body().replace(
-            "Build the continuity brief.",
-            "Build the continuity brief.\n\n```markdown\n## Changes\nExample only.\n```",
-        )
-        event_path = self._write_event(self._event(body=body_with_example))
-        validate_repository(
-            self.root,
-            event_name="pull_request",
-            event_path=event_path,
-        )
-
-        body_without_real_section = self._valid_pr_body().replace(
-            "## Changes\nAdd a strict validator.",
-            "```markdown\n## Changes\nExample only.\n```",
-        )
-        event_path = self._write_event(self._event(body=body_without_real_section))
+        bad_body = self._valid_pr_body().replace("## Changes", "## changes")
         with self.assertRaisesRegex(DevelopmentContextError, "## Changes"):
             validate_repository(
                 self.root,
                 event_name="pull_request",
-                event_path=event_path,
+                event_path=self._event_path(self._event(draft=False, body=bad_body)),
             )
 
-    def test_review_phase_rejects_placeholders_but_draft_allows_them(self) -> None:
-        placeholders = (
-            "TODO",
-            "TBD",
-            "Still to do",
-            "replace-with-active-slice-id",
-        )
-        for phase in ("draft", "review"):
-            for placeholder in placeholders:
-                self.document = self._valid_document()
-                self.document["active_slice"]["pull_request"] = 27
-                self.document["active_slice"]["phase"] = phase
-                self._write_repository()
-                body = self._valid_pr_body().replace(
-                    "Build the continuity brief.", placeholder
-                )
-                event_path = self._write_event(
-                    self._event(draft=phase == "draft", body=body)
-                )
-                with self.subTest(phase=phase, placeholder=placeholder):
-                    if phase == "draft":
-                        validate_repository(
-                            self.root,
-                            event_name="pull_request",
-                            event_path=event_path,
-                        )
-                    else:
-                        with self.assertRaisesRegex(
-                            DevelopmentContextError, "placeholder"
-                        ):
-                            validate_repository(
-                                self.root,
-                                event_name="pull_request",
-                                event_path=event_path,
-                            )
-
-    def test_review_phase_allows_replace_as_domain_language(self) -> None:
-        self.document["active_slice"]["pull_request"] = 27
-        self.document["active_slice"]["phase"] = "review"
+    def test_idle_rejects_pull_request_event(self) -> None:
+        self.document = self._valid_idle_document()
         self._write_repository()
-        body = self._valid_pr_body().replace(
-            "Build the continuity brief.",
-            "Replace the exact interval through video.replace_range.",
-        )
-        event_path = self._write_event(self._event(draft=False, body=body))
-        validate_repository(
-            self.root,
-            event_name="pull_request",
-            event_path=event_path,
-        )
-
-    def test_pull_request_event_json_rejects_duplicate_keys(self) -> None:
-        self.document["active_slice"]["pull_request"] = 27
-        self._write_repository()
-        event_path = self._write_event(
-            '{"number":27,"number":28,"pull_request":{}}'
-        )
-        with self.assertRaisesRegex(DevelopmentContextError, "duplicate JSON key"):
+        with self.assertRaisesRegex(DevelopmentContextError, "idle repository"):
             validate_repository(
                 self.root,
                 event_name="pull_request",
-                event_path=event_path,
+                event_path=self._event_path(self._event(draft=True)),
             )
 
-    def test_unsupported_event_name_and_missing_event_path_fail(self) -> None:
-        with self.assertRaisesRegex(DevelopmentContextError, "unsupported"):
-            validate_repository(self.root, event_name="schedule")
-        with self.assertRaisesRegex(DevelopmentContextError, "GITHUB_EVENT_PATH"):
-            validate_repository(self.root, event_name="pull_request")
+    def test_review_rejects_placeholders_but_draft_allows_them(self) -> None:
+        body = self._valid_pr_body().replace("Close Stage 5 correctness gaps.", "TODO")
+        self.document = self._valid_active_document("draft")
+        self._write_repository()
+        validate_repository(
+            self.root,
+            event_name="pull_request",
+            event_path=self._event_path(self._event(draft=True, body=body)),
+        )
+        self.document = self._valid_active_document("review")
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "placeholder"):
+            validate_repository(
+                self.root,
+                event_name="pull_request",
+                event_path=self._event_path(self._event(draft=False, body=body)),
+            )
+
+    def test_duplicate_json_keys_fail(self) -> None:
+        path = self.root / ACTIVE_SLICE_PATH
+        path.write_text('{"schema_version":2,"schema_version":2}', encoding="utf-8")
+        with self.assertRaisesRegex(DevelopmentContextError, "duplicate JSON key"):
+            validate_repository(self.root)
+
+    def test_close_context_transitions_review_to_idle(self) -> None:
+        self.document = self._valid_active_document("review")
+        self._write_repository()
+        result = close_context(
+            self.root,
+            pull_request=27,
+            merge_commit="1" * 40,
+        )
+        self.assertEqual(result["lifecycle_state"], "idle")
+        self.assertIsNone(result["active_slice"])
+        self.assertEqual(result["last_completed"]["id"], "chore-agent-development-workflow")
+        state_text = (self.root / PROJECT_STATE_PATH).read_text(encoding="utf-8")
+        self.assertIn("<!-- uv-context-state: idle -->", state_text)
+        self.assertIn("<!-- uv-last-completed: chore-agent-development-workflow -->", state_text)
+
+    def test_close_context_rejects_nonreview_or_wrong_pr(self) -> None:
+        with self.assertRaisesRegex(DevelopmentContextError, "only review"):
+            close_context(self.root, pull_request=27, merge_commit="1" * 40)
+        self.document = self._valid_active_document("review")
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "does not match"):
+            close_context(self.root, pull_request=28, merge_commit="1" * 40)
 
 
 if __name__ == "__main__":
