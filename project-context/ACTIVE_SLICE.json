@@ -8,7 +8,7 @@
     "base_branch": "main",
     "branch": "stage-5/dubbing-translation",
     "pull_request": 32,
-    "phase": "draft",
+    "phase": "review",
     "write_scope": [
       ".github/workflows/ci.yml",
       "frontend/**",

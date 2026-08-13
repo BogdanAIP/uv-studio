@@ -30,5 +30,6 @@ Compact record of completed development slices. Detailed rationale remains in th
 | 4B | PR #28, `919baba` | Project-owned replacement candidates, sample-first generative preparation, trusted MCP project outputs and no automatic accepted edit | D-031 |
 | 4B | PR #29 | Evidence-based ReplacementReview bound to exact candidate metadata/content, removal of direct public accepted-edit creation, and approved-review-only acceptance | D-032 |
 | 4C foundation | PR #30, `1064576` | Reuse-first scriptable editor foundation selected: MLT engine behind UV adapter plus selective MIT OpenCut Classic editor UX donor; one Command API required for GUI/scripts/AI/MCP | D-033 |
+| 4C workflow | PR #31, `03b3c0b` | Complete targeted existing-video workflow: project-owned import/preview, exact timeline selection, Brief → Plan → Candidate → Review → Accept, MLT projection, authoritative FFmpeg render and cross-platform real-media parity | D-032, D-033 |
 
 This file is historical only. Current intent, coordination and handoff live in `ACTIVE_SLICE.json`, `PROJECT_STATE.md` and `NEXT_TASK.md`.
