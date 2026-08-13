@@ -121,7 +121,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
             register_whisperx_alignment_adapter(registry)
         offer = registry.offers_for("audio.align")[0]
         self.assertEqual(offer.availability, OfferAvailability.CONFIGURATION_REQUIRED)
-        self.assertIn("no_hidden_model_download", offer.features)
+        self.assertIn("runtime.no_hidden_model_download", offer.features)
         self.assertEqual(offer.locality, LocalityClass.LOCAL)
         self.assertEqual(offer.cost_class, CostClass.FREE)
 
