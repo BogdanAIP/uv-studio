@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: chore-context-lifecycle-closure -->
 
 **Updated:** 2026-08-13
