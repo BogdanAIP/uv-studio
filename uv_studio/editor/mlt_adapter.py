@@ -80,6 +80,20 @@ class MLTTimelineProjection:
         }
 
 
+@dataclass(frozen=True)
+class _PreparedReplacement:
+    edit_id: str
+    project_path: str
+    absolute_path: Path
+    producer_id: str
+    start_frame: int
+    end_frame: int
+
+    @property
+    def frame_count(self) -> int:
+        return self.end_frame - self.start_frame
+
+
 def _positive_int(metadata: dict[str, Any], key: str) -> int:
     value = metadata.get(key)
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -172,6 +186,38 @@ class MLTTimelineAdapter:
         if source_frames <= 0:
             raise MLTAdapterError("MLT source duration maps to zero frames")
 
+        boundary_errors: list[int] = []
+        prepared: list[_PreparedReplacement] = []
+        previous_end_frame = 0
+        for index, edit in enumerate(edits, start=1):
+            start_frame = _boundary_frame(edit.start_us, rate)
+            end_frame = _boundary_frame(edit.end_us, rate)
+            boundary_errors.extend(
+                [
+                    _boundary_error_us(edit.start_us, start_frame, rate),
+                    _boundary_error_us(edit.end_us, end_frame, rate),
+                ]
+            )
+            if (
+                start_frame < previous_end_frame
+                or end_frame <= start_frame
+                or end_frame > source_frames
+            ):
+                raise MLTAdapterError(
+                    f"accepted edit {edit.edit_id!r} cannot be represented as an ordered MLT frame range"
+                )
+            prepared.append(
+                _PreparedReplacement(
+                    edit_id=edit.edit_id,
+                    project_path=edit.replacement_path,
+                    absolute_path=self._resolve(project_id, edit.replacement_path),
+                    producer_id=f"uv_replacement_{index}",
+                    start_frame=start_frame,
+                    end_frame=end_frame,
+                )
+            )
+            previous_end_frame = end_frame
+
         root = ET.Element("mlt", {"LC_NUMERIC": "C"})
         gcd_width_height = math.gcd(width, height)
         ET.SubElement(
@@ -203,29 +249,38 @@ class MLTTimelineAdapter:
         # duration must be inherited before those in/out attributes are applied.
         _add_property(source_producer, "length", str(source_frames))
 
+        # MLT's XML parser resolves <entry producer="..."> against the producer
+        # map at the moment it parses the entry. Declare every replacement producer
+        # before serializing the playlist; forward references are not resolved later.
+        for replacement in prepared:
+            replacement_producer = ET.SubElement(
+                root,
+                "producer",
+                {
+                    "id": replacement.producer_id,
+                    "in": "0",
+                    "out": str(replacement.frame_count - 1),
+                },
+            )
+            _add_property(replacement_producer, "mlt_service", "avformat-novalidate")
+            _add_property(replacement_producer, "resource", replacement.absolute_path.as_posix())
+            # Replacement candidates are duration-validated by the D-032 acceptance
+            # path. Preserve that exact accepted range length inside MLT as well.
+            _add_property(replacement_producer, "length", str(replacement.frame_count))
+
         playlist = ET.SubElement(root, "playlist", {"id": "uv_playlist0"})
         segments: list[MLTProjectionSegment] = []
-        boundary_errors: list[int] = []
         cursor_frame = 0
-
-        for index, edit in enumerate(edits, start=1):
-            start_frame = _boundary_frame(edit.start_us, rate)
-            end_frame = _boundary_frame(edit.end_us, rate)
-            boundary_errors.extend(
-                [
-                    _boundary_error_us(edit.start_us, start_frame, rate),
-                    _boundary_error_us(edit.end_us, end_frame, rate),
-                ]
-            )
-            if start_frame < cursor_frame or end_frame <= start_frame or end_frame > source_frames:
-                raise MLTAdapterError(
-                    f"accepted edit {edit.edit_id!r} cannot be represented as an ordered MLT frame range"
-                )
-            if start_frame > cursor_frame:
+        for replacement in prepared:
+            if replacement.start_frame > cursor_frame:
                 ET.SubElement(
                     playlist,
                     "entry",
-                    {"producer": "uv_source", "in": str(cursor_frame), "out": str(start_frame - 1)},
+                    {
+                        "producer": "uv_source",
+                        "in": str(cursor_frame),
+                        "out": str(replacement.start_frame - 1),
+                    },
                 )
                 segments.append(
                     MLTProjectionSegment(
@@ -233,44 +288,31 @@ class MLTTimelineAdapter:
                         project_path=source_reference.path,
                         producer_id="uv_source",
                         in_frame=cursor_frame,
-                        out_frame=start_frame - 1,
+                        out_frame=replacement.start_frame - 1,
                     )
                 )
 
-            replacement_absolute = self._resolve(project_id, edit.replacement_path)
-            replacement_id = f"uv_replacement_{index}"
-            replacement_frames = end_frame - start_frame
-            replacement_producer = ET.SubElement(
-                root,
-                "producer",
-                {"id": replacement_id, "in": "0", "out": str(replacement_frames - 1)},
-            )
-            _add_property(replacement_producer, "mlt_service", "avformat-novalidate")
-            _add_property(replacement_producer, "resource", replacement_absolute.as_posix())
-            # Replacement candidates are already duration-validated by the D-032
-            # acceptance path. Preserve that exact range length inside MLT as well.
-            _add_property(replacement_producer, "length", str(replacement_frames))
             ET.SubElement(
                 playlist,
                 "entry",
                 {
-                    "producer": replacement_id,
+                    "producer": replacement.producer_id,
                     "in": "0",
-                    "out": str(replacement_frames - 1),
-                    "uv_edit_id": edit.edit_id,
+                    "out": str(replacement.frame_count - 1),
+                    "uv_edit_id": replacement.edit_id,
                 },
             )
             segments.append(
                 MLTProjectionSegment(
                     role="replacement",
-                    project_path=edit.replacement_path,
-                    producer_id=replacement_id,
+                    project_path=replacement.project_path,
+                    producer_id=replacement.producer_id,
                     in_frame=0,
-                    out_frame=replacement_frames - 1,
-                    edit_id=edit.edit_id,
+                    out_frame=replacement.frame_count - 1,
+                    edit_id=replacement.edit_id,
                 )
             )
-            cursor_frame = end_frame
+            cursor_frame = replacement.end_frame
 
         if cursor_frame < source_frames:
             ET.SubElement(
