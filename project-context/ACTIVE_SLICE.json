@@ -8,7 +8,7 @@
     "goal": "Make repository development memory truthful between pull requests, synchronize stale context/documentation after Stage 5, and establish an explicit idle -> draft -> review -> idle lifecycle before any new product slice starts.",
     "base_branch": "main",
     "branch": "chore/context-lifecycle-closure",
-    "pull_request": null,
+    "pull_request": 33,
     "write_scope": [
       "AGENTS.md",
       "DEVELOPMENT_PROTOCOL.md",
