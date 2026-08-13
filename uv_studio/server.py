@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 
+from uv_studio.api.artifact_files import router as artifact_files_router  # noqa: E402
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
@@ -74,6 +75,7 @@ app.include_router(projects_router)
 app.include_router(project_media_router)
 app.include_router(prepared_audio_router)
 app.include_router(prepared_audio_promotion_router)
+app.include_router(artifact_files_router)
 app.include_router(editor_commands_router)
 app.include_router(edit_state_router)
 app.include_router(continuity_brief_router)
