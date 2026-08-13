@@ -1,25 +1,15 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "draft",
+  "lifecycle_state": "review",
   "active_slice": {
     "id": "chore-context-lifecycle-closure",
     "kind": "chore",
     "roadmap_stage": "stage-5",
-    "goal": "Make repository development memory truthful between pull requests, synchronize stale context/documentation after Stage 5, and establish an explicit idle -> draft -> review -> idle lifecycle before any new product slice starts.",
+    "goal": "Make repository development memory truthful between pull requests, synchronize stale context/documentation after Stage 5, and establish an explicit idle-draft-review-idle lifecycle before any new product slice starts.",
     "base_branch": "main",
     "branch": "chore/context-lifecycle-closure",
     "pull_request": 33,
-    "write_scope": [
-      "AGENTS.md",
-      "DEVELOPMENT_PROTOCOL.md",
-      "ROADMAP.md",
-      "THIRD_PARTY_NOTICES.md",
-      "docs/**",
-      "project-context/**",
-      "tools/validate_development_context.py",
-      "tools/close_development_context.py",
-      "tests/test_development_context.py"
-    ]
+    "write_scope": ["AGENTS.md", "DEVELOPMENT_PROTOCOL.md", "ROADMAP.md", "THIRD_PARTY_NOTICES.md", "docs/**", "project-context/**", "tools/validate_development_context.py", "tools/close_development_context.py", "tests/test_development_context.py"]
   },
   "last_completed": {
     "id": "stage-5-dubbing-translation",
@@ -35,11 +25,5 @@
     "context_owner": "coordinator",
     "parallel_write_policy": "disjoint_paths"
   },
-  "required_checks": [
-    "development-context",
-    "bootstrap (ubuntu-latest, 3.11)",
-    "bootstrap (windows-latest, 3.11)",
-    "app-baseline (ubuntu-latest)",
-    "app-baseline (windows-latest)"
-  ]
+  "required_checks": ["development-context", "bootstrap (ubuntu-latest, 3.11)", "bootstrap (windows-latest, 3.11)", "app-baseline (ubuntu-latest)", "app-baseline (windows-latest)"]
 }
