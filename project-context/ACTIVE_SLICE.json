@@ -1,31 +1,33 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "lifecycle_state": "draft",
   "active_slice": {
-    "id": "stage-5-dubbing-translation",
-    "kind": "stage",
+    "id": "chore-context-lifecycle-closure",
+    "kind": "chore",
     "roadmap_stage": "stage-5",
-    "goal": "Deliver professional dubbing and translation as a user-facing workflow on the existing UV Studio editor foundation: project-owned source media, provider-neutral transcript/translation/speech/alignment capabilities, explicit review and acceptance, non-destructive audio state, deterministic preview/render/export, and no second project or timeline model.",
+    "goal": "Make repository development memory truthful between pull requests, synchronize stale context/documentation after Stage 5, and establish an explicit idle -> draft -> review -> idle lifecycle before any new product slice starts.",
     "base_branch": "main",
-    "branch": "stage-5/dubbing-translation",
-    "pull_request": 32,
-    "phase": "review",
+    "branch": "chore/context-lifecycle-closure",
+    "pull_request": 33,
     "write_scope": [
-      ".github/workflows/ci.yml",
-      "frontend/**",
-      "requirements-uv*.txt",
-      "third_party/**",
+      "AGENTS.md",
+      "DEVELOPMENT_PROTOCOL.md",
+      "ROADMAP.md",
       "THIRD_PARTY_NOTICES.md",
-      "uv_studio/**",
-      "tests/**",
-      "tests_api/**",
-      "tests_real_media/**",
       "docs/**",
       "project-context/**",
-      "ROADMAP.md"
+      "tools/validate_development_context.py",
+      "tools/close_development_context.py",
+      "tests/test_development_context.py"
     ]
   },
+  "last_completed": {
+    "id": "stage-5-dubbing-translation",
+    "pull_request": 32,
+    "merge_commit": "6f7531d9b87f569074a632972ca11e36562e8bd7"
+  },
   "handoff": {
-    "next_slice_id": "stage-6-sequence-continuity-review",
+    "next_slice_id": "stage-5-correctness-browser-e2e",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
