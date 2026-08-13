@@ -18,6 +18,7 @@ from uv_studio.api.prepared_audio import (
     get_prepared_audio_probe,
 )
 from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.capabilities.execution import CapabilityExecutionError
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.prepared_audio import PreparedAudioError, ProjectPreparedAudioStore
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
@@ -135,7 +136,12 @@ def promote_audio_artifact_to_prepared_speech(
         return _reference_payload(registered)
     except HTTPException:
         raise
-    except (PreparedAudioError, ProjectValidationError, ProjectStoreError) as exc:
+    except (
+        CapabilityExecutionError,
+        PreparedAudioError,
+        ProjectValidationError,
+        ProjectStoreError,
+    ) as exc:
         raise _translate(exc) from exc
     finally:
         temporary.unlink(missing_ok=True)
