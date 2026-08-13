@@ -15,6 +15,9 @@ from uv_studio.projects.continuity_brief import (
 )
 from uv_studio.projects.edit_state import EditStateError, RangeEditStateStore
 from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.replacement_candidate import ReplacementCandidateStore
+from uv_studio.projects.replacement_plan import ReplacementPlanStore
+from uv_studio.projects.replacement_review import ReplacementReviewStore
 from uv_studio.projects.source_media import SourceMediaError, SourceMediaNotFound
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
@@ -51,7 +54,12 @@ class SelectRangeCommandResultPayload(_StrictModel):
 
 class EditorStatePayload(_StrictModel):
     sources: list[ProjectReferencePayload]
+    artifacts: list[ProjectReferencePayload]
     briefs: list[dict]
+    replacement_plans: list[dict]
+    replacement_candidates: list[dict]
+    sample_approvals: list[dict]
+    replacement_reviews: list[dict]
     accepted_edits: list[dict]
 
 
@@ -124,11 +132,19 @@ def get_editor_state(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
 ) -> EditorStatePayload:
-    """Return canonical state needed to reconstruct the Stage 4C editor workspace."""
+    """Return canonical state needed to reconstruct the complete Stage 4C workspace.
+
+    This endpoint aggregates existing typed stores for display only. Mutations still
+    go through their original Plan/Candidate/Review/Accept boundaries so the editor
+    cannot bypass D-017 authorization or D-032 acceptance review.
+    """
 
     try:
         project = store.load_project(project_id)
         briefs = RangeContinuityBriefStore(store).load(project_id)
+        plans = ReplacementPlanStore(store).load(project_id)
+        candidates = ReplacementCandidateStore(store).load(project_id)
+        reviews = ReplacementReviewStore(store).load(project_id)
         accepted = RangeEditStateStore(store).load(project_id)
         return EditorStatePayload(
             sources=[
@@ -136,7 +152,16 @@ def get_editor_state(
                 for reference in project.sources
                 if reference.kind == "video"
             ],
+            artifacts=[
+                ProjectReferencePayload.model_validate(reference.to_dict())
+                for reference in project.artifacts
+                if reference.kind == "video"
+            ],
             briefs=[brief.to_dict() for brief in briefs.briefs],
+            replacement_plans=[plan.to_dict() for plan in plans.plans],
+            replacement_candidates=[candidate.to_dict() for candidate in candidates.candidates],
+            sample_approvals=[approval.to_dict() for approval in candidates.sample_approvals],
+            replacement_reviews=[review.to_dict() for review in reviews.reviews],
             accepted_edits=[edit.to_dict() for edit in accepted.edits],
         )
     except (
