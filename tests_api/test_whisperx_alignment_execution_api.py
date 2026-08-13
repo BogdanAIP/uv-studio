@@ -82,7 +82,7 @@ class WhisperXAlignmentExecutionApiTests(unittest.TestCase):
             "audio.align",
             "Align",
             "offline forced alignment",
-            OperationKind.ANALYSIS,
+            OperationKind.UNDERSTANDING,
             (MediaKind.AUDIO, MediaKind.TEXT),
             (MediaKind.TEXT,),
         )
