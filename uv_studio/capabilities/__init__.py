@@ -47,8 +47,9 @@ from .selection import (
 
 def build_builtin_capability_registry() -> CapabilityRegistry:
     registry = _build_builtin_registry()
-    # Editor/media projections stay explicit operation modules while callers
-    # receive one complete semantic registry through this public function.
+    # Editor/media projections and optional local runtimes stay explicit modules
+    # while callers receive one complete semantic registry through this function.
+    from .adapters.argos_translate import register_argos_translate_adapter
     from .adapters.artifact_preview import register_artifact_preview_capability
     from .adapters.audio_loudness import register_audio_loudness_capability
     from .adapters.dubbing_render import register_dubbing_render_capability
@@ -58,6 +59,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     register_artifact_preview_capability(registry)
     register_audio_loudness_capability(registry)
     register_dubbing_render_capability(registry)
+    register_argos_translate_adapter(registry)
     return registry
 
 
