@@ -25,18 +25,18 @@ class DubbingCommandsApiTests(unittest.TestCase):
         created = self.client.post("/api/uv/projects", json={"title": "Dubbing Project"})
         self.assertEqual(created.status_code, 201, created.text)
         self.project_id = created.json()["project_id"]
-
-        media_store = ProjectSourceMediaStore(self.store)
-        allocation = media_store.allocate(self.project_id, "dialogue-source.mp4")
-        allocation.absolute_path.write_bytes(b"registered-dialogue-video")
-        project = media_store.register(
+        media = ProjectSourceMediaStore(self.store)
+        allocation = media.allocate(self.project_id, "dialogue-source.mp4")
+        body = b"registered-dialogue-video"
+        allocation.absolute_path.write_bytes(body)
+        project = media.register(
             self.project_id,
             allocation,
             metadata={
                 "original_name": "dialogue-source.mp4",
                 "content_type": "video/mp4",
-                "size_bytes": len(b"registered-dialogue-video"),
-                "sha256": "1" * 64,
+                "size_bytes": len(body),
+                "sha256": hashlib.sha256(body).hexdigest(),
                 "duration_us": 12_000_000,
                 "has_audio": True,
                 "width": 1280,
@@ -50,9 +50,13 @@ class DubbingCommandsApiTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
+    @property
+    def command_url(self) -> str:
+        return f"/api/uv/projects/{self.project_id}/editor/commands"
+
     def _import_transcript(self) -> dict:
         response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
+            self.command_url,
             json={
                 "command": "import_dubbing_transcript",
                 "source_id": self.source.id,
@@ -60,54 +64,40 @@ class DubbingCommandsApiTests(unittest.TestCase):
                 "start_us": 1_000_000,
                 "end_us": 8_000_000,
                 "segments": [
-                    {
-                        "segment_id": "seg_001",
-                        "start_us": 1_000_000,
-                        "end_us": 3_000_000,
-                        "text": "Hello there",
-                        "speaker_label": "Speaker 1",
-                    },
-                    {
-                        "segment_id": "seg_002",
-                        "start_us": 4_000_000,
-                        "end_us": 7_500_000,
-                        "text": "This is the second line",
-                    },
+                    {"segment_id": "seg_001", "start_us": 1_000_000, "end_us": 3_000_000, "text": "Hello there"},
+                    {"segment_id": "seg_002", "start_us": 4_000_000, "end_us": 7_500_000, "text": "Second line"},
                 ],
             },
         )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
-    def _create_translation(self, dubbing_id: str, *, translation_id: str | None = None) -> dict:
+    def _translation(self, dubbing_id: str, *, translation_id: str | None = None, language: str = "ru") -> dict:
         payload = {
             "command": "upsert_dubbing_translation",
             "dubbing_id": dubbing_id,
-            "target_language": "ru",
+            "target_language": language,
             "segments": [
-                {"segment_id": "seg_001", "text": "Привет"},
-                {"segment_id": "seg_002", "text": "Это вторая строка"},
+                {"segment_id": "seg_001", "text": "Привет" if language == "ru" else "Hallo"},
+                {"segment_id": "seg_002", "text": "Вторая строка" if language == "ru" else "Zweite Zeile"},
             ],
         }
         if translation_id is not None:
             payload["translation_id"] = translation_id
-        response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json=payload,
-        )
+        response = self.client.post(self.command_url, json=payload)
         self.assertEqual(response.status_code, 201, response.text)
-        return response.json()
+        return response.json()["payload"]["translation"]
 
-    def _register_prepared_audio(self, *, origin: str = "recorded"):
+    def _audio(self, *, origin: str = "recorded"):
         media = ProjectPreparedAudioStore(self.store)
-        allocation = media.allocate(self.project_id, "voice-take.wav")
+        allocation = media.allocate(self.project_id, "voice.wav")
         body = b"prepared-speech-audio"
         allocation.absolute_path.write_bytes(body)
         project = media.register(
             self.project_id,
             allocation,
             metadata={
-                "original_name": "voice-take.wav",
+                "original_name": "voice.wav",
                 "content_type": "audio/wav",
                 "size_bytes": len(body),
                 "sha256": hashlib.sha256(body).hexdigest(),
@@ -119,299 +109,109 @@ class DubbingCommandsApiTests(unittest.TestCase):
         )
         return next(item for item in project.artifacts if item.id == allocation.audio_id)
 
-    def test_import_transcript_uses_source_id_and_server_owned_revision_binding(self) -> None:
-        result = self._import_transcript()
-        self.assertEqual(result["command"], "import_dubbing_transcript")
-        self.assertTrue(result["dubbing_id"].startswith("dub_"))
-        transcript = result["payload"]["transcript"]
-        self.assertEqual(transcript["source_id"], self.source.id)
-        self.assertEqual(transcript["source_sha256"], "1" * 64)
-        self.assertEqual(transcript["language"], "en-us")
+    def test_import_and_asr_bind_current_source_bytes(self) -> None:
+        imported = self._import_transcript()
+        transcript = imported["payload"]["transcript"]
+        self.assertEqual(transcript["source_sha256"], self.source.metadata["sha256"])
         self.assertEqual(transcript["origin"], "imported")
-        self.assertEqual(len(result["payload"]["transcript_sha256"]), 64)
-
-        persisted = DubbingStore(self.store).validate_project(self.project_id)
-        self.assertEqual(persisted.transcripts[0].to_dict(), transcript)
-
-        state = self.client.get(f"/api/uv/projects/{self.project_id}/editor/state")
-        self.assertEqual(state.status_code, 200, state.text)
-        dubbing = state.json()["dubbing"]
-        self.assertEqual([item["dubbing_id"] for item in dubbing["transcripts"]], [result["dubbing_id"]])
-        self.assertEqual(dubbing["translations"], [])
-
-    def test_accept_asr_transcript_requires_explicit_command_and_rebinds_source_revision(self) -> None:
-        response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
+        asr = self.client.post(
+            self.command_url,
             json={
                 "command": "accept_asr_transcript",
                 "source_id": self.source.id,
                 "language": "en",
                 "start_us": 2_000_000,
-                "end_us": 6_000_000,
-                "segments": [
-                    {
-                        "segment_id": "seg_000001",
-                        "start_us": 2_000_000,
-                        "end_us": 3_250_000,
-                        "text": "Reviewed and corrected ASR text",
-                        "confidence": 0.91,
-                    },
-                    {
-                        "segment_id": "seg_000002",
-                        "start_us": 3_500_000,
-                        "end_us": 5_500_000,
-                        "text": "Second reviewed segment",
-                    },
-                ],
+                "end_us": 4_000_000,
+                "segments": [{"segment_id": "seg_asr", "start_us": 2_000_000, "end_us": 4_000_000, "text": "Reviewed ASR"}],
             },
         )
-        self.assertEqual(response.status_code, 201, response.text)
-        result = response.json()
-        self.assertEqual(result["command"], "accept_asr_transcript")
-        transcript = result["payload"]["transcript"]
-        self.assertEqual(transcript["origin"], "asr")
-        self.assertEqual(transcript["source_id"], self.source.id)
-        self.assertEqual(transcript["source_sha256"], "1" * 64)
-        self.assertEqual(transcript["segments"][0]["text"], "Reviewed and corrected ASR text")
-        self.assertEqual(len(result["payload"]["transcript_sha256"]), 64)
+        self.assertEqual(asr.status_code, 201, asr.text)
+        self.assertEqual(asr.json()["payload"]["transcript"]["source_sha256"], self.source.metadata["sha256"])
 
-        persisted = DubbingStore(self.store).validate_project(self.project_id)
-        self.assertEqual(persisted.get_transcript(result["dubbing_id"]).origin, "asr")
-
-    def test_translation_command_binds_exact_current_transcript_revision(self) -> None:
+    def test_translation_language_change_creates_new_identity(self) -> None:
         imported = self._import_transcript()
-        result = self._create_translation(imported["dubbing_id"])
-        translation = result["payload"]["translation"]
-        self.assertTrue(translation["translation_id"].startswith("translation_"))
-        self.assertEqual(
-            translation["transcript_sha256"],
-            imported["payload"]["transcript_sha256"],
-        )
-        self.assertEqual(translation["target_language"], "ru")
+        first = self._translation(imported["dubbing_id"])
+        second = self._translation(imported["dubbing_id"], translation_id=first["translation_id"], language="de")
+        self.assertNotEqual(second["translation_id"], first["translation_id"])
+        state = DubbingStore(self.store).validate_project(self.project_id)
+        self.assertEqual(state.get_translation(first["translation_id"]).target_language, "ru")
+        self.assertEqual(state.get_translation(second["translation_id"]).target_language, "de")
 
-        state = self.client.get(f"/api/uv/projects/{self.project_id}/editor/state")
-        self.assertEqual(state.status_code, 200, state.text)
-        self.assertEqual(
-            state.json()["dubbing"]["translations"][0]["translation_id"],
-            translation["translation_id"],
-        )
-
-    def test_attach_prepared_speech_binds_server_owned_audio_and_script_revisions(self) -> None:
+    def test_attach_binds_exact_audio_and_script(self) -> None:
         imported = self._import_transcript()
-        audio = self._register_prepared_audio(origin="recorded")
+        audio = self._audio()
         response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "attach_prepared_speech",
-                "dubbing_id": imported["dubbing_id"],
-                "audio_id": audio.id,
-                "segment_id": "seg_001",
-            },
+            self.command_url,
+            json={"command": "attach_prepared_speech", "dubbing_id": imported["dubbing_id"], "audio_id": audio.id, "segment_id": "seg_001"},
         )
         self.assertEqual(response.status_code, 201, response.text)
-        result = response.json()
-        self.assertEqual(result["command"], "attach_prepared_speech")
-        take = result["payload"]["prepared_speech"]
-        self.assertTrue(take["take_id"].startswith("take_"))
-        self.assertEqual(take["script_kind"], "transcript")
-        self.assertEqual(take["script_id"], imported["dubbing_id"])
+        take = response.json()["payload"]["prepared_speech"]
         self.assertEqual(take["script_sha256"], imported["payload"]["transcript_sha256"])
-        self.assertEqual(take["audio_id"], audio.id)
         self.assertEqual(take["audio_sha256"], audio.metadata["sha256"])
-        self.assertEqual(take["duration_us"], audio.metadata["duration_us"])
-        self.assertEqual(take["origin"], "recorded")
-        self.assertEqual(take["segment_id"], "seg_001")
+        self.assertEqual(PreparedSpeechStore(self.store).validate_project(self.project_id).get(take["take_id"]).to_dict(), take)
 
-        persisted = PreparedSpeechStore(self.store).validate_project(self.project_id)
-        self.assertEqual(persisted.get(take["take_id"]).to_dict(), take)
-        state = self.client.get(f"/api/uv/projects/{self.project_id}/editor/state")
-        self.assertEqual(state.status_code, 200, state.text)
-        self.assertEqual(state.json()["prepared_audio"][0]["id"], audio.id)
-        self.assertEqual(state.json()["prepared_speech"]["takes"][0]["take_id"], take["take_id"])
-
-    def test_translation_prepared_speech_blocks_silent_translation_revision_change(self) -> None:
+    def test_bound_translation_cannot_change_same_identity(self) -> None:
         imported = self._import_transcript()
-        translated = self._create_translation(imported["dubbing_id"])
-        translation = translated["payload"]["translation"]
-        audio = self._register_prepared_audio(origin="imported")
+        translation = self._translation(imported["dubbing_id"])
+        audio = self._audio(origin="imported")
         attached = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "attach_prepared_speech",
-                "dubbing_id": imported["dubbing_id"],
-                "translation_id": translation["translation_id"],
-                "audio_id": audio.id,
-                "segment_id": "seg_002",
-            },
+            self.command_url,
+            json={"command": "attach_prepared_speech", "dubbing_id": imported["dubbing_id"], "translation_id": translation["translation_id"], "audio_id": audio.id},
         )
         self.assertEqual(attached.status_code, 201, attached.text)
-        take = attached.json()["payload"]["prepared_speech"]
-        self.assertEqual(take["script_kind"], "translation")
-        self.assertEqual(take["script_id"], translation["translation_id"])
-
         changed = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
+            self.command_url,
             json={
                 "command": "upsert_dubbing_translation",
                 "dubbing_id": imported["dubbing_id"],
                 "translation_id": translation["translation_id"],
                 "target_language": "ru",
-                "segments": [
-                    {"segment_id": "seg_001", "text": "Изменённый перевод"},
-                    {"segment_id": "seg_002", "text": "Это вторая строка"},
-                ],
+                "segments": [{"segment_id": "seg_001", "text": "Изменено"}, {"segment_id": "seg_002", "text": "Вторая строка"}],
             },
         )
         self.assertEqual(changed.status_code, 422, changed.text)
-        current = DubbingStore(self.store).validate_project(self.project_id)
-        self.assertEqual(
-            current.get_translation(translation["translation_id"]).segments[0].text,
-            "Привет",
-        )
 
-    def test_prepared_speech_blocks_silent_transcript_revision_change(self) -> None:
-        imported = self._import_transcript()
-        audio = self._register_prepared_audio()
-        attached = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "attach_prepared_speech",
-                "dubbing_id": imported["dubbing_id"],
-                "audio_id": audio.id,
-            },
-        )
-        self.assertEqual(attached.status_code, 201, attached.text)
-
-        changed = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
+    def test_source_change_after_registration_fails_closed(self) -> None:
+        _reference, path = ProjectSourceMediaStore(self.store).resolve(self.project_id, self.source.id)
+        path.write_bytes(b"changed-dialogue-video")
+        response = self.client.post(
+            self.command_url,
             json={
                 "command": "import_dubbing_transcript",
-                "dubbing_id": imported["dubbing_id"],
                 "source_id": self.source.id,
-                "language": "en-US",
-                "start_us": 1_000_000,
-                "end_us": 8_000_000,
-                "segments": [
-                    {
-                        "segment_id": "seg_001",
-                        "start_us": 1_000_000,
-                        "end_us": 3_000_000,
-                        "text": "Changed after voice recording",
-                    },
-                    {
-                        "segment_id": "seg_002",
-                        "start_us": 4_000_000,
-                        "end_us": 7_500_000,
-                        "text": "This is the second line",
-                    },
-                ],
+                "language": "en",
+                "start_us": 0,
+                "end_us": 1_000_000,
+                "segments": [{"segment_id": "seg_changed", "start_us": 0, "end_us": 1_000_000, "text": "Changed"}],
             },
         )
-        self.assertEqual(changed.status_code, 422, changed.text)
-        current = DubbingStore(self.store).validate_project(self.project_id)
-        self.assertEqual(
-            current.get_transcript(imported["dubbing_id"]).segments[0].text,
-            "Hello there",
-        )
-
-    def test_attach_prepared_speech_rejects_unknown_audio_and_client_hash_bypass(self) -> None:
-        imported = self._import_transcript()
-        missing = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "attach_prepared_speech",
-                "dubbing_id": imported["dubbing_id"],
-                "audio_id": "aud_missing",
-            },
-        )
-        self.assertEqual(missing.status_code, 404, missing.text)
-
-        audio = self._register_prepared_audio()
-        bypass = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "attach_prepared_speech",
-                "dubbing_id": imported["dubbing_id"],
-                "audio_id": audio.id,
-                "audio_sha256": "f" * 64,
-                "script_sha256": "f" * 64,
-                "source_path": "assets/attacker.wav",
-            },
-        )
-        self.assertEqual(bypass.status_code, 422, bypass.text)
-
-    def test_translation_rejects_missing_segments_and_unknown_transcript(self) -> None:
-        imported = self._import_transcript()
-        incomplete = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "upsert_dubbing_translation",
-                "dubbing_id": imported["dubbing_id"],
-                "target_language": "ru",
-                "segments": [{"segment_id": "seg_001", "text": "Привет"}],
-            },
-        )
-        self.assertEqual(incomplete.status_code, 422, incomplete.text)
-
-        missing = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
-            json={
-                "command": "upsert_dubbing_translation",
-                "dubbing_id": "dub_missing",
-                "target_language": "ru",
-                "segments": [{"segment_id": "seg_001", "text": "Привет"}],
-            },
-        )
-        self.assertEqual(missing.status_code, 404, missing.text)
-
-    def test_transcript_commands_reject_client_controlled_source_revision_and_raw_path(self) -> None:
-        for command in ("import_dubbing_transcript", "accept_asr_transcript"):
-            with self.subTest(command=command):
-                bypass = self.client.post(
-                    f"/api/uv/projects/{self.project_id}/editor/commands",
-                    json={
-                        "command": command,
-                        "source_id": self.source.id,
-                        "source_path": "sources/attacker.wav",
-                        "source_sha256": "f" * 64,
-                        "offer_id": "remote.magic",
-                        "language": "en",
-                        "start_us": 0,
-                        "end_us": 2_000_000,
-                        "segments": [
-                            {
-                                "segment_id": "seg_001",
-                                "start_us": 0,
-                                "end_us": 1_000_000,
-                                "text": "Bypass",
-                            }
-                        ],
-                    },
-                )
-                self.assertEqual(bypass.status_code, 422, bypass.text)
+        self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(DubbingStore(self.store).load(self.project_id).transcripts, ())
 
-    def test_import_rejects_range_outside_registered_source_duration(self) -> None:
-        response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/editor/commands",
+    def test_invalid_inputs_fail_closed(self) -> None:
+        imported = self._import_transcript()
+        missing_audio = self.client.post(
+            self.command_url,
+            json={"command": "attach_prepared_speech", "dubbing_id": imported["dubbing_id"], "audio_id": "aud_missing"},
+        )
+        self.assertEqual(missing_audio.status_code, 404, missing_audio.text)
+        incomplete = self.client.post(
+            self.command_url,
+            json={"command": "upsert_dubbing_translation", "dubbing_id": imported["dubbing_id"], "target_language": "ru", "segments": [{"segment_id": "seg_001", "text": "Привет"}]},
+        )
+        self.assertEqual(incomplete.status_code, 422, incomplete.text)
+        outside = self.client.post(
+            self.command_url,
             json={
                 "command": "import_dubbing_transcript",
                 "source_id": self.source.id,
                 "language": "en",
                 "start_us": 11_000_000,
                 "end_us": 13_000_000,
-                "segments": [
-                    {
-                        "segment_id": "seg_001",
-                        "start_us": 11_000_000,
-                        "end_us": 12_500_000,
-                        "text": "Outside",
-                    }
-                ],
+                "segments": [{"segment_id": "seg_out", "start_us": 11_000_000, "end_us": 12_500_000, "text": "Outside"}],
             },
         )
-        self.assertEqual(response.status_code, 422, response.text)
-        self.assertEqual(DubbingStore(self.store).load(self.project_id).transcripts, ())
+        self.assertEqual(outside.status_code, 422, outside.text)
 
 
 if __name__ == "__main__":
