@@ -9,6 +9,7 @@ from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
 from .artifact_preview import create_artifact_preview
 from .audio_loudness import measure_prepared_audio_loudness
+from .dubbing_render import render_dubbing_state
 from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
 from .native_videoclaw import NativeVideoClawAdapter
@@ -42,6 +43,14 @@ class LocalFFmpegAdapter:
         if offer.capability_id == "video.render_edits":
             self._delegate._validate_offer(offer)
             return render_edit_state(
+                self._delegate,
+                project_id=project_id,
+                offer=offer,
+                payload=payload,
+            )
+        if offer.capability_id == "video.render_dubbing":
+            self._delegate._validate_offer(offer)
+            return render_dubbing_state(
                 self._delegate,
                 project_id=project_id,
                 offer=offer,
