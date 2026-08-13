@@ -2,7 +2,7 @@
 
 <!-- uv-next-slice: stage-5-dubbing-translation -->
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Expected handoff
 
@@ -20,7 +20,8 @@ Stage 5 must compose the permanent primitives delivered by Stage 4C rather than 
 - provider/model choice remains behind semantic Capability Registry offers;
 - paid/remote execution remains subject to D-017 authorization;
 - generated/replacement media that changes accepted source content must preserve the existing review/acceptance boundary where applicable;
-- final render/export remains explicit and deterministic.
+- final render/export remains explicit and deterministic;
+- browser preview is a deterministic projection of an accepted/rendered artifact, not a parallel editing authority.
 
 ## Stage 5 product outcome
 
