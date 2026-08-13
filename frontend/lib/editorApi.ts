@@ -124,6 +124,36 @@ export interface AcceptedRangeEdit {
   replacement_path: string;
 }
 
+export interface MLTProjectionSegment {
+  role: 'source' | 'replacement';
+  project_path: string;
+  in_frame: number;
+  out_frame: number;
+  frame_count: number;
+  edit_id: string | null;
+}
+
+export interface MLTTimelineProjectionSummary {
+  status: 'ready' | 'projection_error';
+  source_path: string;
+  frame_rate?: string;
+  width?: number;
+  height?: number;
+  source_duration_us?: number;
+  accepted_edit_ids?: string[];
+  segment_count?: number;
+  segments?: MLTProjectionSegment[];
+  exact_boundaries?: boolean;
+  max_boundary_error_us?: number;
+  error?: string;
+}
+
+export interface EditorEngineState {
+  adapter_id: 'mlt';
+  runtime_available: boolean;
+  timelines: MLTTimelineProjectionSummary[];
+}
+
 export interface EditorState {
   sources: ProjectReference[];
   artifacts: ProjectReference[];
@@ -133,6 +163,7 @@ export interface EditorState {
   sample_approvals: SampleApproval[];
   replacement_reviews: ReplacementReview[];
   accepted_edits: AcceptedRangeEdit[];
+  engine: EditorEngineState;
 }
 
 export interface ResolvedProjectMediaRange {
