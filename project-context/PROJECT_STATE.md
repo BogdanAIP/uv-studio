@@ -1,36 +1,36 @@
 # Project State
 
-<!-- uv-active-slice: stage-4-editor-foundation-spike -->
+<!-- uv-active-slice: stage-4-range-edit-user-workflow -->
 
-**Updated:** 2026-08-12
+**Updated:** 2026-08-13
 
 **Repository:** `BogdanAIP/uv-studio`
 
-**Active roadmap stage:** Stage 4C foundation selection complete; PR #30 still active
+**Active roadmap stage:** Stage 4C targeted range-edit user workflow — PR #31 review
 
 Machine-readable slice intent, branch scope, coordination ownership and required checks live only in `ACTIVE_SLICE.json`.
 
 ## Product now
 
-The targeted existing-video backend path is complete through Stage 4B:
+The targeted existing-video workflow is implemented end to end through the product UI:
 
 ```text
-targeted range intent
+project-owned source import
+  -> browser preview + exact integer-microsecond timeline selection
   -> RangeContinuityBrief (D-029)
   -> approved ReplacementPlan (D-030)
   -> ReplacementCandidate (D-031)
   -> evidence-based ReplacementReview (D-032)
   -> AcceptedRangeEdit (D-028)
-  -> explicit one-pass render/export
+  -> explicit authoritative FFmpeg render
+  -> deterministic H.264/AAC browser-preview projection from that master
 ```
 
-PR #29 merged the independent review gate and removed caller-controlled direct edit acceptance. Exact range mechanics and the Stage 4B decision chain are covered by real-media tests on Ubuntu and Windows.
+The UI does not create a second editing model. GUI actions use UV-owned command/workflow contracts, Project Store/domain state remains canonical, and AI/scripts/MCP are required to share the same boundary rather than mutating raw MLT or project JSON.
 
-## Stage 4C foundation selected
+## Stage 4C reusable foundation
 
-D-033 is accepted. Stage 4C will not build another general-purpose video editor stack from scratch.
-
-The selected composition is:
+D-033 is accepted and PR #30 is merged. Stage 4C uses:
 
 ```text
 OpenCut Classic-derived editor UX
@@ -38,81 +38,65 @@ OpenCut Classic-derived editor UX
 GUI --------- |
 Scripts ------+--> UV Studio Command API --> domain validation/transaction --> MLT adapter
 AI -----------|                                         |
-MCP ----------|                                         +--> derived preview/edit representation
+MCP ----------|                                         +--> derived timeline/preview representation
                                                         |
                                                         +--> UV Project Store remains canonical
 
 approved replacement workflow --> D-032 review --> D-028 AcceptedRangeEdit --> UV FFmpeg final render
 ```
 
-### Editing engine — MLT
+- MLT is the selected editing/timeline engine behind a UV-owned adapter.
+- OpenCut Classic commit `cf5e79e919144200294fb9fed22a222592a0aeea` remains the selected MIT editor-UX/component donor.
+- UV Project Store/domain state is the single canonical project state.
+- raw MLT XML is ephemeral engine input and is not exposed by `/editor/state`; absolute host paths do not cross that API boundary.
+- the existing UV FFmpeg one-pass renderer remains authoritative final export; browser MP4 preview is encoded from the authoritative master rather than repeating the edit from source media.
 
-MLT won the executable engine comparison.
+## PR #31 implementation outcome
 
-- Ubuntu MLT Python binding `7.22.0` passed all 16 required engine capabilities using real generated media: source open, timeline creation/query, multitrack, add/move/trim/split/ripple, serialization, round-trip, external mutation, undo/redo integration surface, preview frame, render/export and exact replacement expression.
-- A separate Windows deployment probe extracted a SHA-256-pinned KDE Kdenlive standalone package, found relocatable `melt.exe` `7.40.0` plus bundled FFmpeg, round-tripped and programmatically mutated serialized MLT XML, then rendered real output successfully.
-- The Windows result proves a no-system-install runtime path. Eventual packaging may bundle a smaller compliant MLT runtime rather than the whole Kdenlive application.
+The normal-user Stage 4C path now includes:
 
-`libopenshot` remains a fallback/component source, but is not the primary engine because its tested `0.3.2` binding failed the required clean Timeline JSON round-trip and reliable external serialized-mutation seam.
+- project-owned streaming source import with media inspection, portable metadata and cleanup on failure;
+- ID-based source/artifact HTTP media delivery with byte Range support and no arbitrary host-path API;
+- player, reusable timeline, zoom, playhead and exact microsecond range selection;
+- AI/change-request panel bound to canonical `select_range` command state;
+- visible Brief -> Plan -> Candidate -> Review -> Accept workflow with D-032 approval still mandatory;
+- accepted non-destructive edits shown back on the timeline, including multiple edits;
+- explicit one-pass authoritative render/export rather than automatic heavy render after acceptance;
+- render revision detection so an older master is marked stale when Accepted edits change;
+- deterministic `video.preview_artifact` H.264/AAC MP4 projection from the registered authoritative master for browser playback;
+- real MLT adapter derived from canonical accepted edits, not a second project file format;
+- typed public MLT projection summary while raw XML and resolved machine paths remain adapter-private.
 
-### Editor UX donor — OpenCut Classic
+## MLT parity evidence
 
-OpenCut Classic is pinned at `cf5e79e919144200294fb9fed22a222592a0aeea` as an MIT source donor. The source probe confirmed implemented timeline/editor primitives including timeline store/state, tracks, creation/update helpers, ruler/scale/zoom, dragging and snapping. Roadmap-only API/MCP/headless promises are not counted as implemented capability.
+The Stage 4C integration test deliberately compares the derived MLT timeline against the authoritative FFmpeg render on real encoded media.
 
-UV Studio will selectively adapt useful editor code. OpenCut backend/auth/storage architecture does not become UV Studio architecture by default.
+During PR #31 this test exposed two real adapter defects that the earlier foundation spike could not detect because the spike only proved a non-empty render:
 
-### Canonical ownership
+1. `avformat-novalidate` began with a tiny provisional producer length, causing requested ranges to be clamped. The adapter now provides explicit frame length from already validated UV metadata.
+2. replacement producers were serialized after playlist entries that referenced them. MLT resolves producer IDs sequentially while parsing XML, so the replacement entries disappeared and a 6-second composition became 4 seconds. All producers are now declared before the playlist.
 
-UV Studio still owns:
+After both fixes, the real-media parity suite passes on Ubuntu and Windows. The strict parity fixture uses FFV1/MKV source and replacement media, verifies full duration and samples the expected source/replacement colors at five timeline positions. The authoritative export remains a separate UV FFmpeg path.
 
-- Project Store and portable project identity;
-- source/asset/artifact/export path rules;
-- product Command API and transaction/undo-redo semantics;
-- Capability Registry and execution authorization;
-- Brief -> Plan -> Candidate -> Review -> Accept invariants;
-- accepted non-destructive edit state;
-- provenance/security policy.
+## Review gate
 
-Raw MLT XML or OpenCut state is never a public bypass around these boundaries.
+PR #31 is ready for review only after its code head proves all required checks on the exact commit. The final review-context commit must then receive the same five required green checks before merge:
 
-The existing UV FFmpeg one-pass renderer remains authoritative final export initially. MLT rendering is proven, but will not silently replace canonical render truth until preview/render parity is tested.
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)`;
+- `app-baseline (windows-latest)`.
 
-## Evidence state
+## Next product slice
 
-`editor-foundation-spike` run `31608137802` at head `bc0433e0b2781ffca805f8e6644b65cf9a801764` completed all four spike jobs successfully and uploaded preserved evidence for:
+After PR #31 merges, continue with `stage-5-dubbing-translation` using the same Project Store, Command API, MLT adapter, semantic Capability Registry and explicit review/render boundaries. Do not introduce another timeline/project model for dubbing.
 
-- MLT Linux;
-- MLT Windows relocatable deployment;
-- libopenshot;
-- OpenCut Classic.
-
-The hidden `.spike-output` artifact issue was fixed with `include-hidden-files: true`.
-
-The ordinary Windows app-baseline also exposed that Chocolatey/BtbN moving package sources are unsuitable as durable CI pins. The active branch now provisions Windows FFmpeg from the same exact SHA-256-pinned KDE standalone package already exercised by the MLT Windows probe. Exact-head ordinary CI must be green before PR #30 leaves draft/review and merges.
-
-## Next product gap
-
-After PR #30 merges, Stage 4C continues as `stage-4-range-edit-user-workflow` using the selected foundation rather than reopening the editor-engine decision.
-
-The complete user-facing path still needs:
-
-- project source registration/import;
-- safe Range-capable browser media delivery;
-- reusable editor workspace/player/timeline;
-- exact timeline range selection mapped to UV integer microseconds;
-- one UV Command API callable by GUI/scripts/AI/MCP;
-- visible Brief/Plan/Candidate/Review state in the editor;
-- candidate-in-context preview and approve/reject/revise;
-- accepted non-destructive edits visible on the timeline;
-- multiple edits;
-- explicit preview/render/export;
-- browser E2E and preview-vs-authoritative-render consistency tests.
-
-## Cross-cutting debt retained outside this spike
+## Cross-cutting debt retained outside this slice
 
 - D-023 still needs an explicit merged/idle lifecycle and live PR diff-vs-write-scope enforcement;
-- the aggregate decision index is stale after D-026 and needs lifecycle/process maintenance;
-- free-form project JSON fields need recursive portability hardening;
+- the aggregate decision index needs lifecycle/process maintenance;
+- broader free-form project JSON fields still need recursive portability hardening outside newly typed boundaries;
 - broader accepted-file/content-addressing integrity remains future hardening;
 - the compatibility `/api/stages` catalog should be retired when no UV-owned screen needs it;
 - broader codec/device fixtures remain incremental hardening.

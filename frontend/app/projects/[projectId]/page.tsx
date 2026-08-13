@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import {
   getProjectExecutionPlan,
   getUVProject,
@@ -42,7 +43,7 @@ export default function ProjectPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         <Link href="/projects" className="text-sm text-sky-400 hover:text-sky-300">← Все проекты</Link>
 
         {error ? (
@@ -67,7 +68,14 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
-            <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+            <ProjectEditor
+              projectId={project.project_id}
+              onProjectChanged={async () => {
+                setProject(await getUVProject(project.project_id));
+              }}
+            />
+
+            <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-slate-500">Готовность процесса</p>

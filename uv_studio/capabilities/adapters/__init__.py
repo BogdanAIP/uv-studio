@@ -7,6 +7,7 @@ from typing import Any
 
 from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
+from .artifact_preview import create_artifact_preview
 from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
 from .native_videoclaw import NativeVideoClawAdapter
@@ -17,8 +18,8 @@ class LocalFFmpegAdapter:
     """Stable package-level facade over bounded local FFmpeg operation handlers.
 
     The historical range adapter remains the delegate for probe/extract/assemble and
-    exact single-range reinsertion. New edit-state rendering is an operation handler,
-    not another inheritance layer.
+    exact single-range reinsertion. New project render/preview operations are explicit
+    handlers, not another inheritance layer.
     """
 
     adapter_id = LocalFFmpegRangeAdapter.adapter_id
@@ -39,6 +40,14 @@ class LocalFFmpegAdapter:
         if offer.capability_id == "video.render_edits":
             self._delegate._validate_offer(offer)
             return render_edit_state(
+                self._delegate,
+                project_id=project_id,
+                offer=offer,
+                payload=payload,
+            )
+        if offer.capability_id == "video.preview_artifact":
+            self._delegate._validate_offer(offer)
+            return create_artifact_preview(
                 self._delegate,
                 project_id=project_id,
                 offer=offer,
