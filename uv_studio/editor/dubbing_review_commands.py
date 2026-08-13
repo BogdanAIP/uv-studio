@@ -112,9 +112,10 @@ class DubbingReviewCommandService:
                 loudness_range_lu=raw.get("loudness_range_lu"),
                 threshold_lufs=raw.get("threshold_lufs"),
             )
+            review_id = command.review_id or self._new_review_id()
             state = self.reviews.create_review(
                 project_id,
-                review_id=command.review_id or self._new_review_id(),
+                review_id=review_id,
                 take_id=take.take_id,
                 loudness=loudness,
                 content_fidelity_confirmed=command.content_fidelity_confirmed,
@@ -122,8 +123,8 @@ class DubbingReviewCommandService:
                 verdict=command.verdict,
                 note=command.note,
             )
-            review = state.get(command.review_id or state.reviews[-1].review_id)
-        except (ProjectNotFound,):
+            review = state.get(review_id)
+        except ProjectNotFound:
             raise
         except (PreparedSpeechError, DubbingReviewError, ProjectStoreError) as exc:
             raise DubbingReviewCommandError(str(exc)) from exc
@@ -149,7 +150,7 @@ class DubbingReviewCommandService:
                 composition_policy=command.composition_policy,
             )
             edit = next(item for item in state.edits if item.review_id == command.review_id)
-        except (ProjectNotFound,):
+        except ProjectNotFound:
             raise
         except (DubbingReviewError, PreparedSpeechError, ProjectStoreError) as exc:
             raise DubbingReviewCommandError(str(exc)) from exc
