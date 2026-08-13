@@ -290,6 +290,7 @@ def _whisper_cpp_binary() -> str | None:
 
 def _whisper_cpp_offer() -> CapabilityOffer:
     binary = _whisper_cpp_binary()
+    ffmpeg = shutil.which("ffmpeg")
     configured_model = os.environ.get("UV_WHISPER_CPP_MODEL")
     model_ok = False
     if configured_model:
@@ -302,15 +303,21 @@ def _whisper_cpp_offer() -> CapabilityOffer:
             "whisper-cli не найден; установите pinned whisper.cpp runtime или задайте "
             "UV_WHISPER_CPP_BIN."
         )
+    elif not ffmpeg:
+        availability = OfferAvailability.UNAVAILABLE
+        reason = "FFmpeg не найден в PATH; локальная подготовка аудио для whisper.cpp недоступна."
     elif not model_ok:
         availability = OfferAvailability.CONFIGURATION_REQUIRED
         reason = (
-            "whisper.cpp runtime найден, но локальная модель не настроена; "
+            "whisper.cpp runtime и FFmpeg найдены, но локальная модель не настроена; "
             "задайте UV_WHISPER_CPP_MODEL на существующий model file."
         )
     else:
         availability = OfferAvailability.AVAILABLE
-        reason = "Локальный whisper.cpp runtime и модель настроены; распознавание речи доступно."
+        reason = (
+            "Локальные whisper.cpp runtime, модель и FFmpeg настроены; "
+            "распознавание речи доступно."
+        )
 
     return CapabilityOffer(
         offer_id="local_whisper_cpp.speech_transcribe",
