@@ -8,7 +8,7 @@
     "goal": "Add optional linked-shot sequence continuity and review with explicit planned/observed state, accepted anchors, bounded timeline context and rendered-output evidence without imposing continuity machinery on standalone clips.",
     "base_branch": "main",
     "branch": "stage-6/sequence-continuity-review",
-    "pull_request": null,
+    "pull_request": 35,
     "write_scope": [
       ".github/workflows/ci.yml",
       "THIRD_PARTY_NOTICES.md",
