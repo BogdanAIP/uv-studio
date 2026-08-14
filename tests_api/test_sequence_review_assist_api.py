@@ -102,6 +102,14 @@ class SequenceReviewAssistApiTests(unittest.TestCase):
             }
         )
 
+    def test_missing_take_remains_not_found(self) -> None:
+        self._prepare_take()
+        response = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sequence/seq/takes/missing/review-assist"
+        )
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(response.json()["detail"], "Sequence take not found")
+
     def test_vlm_assist_round_trip_requires_human_review(self) -> None:
         self._prepare_take()
         assist = self.client.get(
