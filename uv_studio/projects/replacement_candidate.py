@@ -437,6 +437,12 @@ class ReplacementCandidateStore:
         if not isinstance(candidate, ReplacementCandidate):
             raise ReplacementCandidateError("register requires ReplacementCandidate")
         with self.project_store._lock:
+            self._validate_candidate(
+                project_id,
+                candidate,
+                require_sample_for_full=True,
+                verify_identity=False,
+            )
             self._bind_artifact_identity(project_id, candidate)
             self._validate_candidate(project_id, candidate, require_sample_for_full=True)
             current = self.load(project_id)
@@ -472,6 +478,7 @@ class ReplacementCandidateStore:
         candidate: ReplacementCandidate,
         *,
         require_sample_for_full: bool,
+        verify_identity: bool = True,
     ) -> None:
         plan = self.current_plan(project_id, candidate.edit_id)
         plan_identity = (plan.edit_id, plan.source_path, plan.start_us, plan.end_us)
@@ -502,12 +509,13 @@ class ReplacementCandidateStore:
         ]
         if len(matching) != 1:
             raise ReplacementCandidateError("candidate artifact must be registered exactly once in Project Store")
-        try:
-            verify_registered_media_bytes(artifact_path, matching[0].metadata)
-        except MediaIntegrityError as exc:
-            raise ReplacementCandidateError(
-                f"candidate artifact identity no longer matches current bytes: {exc}"
-            ) from exc
+        if verify_identity:
+            try:
+                verify_registered_media_bytes(artifact_path, matching[0].metadata)
+            except MediaIntegrityError as exc:
+                raise ReplacementCandidateError(
+                    f"candidate artifact bytes changed or no longer match registered identity: {exc}"
+                ) from exc
 
         if (
             require_sample_for_full
