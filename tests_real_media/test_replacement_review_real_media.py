@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.projects import get_project_store
 from uv_studio.projects import (
     ContinuityEvidence,
+    ProjectReference,
     ProjectStore,
     RangeContinuityBrief,
     RangeContinuityBriefStore,
@@ -113,6 +115,21 @@ class ReplacementReviewRealMediaTests(unittest.TestCase):
         self.prepared = self.project_dir / "assets" / "prepared-red.mkv"
         _color(self.source, color="blue", duration_s=3)
         _color(self.prepared, color="red", duration_s=1)
+        source_bytes = self.source.read_bytes()
+        self.store.update_project(
+            self.project.project_id,
+            sources=(
+                ProjectReference(
+                    id="src_review",
+                    kind="video",
+                    path="sources/source.mkv",
+                    metadata={
+                        "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                        "size_bytes": len(source_bytes),
+                    },
+                ),
+            ),
+        )
         RangeContinuityBriefStore(self.store).upsert(
             self.project.project_id,
             RangeContinuityBrief(
