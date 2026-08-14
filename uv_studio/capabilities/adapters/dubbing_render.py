@@ -234,7 +234,7 @@ def render_dubbing_state(
 
     try:
         source_store = ProjectSourceMediaStore(adapter.store)
-        source_ref, source_file = source_store.resolve(project_id, source_id.strip())
+        source_ref, source_file = source_store.resolve_verified(project_id, source_id.strip())
         source_sha256 = source_ref.metadata.get("sha256")
         if not isinstance(source_sha256, str) or len(source_sha256) != 64:
             raise InvalidCapabilityInput("registered source is missing a valid sha256")
@@ -353,7 +353,7 @@ def render_dubbing_state(
     mapped: list[tuple[Any, int, int]] = []
     for item in dubbing_edits:
         try:
-            audio_ref, audio_file = prepared_audio.resolve(project_id, item.audio_id)
+            audio_ref, audio_file = prepared_audio.resolve_verified(project_id, item.audio_id)
         except (PreparedAudioError, ProjectStoreError, ProjectValidationError) as exc:
             raise InvalidCapabilityInput(str(exc)) from exc
         if audio_ref.metadata.get("sha256") != item.audio_sha256:
