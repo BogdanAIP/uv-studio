@@ -53,11 +53,12 @@ class DependencyContractTests(unittest.TestCase):
         names = _requirement_names(CORE_REQUIREMENTS)
         self.assertFalse(names.intersection(_PROVIDER_OR_HEAVY_OPTIONAL_PACKAGES), names)
 
-    def test_dev_requirements_layer_on_core_and_add_test_transport_only(self) -> None:
+    def test_dev_requirements_layer_on_core_and_add_test_tooling_only(self) -> None:
         text = DEV_REQUIREMENTS.read_text(encoding="utf-8")
         self.assertIn("-r requirements-uv.txt", text)
         names = _requirement_names(DEV_REQUIREMENTS)
-        self.assertEqual(names, {"httpx"})
+        self.assertEqual(names, {"httpx", "playwright"})
+        self.assertIn("playwright==1.61.0", text)
 
     def test_development_setup_does_not_install_vendor_backend_requirements(self) -> None:
         text = SETUP_SCRIPT.read_text(encoding="utf-8")
