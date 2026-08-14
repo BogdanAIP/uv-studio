@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: stage-6-sequence-continuity-review -->
 
 **Updated:** 2026-08-14
@@ -24,7 +24,10 @@ UV Studio currently has:
 - local whisper.cpp ASR baseline, optional Argos translation and optional WhisperX alignment;
 - D-017-protected Edge TTS reuse;
 - deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download;
-- maintained production-browser E2E for the targeted replacement and dubbing user outcomes on Ubuntu and Windows.
+- optional Stage 6 linked-shot continuity state with explicit planned/observed separation, SHA-bound takes, accepted/rejected lifecycle, current Review semantics and explicit re-anchor;
+- bounded TimelineContext over accepted-anchor tail and candidate head with fail-closed trust checks for approved anchor observations;
+- provider-neutral ephemeral Review Assist over semantic `media.understand`, where VLM suggestions never create canonical Review/Accept/re-anchor state;
+- maintained production-browser E2E composing targeted replacement, dubbing and linked-shot continuity on Ubuntu and Windows.
 
 ## Architecture invariants
 
@@ -39,28 +42,33 @@ UV Studio currently has:
 
 PR #34's final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline were all green, including the permanent Playwright browser user-outcome scenario on both operating systems.
 
-PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfies the Stage 6 entry gate.
+PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfied the Stage 6 entry gate.
 
-## Stage 6 sequence continuity/review in development
+The Stage 6 implementation head `b172f981526fe2dfd2786f2352a6362c643832f5` passed exact-head PR run `31808557923` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
 
-The active slice is `stage-6-sequence-continuity-review`. Its scope is optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows must remain free of sequence state and review overhead.
+The browser scenario now creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review. Focused tests also prove archive round-trip, stale plan/media rejection, Review Assist non-authority, preserved not-found semantics and fail-closed rejection of corrupted approved-anchor observations.
 
-The initial architecture direction is:
+## Stage 6 sequence continuity/review ready for review
 
-- keep planned continuity distinct from observed accepted-take state;
-- model explicit locks, allowed changes, take verdicts and re-anchor operations in provider-neutral project state;
-- build bounded `TimelineContext` as a derived inspection view from canonical Project Store/media/transcript/timeline state rather than a second source of truth;
-- add rendered-output evidence so automated/local checks or optional VLM review can inspect the actual produced take around continuity boundaries before human acceptance;
-- route optional VLM/generation/review through the existing Capability Registry and D-017 authorization boundary;
-- preserve a complete human/manual baseline when automated visual evidence is unavailable or uncertain;
-- reuse existing D-029 continuity evidence concepts and mature external components only where they prove a missing general primitive.
+PR #35 implements optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows remain free of sequence state and review overhead until the user explicitly enables the mode.
 
-`browser-use/video-use` is being evaluated as an MIT architecture donor for compact text-plus-on-demand-visual context and rendered-output self-review, not as a direct project/session authority or mandatory dependency. PySceneDetect is being evaluated only as an optional deterministic shot-boundary helper; Stage 6 does not make either project canonical state.
+The implemented architecture is:
+
+- planned continuity is distinct from observed accepted-take state;
+- plans carry explicit locks, allowed changes and review targets;
+- prepared takes bind exact project-owned video bytes and exact plan revisions;
+- Review binds candidate SHA, plan revision and anchor identity; Accept and re-anchor remain explicit semantic commands;
+- bounded `TimelineContext` is a derived inspection view from canonical Project Store state, never a second timeline/EDL authority;
+- trusted anchor observations are exposed only from a current approved Review whose take/SHA/plan/anchor/target binding still matches current state;
+- optional VLM assistance uses an ephemeral provider-neutral `media.understand` Review Assist package and suggestion schema; even a normalized `approved` suggestion leaves the take prepared until a human creates the canonical Review and explicitly accepts it;
+- `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
+
+The implementation is complete on the verified implementation head. The lifecycle is now `review`; merge remains a reviewer/integration action and is not part of this transition.
 
 ## Cross-cutting backlog
 
-Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
+Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries, richer continuity-authoring UX and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. `stage-6-sequence-continuity-review` is now the draft slice on `stage-6/sequence-continuity-review`, based on the verified idle main head `9f47f5ac2e4c6cc608162550313894bdb6e194ae`. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until Stage 6 is reviewed, merged, closed back to idle and its post-merge checks are green.
+D-038 keeps one canonical active slice. PR #35 is the current review slice on `stage-6/sequence-continuity-review`, based on verified idle main head `9f47f5ac2e4c6cc608162550313894bdb6e194ae`. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until PR #35 is reviewed, merged, `main` closes back to `idle`, and the post-merge closure checks are green.
