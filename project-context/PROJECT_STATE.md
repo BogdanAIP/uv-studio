@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-5-correctness-browser-e2e -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: stage-6-sequence-continuity-review -->
 
 **Updated:** 2026-08-14
 
@@ -37,29 +37,25 @@ UV Studio currently has:
 
 ## What is verified
 
-PR #32's final implementation and review-context heads passed the five permanent CI checks on Ubuntu and Windows. The app-baseline jobs run unit/API integration, real FFmpeg/MLT media suites, HTTP smoke, frontend lint, high-severity dependency audit and production build.
+PR #34's final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline were all green, including the permanent Playwright browser user-outcome scenario on both operating systems.
 
-Real-media Stage 5 evidence proves that accepted dubbing replaces only the accepted target range, preserves original audio before/after the range and preserves expected output duration.
+PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfies the Stage 6 entry gate.
 
-PR #33 established the explicit idle/draft/review lifecycle. Its post-merge closure head `453832323bcf992714863a4ccc7675c8102b6ba2` passed all five permanent checks while `active_slice` was null.
+## Stage 6 sequence continuity/review in development
 
-PR #34's implementation head `775b2a5d4bac687b0375a129ad56cf77a66a604e` passed the full required PR CI run `31799027680`. The final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` then passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap, and Ubuntu/Windows app-baseline were all green.
+The active slice is `stage-6-sequence-continuity-review`. Its scope is optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows must remain free of sequence state and review overhead.
 
-Both final app-baseline jobs passed API integration, HTTP smoke, real FFmpeg/MLT media evidence, frontend lint, high-severity dependency audit and production build. The permanent Playwright browser user-outcome scenario passed on both Ubuntu and Windows: create a project through the production UI, complete targeted media replacement through Review -> Accept -> render, then complete transcript translation, PreparedSpeech import/binding, dubbing Review -> Accept and dubbing master render. Browser CI preserves backend/frontend logs, full unittest output, failure screenshots when applicable and a success outcome report.
+The initial architecture direction is:
 
-## Stage 5 hardening complete
+- keep planned continuity distinct from observed accepted-take state;
+- model explicit locks, allowed changes, take verdicts and re-anchor operations in provider-neutral project state;
+- build bounded `TimelineContext` as a derived inspection view from canonical Project Store/media/transcript/timeline state rather than a second source of truth;
+- add rendered-output evidence so automated/local checks or optional VLM review can inspect the actual produced take around continuity boundaries before human acceptance;
+- route optional VLM/generation/review through the existing Capability Registry and D-017 authorization boundary;
+- preserve a complete human/manual baseline when automated visual evidence is unavailable or uncertain;
+- reuse existing D-029 continuity evidence concepts and mature external components only where they prove a missing general primitive.
 
-PR #34 closed the bounded post-merge audit findings before Stage 6:
-
-- explicit current/superseded semantics for dubbing Review history;
-- immutable translation identity across target language and dubbing identity;
-- explicit selection of newly created TTS takes;
-- transaction-sized transcript/translation mutation versus PreparedSpeech binding checks;
-- current-byte source/prepared-audio/replacement integrity at Review/Accept/render trust boundaries;
-- retirement of the unsupported legacy VideoClaw root workspace;
-- maintained browser E2E for the targeted existing-video and dubbing user outcomes on both continuous engineering targets.
-
-The PR was reviewed with no unresolved review threads and merged at `e98015da54834a2684e075ede121847df59eda0a`. This closure returns repository lifecycle memory to explicit `idle` without product implementation changes.
+`browser-use/video-use` is being evaluated as an MIT architecture donor for compact text-plus-on-demand-visual context and rendered-output self-review, not as a direct project/session authority or mandatory dependency. PySceneDetect is being evaluated only as an optional deterministic shot-boundary helper; Stage 6 does not make either project canonical state.
 
 ## Cross-cutting backlog
 
@@ -67,4 +63,4 @@ Remaining non-blocking debt includes recursive portability validation for genera
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. The repository is idle after `stage-5-correctness-browser-e2e`; `active_slice` is null and `last_completed` records PR #34 plus merge commit `e98015da54834a2684e075ede121847df59eda0a`. The declared handoff remains `stage-6-sequence-continuity-review`, which may start only after this idle closure head passes the permanent CI matrix.
+D-038 keeps one canonical active slice. `stage-6-sequence-continuity-review` is now the draft slice on `stage-6/sequence-continuity-review`, based on the verified idle main head `9f47f5ac2e4c6cc608162550313894bdb6e194ae`. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until Stage 6 is reviewed, merged, closed back to idle and its post-merge checks are green.
