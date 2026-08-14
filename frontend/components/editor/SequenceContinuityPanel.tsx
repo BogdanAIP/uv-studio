@@ -29,6 +29,19 @@ interface VideoChoice extends ProjectReference {
   collection: 'source' | 'artifact';
 }
 
+interface ReviewDraft {
+  key: string;
+  verdict: SequenceReviewVerdict;
+  outcomes: Record<string, SequenceReviewOutcome>;
+  observation: string;
+  note: string;
+}
+
+interface ContextState {
+  key: string;
+  value: SequenceTimelineContext;
+}
+
 const outcomeLabels: Record<SequenceReviewOutcome, string> = {
   pass: 'Соответствует',
   fail: 'Не соответствует',
@@ -55,23 +68,34 @@ function currentReview(sequence: SequenceRecord, take: SequenceTake | null): Seq
   return sequence.reviews.find(item => item.review_id === take.current_review_id) ?? null;
 }
 
+function makeReviewDraft(key: string, plan: SequenceShotPlan | null): ReviewDraft {
+  return {
+    key,
+    verdict: 'needs_revision',
+    outcomes: Object.fromEntries(
+      (plan?.review_targets ?? []).map(item => [item.target_id, 'uncertain' as SequenceReviewOutcome]),
+    ),
+    observation: '',
+    note: '',
+  };
+}
+
 export function SequenceContinuityPanel({ projectId, onProjectChanged }: SequenceContinuityPanelProps) {
   const [state, setState] = useState<SequenceContinuityState | null>(null);
   const [videos, setVideos] = useState<VideoChoice[]>([]);
-  const [activeSequenceId, setActiveSequenceId] = useState<string>('');
+  const [activeSequenceId, setActiveSequenceId] = useState('');
   const [sequenceTitle, setSequenceTitle] = useState('Связанная последовательность');
   const [shotIntent, setShotIntent] = useState('');
   const [lockRequirement, setLockRequirement] = useState('');
   const [allowedChange, setAllowedChange] = useState('');
-  const [reviewCriterion, setReviewCriterion] = useState('Проверить визуальную непрерывность с принятым опорным дублем.');
+  const [reviewCriterion, setReviewCriterion] = useState(
+    'Проверить визуальную непрерывность с принятым опорным дублем.',
+  );
   const [takeShotId, setTakeShotId] = useState('');
   const [takeReferenceId, setTakeReferenceId] = useState('');
   const [selectedTakeId, setSelectedTakeId] = useState('');
-  const [context, setContext] = useState<SequenceTimelineContext | null>(null);
-  const [reviewVerdict, setReviewVerdict] = useState<SequenceReviewVerdict>('needs_revision');
-  const [reviewOutcomes, setReviewOutcomes] = useState<Record<string, SequenceReviewOutcome>>({});
-  const [reviewObservation, setReviewObservation] = useState('');
-  const [reviewNote, setReviewNote] = useState('');
+  const [contextState, setContextState] = useState<ContextState | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<ReviewDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,7 +128,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
         setActiveSequenceId(sequenceState.sequences[0]?.sequence_id ?? '');
       })
       .catch(reason => {
-        if (active) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить последовательность');
+        if (active) {
+          setError(reason instanceof Error ? reason.message : 'Не удалось загрузить последовательность');
+        }
       });
     return () => {
       active = false;
@@ -112,12 +138,36 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
   }, [projectId]);
 
   const sequence = useMemo(
-    () => state?.sequences.find(item => item.sequence_id === activeSequenceId) ?? null,
+    () => state?.sequences.find(item => item.sequence_id === activeSequenceId) ?? state?.sequences[0] ?? null,
     [activeSequenceId, state],
   );
+
+  const effectiveTakeShotId = useMemo(() => {
+    if (!sequence) return '';
+    if (takeShotId && sequence.plans.some(item => item.shot_id === takeShotId)) return takeShotId;
+    return sequence.plans.at(-1)?.shot_id ?? '';
+  }, [sequence, takeShotId]);
+
+  const effectiveTakeReferenceId = useMemo(() => {
+    if (takeReferenceId && videos.some(item => item.id === takeReferenceId)) return takeReferenceId;
+    return videos[0]?.id ?? '';
+  }, [takeReferenceId, videos]);
+
+  const effectiveSelectedTakeId = useMemo(() => {
+    if (!sequence) return '';
+    if (selectedTakeId && sequence.takes.some(item => item.take_id === selectedTakeId)) {
+      return selectedTakeId;
+    }
+    return (
+      sequence.takes.find(item => item.status === 'prepared')?.take_id ??
+      sequence.takes.at(-1)?.take_id ??
+      ''
+    );
+  }, [selectedTakeId, sequence]);
+
   const selectedTake = useMemo(
-    () => sequence?.takes.find(item => item.take_id === selectedTakeId) ?? null,
-    [selectedTakeId, sequence],
+    () => sequence?.takes.find(item => item.take_id === effectiveSelectedTakeId) ?? null,
+    [effectiveSelectedTakeId, sequence],
   );
   const selectedPlan = useMemo(
     () => (sequence ? planForTake(sequence, selectedTake) : null),
@@ -132,28 +182,23 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
     [sequence],
   );
 
-  useEffect(() => {
-    if (!sequence) return;
-    if (!takeShotId || !sequence.plans.some(item => item.shot_id === takeShotId)) {
-      setTakeShotId(sequence.plans.at(-1)?.shot_id ?? '');
-    }
-    if (!selectedTakeId || !sequence.takes.some(item => item.take_id === selectedTakeId)) {
-      const candidate = sequence.takes.find(item => item.status === 'prepared') ?? sequence.takes.at(-1);
-      setSelectedTakeId(candidate?.take_id ?? '');
-    }
-    if (!takeReferenceId || !videos.some(item => item.id === takeReferenceId)) {
-      setTakeReferenceId(videos[0]?.id ?? '');
-    }
-  }, [sequence, selectedTakeId, takeReferenceId, takeShotId, videos]);
+  const reviewKey = selectedTake && selectedPlan
+    ? `${sequence?.sequence_id ?? ''}:${selectedTake.take_id}:${selectedPlan.revision_sha256}`
+    : '';
+  const activeReviewDraft = reviewDraft?.key === reviewKey
+    ? reviewDraft
+    : makeReviewDraft(reviewKey, selectedPlan);
+  const contextKey = selectedTake && selectedPlan
+    ? `${sequence?.sequence_id ?? ''}:${selectedTake.take_id}:${selectedPlan.revision_sha256}`
+    : '';
+  const context = contextState?.key === contextKey ? contextState.value : null;
 
-  useEffect(() => {
-    const targets = selectedPlan?.review_targets ?? [];
-    setReviewOutcomes(Object.fromEntries(targets.map(item => [item.target_id, 'uncertain'])));
-    setReviewVerdict('needs_revision');
-    setReviewObservation('');
-    setReviewNote('');
-    setContext(null);
-  }, [selectedPlan?.revision_sha256, selectedTake?.take_id]);
+  const updateReviewDraft = (update: Partial<Omit<ReviewDraft, 'key'>>) => {
+    setReviewDraft(current => {
+      const base = current?.key === reviewKey ? current : makeReviewDraft(reviewKey, selectedPlan);
+      return { ...base, ...update, key: reviewKey };
+    });
+  };
 
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
@@ -270,7 +315,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm disabled:text-slate-400"
           >
             <option value="">Без опоры</option>
-            {acceptedTakes.map(item => <option key={item.take_id} value={item.take_id}>{item.take_id} · {item.shot_id}</option>)}
+            {acceptedTakes.map(item => (
+              <option key={item.take_id} value={item.take_id}>{item.take_id} · {item.shot_id}</option>
+            ))}
           </select>
           <label className="mt-4 block text-xs text-slate-400">Что зафиксировать</label>
           <input
@@ -332,36 +379,42 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
           <h3 className="font-medium">2. Зарегистрировать подготовленный дубль</h3>
-          <p className="mt-1 text-xs text-slate-500">UV Studio привяжет точный SHA/размер выбранного видео к текущей версии плана.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            UV Studio привяжет точный SHA/размер выбранного видео к текущей версии плана.
+          </p>
           <label className="mt-4 block text-xs text-slate-400">Кадр</label>
           <select
             aria-label="Кадр для подготовленного дубля"
-            value={takeShotId}
+            value={effectiveTakeShotId}
             onChange={event => setTakeShotId(event.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
           >
             <option value="">Выберите кадр</option>
-            {sequence.plans.map(item => <option key={item.shot_id} value={item.shot_id}>{item.shot_id} · {item.intent}</option>)}
+            {sequence.plans.map(item => (
+              <option key={item.shot_id} value={item.shot_id}>{item.shot_id} · {item.intent}</option>
+            ))}
           </select>
           <label className="mt-4 block text-xs text-slate-400">Видео проекта</label>
           <select
             aria-label="Видео для подготовленного дубля"
-            value={takeReferenceId}
+            value={effectiveTakeReferenceId}
             onChange={event => setTakeReferenceId(event.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
           >
             <option value="">Выберите видео</option>
-            {videos.map(item => <option key={`${item.collection}:${item.id}`} value={item.id}>{item.collection} · {item.path}</option>)}
+            {videos.map(item => (
+              <option key={`${item.collection}:${item.id}`} value={item.id}>{item.collection} · {item.path}</option>
+            ))}
           </select>
           <button
             type="button"
-            disabled={busy || !takeShotId || !takeReferenceId}
+            disabled={busy || !effectiveTakeShotId || !effectiveTakeReferenceId}
             onClick={() => run(async () => {
               const result = await executeSequenceCommand<SequenceTake>(projectId, {
                 command: 'register_sequence_take',
                 sequence_id: sequence.sequence_id,
-                shot_id: takeShotId,
-                reference_id: takeReferenceId,
+                shot_id: effectiveTakeShotId,
+                reference_id: effectiveTakeReferenceId,
               });
               setSelectedTakeId(result.payload.take_id);
             })}
@@ -375,22 +428,30 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
               <label className="mt-6 block text-xs text-slate-400">Дубль для проверки</label>
               <select
                 aria-label="Дубль последовательности"
-                value={selectedTakeId}
+                value={effectiveSelectedTakeId}
                 onChange={event => setSelectedTakeId(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
                 {sequence.takes.map(item => (
-                  <option key={item.take_id} value={item.take_id}>{item.take_id} · {item.shot_id} · {item.status}</option>
+                  <option key={item.take_id} value={item.take_id}>
+                    {item.take_id} · {item.shot_id} · {item.status}
+                  </option>
                 ))}
               </select>
               <button
                 type="button"
-                disabled={busy || !selectedTakeId || selectedTake?.status === 'rejected'}
+                disabled={busy || !effectiveSelectedTakeId || selectedTake?.status === 'rejected'}
                 onClick={async () => {
+                  if (!effectiveSelectedTakeId) return;
                   setBusy(true);
                   setError(null);
                   try {
-                    setContext(await getSequenceTimelineContext(projectId, sequence.sequence_id, selectedTakeId));
+                    const value = await getSequenceTimelineContext(
+                      projectId,
+                      sequence.sequence_id,
+                      effectiveSelectedTakeId,
+                    );
+                    setContextState({ key: contextKey, value });
                   } catch (reason) {
                     setError(reason instanceof Error ? reason.message : 'Не удалось загрузить границу');
                   } finally {
@@ -411,15 +472,21 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-medium">3. Bounded TimelineContext</h3>
-              <p className="mt-1 text-xs text-slate-500">Только хвост принятой опоры и начало candidate; полный видеоскан не выполняется.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Только хвост принятой опоры и начало candidate; полный видеоскан не выполняется.
+              </p>
             </div>
-            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">{(context.window_us / 1_000_000).toFixed(2)} с</span>
+            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
+              {(context.window_us / 1_000_000).toFixed(2)} с
+            </span>
           </div>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {context.anchor ? (
               <BoundaryMedia projectId={projectId} title="Принятая опора · хвост" media={context.anchor} />
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-500">Первый кадр последовательности не требует опоры.</div>
+              <div className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-500">
+                Первый кадр последовательности не требует опоры.
+              </div>
             )}
             <BoundaryMedia projectId={projectId} title="Проверяемый дубль · начало" media={context.candidate} />
           </div>
@@ -435,7 +502,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
       {selectedTake && selectedPlan && (
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
           <h3 className="font-medium">4. Review → Accept → Re-anchor</h3>
-          <p className="mt-1 text-xs text-slate-500">Review относится к точным байтам дубля, текущей версии плана и текущей опоре.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Review относится к точным байтам дубля, текущей версии плана и текущей опоре.
+          </p>
 
           {selectedTake.status === 'prepared' && (
             <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_280px]">
@@ -445,15 +514,19 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm text-slate-200">{target.criterion}</p>
-                        <p className="mt-1 text-xs text-slate-600">{target.target_id}{target.required ? ' · обязательно' : ''}</p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {target.target_id}{target.required ? ' · обязательно' : ''}
+                        </p>
                       </div>
                       <select
                         aria-label={`Результат ${target.target_id}`}
-                        value={reviewOutcomes[target.target_id] ?? 'uncertain'}
-                        onChange={event => setReviewOutcomes(current => ({
-                          ...current,
-                          [target.target_id]: event.target.value as SequenceReviewOutcome,
-                        }))}
+                        value={activeReviewDraft.outcomes[target.target_id] ?? 'uncertain'}
+                        onChange={event => updateReviewDraft({
+                          outcomes: {
+                            ...activeReviewDraft.outcomes,
+                            [target.target_id]: event.target.value as SequenceReviewOutcome,
+                          },
+                        })}
                         className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
                       >
                         {(Object.keys(outcomeLabels) as SequenceReviewOutcome[]).map(value => (
@@ -465,16 +538,16 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
                 ))}
                 <textarea
                   aria-label="Наблюдение по принятому дублю"
-                  value={reviewObservation}
-                  onChange={event => setReviewObservation(event.target.value)}
+                  value={activeReviewDraft.observation}
+                  onChange={event => updateReviewDraft({ observation: event.target.value })}
                   rows={2}
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
                   placeholder="Фактическое наблюдение: поза, направление движения, свет, композиция…"
                 />
                 <textarea
                   aria-label="Примечание Review последовательности"
-                  value={reviewNote}
-                  onChange={event => setReviewNote(event.target.value)}
+                  value={activeReviewDraft.note}
+                  onChange={event => updateReviewDraft({ note: event.target.value })}
                   rows={2}
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
                   placeholder="Примечание к решению"
@@ -484,8 +557,10 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
                 <label className="block text-xs text-slate-400">Вердикт</label>
                 <select
                   aria-label="Вердикт Review последовательности"
-                  value={reviewVerdict}
-                  onChange={event => setReviewVerdict(event.target.value as SequenceReviewVerdict)}
+                  value={activeReviewDraft.verdict}
+                  onChange={event => updateReviewDraft({
+                    verdict: event.target.value as SequenceReviewVerdict,
+                  })}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
                 >
                   {(Object.keys(verdictLabels) as SequenceReviewVerdict[]).map(value => (
@@ -500,20 +575,20 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
                       command: 'review_sequence_take',
                       sequence_id: sequence.sequence_id,
                       take_id: selectedTake.take_id,
-                      verdict: reviewVerdict,
+                      verdict: activeReviewDraft.verdict,
                       results: selectedPlan.review_targets.map(target => ({
                         target_id: target.target_id,
-                        outcome: reviewOutcomes[target.target_id] ?? 'uncertain',
+                        outcome: activeReviewDraft.outcomes[target.target_id] ?? 'uncertain',
                         note: null,
                       })),
-                      observations: reviewObservation.trim() ? [{
+                      observations: activeReviewDraft.observation.trim() ? [{
                         observation_id: `obs_${selectedTake.take_id}`,
                         kind: 'observation',
                         category: 'visual',
-                        statement: reviewObservation.trim(),
+                        statement: activeReviewDraft.observation.trim(),
                         confidence: 'medium',
                       }] : [],
-                      note: reviewNote.trim() || null,
+                      note: activeReviewDraft.note.trim() || null,
                     });
                   })}
                   className="mt-3 w-full rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 disabled:opacity-50"
@@ -550,7 +625,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
               </div>
               {selectedReview.observations.length > 0 && (
                 <ul className="mt-3 space-y-1 text-sm text-slate-400">
-                  {selectedReview.observations.map(item => <li key={item.observation_id}>• {item.statement}</li>)}
+                  {selectedReview.observations.map(item => (
+                    <li key={item.observation_id}>• {item.statement}</li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -560,7 +637,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-4">
               <div>
                 <p className="text-sm text-emerald-200">Дубль принят и может стать factual anchor.</p>
-                <p className="mt-1 text-xs text-slate-500">Текущая опора: {sequence.anchor_take_id ?? 'не назначена'}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Текущая опора: {sequence.anchor_take_id ?? 'не назначена'}
+                </p>
               </div>
               <button
                 type="button"
@@ -581,7 +660,9 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
         </div>
       )}
 
-      {error && <p className="mt-5 rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-sm text-red-300">{error}</p>}
+      {error && (
+        <p className="mt-5 rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-sm text-red-300">{error}</p>
+      )}
     </section>
   );
 }
@@ -595,7 +676,9 @@ function BoundaryMedia({ projectId, title, media }: { projectId: string; title: 
           <p className="text-sm text-slate-200">{title}</p>
           <p className="mt-1 font-mono text-xs text-slate-600">{media.take_id} · {media.reference_path}</p>
         </div>
-        <span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] text-slate-500">{media.sha256.slice(0, 10)}</span>
+        <span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] text-slate-500">
+          {media.sha256.slice(0, 10)}
+        </span>
       </div>
       <video
         ref={videoRef}
@@ -629,8 +712,12 @@ function RuleList({ title, items }: { title: string; items: SequenceContinuityRu
     <div className="rounded-lg border border-slate-800 p-4">
       <p className="text-xs uppercase tracking-wider text-slate-500">{title}</p>
       <ul className="mt-2 space-y-2 text-sm text-slate-300">
-        {items.length === 0 ? <li className="text-slate-600">Нет</li> : items.map(item => (
-          <li key={item.rule_id}><span className="text-slate-500">{item.category}:</span> {item.requirement}</li>
+        {items.length === 0 ? (
+          <li className="text-slate-600">Нет</li>
+        ) : items.map(item => (
+          <li key={item.rule_id}>
+            <span className="text-slate-500">{item.category}:</span> {item.requirement}
+          </li>
         ))}
       </ul>
     </div>
