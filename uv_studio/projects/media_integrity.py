@@ -18,13 +18,8 @@ class VerifiedMediaIdentity:
     size_bytes: int
 
 
-def verify_registered_media_bytes(path: Path, metadata: Mapping[str, Any]) -> VerifiedMediaIdentity:
-    expected_sha = metadata.get("sha256")
-    expected_size = metadata.get("size_bytes")
-    if not isinstance(expected_sha, str) or len(expected_sha) != 64:
-        raise MediaIntegrityError("media metadata requires sha256")
-    if isinstance(expected_size, bool) or not isinstance(expected_size, int) or expected_size <= 0:
-        raise MediaIntegrityError("media metadata requires positive size_bytes")
+def measure_media_identity(path: Path) -> VerifiedMediaIdentity:
+    """Hash one regular file while rejecting mutation during the measurement."""
     if not path.is_file() or path.is_symlink():
         raise MediaIntegrityError("registered media must be a regular non-symlink file")
 
@@ -42,9 +37,20 @@ def verify_registered_media_bytes(path: Path, metadata: Mapping[str, Any]) -> Ve
 
     if before.st_size != after.st_size or before.st_mtime_ns != after.st_mtime_ns or size != after.st_size:
         raise MediaIntegrityError("registered media changed while its identity was being verified")
-    if size != expected_size:
+    return VerifiedMediaIdentity(sha256=digest.hexdigest(), size_bytes=size)
+
+
+def verify_registered_media_bytes(path: Path, metadata: Mapping[str, Any]) -> VerifiedMediaIdentity:
+    expected_sha = metadata.get("sha256")
+    expected_size = metadata.get("size_bytes")
+    if not isinstance(expected_sha, str) or len(expected_sha) != 64:
+        raise MediaIntegrityError("media metadata requires sha256")
+    if isinstance(expected_size, bool) or not isinstance(expected_size, int) or expected_size <= 0:
+        raise MediaIntegrityError("media metadata requires positive size_bytes")
+
+    identity = measure_media_identity(path)
+    if identity.size_bytes != expected_size:
         raise MediaIntegrityError("registered media size no longer matches metadata")
-    actual_sha = digest.hexdigest()
-    if actual_sha != expected_sha:
+    if identity.sha256 != expected_sha:
         raise MediaIntegrityError("registered media sha256 no longer matches current file bytes")
-    return VerifiedMediaIdentity(sha256=actual_sha, size_bytes=size)
+    return identity
