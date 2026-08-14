@@ -383,13 +383,13 @@ class BrowserUserOutcomes(unittest.TestCase):
                 "command": "import_dubbing_transcript",
                 "source_id": source_id,
                 "language": "en",
-                "start_us": 1_000_000,
-                "end_us": 3_000_000,
+                "start_us": 4_000_000,
+                "end_us": 5_500_000,
                 "segments": [
                     {
                         "segment_id": "segment_1",
-                        "start_us": 1_000_000,
-                        "end_us": 3_000_000,
+                        "start_us": 4_000_000,
+                        "end_us": 5_500_000,
                         "text": "hello world",
                         "speaker_label": "speaker_1",
                         "confidence": 1.0,
