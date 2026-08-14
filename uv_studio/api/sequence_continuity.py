@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.projects import get_project_store
 from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.sequence_context import build_sequence_timeline_context
 from uv_studio.projects.sequence_continuity import (
     SequenceContinuityError,
     SequenceContinuityRule,
@@ -278,7 +279,8 @@ def get_sequence_timeline_context(
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
     try:
-        return SequenceContinuityStore(store).timeline_context(
+        return build_sequence_timeline_context(
+            SequenceContinuityStore(store),
             project_id,
             sequence_id=sequence_id,
             take_id=take_id,
