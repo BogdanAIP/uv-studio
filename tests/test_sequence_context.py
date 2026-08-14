@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,8 @@ from pathlib import Path
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.sequence_context import build_sequence_timeline_context
 from uv_studio.projects.sequence_continuity import (
+    SEQUENCE_CONTINUITY_PATH,
+    SequenceContinuityError,
     SequenceContinuityRule,
     SequenceContinuityStore,
     SequenceObservation,
@@ -18,7 +21,7 @@ from uv_studio.projects.store import ProjectStore
 
 
 class SequenceContextTests(unittest.TestCase):
-    def test_linked_context_exposes_observed_anchor_review_facts(self) -> None:
+    def test_linked_context_exposes_only_current_approved_anchor_review_facts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
             project = store.create_project(title="Observed sequence context")
@@ -132,6 +135,23 @@ class SequenceContextTests(unittest.TestCase):
             self.assertEqual(context["candidate"]["observations"], [])
             self.assertEqual(context["anchor"]["sample_times_us"], [3_000_000, 3_500_000, 4_000_000])
             self.assertEqual(context["candidate"]["sample_times_us"], [0, 500_000, 1_000_000])
+
+            state_path = project_dir / SEQUENCE_CONTINUITY_PATH
+            corrupt = json.loads(state_path.read_text(encoding="utf-8"))
+            corrupt["sequences"][0]["reviews"][0]["results"][0]["outcome"] = "fail"
+            state_path.write_text(
+                json.dumps(corrupt, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SequenceContinuityError, "stale or inconsistent"):
+                build_sequence_timeline_context(
+                    service,
+                    project.project_id,
+                    sequence_id="seq",
+                    take_id="take_candidate",
+                    window_us=1_000_000,
+                    samples=3,
+                )
 
 
 if __name__ == "__main__":
