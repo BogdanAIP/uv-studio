@@ -9,8 +9,12 @@ from .sequence_context import build_sequence_timeline_context
 from .sequence_continuity import (
     SequenceContinuityError,
     SequenceContinuityStore,
+    SequenceNotFound,
     SequenceObservation,
+    SequenceReviewNotFound,
     SequenceReviewResult,
+    SequenceShotNotFound,
+    SequenceTakeNotFound,
 )
 
 SEQUENCE_REVIEW_ASSIST_SCHEMA_VERSION = 1
@@ -124,6 +128,8 @@ def build_sequence_review_assist(
             window_us=window_us,
             samples=samples,
         )
+    except (SequenceNotFound, SequenceShotNotFound, SequenceTakeNotFound, SequenceReviewNotFound):
+        raise
     except SequenceContinuityError as exc:
         raise SequenceReviewAssistError(str(exc)) from exc
     state = service.load(project_id)
