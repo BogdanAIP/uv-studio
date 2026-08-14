@@ -413,7 +413,9 @@ class BrowserUserOutcomes(unittest.TestCase):
         source_card.locator("select").first.select_option(label=self.source_video.name)
 
         translation_card = _card_for(dubbing, "Transcript и перевод")
-        expect(translation_card.get_by_text("hello world", exact=True)).to_be_visible()
+        expect(
+            translation_card.get_by_role("paragraph").filter(has_text="hello world")
+        ).to_be_visible()
         translation_card.locator("textarea").first.fill("привет мир")
         translation_card.get_by_role("button", name="Сохранить перевод", exact=True).click()
         expect(dubbing.get_by_text("Перевод сохранён и привязан", exact=False)).to_be_visible()
