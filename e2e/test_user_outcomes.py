@@ -313,6 +313,7 @@ class BrowserUserOutcomes(unittest.TestCase):
     def _select_range(self, page: Page) -> None:
         track = page.locator("div.cursor-crosshair.bg-slate-950").first
         expect(track).to_be_visible()
+        track.scroll_into_view_if_needed()
         box = track.bounding_box()
         self.assertIsNotNone(box)
         assert box is not None
