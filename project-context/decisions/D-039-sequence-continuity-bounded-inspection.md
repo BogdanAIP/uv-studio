@@ -34,6 +34,8 @@ TimelineContext is not canonical project state and is not persisted as a second 
 
 Review must be capable of inspecting the actual produced take, not only the prompt or plan. Local deterministic inspection may provide sampled frames, media facts and bounded boundary context. Optional VLM assistance can enrich review through the existing Capability Registry and D-017 authorization boundary.
 
+The VLM boundary is an **ephemeral Review Assist package**, not another review authority. UV Studio derives a bounded `media.understand` request containing only project-relative media references, exact candidate/anchor SHA bindings, current plan revision, locks/allowed changes, review targets and approved anchor observations. A provider may return a structured suggestion, but UV validates that suggestion again against the current take/plan/anchor binding and never persists it automatically. Even a normalized `approved` suggestion leaves the take `prepared`; a human-confirmed `review_sequence_take` command is still required to create the canonical `SequenceTakeReview`, after which the existing explicit Accept command remains the only path to accepted state.
+
 Model/provider/runtime identity is execution provenance, not portable continuity identity. A complete manual/human review path remains valid when no VLM is configured or automated evidence is uncertain.
 
 Review verdicts remain evidence-based and bind the exact current plan, anchor and candidate-take bytes. An approved current review is required before a prepared take becomes accepted.
@@ -59,7 +61,7 @@ PySceneDetect 0.7.x (BSD-3-Clause) is a credible maintained component for determ
 
 ## Capability boundary
 
-Optional generation, VLM understanding and model-assisted review reuse semantic Capability Registry offers and existing authorization semantics. Stage 6 does not create a privileged provider API or a second execution framework.
+Optional generation, VLM understanding and model-assisted review reuse semantic Capability Registry offers and existing authorization semantics. Stage 6 does not create a privileged provider API or a second execution framework. The Stage 6 contract names only the semantic `media.understand` capability; it does not bind Qwen, Gemini, GPT/Vision or another VLM into canonical continuity state.
 
 GUI, scripts, AI and MCP automation must converge on UV-owned sequence commands for plan creation, take registration/review/acceptance and re-anchor. Direct canonical JSON mutation is not an automation API.
 
