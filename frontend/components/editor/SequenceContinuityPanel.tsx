@@ -37,11 +37,6 @@ interface ReviewDraft {
   note: string;
 }
 
-interface ContextState {
-  key: string;
-  value: SequenceTimelineContext;
-}
-
 const outcomeLabels: Record<SequenceReviewOutcome, string> = {
   pass: 'Соответствует',
   fail: 'Не соответствует',
@@ -58,14 +53,9 @@ function nextShotId(sequence: SequenceRecord): string {
   return `shot_${String(sequence.plans.length + 1).padStart(2, '0')}`;
 }
 
-function planForTake(sequence: SequenceRecord, take: SequenceTake | null): SequenceShotPlan | null {
-  if (!take) return null;
-  return sequence.plans.find(item => item.shot_id === take.shot_id) ?? null;
-}
-
-function currentReview(sequence: SequenceRecord, take: SequenceTake | null): SequenceTakeReview | null {
-  if (!take?.current_review_id) return null;
-  return sequence.reviews.find(item => item.review_id === take.current_review_id) ?? null;
+function videoLabel(reference: ProjectReference): string {
+  const originalName = reference.metadata.original_name;
+  return typeof originalName === 'string' && originalName.trim() ? originalName : reference.path;
 }
 
 function makeReviewDraft(key: string, plan: SequenceShotPlan | null): ReviewDraft {
@@ -73,7 +63,7 @@ function makeReviewDraft(key: string, plan: SequenceShotPlan | null): ReviewDraf
     key,
     verdict: 'needs_revision',
     outcomes: Object.fromEntries(
-      (plan?.review_targets ?? []).map(item => [item.target_id, 'uncertain' as SequenceReviewOutcome]),
+      (plan?.review_targets ?? []).map(target => [target.target_id, 'uncertain' as SequenceReviewOutcome]),
     ),
     observation: '',
     note: '',
@@ -94,7 +84,7 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
   const [takeShotId, setTakeShotId] = useState('');
   const [takeReferenceId, setTakeReferenceId] = useState('');
   const [selectedTakeId, setSelectedTakeId] = useState('');
-  const [contextState, setContextState] = useState<ContextState | null>(null);
+  const [context, setContext] = useState<{ key: string; value: SequenceTimelineContext } | null>(null);
   const [reviewDraft, setReviewDraft] = useState<ReviewDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +96,12 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
     ]);
     setState(sequenceState);
     setVideos([
-      ...editorState.sources.map(reference => ({ ...reference, collection: 'source' as const })),
-      ...editorState.artifacts.map(reference => ({ ...reference, collection: 'artifact' as const })),
+      ...editorState.sources
+        .filter(reference => reference.kind === 'video')
+        .map(reference => ({ ...reference, collection: 'source' as const })),
+      ...editorState.artifacts
+        .filter(reference => reference.kind === 'video')
+        .map(reference => ({ ...reference, collection: 'artifact' as const })),
     ]);
     setActiveSequenceId(current => {
       if (current && sequenceState.sequences.some(item => item.sequence_id === current)) return current;
@@ -122,15 +116,17 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
         if (!active) return;
         setState(sequenceState);
         setVideos([
-          ...editorState.sources.map(reference => ({ ...reference, collection: 'source' as const })),
-          ...editorState.artifacts.map(reference => ({ ...reference, collection: 'artifact' as const })),
+          ...editorState.sources
+            .filter(reference => reference.kind === 'video')
+            .map(reference => ({ ...reference, collection: 'source' as const })),
+          ...editorState.artifacts
+            .filter(reference => reference.kind === 'video')
+            .map(reference => ({ ...reference, collection: 'artifact' as const })),
         ]);
         setActiveSequenceId(sequenceState.sequences[0]?.sequence_id ?? '');
       })
       .catch(reason => {
-        if (active) {
-          setError(reason instanceof Error ? reason.message : 'Не удалось загрузить последовательность');
-        }
+        if (active) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить последовательность');
       });
     return () => {
       active = false;
@@ -141,62 +137,43 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
     () => state?.sequences.find(item => item.sequence_id === activeSequenceId) ?? state?.sequences[0] ?? null,
     [activeSequenceId, state],
   );
-
-  const effectiveTakeShotId = useMemo(() => {
-    if (!sequence) return '';
-    if (takeShotId && sequence.plans.some(item => item.shot_id === takeShotId)) return takeShotId;
-    return sequence.plans.at(-1)?.shot_id ?? '';
-  }, [sequence, takeShotId]);
-
-  const effectiveTakeReferenceId = useMemo(() => {
-    if (takeReferenceId && videos.some(item => item.id === takeReferenceId)) return takeReferenceId;
-    return videos[0]?.id ?? '';
-  }, [takeReferenceId, videos]);
-
-  const effectiveSelectedTakeId = useMemo(() => {
-    if (!sequence) return '';
-    if (selectedTakeId && sequence.takes.some(item => item.take_id === selectedTakeId)) {
-      return selectedTakeId;
-    }
-    return (
-      sequence.takes.find(item => item.status === 'prepared')?.take_id ??
-      sequence.takes.at(-1)?.take_id ??
-      ''
-    );
-  }, [selectedTakeId, sequence]);
-
-  const selectedTake = useMemo(
-    () => sequence?.takes.find(item => item.take_id === effectiveSelectedTakeId) ?? null,
-    [effectiveSelectedTakeId, sequence],
-  );
-  const selectedPlan = useMemo(
-    () => (sequence ? planForTake(sequence, selectedTake) : null),
-    [selectedTake, sequence],
-  );
-  const selectedReview = useMemo(
-    () => (sequence ? currentReview(sequence, selectedTake) : null),
-    [selectedTake, sequence],
-  );
   const acceptedTakes = useMemo(
     () => sequence?.takes.filter(item => item.status === 'accepted') ?? [],
     [sequence],
   );
-
+  const effectiveTakeShotId = useMemo(() => {
+    if (!sequence) return '';
+    if (takeShotId && sequence.plans.some(plan => plan.shot_id === takeShotId)) return takeShotId;
+    return sequence.plans.at(-1)?.shot_id ?? '';
+  }, [sequence, takeShotId]);
+  const effectiveReferenceId = useMemo(() => {
+    if (takeReferenceId && videos.some(video => video.id === takeReferenceId)) return takeReferenceId;
+    return videos[0]?.id ?? '';
+  }, [takeReferenceId, videos]);
+  const effectiveTakeId = useMemo(() => {
+    if (!sequence) return '';
+    if (selectedTakeId && sequence.takes.some(take => take.take_id === selectedTakeId)) return selectedTakeId;
+    return sequence.takes.find(take => take.status === 'prepared')?.take_id ?? sequence.takes.at(-1)?.take_id ?? '';
+  }, [selectedTakeId, sequence]);
+  const selectedTake = sequence?.takes.find(take => take.take_id === effectiveTakeId) ?? null;
+  const selectedPlan = selectedTake
+    ? sequence?.plans.find(plan => plan.shot_id === selectedTake.shot_id) ?? null
+    : null;
+  const selectedReview = selectedTake?.current_review_id
+    ? sequence?.reviews.find(review => review.review_id === selectedTake.current_review_id) ?? null
+    : null;
   const reviewKey = selectedTake && selectedPlan
-    ? `${sequence?.sequence_id ?? ''}:${selectedTake.take_id}:${selectedPlan.revision_sha256}`
+    ? `${sequence?.sequence_id}:${selectedTake.take_id}:${selectedPlan.revision_sha256}`
     : '';
   const activeReviewDraft = reviewDraft?.key === reviewKey
     ? reviewDraft
     : makeReviewDraft(reviewKey, selectedPlan);
-  const contextKey = selectedTake && selectedPlan
-    ? `${sequence?.sequence_id ?? ''}:${selectedTake.take_id}:${selectedPlan.revision_sha256}`
-    : '';
-  const context = contextState?.key === contextKey ? contextState.value : null;
+  const activeContext = context?.key === reviewKey ? context.value : null;
 
-  const updateReviewDraft = (update: Partial<Omit<ReviewDraft, 'key'>>) => {
+  const updateReviewDraft = (patch: Partial<Omit<ReviewDraft, 'key'>>) => {
     setReviewDraft(current => {
       const base = current?.key === reviewKey ? current : makeReviewDraft(reviewKey, selectedPlan);
-      return { ...base, ...update, key: reviewKey };
+      return { ...base, ...patch, key: reviewKey };
     });
   };
 
@@ -215,29 +192,23 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
   };
 
   if (!state) {
-    return (
-      <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <p className="text-sm text-slate-400">Загрузка режима последовательности…</p>
-      </section>
-    );
+    return <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6 text-sm text-slate-400">Загрузка режима последовательности…</section>;
   }
 
   if (state.sequences.length === 0) {
     return (
       <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <div className="max-w-3xl">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Stage 6 · необязательно</p>
-          <h2 className="mt-2 text-xl font-medium">Непрерывность связанных кадров</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            Включайте этот режим только когда следующий кадр должен продолжать принятый дубль. Обычные одиночные клипы не получают дополнительного состояния или проверки.
-          </p>
-        </div>
+        <p className="text-xs uppercase tracking-wider text-slate-500">Stage 6 · необязательно</p>
+        <h2 className="mt-2 text-xl font-medium">Непрерывность связанных кадров</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+          Включайте режим только когда следующий кадр должен продолжать принятый дубль. Одиночные клипы не получают sequence state и дополнительный Review.
+        </p>
         <div className="mt-5 flex max-w-xl gap-3">
           <input
             aria-label="Название последовательности"
             value={sequenceTitle}
             onChange={event => setSequenceTitle(event.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
           />
           <button
             type="button"
@@ -245,7 +216,7 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
             onClick={() => run(async () => {
               const result = await executeSequenceCommand<SequenceRecord>(projectId, {
                 command: 'create_sequence',
-                title: sequenceTitle,
+                title: sequenceTitle.trim(),
               });
               setActiveSequenceId(result.payload.sequence_id);
             })}
@@ -260,88 +231,46 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
   }
 
   if (!sequence) return null;
-
   const newShotId = nextShotId(sequence);
   const defaultAnchor = sequence.anchor_take_id ?? acceptedTakes.at(-1)?.take_id ?? null;
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Stage 6 · Sequence Continuity</p>
-          <h2 className="mt-2 text-xl font-medium">Принятый дубль → следующий связанный кадр</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            План описывает то, что должно сохраниться. Наблюдения Review описывают только то, что действительно видно в конкретном дубле. Опорой может стать только принятый дубль с неизменившимися байтами.
-          </p>
-        </div>
-        <select
-          aria-label="Последовательность"
-          value={sequence.sequence_id}
-          onChange={event => setActiveSequenceId(event.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-        >
-          {state.sequences.map(item => (
-            <option key={item.sequence_id} value={item.sequence_id}>{item.title}</option>
-          ))}
-        </select>
-      </div>
+      <p className="text-xs uppercase tracking-wider text-slate-500">Stage 6 · Sequence Continuity</p>
+      <h2 className="mt-2 text-xl font-medium">Принятый дубль → следующий связанный кадр</h2>
+      <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-400">
+        Planned state задаёт locks и разрешённые изменения. Observed facts появляются только из Review конкретного дубля. Factual anchor — только accepted take с текущими байтами.
+      </p>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <Stat label="Планы кадров" value={sequence.plans.length} />
         <Stat label="Дубли" value={sequence.takes.length} />
         <Stat label="Принятые" value={acceptedTakes.length} />
         <Stat label="Текущая опора" value={sequence.anchor_take_id ?? 'нет'} />
       </div>
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-2">
+      <div className="mt-7 grid gap-5 xl:grid-cols-2">
         <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
           <h3 className="font-medium">1. План следующего кадра</h3>
           <p className="mt-1 text-xs text-slate-500">{newShotId} · порядок {sequence.plans.length}</p>
-          <label className="mt-4 block text-xs text-slate-400">Замысел кадра</label>
-          <textarea
-            aria-label="Замысел связанного кадра"
-            value={shotIntent}
-            onChange={event => setShotIntent(event.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-            placeholder="Например: продолжить движение вправо, перейти на более крупный план."
-          />
-          <label className="mt-4 block text-xs text-slate-400">Опорный принятый дубль</label>
-          <select
-            aria-label="Опорный принятый дубль"
-            value={defaultAnchor ?? ''}
-            onChange={() => undefined}
-            disabled
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm disabled:text-slate-400"
-          >
-            <option value="">Без опоры</option>
-            {acceptedTakes.map(item => (
-              <option key={item.take_id} value={item.take_id}>{item.take_id} · {item.shot_id}</option>
-            ))}
-          </select>
-          <label className="mt-4 block text-xs text-slate-400">Что зафиксировать</label>
-          <input
-            aria-label="Фиксированное условие непрерывности"
-            value={lockRequirement}
-            onChange={event => setLockRequirement(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-            placeholder="Например: сохранить направление движения вправо."
-          />
-          <label className="mt-4 block text-xs text-slate-400">Что разрешено изменить</label>
-          <input
-            aria-label="Разрешённое изменение непрерывности"
-            value={allowedChange}
-            onChange={event => setAllowedChange(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-            placeholder="Например: разрешить более крупное кадрирование."
-          />
-          <label className="mt-4 block text-xs text-slate-400">Критерий Review</label>
-          <input
-            aria-label="Критерий проверки связанного кадра"
-            value={reviewCriterion}
-            onChange={event => setReviewCriterion(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          />
+          <Field label="Замысел кадра">
+            <textarea aria-label="Замысел связанного кадра" value={shotIntent} onChange={event => setShotIntent(event.target.value)} rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Опорный принятый дубль">
+            <select aria-label="Опорный принятый дубль" value={defaultAnchor ?? ''} onChange={() => undefined} disabled className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm disabled:text-slate-400">
+              <option value="">Без опоры</option>
+              {acceptedTakes.map(take => <option key={take.take_id} value={take.take_id}>{take.take_id} · {take.shot_id}</option>)}
+            </select>
+          </Field>
+          <Field label="Что зафиксировать">
+            <input aria-label="Фиксированное условие непрерывности" value={lockRequirement} onChange={event => setLockRequirement(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Что разрешено изменить">
+            <input aria-label="Разрешённое изменение непрерывности" value={allowedChange} onChange={event => setAllowedChange(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+          </Field>
+          <Field label="Критерий Review">
+            <input aria-label="Критерий проверки связанного кадра" value={reviewCriterion} onChange={event => setReviewCriterion(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
+          </Field>
           <button
             type="button"
             disabled={busy || !shotIntent.trim() || !reviewCriterion.trim()}
@@ -361,11 +290,7 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
                 anchor_take_id: defaultAnchor,
                 locks,
                 allowed_changes: allowed,
-                review_targets: [{
-                  target_id: `${newShotId}.continuity`,
-                  criterion: reviewCriterion.trim(),
-                  required: true,
-                }],
+                review_targets: [{ target_id: `${newShotId}.continuity`, criterion: reviewCriterion.trim(), required: true }],
               });
               setShotIntent('');
               setLockRequirement('');
@@ -379,42 +304,28 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
           <h3 className="font-medium">2. Зарегистрировать подготовленный дубль</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            UV Studio привяжет точный SHA/размер выбранного видео к текущей версии плана.
-          </p>
-          <label className="mt-4 block text-xs text-slate-400">Кадр</label>
-          <select
-            aria-label="Кадр для подготовленного дубля"
-            value={effectiveTakeShotId}
-            onChange={event => setTakeShotId(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          >
-            <option value="">Выберите кадр</option>
-            {sequence.plans.map(item => (
-              <option key={item.shot_id} value={item.shot_id}>{item.shot_id} · {item.intent}</option>
-            ))}
-          </select>
-          <label className="mt-4 block text-xs text-slate-400">Видео проекта</label>
-          <select
-            aria-label="Видео для подготовленного дубля"
-            value={effectiveTakeReferenceId}
-            onChange={event => setTakeReferenceId(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          >
-            <option value="">Выберите видео</option>
-            {videos.map(item => (
-              <option key={`${item.collection}:${item.id}`} value={item.id}>{item.collection} · {item.path}</option>
-            ))}
-          </select>
+          <p className="mt-1 text-xs text-slate-500">Доступны только project-owned video references. В state сохраняются точные SHA/размер и revision плана.</p>
+          <Field label="Кадр">
+            <select aria-label="Кадр для подготовленного дубля" value={effectiveTakeShotId} onChange={event => setTakeShotId(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+              <option value="">Выберите кадр</option>
+              {sequence.plans.map(plan => <option key={plan.shot_id} value={plan.shot_id}>{plan.shot_id} · {plan.intent}</option>)}
+            </select>
+          </Field>
+          <Field label="Видео проекта">
+            <select aria-label="Видео для подготовленного дубля" value={effectiveReferenceId} onChange={event => setTakeReferenceId(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+              <option value="">Выберите видео</option>
+              {videos.map(video => <option key={`${video.collection}:${video.id}`} value={video.id}>{video.collection} · {videoLabel(video)}</option>)}
+            </select>
+          </Field>
           <button
             type="button"
-            disabled={busy || !effectiveTakeShotId || !effectiveTakeReferenceId}
+            disabled={busy || !effectiveTakeShotId || !effectiveReferenceId}
             onClick={() => run(async () => {
               const result = await executeSequenceCommand<SequenceTake>(projectId, {
                 command: 'register_sequence_take',
                 sequence_id: sequence.sequence_id,
                 shot_id: effectiveTakeShotId,
-                reference_id: effectiveTakeReferenceId,
+                reference_id: effectiveReferenceId,
               });
               setSelectedTakeId(result.payload.take_id);
             })}
@@ -425,35 +336,23 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
 
           {sequence.takes.length > 0 && (
             <>
-              <label className="mt-6 block text-xs text-slate-400">Дубль для проверки</label>
-              <select
-                aria-label="Дубль последовательности"
-                value={effectiveSelectedTakeId}
-                onChange={event => setSelectedTakeId(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-              >
-                {sequence.takes.map(item => (
-                  <option key={item.take_id} value={item.take_id}>
-                    {item.take_id} · {item.shot_id} · {item.status}
-                  </option>
-                ))}
-              </select>
+              <Field label="Дубль для проверки">
+                <select aria-label="Дубль последовательности" value={effectiveTakeId} onChange={event => setSelectedTakeId(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                  {sequence.takes.map(take => <option key={take.take_id} value={take.take_id}>{take.take_id} · {take.shot_id} · {take.status}</option>)}
+                </select>
+              </Field>
               <button
                 type="button"
-                disabled={busy || !effectiveSelectedTakeId || selectedTake?.status === 'rejected'}
+                disabled={busy || !effectiveTakeId || selectedTake?.status === 'rejected'}
                 onClick={async () => {
-                  if (!effectiveSelectedTakeId) return;
+                  if (!effectiveTakeId) return;
                   setBusy(true);
                   setError(null);
                   try {
-                    const value = await getSequenceTimelineContext(
-                      projectId,
-                      sequence.sequence_id,
-                      effectiveSelectedTakeId,
-                    );
-                    setContextState({ key: contextKey, value });
+                    const value = await getSequenceTimelineContext(projectId, sequence.sequence_id, effectiveTakeId);
+                    setContext({ key: reviewKey, value });
                   } catch (reason) {
-                    setError(reason instanceof Error ? reason.message : 'Не удалось загрузить границу');
+                    setError(reason instanceof Error ? reason.message : 'Не удалось получить контекст границы');
                   } finally {
                     setBusy(false);
                   }
@@ -467,105 +366,54 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
         </div>
       </div>
 
-      {context && (
+      {activeContext && (
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-medium">3. Bounded TimelineContext</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Только хвост принятой опоры и начало candidate; полный видеоскан не выполняется.
-              </p>
-            </div>
-            <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
-              {(context.window_us / 1_000_000).toFixed(2)} с
-            </span>
-          </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {context.anchor ? (
-              <BoundaryMedia projectId={projectId} title="Принятая опора · хвост" media={context.anchor} />
+          <h3 className="font-medium">3. Bounded TimelineContext</h3>
+          <p className="mt-1 text-xs text-slate-500">Только хвост accepted anchor и начало candidate; frame dumping не выполняется.</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {activeContext.anchor ? (
+              <BoundaryMedia projectId={projectId} title="Принятая опора · хвост" media={activeContext.anchor} />
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-500">
-                Первый кадр последовательности не требует опоры.
-              </div>
+              <div className="rounded-lg border border-dashed border-slate-700 p-4 text-sm text-slate-500">Первый кадр последовательности не требует опоры.</div>
             )}
-            <BoundaryMedia projectId={projectId} title="Проверяемый дубль · начало" media={context.candidate} />
+            <BoundaryMedia projectId={projectId} title="Проверяемый дубль · начало" media={activeContext.candidate} />
           </div>
-          {(context.locks.length > 0 || context.allowed_changes.length > 0) && (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <RuleList title="Зафиксировано" items={context.locks} />
-              <RuleList title="Разрешено изменить" items={context.allowed_changes} />
-            </div>
-          )}
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <RuleList title="Зафиксировано" items={activeContext.locks} />
+            <RuleList title="Разрешено изменить" items={activeContext.allowed_changes} />
+          </div>
         </div>
       )}
 
       {selectedTake && selectedPlan && (
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/50 p-5">
           <h3 className="font-medium">4. Review → Accept → Re-anchor</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            Review относится к точным байтам дубля, текущей версии плана и текущей опоре.
-          </p>
+          <p className="mt-1 text-xs text-slate-500">Review связан с точными candidate bytes, plan revision и anchor identity.</p>
 
           {selectedTake.status === 'prepared' && (
-            <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_280px]">
+            <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_280px]">
               <div className="space-y-3">
                 {selectedPlan.review_targets.map(target => (
                   <div key={target.target_id} className="rounded-lg border border-slate-800 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-slate-200">{target.criterion}</p>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {target.target_id}{target.required ? ' · обязательно' : ''}
-                        </p>
-                      </div>
-                      <select
-                        aria-label={`Результат ${target.target_id}`}
-                        value={activeReviewDraft.outcomes[target.target_id] ?? 'uncertain'}
-                        onChange={event => updateReviewDraft({
-                          outcomes: {
-                            ...activeReviewDraft.outcomes,
-                            [target.target_id]: event.target.value as SequenceReviewOutcome,
-                          },
-                        })}
-                        className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                      >
-                        {(Object.keys(outcomeLabels) as SequenceReviewOutcome[]).map(value => (
-                          <option key={value} value={value}>{outcomeLabels[value]}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <p className="text-sm text-slate-200">{target.criterion}</p>
+                    <select
+                      aria-label={`Результат ${target.target_id}`}
+                      value={activeReviewDraft.outcomes[target.target_id] ?? 'uncertain'}
+                      onChange={event => updateReviewDraft({
+                        outcomes: { ...activeReviewDraft.outcomes, [target.target_id]: event.target.value as SequenceReviewOutcome },
+                      })}
+                      className="mt-3 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    >
+                      {(Object.keys(outcomeLabels) as SequenceReviewOutcome[]).map(value => <option key={value} value={value}>{outcomeLabels[value]}</option>)}
+                    </select>
                   </div>
                 ))}
-                <textarea
-                  aria-label="Наблюдение по принятому дублю"
-                  value={activeReviewDraft.observation}
-                  onChange={event => updateReviewDraft({ observation: event.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                  placeholder="Фактическое наблюдение: поза, направление движения, свет, композиция…"
-                />
-                <textarea
-                  aria-label="Примечание Review последовательности"
-                  value={activeReviewDraft.note}
-                  onChange={event => updateReviewDraft({ note: event.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                  placeholder="Примечание к решению"
-                />
+                <textarea aria-label="Наблюдение по принятому дублю" value={activeReviewDraft.observation} onChange={event => updateReviewDraft({ observation: event.target.value })} rows={2} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Фактическое observed состояние дубля" />
+                <textarea aria-label="Примечание Review последовательности" value={activeReviewDraft.note} onChange={event => updateReviewDraft({ note: event.target.value })} rows={2} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400">Вердикт</label>
-                <select
-                  aria-label="Вердикт Review последовательности"
-                  value={activeReviewDraft.verdict}
-                  onChange={event => updateReviewDraft({
-                    verdict: event.target.value as SequenceReviewVerdict,
-                  })}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                >
-                  {(Object.keys(verdictLabels) as SequenceReviewVerdict[]).map(value => (
-                    <option key={value} value={value}>{verdictLabels[value]}</option>
-                  ))}
+                <select aria-label="Вердикт Review последовательности" value={activeReviewDraft.verdict} onChange={event => updateReviewDraft({ verdict: event.target.value as SequenceReviewVerdict })} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                  {(Object.keys(verdictLabels) as SequenceReviewVerdict[]).map(value => <option key={value} value={value}>{verdictLabels[value]}</option>)}
                 </select>
                 <button
                   type="button"
@@ -600,47 +448,31 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
           )}
 
           {selectedReview && (
-            <div className="mt-5 rounded-lg border border-slate-800 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-slate-200">Текущий Review: {verdictLabels[selectedReview.verdict]}</p>
-                  <p className="mt-1 font-mono text-xs text-slate-600">{selectedReview.review_id}</p>
-                </div>
-                {selectedTake.status === 'prepared' && selectedReview.verdict === 'approved' && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => run(async () => {
-                      await executeSequenceCommand<SequenceTake>(projectId, {
-                        command: 'accept_sequence_take',
-                        sequence_id: sequence.sequence_id,
-                        review_id: selectedReview.review_id,
-                      });
-                    })}
-                    className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 disabled:opacity-50"
-                  >
-                    Accept дубль
-                  </button>
-                )}
-              </div>
-              {selectedReview.observations.length > 0 && (
-                <ul className="mt-3 space-y-1 text-sm text-slate-400">
-                  {selectedReview.observations.map(item => (
-                    <li key={item.observation_id}>• {item.statement}</li>
-                  ))}
-                </ul>
+            <div className="mt-4 rounded-lg border border-slate-800 p-4">
+              <p className="text-sm text-slate-200">Текущий Review: {verdictLabels[selectedReview.verdict]}</p>
+              {selectedReview.observations.map(observation => <p key={observation.observation_id} className="mt-2 text-sm text-slate-400">Observed: {observation.statement}</p>)}
+              {selectedTake.status === 'prepared' && selectedReview.verdict === 'approved' && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(async () => {
+                    await executeSequenceCommand<SequenceTake>(projectId, {
+                      command: 'accept_sequence_take',
+                      sequence_id: sequence.sequence_id,
+                      review_id: selectedReview.review_id,
+                    });
+                  })}
+                  className="mt-3 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 disabled:opacity-50"
+                >
+                  Accept дубль
+                </button>
               )}
             </div>
           )}
 
           {selectedTake.status === 'accepted' && (
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-4">
-              <div>
-                <p className="text-sm text-emerald-200">Дубль принят и может стать factual anchor.</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Текущая опора: {sequence.anchor_take_id ?? 'не назначена'}
-                </p>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-4">
+              <p className="text-sm text-emerald-200">Дубль принят и может стать factual anchor.</p>
               <button
                 type="button"
                 disabled={busy || sequence.anchor_take_id === selectedTake.take_id}
@@ -660,9 +492,7 @@ export function SequenceContinuityPanel({ projectId, onProjectChanged }: Sequenc
         </div>
       )}
 
-      {error && (
-        <p className="mt-5 rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-sm text-red-300">{error}</p>
-      )}
+      {error && <p className="mt-5 rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-sm text-red-300">{error}</p>}
     </section>
   );
 }
@@ -671,38 +501,25 @@ function BoundaryMedia({ projectId, title, media }: { projectId: string; title: 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   return (
     <div className="rounded-lg border border-slate-800 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-slate-200">{title}</p>
-          <p className="mt-1 font-mono text-xs text-slate-600">{media.take_id} · {media.reference_path}</p>
-        </div>
-        <span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] text-slate-500">
-          {media.sha256.slice(0, 10)}
-        </span>
-      </div>
-      <video
-        ref={videoRef}
-        src={sequenceMediaUrl(projectId, media)}
-        controls
-        preload="metadata"
-        className="mt-3 aspect-video w-full rounded-lg bg-black object-contain"
-      />
+      <p className="text-sm text-slate-200">{title}</p>
+      <p className="mt-1 font-mono text-xs text-slate-600">{media.take_id} · {media.sha256.slice(0, 10)}</p>
+      <video ref={videoRef} src={sequenceMediaUrl(projectId, media)} controls preload="metadata" className="mt-3 aspect-video w-full rounded-lg bg-black object-contain" />
       <div className="mt-3 flex flex-wrap gap-2">
         {media.sample_times_us.map(time => (
-          <button
-            key={time}
-            type="button"
-            onClick={() => {
-              if (!videoRef.current) return;
-              videoRef.current.currentTime = time / 1_000_000;
-              void videoRef.current.play().catch(() => undefined);
-            }}
-            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300"
-          >
+          <button key={time} type="button" onClick={() => {
+            if (!videoRef.current) return;
+            videoRef.current.currentTime = time / 1_000_000;
+          }} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">
             {(time / 1_000_000).toFixed(2)} с
           </button>
         ))}
       </div>
+      {(media.observations?.length ?? 0) > 0 && (
+        <div className="mt-3 rounded-lg bg-slate-900/70 p-3">
+          <p className="text-[11px] uppercase tracking-wider text-slate-500">Observed facts</p>
+          {media.observations?.map(observation => <p key={observation.observation_id} className="mt-1 text-sm text-slate-300">{observation.statement}</p>)}
+        </div>
+      )}
     </div>
   );
 }
@@ -711,15 +528,7 @@ function RuleList({ title, items }: { title: string; items: SequenceContinuityRu
   return (
     <div className="rounded-lg border border-slate-800 p-4">
       <p className="text-xs uppercase tracking-wider text-slate-500">{title}</p>
-      <ul className="mt-2 space-y-2 text-sm text-slate-300">
-        {items.length === 0 ? (
-          <li className="text-slate-600">Нет</li>
-        ) : items.map(item => (
-          <li key={item.rule_id}>
-            <span className="text-slate-500">{item.category}:</span> {item.requirement}
-          </li>
-        ))}
-      </ul>
+      {items.length === 0 ? <p className="mt-2 text-sm text-slate-600">Нет</p> : items.map(item => <p key={item.rule_id} className="mt-2 text-sm text-slate-300">{item.category}: {item.requirement}</p>)}
     </div>
   );
 }
@@ -730,5 +539,14 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       <p className="text-[11px] uppercase tracking-wider text-slate-600">{label}</p>
       <p className="mt-1 truncate text-sm text-slate-200">{value}</p>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="mt-4 block text-xs text-slate-400">
+      <span className="mb-1 block">{label}</span>
+      {children}
+    </label>
   );
 }
