@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .models import ProjectReference
+from .store import ProjectStore
+
 
 class MediaIntegrityError(ValueError):
     """Registered media bytes no longer match canonical identity metadata."""
@@ -54,3 +57,25 @@ def verify_registered_media_bytes(path: Path, metadata: Mapping[str, Any]) -> Ve
     if identity.sha256 != expected_sha:
         raise MediaIntegrityError("registered media sha256 no longer matches current file bytes")
     return identity
+
+
+def verify_project_media_path(
+    project_store: ProjectStore,
+    project_id: str,
+    relative_path: str,
+    path: Path,
+) -> ProjectReference:
+    """Resolve one canonical media identity by path and verify its current bytes."""
+    project = project_store.load_project(project_id)
+    matches = [
+        reference
+        for reference in (*project.sources, *project.artifacts)
+        if reference.path == relative_path
+    ]
+    if len(matches) != 1:
+        raise MediaIntegrityError(
+            f"render input {relative_path!r} must have exactly one registered project media identity"
+        )
+    reference = matches[0]
+    verify_registered_media_bytes(path, reference.metadata)
+    return reference
