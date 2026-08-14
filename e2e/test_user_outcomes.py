@@ -423,7 +423,9 @@ class BrowserUserOutcomes(unittest.TestCase):
         audio_card = _card_for(dubbing, "Подготовленная речь")
         audio_picker = audio_card.locator('input[type="file"][accept="audio/*"]')
         audio_picker.set_input_files(str(self.prepared_speech))
-        expect(audio_card.get_by_text(self.prepared_speech.name, exact=True)).to_be_visible(timeout=30_000)
+        expect(
+            audio_card.locator("select").first.locator("option:checked")
+        ).to_have_text(self.prepared_speech.name, timeout=30_000)
         audio_card.get_by_role("button", name="Привязать к тексту и диапазону", exact=True).click()
         expect(dubbing.get_by_text("Голосовая дорожка привязана", exact=False)).to_be_visible()
 
