@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "draft",
+  "lifecycle_state": "review",
   "active_slice": {
     "id": "stage-6-sequence-continuity-review",
     "kind": "stage",
