@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: stage-6-sequence-continuity-review -->
 
 **Updated:** 2026-08-14
@@ -46,13 +46,15 @@ PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle
 
 The Stage 6 implementation head `b172f981526fe2dfd2786f2352a6362c643832f5` passed exact-head PR run `31808557923` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
 
-The browser scenario now creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review. Focused tests also prove archive round-trip, stale plan/media rejection, Review Assist non-authority, preserved not-found semantics and fail-closed rejection of corrupted approved-anchor observations.
+The browser scenario creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review. Focused tests also prove archive round-trip, stale plan/media rejection, Review Assist non-authority, preserved not-found semantics and fail-closed rejection of corrupted approved-anchor observations.
 
-## Stage 6 sequence continuity/review ready for review
+## Stage 6 review hardening in progress
 
 PR #35 implements optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows remain free of sequence state and review overhead until the user explicitly enables the mode.
 
-The implemented architecture is:
+The full pre-merge audit found one additional trust-boundary gap after the first review transition: `accept_take()` revalidated the Review verdict, exact take bytes, plan revision and anchor binding, but did not independently revalidate current review-target coverage and required `pass` outcomes. Normal semantic commands cannot create that mismatch, but direct corruption of canonical Review JSON between Review and Accept could have allowed a stale approved verdict to pass acceptance. The slice has therefore returned to `draft` while this fail-closed acceptance check and its regression are added.
+
+The implemented architecture remains:
 
 - planned continuity is distinct from observed accepted-take state;
 - plans carry explicit locks, allowed changes and review targets;
@@ -63,12 +65,10 @@ The implemented architecture is:
 - optional VLM assistance uses an ephemeral provider-neutral `media.understand` Review Assist package and suggestion schema; even a normalized `approved` suggestion leaves the take prepared until a human creates the canonical Review and explicitly accepts it;
 - `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
 
-The implementation is complete on the verified implementation head. The lifecycle is now `review`; merge remains a reviewer/integration action and is not part of this transition.
-
 ## Cross-cutting backlog
 
 Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries, richer continuity-authoring UX and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. PR #35 is the current review slice on `stage-6/sequence-continuity-review`, based on verified idle main head `9f47f5ac2e4c6cc608162550313894bdb6e194ae`. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until PR #35 is reviewed, merged, `main` closes back to `idle`, and the post-merge closure checks are green.
+D-038 keeps one canonical active slice. PR #35 is temporarily back in `draft` on `stage-6/sequence-continuity-review` while the acceptance trust-boundary review finding is fixed and reverified. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until PR #35 is reviewed, merged, `main` closes back to `idle`, and the post-merge closure checks are green.
