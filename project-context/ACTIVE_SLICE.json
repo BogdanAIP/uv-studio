@@ -19,6 +19,7 @@
       "frontend/lib/**",
       "frontend/next.config.ts",
       "project-context/**",
+      "requirements-uv-dev.txt",
       "tests/**",
       "tests_api/**",
       "tests_real_media/**",
