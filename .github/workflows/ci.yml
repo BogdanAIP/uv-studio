@@ -194,7 +194,7 @@ jobs:
       - name: Run Stage 4C + Stage 5 browser user-outcome suite
         env:
           UV_E2E_ARTIFACT_DIR: e2e-artifacts/${{ runner.os }}
-        run: python -m unittest discover -s e2e -v
+        run: python e2e/run_browser_e2e.py
 
       - name: Upload browser E2E evidence
         if: always()
