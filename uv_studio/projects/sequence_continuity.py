@@ -970,6 +970,23 @@ class SequenceContinuityStore:
                 raise SequenceContinuityError("review take binding is stale")
             if review.anchor_take_id != plan.anchor_take_id or review.anchor_take_sha256 != plan.anchor_take_sha256:
                 raise SequenceContinuityError("review anchor binding is stale")
+            expected_ids = {item.target_id for item in plan.review_targets}
+            actual_ids = {item.target_id for item in review.results}
+            if expected_ids != actual_ids or len(review.results) != len(actual_ids):
+                raise SequenceContinuityError(
+                    "approved review no longer covers each current review target exactly once"
+                )
+            by_id = {item.target_id: item for item in review.results}
+            failing_required = [
+                target.target_id
+                for target in plan.review_targets
+                if target.required and by_id[target.target_id].outcome != "pass"
+            ]
+            if failing_required:
+                raise SequenceContinuityError(
+                    "approved review no longer passes all required targets: "
+                    f"{sorted(failing_required)!r}"
+                )
             self._verify_plan_anchor_current(project_id, sequence, plan)
             self._verify_take_current(project_id, take)
             if any(
