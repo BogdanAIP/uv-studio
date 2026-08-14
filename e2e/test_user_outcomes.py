@@ -339,9 +339,9 @@ class BrowserUserOutcomes(unittest.TestCase):
         page.get_by_role("button", name="Утвердить план по готовому клипу", exact=True).click()
         expect(page.get_by_text("План привязан к текущей ревизии Brief.", exact=True)).to_be_visible()
         page.get_by_role("button", name="Подготовить full candidate", exact=True).click()
-        expect(page.get_by_text("Review + Accept", exact=True)).to_be_visible(timeout=45_000)
 
         result_selects = page.locator('select[aria-label^="Результат "]')
+        expect(result_selects.first).to_be_visible(timeout=45_000)
         count = result_selects.count()
         self.assertGreater(count, 0, "replacement Review must expose at least one ReviewTarget")
         for index in range(count):
