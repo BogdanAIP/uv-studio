@@ -33,6 +33,14 @@ Default upstream license: LGPL v2.1-or-later, with GPL applying when GPL-covered
 
 UV Studio invokes FFmpeg/FFprobe as external deterministic media tools. Development/CI provisioning is not a final shipping decision. Any packaged Windows release must record the exact distributed FFmpeg build/configuration and comply with the licenses of enabled components/codecs rather than assuming every FFmpeg binary has identical terms.
 
+## Playwright (development/browser E2E only)
+
+Project: `microsoft/playwright-python` / `microsoft/playwright`  
+Source license: Apache-2.0  
+UV Studio development dependency: `playwright==1.61.0`
+
+Playwright is used only by the maintained browser user-outcome suite under `e2e/` and CI. It is not a UV Studio core/runtime dependency and is not required to open or execute a user project. Browser binaries are provisioned separately for CI rather than being treated as canonical project assets.
+
 ## whisper.cpp (optional local ASR runtime)
 
 Project: `ggml-org/whisper.cpp`  
