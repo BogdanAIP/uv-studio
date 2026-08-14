@@ -115,14 +115,17 @@ def build_sequence_review_assist(
 ) -> SequenceReviewAssistPackage:
     """Build an ephemeral VLM-ready package without changing canonical project state."""
 
-    context = build_sequence_timeline_context(
-        service,
-        project_id,
-        sequence_id=sequence_id,
-        take_id=take_id,
-        window_us=window_us,
-        samples=samples,
-    )
+    try:
+        context = build_sequence_timeline_context(
+            service,
+            project_id,
+            sequence_id=sequence_id,
+            take_id=take_id,
+            window_us=window_us,
+            samples=samples,
+        )
+    except SequenceContinuityError as exc:
+        raise SequenceReviewAssistError(str(exc)) from exc
     state = service.load(project_id)
     sequence = state.sequence(sequence_id)
     take = sequence.take(take_id)
