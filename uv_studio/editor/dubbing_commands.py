@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -214,10 +213,7 @@ class DubbingCommandService:
 
     @staticmethod
     def _new_take_id() -> str:
-        # Existing Stage 5 UI falls back to the last canonical take after refresh.
-        # A z-prefixed fixed-width creation stamp keeps new takes after legacy random
-        # IDs while remaining opaque identity; exact selection still remains a UI concern.
-        return f"take_z{time.time_ns():020d}_{uuid.uuid4().hex}"
+        return f"take_{uuid.uuid4().hex}"
 
     def _store_transcript(
         self,
@@ -325,8 +321,6 @@ class DubbingCommandService:
                     previous.dubbing_id != candidate.dubbing_id
                     or previous.target_language != candidate.target_language
                 ):
-                    # Identity is immutable: a changed transcript/language target is a
-                    # new translation, never a retargeting of the old translation ID.
                     previous = None
                     candidate = DubbingTranslation(
                         translation_id=self._new_translation_id(),
