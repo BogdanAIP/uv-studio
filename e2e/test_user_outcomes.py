@@ -505,14 +505,16 @@ class BrowserUserOutcomes(unittest.TestCase):
         expect(sequence.get_by_text("Текущий Review: Одобрить", exact=True)).to_be_visible(timeout=30_000)
         sequence.get_by_role("button", name="Accept дубль", exact=True).click()
         expect(sequence.get_by_text("Дубль принят и может стать factual anchor.", exact=True)).to_be_visible(timeout=30_000)
+        first_anchor_id = take_select.input_value()
+        self.assertTrue(first_anchor_id)
         anchor_button = sequence.get_by_role("button", name="Сделать опорой", exact=True)
         anchor_button.click()
-        expect(anchor_button).to_be_disabled(timeout=30_000)
+        anchor_stat = sequence.get_by_text("Текущая опора", exact=True).locator("xpath=parent::div")
+        expect(anchor_stat).to_contain_text(first_anchor_id, timeout=30_000)
 
         state_after_anchor = _api_json("GET", _project_path(project_id, "/sequence/state"))
         sequence_state = state_after_anchor["sequences"][0]
-        first_anchor_id = sequence_state["anchor_take_id"]
-        self.assertIsNotNone(first_anchor_id)
+        self.assertEqual(sequence_state["anchor_take_id"], first_anchor_id)
 
         sequence.get_by_label("Замысел связанного кадра", exact=True).fill(
             "Продолжить принятый выход вправо в более крупном втором кадре."
@@ -569,14 +571,16 @@ class BrowserUserOutcomes(unittest.TestCase):
         expect(sequence.get_by_text("Текущий Review: Одобрить", exact=True)).to_be_visible(timeout=30_000)
         sequence.get_by_role("button", name="Accept дубль", exact=True).click()
         expect(sequence.get_by_text("Дубль принят и может стать factual anchor.", exact=True)).to_be_visible(timeout=30_000)
+        second_anchor_id = take_select.input_value()
+        self.assertTrue(second_anchor_id)
         anchor_button = sequence.get_by_role("button", name="Сделать опорой", exact=True)
         anchor_button.click()
-        expect(anchor_button).to_be_disabled(timeout=30_000)
+        expect(anchor_stat).to_contain_text(second_anchor_id, timeout=30_000)
 
         final_state = _api_json("GET", _project_path(project_id, "/sequence/state"))["sequences"][0]
         accepted = [take for take in final_state["takes"] if take["status"] == "accepted"]
         self.assertEqual(len(accepted), 2)
-        self.assertEqual(final_state["anchor_take_id"], accepted[-1]["take_id"])
+        self.assertEqual(final_state["anchor_take_id"], second_anchor_id)
         self.assertNotEqual(final_state["anchor_take_id"], first_anchor_id)
 
     def test_targeted_edit_dubbing_and_sequence_user_outcomes(self) -> None:
