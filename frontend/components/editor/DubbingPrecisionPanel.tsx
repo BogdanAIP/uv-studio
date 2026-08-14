@@ -272,7 +272,10 @@ export function DubbingPrecisionPanel({ projectId, onProjectChanged }: DubbingPr
           ? { translation_id: translation.translation_id }
           : {}),
       });
-      setCreatedTakeId(attached.payload.prepared_speech.take_id);
+      const newTakeId = attached.payload.prepared_speech.take_id;
+      setCreatedTakeId(newTakeId);
+      setSelectedTakeId(newTakeId);
+      setAlignmentDraft(null);
       setRemoteConsent(false);
       await refresh();
       await onProjectChanged?.();
