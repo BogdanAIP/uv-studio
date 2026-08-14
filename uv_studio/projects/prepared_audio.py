@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .media_integrity import MediaIntegrityError, verify_registered_media_bytes
 from .models import ProjectDocument, ProjectReference, ProjectValidationError
 from .source_media import SourceMediaError, normalize_original_filename
 from .store import ProjectNotFound, ProjectStore, ProjectStoreError
@@ -175,6 +176,14 @@ class ProjectPreparedAudioStore:
             raise PreparedAudioError(str(exc)) from exc
         if not path.is_file() or path.is_symlink():
             raise PreparedAudioError("registered prepared audio is not a regular project file")
+        return reference, path
+
+    def resolve_verified(self, project_id: str, audio_id: str) -> tuple[ProjectReference, Path]:
+        reference, path = self.resolve(project_id, audio_id)
+        try:
+            verify_registered_media_bytes(path, reference.metadata)
+        except MediaIntegrityError as exc:
+            raise PreparedAudioError(str(exc)) from exc
         return reference, path
 
     def validate_reference(self, project_id: str, audio_id: str) -> ProjectReference:

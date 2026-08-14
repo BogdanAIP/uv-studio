@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from uv_studio.projects import EditStateError, RangeEditStateStore
+from uv_studio.projects.media_integrity import MediaIntegrityError, verify_project_media_path
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.store import ProjectStoreError
 
@@ -190,6 +191,10 @@ def render_edit_state(
         source_path,
         operation="video.render_edits source",
     )
+    try:
+        verify_project_media_path(adapter.store, project_id, canonical_source, source)
+    except MediaIntegrityError as exc:
+        raise InvalidCapabilityInput(str(exc)) from exc
     source_probe = adapter._probe_path(canonical_path=canonical_source, source=source)
     if _stream_count(source_probe, "video") != 1:
         raise InvalidCapabilityInput(
@@ -244,7 +249,6 @@ def render_edit_state(
     replacement_durations_us: list[int] = []
     for edit in edits:
         try:
-            edit_range = edit.to_dict()
             # Resolve against the probed source now; acceptance intentionally performs no media I/O.
             from uv_studio.projects.media_ranges import ProjectMediaRange
 
@@ -262,6 +266,12 @@ def render_edit_state(
             edit.replacement_path,
             operation=f"video.render_edits replacement {edit.edit_id}",
         )
+        try:
+            verify_project_media_path(adapter.store, project_id, canonical_replacement, replacement)
+        except MediaIntegrityError as exc:
+            raise InvalidCapabilityInput(
+                f"accepted edit {edit.edit_id!r} replacement identity is stale: {exc}"
+            ) from exc
         replacement_probe = adapter._probe_path(
             canonical_path=canonical_replacement,
             source=replacement,

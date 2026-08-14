@@ -190,6 +190,15 @@ class DubbingRenderRealMediaTests(unittest.TestCase):
         self.assertEqual(accepted.status_code, 201, accepted.text)
         return accepted.json()["payload"]["accepted_dubbing"]
 
+    def _render(self):
+        return self.client.post(
+            f"/api/uv/projects/{self.project_id}/capabilities/video.render_dubbing/execute",
+            json={
+                "selection_policy": "local_free_first",
+                "input": {"source_id": self.source.id},
+            },
+        )
+
     def _frequency_hz(self, media: Path, *, start: float, duration: float = 0.5) -> float:
         wav = self.root / f"probe-{start:.2f}.wav"
         self._run(
@@ -231,13 +240,7 @@ class DubbingRenderRealMediaTests(unittest.TestCase):
 
     def test_render_replaces_only_accepted_dialogue_range_and_preserves_video_duration(self) -> None:
         accepted = self._accept_dubbing()
-        rendered = self.client.post(
-            f"/api/uv/projects/{self.project_id}/capabilities/video.render_dubbing/execute",
-            json={
-                "selection_policy": "local_free_first",
-                "input": {"source_id": self.source.id},
-            },
-        )
+        rendered = self._render()
         self.assertEqual(rendered.status_code, 200, rendered.text)
         result = rendered.json()["result"]
         output = result["output"]
@@ -267,6 +270,36 @@ class DubbingRenderRealMediaTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["accepted_dubbing_ids"], [accepted["accepted_id"]])
         self.assertEqual(artifact.metadata["mapped_ranges"][0]["source_start_us"], 2_000_000)
         self.assertEqual(artifact.metadata["mapped_ranges"][0]["master_start_us"], 2_000_000)
+
+    def test_render_rejects_source_bytes_changed_after_accept(self) -> None:
+        self._accept_dubbing()
+        source_path = self.store.resolve_project_file(
+            self.project_id,
+            self.source.path,
+            must_exist=True,
+            allowed_roots=("sources",),
+        )
+        with source_path.open("ab") as handle:
+            handle.write(b"tampered-after-accept")
+
+        rendered = self._render()
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("registered media size no longer matches metadata", rendered.text)
+
+    def test_render_rejects_prepared_audio_bytes_changed_after_accept(self) -> None:
+        self._accept_dubbing()
+        audio_path = self.store.resolve_project_file(
+            self.project_id,
+            self.audio.path,
+            must_exist=True,
+            allowed_roots=("assets",),
+        )
+        with audio_path.open("ab") as handle:
+            handle.write(b"tampered-after-accept")
+
+        rendered = self._render()
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("registered media size no longer matches metadata", rendered.text)
 
 
 if __name__ == "__main__":

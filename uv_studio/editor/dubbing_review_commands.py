@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.dubbing_review import (
     AcceptedDubbingState,
     DubbingLoudnessEvidence,
@@ -14,14 +15,18 @@ from uv_studio.projects.dubbing_review import (
     DubbingReviewError,
     DubbingReviewStore,
 )
+from uv_studio.projects.dubbing_review_current import CurrentReviewError, CurrentReviewStore
+from uv_studio.projects.media_integrity import MediaIntegrityError, verify_registered_media_bytes
+from uv_studio.projects.prepared_audio import PreparedAudioError, ProjectPreparedAudioStore
 from uv_studio.projects.prepared_speech import PreparedSpeechError, PreparedSpeechStore
+from uv_studio.projects.source_media import ProjectSourceMediaStore, SourceMediaError
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 
 LoudnessMeasure = Callable[[str, str], Mapping[str, Any]]
 
 
 class DubbingReviewCommandError(DubbingReviewError):
-    """A semantic dubbing review command cannot be applied to current project state."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -75,13 +80,17 @@ class DubbingReviewCommandResult:
 
 
 class DubbingReviewCommandService:
-    """One Command API service; machine loudness evidence is never client supplied."""
+    """One Command API service with current-byte evidence and explicit current Review."""
 
     def __init__(self, project_store: ProjectStore, loudness_measure: LoudnessMeasure) -> None:
         self.project_store = project_store
         self.loudness_measure = loudness_measure
         self.prepared_speech = PreparedSpeechStore(project_store)
+        self.prepared_audio = ProjectPreparedAudioStore(project_store)
+        self.dubbing = DubbingStore(project_store)
+        self.source_media = ProjectSourceMediaStore(project_store)
         self.reviews = DubbingReviewStore(project_store)
+        self.current_reviews = CurrentReviewStore(project_store)
 
     @staticmethod
     def _new_review_id() -> str:
@@ -96,16 +105,10 @@ class DubbingReviewCommandService:
         return start_a < end_b and end_a > start_b
 
     @classmethod
-    def _reject_overlapping_acceptance(
-        cls,
-        review: DubbingReview,
-        accepted: AcceptedDubbingState,
-    ) -> None:
+    def _reject_overlapping_acceptance(cls, review: DubbingReview, accepted: AcceptedDubbingState) -> None:
         for existing in accepted.edits:
             if existing.review_id == review.review_id:
-                raise DubbingReviewCommandError(
-                    f"dubbing review {review.review_id!r} is already accepted"
-                )
+                raise DubbingReviewCommandError(f"dubbing review {review.review_id!r} is already accepted")
             if existing.source_id != review.source_id:
                 continue
             if cls._ranges_overlap(
@@ -119,47 +122,70 @@ class DubbingReviewCommandService:
                     f"existing={existing.accepted_id!r}, review={review.review_id!r}"
                 )
 
+    def _verify_take_media(self, project_id: str, take_id: str) -> None:
+        take = self.prepared_speech.validate_project(project_id).get(take_id)
+        transcript = self.dubbing.validate_project(project_id).get_transcript(take.dubbing_id)
+        source, _source_path = self.source_media.resolve_verified(project_id, transcript.source_id)
+        if source.metadata.get("sha256") != transcript.source_sha256:
+            raise DubbingReviewCommandError("dubbing source identity no longer matches transcript")
+        audio, audio_path = self.prepared_audio.resolve(project_id, take.audio_id)
+        verify_registered_media_bytes(audio_path, audio.metadata)
+        if audio.metadata.get("sha256") != take.audio_sha256:
+            raise DubbingReviewCommandError("prepared speech audio identity no longer matches take")
+
     def review_prepared_speech(
         self,
         project_id: str,
         command: ReviewPreparedSpeechCommand,
     ) -> DubbingReviewCommandResult:
         if not isinstance(command, ReviewPreparedSpeechCommand):
-            raise DubbingReviewCommandError(
-                "review_prepared_speech requires ReviewPreparedSpeechCommand"
-            )
+            raise DubbingReviewCommandError("review_prepared_speech requires ReviewPreparedSpeechCommand")
         try:
-            take = self.prepared_speech.validate_project(project_id).get(command.take_id)
-            raw = self.loudness_measure(project_id, take.audio_id)
-            loudness = DubbingLoudnessEvidence(
-                audio_id=raw.get("audio_id"),
-                audio_sha256=raw.get("audio_sha256"),
-                duration_us=raw.get("duration_us"),
-                measurable=raw.get("measurable"),
-                integrated_lufs=raw.get("integrated_lufs"),
-                true_peak_dbtp=raw.get("true_peak_dbtp"),
-                loudness_range_lu=raw.get("loudness_range_lu"),
-                threshold_lufs=raw.get("threshold_lufs"),
-            )
-            review_id = command.review_id or self._new_review_id()
-            state = self.reviews.create_review(
-                project_id,
-                review_id=review_id,
-                take_id=take.take_id,
-                loudness=loudness,
-                content_fidelity_confirmed=command.content_fidelity_confirmed,
-                synchronization_confirmed=command.synchronization_confirmed,
-                verdict=command.verdict,
-                note=command.note,
-            )
-            review = state.get(review_id)
+            with self.project_store._lock:
+                self._verify_take_media(project_id, command.take_id)
+                take = self.prepared_speech.validate_project(project_id).get(command.take_id)
+                raw = self.loudness_measure(project_id, take.audio_id)
+                # Detect external mutation while FFmpeg measured the audio.
+                self._verify_take_media(project_id, command.take_id)
+                loudness = DubbingLoudnessEvidence(
+                    audio_id=raw.get("audio_id"),
+                    audio_sha256=raw.get("audio_sha256"),
+                    duration_us=raw.get("duration_us"),
+                    measurable=raw.get("measurable"),
+                    integrated_lufs=raw.get("integrated_lufs"),
+                    true_peak_dbtp=raw.get("true_peak_dbtp"),
+                    loudness_range_lu=raw.get("loudness_range_lu"),
+                    threshold_lufs=raw.get("threshold_lufs"),
+                )
+                review_id = command.review_id or self._new_review_id()
+                state = self.reviews.create_review(
+                    project_id,
+                    review_id=review_id,
+                    take_id=take.take_id,
+                    loudness=loudness,
+                    content_fidelity_confirmed=command.content_fidelity_confirmed,
+                    synchronization_confirmed=command.synchronization_confirmed,
+                    verdict=command.verdict,
+                    note=command.note,
+                )
+                review = state.get(review_id)
+                self.current_reviews.set_current(project_id, take.take_id, review.review_id)
         except ProjectNotFound:
             raise
-        except (PreparedSpeechError, DubbingReviewError, ProjectStoreError) as exc:
+        except (
+            PreparedSpeechError,
+            PreparedAudioError,
+            SourceMediaError,
+            MediaIntegrityError,
+            DubbingError,
+            DubbingReviewError,
+            CurrentReviewError,
+            ProjectStoreError,
+        ) as exc:
             raise DubbingReviewCommandError(str(exc)) from exc
         return DubbingReviewCommandResult(
             command="review_prepared_speech",
-            payload={"review": review.to_dict()},
+            payload={"review": review.to_dict(), "current_review_id": review.review_id},
         )
 
     def accept_dubbing_review(
@@ -168,29 +194,45 @@ class DubbingReviewCommandService:
         command: AcceptDubbingReviewCommand,
     ) -> DubbingReviewCommandResult:
         if not isinstance(command, AcceptDubbingReviewCommand):
-            raise DubbingReviewCommandError(
-                "accept_dubbing_review requires AcceptDubbingReviewCommand"
-            )
+            raise DubbingReviewCommandError("accept_dubbing_review requires AcceptDubbingReviewCommand")
         try:
-            # Hold the canonical project lock across conflict validation and acceptance.
-            # ProjectStore uses RLock, so DubbingReviewStore may safely re-enter it while
-            # revalidating exact review/take/script/audio revisions before the write.
             with self.project_store._lock:
+                history = self.reviews.load_reviews(project_id)
+                review = history.get(command.review_id)
+                current_id = self.current_reviews.resolve_current(
+                    project_id, review.take_id, history.reviews
+                )
+                if current_id is None:
+                    raise DubbingReviewCommandError(
+                        "review history has ambiguous legacy ordering; create a new Review before acceptance"
+                    )
+                if current_id != review.review_id:
+                    raise DubbingReviewCommandError(
+                        "only the explicit current Review for a prepared speech take can be accepted"
+                    )
+                self._verify_take_media(project_id, review.take_id)
                 review = self.reviews.validate_review(project_id, command.review_id)
                 accepted = self.reviews.load_accepted(project_id, validate_current=True)
                 self._reject_overlapping_acceptance(review, accepted)
-                state: AcceptedDubbingState = self.reviews.accept_review(
+                state = self.reviews.accept_review(
                     project_id,
                     review_id=command.review_id,
                     accepted_id=command.accepted_id or self._new_accepted_id(),
                     composition_policy=command.composition_policy,
                 )
-                edit = next(
-                    item for item in state.edits if item.review_id == command.review_id
-                )
+                edit = next(item for item in state.edits if item.review_id == command.review_id)
         except ProjectNotFound:
             raise
-        except (DubbingReviewError, PreparedSpeechError, ProjectStoreError) as exc:
+        except (
+            DubbingReviewError,
+            CurrentReviewError,
+            PreparedSpeechError,
+            PreparedAudioError,
+            SourceMediaError,
+            MediaIntegrityError,
+            DubbingError,
+            ProjectStoreError,
+        ) as exc:
             raise DubbingReviewCommandError(str(exc)) from exc
         return DubbingReviewCommandResult(
             command="accept_dubbing_review",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -55,6 +56,14 @@ def _color(path: Path, color: str, duration_s: int) -> None:
         "yuv420p",
         str(path),
     )
+
+
+def _identity(path: Path) -> dict[str, int | str]:
+    body = path.read_bytes()
+    return {
+        "sha256": hashlib.sha256(body).hexdigest(),
+        "size_bytes": len(body),
+    }
 
 
 def _probe(path: Path) -> dict:
@@ -138,6 +147,7 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
                 kind="video",
                 path="sources/blue.mkv",
                 metadata={
+                    **_identity(source),
                     "duration_us": 6_000_000,
                     "width": WIDTH,
                     "height": HEIGHT,
@@ -145,8 +155,18 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
                     "has_audio": False,
                 },
             )
-            red_ref = ProjectReference(id="art_red", kind="video", path="artifacts/red.mkv")
-            green_ref = ProjectReference(id="art_green", kind="video", path="artifacts/green.mkv")
+            red_ref = ProjectReference(
+                id="art_red",
+                kind="video",
+                path="artifacts/red.mkv",
+                metadata=_identity(red),
+            )
+            green_ref = ProjectReference(
+                id="art_green",
+                kind="video",
+                path="artifacts/green.mkv",
+                metadata=_identity(green),
+            )
             store.update_project(
                 project.project_id,
                 sources=(source_ref,),

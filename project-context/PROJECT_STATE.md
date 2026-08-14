@@ -1,9 +1,9 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: chore-context-lifecycle-closure -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: stage-5-correctness-browser-e2e -->
 
-**Updated:** 2026-08-13
+**Updated:** 2026-08-14
 
 **Repository:** `BogdanAIP/uv-studio`
 
@@ -40,17 +40,25 @@ PR #32's final implementation and review-context heads passed the five permanent
 
 Real-media Stage 5 evidence proves that accepted dubbing replaces only the accepted target range, preserves original audio before/after the range and preserves expected output duration.
 
-## Known gaps before Stage 6
+PR #33 then established the explicit idle/draft/review lifecycle. Its post-merge closure head `453832323bcf992714863a4ccc7675c8102b6ba2` passed all five permanent checks while `active_slice` was null.
 
-The repository audit after PR #32 found a bounded hardening slice that must close before sequence continuity starts:
+The Stage 5 hardening implementation head `775b2a5d4bac687b0375a129ad56cf77a66a604e` passed the full required PR CI run `31799027680`: development-context, Ubuntu/Windows bootstrap, and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real FFmpeg/MLT media coverage, frontend lint, high-severity dependency audit and production build.
 
-- dubbing Review history has no explicit chronological identity; frontend selection must not infer recency from UUID ordering;
-- an existing translation ID must not be silently retargeted to another language/dubbing identity;
-- newly created TTS takes must become the explicit selected take instead of relying on ID-order fallback;
-- transcript/translation binding checks and PreparedSpeech attachment need one transaction-sized Project Store lock boundary;
-- accepted/review/render trust boundaries need verification against current media bytes rather than only stored metadata hashes;
-- the legacy root VideoClaw workspace is still exposed by the product frontend although the UV-owned server intentionally does not mount its old backend routes;
-- Stage 4C/5 roadmap user-outcome gates still lack browser E2E coverage.
+The permanent Playwright browser user-outcome scenario also passed on both Ubuntu and Windows. It creates a project through the production UI and completes targeted media replacement through Review -> Accept -> render, then completes transcript translation, PreparedSpeech import/binding, dubbing Review -> Accept and dubbing master render. Browser CI preserves screenshots on failure plus backend/frontend logs and full unittest output artifacts.
+
+## Stage 5 hardening ready for review
+
+PR #34 closes the bounded post-merge audit findings before Stage 6:
+
+- explicit current/superseded semantics for dubbing Review history;
+- immutable translation identity across target language and dubbing identity;
+- explicit selection of newly created TTS takes;
+- transaction-sized transcript/translation mutation versus PreparedSpeech binding checks;
+- current-byte source/prepared-audio/replacement integrity at Review/Accept/render trust boundaries;
+- retirement of the unsupported legacy VideoClaw root workspace;
+- maintained browser E2E for the targeted existing-video and dubbing user outcomes on both continuous engineering targets.
+
+The implementation is complete on the verified implementation head. This lifecycle is now in `review`; merge remains a reviewer/integration action rather than part of the implementation slice.
 
 ## Cross-cutting backlog
 
@@ -58,6 +66,4 @@ After Stage 5 hardening, remaining non-blocking debt includes recursive portabil
 
 ## Development-memory lifecycle
 
-D-038 upgrades repository context to an explicit `idle -> draft -> review -> idle` lifecycle. `ACTIVE_SLICE.json` may have `active_slice = null` only in `idle`; `last_completed` records the exact merged slice/PR/merge commit. A new development slice must start from an idle `main`, not from a merged branch that still claims to be active.
-
-Repository-memory closure is process/documentation-only; its declared handoff is `stage-5-correctness-browser-e2e`. Stage 6 remains blocked until that hardening slice is merged and the repository returns to idle.
+D-038 keeps one canonical active slice. PR #34 is the current review slice. The declared handoff is `stage-6-sequence-continuity-review`, but Stage 6 remains blocked until PR #34 merges, `main` closes back to `idle`, and the post-merge closure CI is green.

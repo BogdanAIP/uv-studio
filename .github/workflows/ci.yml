@@ -46,7 +46,7 @@ jobs:
         run: python -c "import uv_studio.server; print('uv_studio.server core import ok')"
 
       - name: Compile UV Studio Python
-        run: python -m compileall tools tests tests_real_media uv_studio
+        run: python -m compileall e2e tools tests tests_real_media uv_studio
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
@@ -79,7 +79,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -182,3 +182,25 @@ jobs:
       - name: Build UV Studio frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Provision Chromium for Playwright on Ubuntu
+        if: runner.os == 'Linux'
+        run: python -m playwright install --with-deps chromium
+
+      - name: Provision Chromium for Playwright on Windows
+        if: runner.os == 'Windows'
+        run: python -m playwright install chromium
+
+      - name: Run Stage 4C + Stage 5 browser user-outcome suite
+        env:
+          UV_E2E_ARTIFACT_DIR: e2e-artifacts/${{ runner.os }}
+        run: python e2e/run_browser_e2e.py
+
+      - name: Upload browser E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-${{ matrix.os }}
+          path: e2e-artifacts/${{ runner.os }}/**
+          if-no-files-found: warn
+          retention-days: 14

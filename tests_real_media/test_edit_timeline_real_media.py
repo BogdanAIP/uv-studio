@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ from uv_studio.projects import (
     ProjectStore,
     RangeEditStateStore,
 )
+from uv_studio.projects.models import ProjectReference
 from uv_studio.server import app
 
 WIDTH = 160
@@ -160,6 +162,10 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
             width=128,
             height=72,
         )
+        self._register(self.source, reference_id="src_blue", source=True)
+        self._register(self.red, reference_id="art_red")
+        self._register(self.green, reference_id="art_green")
+        self._register(self.wrong_size, reference_id="art_wrong_size")
         app.dependency_overrides[get_project_store] = lambda: self.store
         # API tests run before explicit FFmpeg provisioning in the same CI job and may
         # have cached an unavailable local offer. Rebuild after provisioning here.
@@ -171,6 +177,29 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.client.close()
         self.tmp.cleanup()
+
+    def _register(self, path: Path, *, reference_id: str, source: bool = False) -> None:
+        body = path.read_bytes()
+        reference = ProjectReference(
+            id=reference_id,
+            kind="video",
+            path=path.relative_to(self.project_dir).as_posix(),
+            metadata={
+                "sha256": hashlib.sha256(body).hexdigest(),
+                "size_bytes": len(body),
+            },
+        )
+        project = self.store.load_project(self.project.project_id)
+        if source:
+            self.store.update_project(
+                self.project.project_id,
+                sources=(*project.sources, reference),
+            )
+        else:
+            self.store.update_project(
+                self.project.project_id,
+                artifacts=(*project.artifacts, reference),
+            )
 
     def _render_url(self) -> str:
         return (
@@ -191,7 +220,8 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         )
 
     def test_accept_two_edits_stays_lightweight_until_one_explicit_render(self) -> None:
-        artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        files_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        references_before_accept = self.store.load_project(self.project.project_id).artifacts
         for payload in (
             {
                 "edit_id": "edit_red",
@@ -212,10 +242,13 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
 
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
-            artifacts_before_accept,
+            files_before_accept,
         )
         self.assertTrue((self.project_dir / EDIT_STATE_PATH).is_file())
-        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        self.assertEqual(
+            self.store.load_project(self.project.project_id).artifacts,
+            references_before_accept,
+        )
 
         registry = get_capability_registry()
         offer = registry.get_offer("local_ffmpeg.video_render_edits")
@@ -233,7 +266,10 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         self.assertEqual(result["output"]["edit_ids"], ["edit_red", "edit_green"])
         output = self.project_dir / result["output"]["path"]
         self.assertTrue(output.is_file())
-        self.assertEqual(len(self.store.load_project(self.project.project_id).artifacts), 1)
+        self.assertEqual(
+            len(self.store.load_project(self.project.project_id).artifacts),
+            len(references_before_accept) + 1,
+        )
 
         for timestamp, expected in (
             (0.5, "blue"),
@@ -251,7 +287,11 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         _color(source, color="blue", duration_s=6, audio=True, tone_hz=440)
         _color(red, color="red", duration_s=1, audio=True, tone_hz=660)
         _color(green, color="green", duration_s=1, audio=True, tone_hz=880)
-        artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        self._register(source, reference_id="src_audio_blue", source=True)
+        self._register(red, reference_id="art_audio_red")
+        self._register(green, reference_id="art_audio_green")
+        files_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        references_before_accept = self.store.load_project(self.project.project_id).artifacts
 
         self._accept(
             {
@@ -273,9 +313,12 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         )
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
-            artifacts_before_accept,
+            files_before_accept,
         )
-        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        self.assertEqual(
+            self.store.load_project(self.project.project_id).artifacts,
+            references_before_accept,
+        )
 
         rendered = self.client.post(
             self._render_url(),
@@ -296,7 +339,8 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
             _assert_color(self, _sample_rgb(output, timestamp), expected)
 
     def test_acceptance_is_storage_only_and_incompatible_media_fails_at_render(self) -> None:
-        artifacts_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        files_before_accept = sorted(path.name for path in (self.project_dir / "artifacts").iterdir())
+        references_before_accept = self.store.load_project(self.project.project_id).artifacts
         self._accept(
             {
                 "edit_id": "edit_wrong_size",
@@ -308,9 +352,12 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         )
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
-            artifacts_before_accept,
+            files_before_accept,
         )
-        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        self.assertEqual(
+            self.store.load_project(self.project.project_id).artifacts,
+            references_before_accept,
+        )
 
         rendered = self.client.post(
             self._render_url(),
@@ -318,11 +365,33 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
         )
         self.assertEqual(rendered.status_code, 422, rendered.text)
         self.assertIn("resolution must match", rendered.text)
-        self.assertEqual(self.store.load_project(self.project.project_id).artifacts, ())
+        self.assertEqual(
+            self.store.load_project(self.project.project_id).artifacts,
+            references_before_accept,
+        )
         self.assertEqual(
             sorted(path.name for path in (self.project_dir / "artifacts").iterdir()),
-            artifacts_before_accept,
+            files_before_accept,
         )
+
+    def test_render_rejects_replacement_bytes_changed_after_accept(self) -> None:
+        self._accept(
+            {
+                "edit_id": "edit_red",
+                "source_path": "sources/blue-source.mkv",
+                "start_us": 1_000_000,
+                "end_us": 2_000_000,
+                "replacement_path": "artifacts/red-replacement.mkv",
+            }
+        )
+        self.red.write_bytes(self.green.read_bytes())
+
+        rendered = self.client.post(
+            self._render_url(),
+            json={"input": {"source_path": "sources/blue-source.mkv"}},
+        )
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("replacement identity is stale", rendered.text)
 
 
 if __name__ == "__main__":

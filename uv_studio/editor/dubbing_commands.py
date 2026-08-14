@@ -16,6 +16,7 @@ from uv_studio.projects.dubbing import (
     TranscriptSegment,
     TranslationSegment,
 )
+from uv_studio.projects.media_integrity import MediaIntegrityError, verify_registered_media_bytes
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.prepared_audio import (
     PreparedAudioError,
@@ -225,32 +226,33 @@ class DubbingCommandService:
         if not isinstance(command, ImportDubbingTranscriptCommand):
             raise DubbingCommandError(f"{command_name} requires ImportDubbingTranscriptCommand")
         try:
-            source = self.source_media.get(project_id, command.source_id)
-            transcript = DubbingTranscript(
-                dubbing_id=command.dubbing_id or self._new_dubbing_id(),
-                source_id=source.id,
-                source_sha256=_source_sha256(source.metadata),
-                language=command.language,
-                start_us=command.start_us,
-                end_us=command.end_us,
-                origin=origin,
-                segments=tuple(item.to_domain() for item in command.segments),
-            )
-            current = self.dubbing.load(project_id)
-            try:
-                previous = current.get_transcript(transcript.dubbing_id)
-            except DubbingTranscriptNotFound:
-                previous = None
-            if (
-                previous is not None
-                and previous.digest != transcript.digest
-                and self.prepared_speech.has_dubbing_bindings(project_id, transcript.dubbing_id)
-            ):
-                raise DubbingCommandError(
-                    "cannot change transcript while prepared speech takes are bound to its current revision"
+            with self.project_store._lock:
+                source, _source_path = self.source_media.resolve_verified(project_id, command.source_id)
+                transcript = DubbingTranscript(
+                    dubbing_id=command.dubbing_id or self._new_dubbing_id(),
+                    source_id=source.id,
+                    source_sha256=_source_sha256(source.metadata),
+                    language=command.language,
+                    start_us=command.start_us,
+                    end_us=command.end_us,
+                    origin=origin,
+                    segments=tuple(item.to_domain() for item in command.segments),
                 )
-            state = self.dubbing.upsert_transcript(project_id, transcript)
-            stored = state.get_transcript(transcript.dubbing_id)
+                current = self.dubbing.load(project_id)
+                try:
+                    previous = current.get_transcript(transcript.dubbing_id)
+                except DubbingTranscriptNotFound:
+                    previous = None
+                if (
+                    previous is not None
+                    and previous.digest != transcript.digest
+                    and self.prepared_speech.has_dubbing_bindings(project_id, transcript.dubbing_id)
+                ):
+                    raise DubbingCommandError(
+                        "cannot change transcript while prepared speech takes are bound to its current revision"
+                    )
+                state = self.dubbing.upsert_transcript(project_id, transcript)
+                stored = state.get_transcript(transcript.dubbing_id)
         except (ProjectNotFound, SourceMediaNotFound):
             raise
         except DubbingCommandError:
@@ -269,11 +271,7 @@ class DubbingCommandService:
             payload={"transcript": stored.to_dict(), "transcript_sha256": stored.digest},
         )
 
-    def import_transcript(
-        self,
-        project_id: str,
-        command: ImportDubbingTranscriptCommand,
-    ) -> DubbingCommandResult:
+    def import_transcript(self, project_id: str, command: ImportDubbingTranscriptCommand) -> DubbingCommandResult:
         return self._store_transcript(
             project_id,
             command,
@@ -281,13 +279,7 @@ class DubbingCommandService:
             command_name="import_dubbing_transcript",
         )
 
-    def accept_asr_transcript(
-        self,
-        project_id: str,
-        command: ImportDubbingTranscriptCommand,
-    ) -> DubbingCommandResult:
-        """Persist a reviewed ASR draft without trusting engine-side project identity."""
-
+    def accept_asr_transcript(self, project_id: str, command: ImportDubbingTranscriptCommand) -> DubbingCommandResult:
         return self._store_transcript(
             project_id,
             command,
@@ -305,33 +297,51 @@ class DubbingCommandService:
                 "upsert_dubbing_translation requires UpsertDubbingTranslationCommand"
             )
         try:
-            current = self.dubbing.validate_project(project_id)
-            transcript = current.get_transcript(command.dubbing_id)
-            translation = DubbingTranslation(
-                translation_id=command.translation_id or self._new_translation_id(),
-                dubbing_id=transcript.dubbing_id,
-                transcript_sha256=transcript.digest,
-                target_language=command.target_language,
-                segments=tuple(item.to_domain() for item in command.segments),
-            )
-            if command.translation_id is not None:
-                try:
-                    previous = current.get_translation(command.translation_id)
-                except DubbingTranslationNotFound:
+            with self.project_store._lock:
+                current = self.dubbing.validate_project(project_id)
+                transcript = current.get_transcript(command.dubbing_id)
+                previous = None
+                translation_id = command.translation_id
+                if translation_id is not None:
+                    try:
+                        previous = current.get_translation(translation_id)
+                    except DubbingTranslationNotFound as exc:
+                        raise DubbingCommandError(
+                            "translation_id can update only an existing translation"
+                        ) from exc
+
+                candidate = DubbingTranslation(
+                    translation_id=translation_id or self._new_translation_id(),
+                    dubbing_id=transcript.dubbing_id,
+                    transcript_sha256=transcript.digest,
+                    target_language=command.target_language,
+                    segments=tuple(item.to_domain() for item in command.segments),
+                )
+                if previous is not None and (
+                    previous.dubbing_id != candidate.dubbing_id
+                    or previous.target_language != candidate.target_language
+                ):
                     previous = None
+                    candidate = DubbingTranslation(
+                        translation_id=self._new_translation_id(),
+                        dubbing_id=transcript.dubbing_id,
+                        transcript_sha256=transcript.digest,
+                        target_language=command.target_language,
+                        segments=tuple(item.to_domain() for item in command.segments),
+                    )
                 if (
                     previous is not None
                     and canonical_revision_sha256(previous.to_dict())
-                    != canonical_revision_sha256(translation.to_dict())
+                    != canonical_revision_sha256(candidate.to_dict())
                     and self.prepared_speech.has_translation_bindings(
-                        project_id, command.translation_id
+                        project_id, previous.translation_id
                     )
                 ):
                     raise DubbingCommandError(
                         "cannot change translation while prepared speech takes are bound to its current revision"
                     )
-            state = self.dubbing.upsert_translation(project_id, translation)
-            stored = state.get_translation(translation.translation_id)
+                state = self.dubbing.upsert_translation(project_id, candidate)
+                stored = state.get_translation(candidate.translation_id)
         except (ProjectNotFound, SourceMediaNotFound):
             raise
         except DubbingCommandError:
@@ -354,40 +364,45 @@ class DubbingCommandService:
         if not isinstance(command, AttachPreparedSpeechCommand):
             raise DubbingCommandError("attach_prepared_speech requires AttachPreparedSpeechCommand")
         try:
-            dubbing = self.dubbing.validate_project(project_id)
-            transcript = dubbing.get_transcript(command.dubbing_id)
-            if command.translation_id is None:
-                script_kind = "transcript"
-                script_id = transcript.dubbing_id
-                script_sha256 = transcript.digest
-            else:
-                translation = dubbing.get_translation(command.translation_id)
-                if translation.dubbing_id != transcript.dubbing_id:
-                    raise DubbingCommandError(
-                        "prepared speech translation belongs to a different dubbing transcript"
-                    )
-                script_kind = "translation"
-                script_id = translation.translation_id
-                script_sha256 = canonical_revision_sha256(translation.to_dict())
+            with self.project_store._lock:
+                dubbing = self.dubbing.validate_project(project_id)
+                transcript = dubbing.get_transcript(command.dubbing_id)
+                if command.translation_id is None:
+                    script_kind = "transcript"
+                    script_id = transcript.dubbing_id
+                    script_sha256 = transcript.digest
+                else:
+                    translation = dubbing.get_translation(command.translation_id)
+                    if translation.dubbing_id != transcript.dubbing_id:
+                        raise DubbingCommandError(
+                            "prepared speech translation belongs to a different dubbing transcript"
+                        )
+                    script_kind = "translation"
+                    script_id = translation.translation_id
+                    script_sha256 = canonical_revision_sha256(translation.to_dict())
 
-            audio = self.prepared_audio.get(project_id, command.audio_id)
-            origin = audio.metadata.get("origin")
-            if origin not in {"imported", "recorded", "tts"}:
-                raise DubbingCommandError("registered prepared audio has invalid origin")
-            take = PreparedSpeechTake(
-                take_id=command.take_id or self._new_take_id(),
-                dubbing_id=transcript.dubbing_id,
-                script_kind=script_kind,
-                script_id=script_id,
-                script_sha256=script_sha256,
-                audio_id=audio.id,
-                audio_sha256=_audio_sha256(audio.metadata),
-                duration_us=_audio_duration_us(audio.metadata),
-                origin=origin,
-                segment_id=command.segment_id,
-            )
-            state = self.prepared_speech.upsert(project_id, take)
-            stored = state.get(take.take_id)
+                audio, audio_path = self.prepared_audio.resolve(project_id, command.audio_id)
+                try:
+                    verify_registered_media_bytes(audio_path, audio.metadata)
+                except MediaIntegrityError as exc:
+                    raise DubbingCommandError(str(exc)) from exc
+                origin = audio.metadata.get("origin")
+                if origin not in {"imported", "recorded", "tts"}:
+                    raise DubbingCommandError("registered prepared audio has invalid origin")
+                take = PreparedSpeechTake(
+                    take_id=command.take_id or self._new_take_id(),
+                    dubbing_id=transcript.dubbing_id,
+                    script_kind=script_kind,
+                    script_id=script_id,
+                    script_sha256=script_sha256,
+                    audio_id=audio.id,
+                    audio_sha256=_audio_sha256(audio.metadata),
+                    duration_us=_audio_duration_us(audio.metadata),
+                    origin=origin,
+                    segment_id=command.segment_id,
+                )
+                state = self.prepared_speech.upsert(project_id, take)
+                stored = state.get(take.take_id)
         except (ProjectNotFound, SourceMediaNotFound, PreparedAudioNotFound):
             raise
         except DubbingCommandError:
