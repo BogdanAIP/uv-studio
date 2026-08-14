@@ -8,8 +8,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from .media_integrity import (
+    MediaIntegrityError,
+    measure_media_identity,
+    verify_registered_media_bytes,
+)
 from .media_ranges import ProjectMediaRange
-from .models import ProjectValidationError, validate_identifier, validate_project_relative_path
+from .models import (
+    ProjectReference,
+    ProjectValidationError,
+    validate_identifier,
+    validate_project_relative_path,
+)
 from .replacement_plan import (
     ReplacementPlan,
     ReplacementPlanError,
@@ -369,10 +379,65 @@ class ReplacementCandidateStore:
             execution_run_id=execution_run_id,
         )
 
+    def _bind_artifact_identity(self, project_id: str, candidate: ReplacementCandidate) -> None:
+        try:
+            artifact_path = self.project_store.resolve_project_file(
+                project_id,
+                candidate.artifact_path,
+                must_exist=True,
+                allowed_roots=("artifacts",),
+            )
+            identity = measure_media_identity(artifact_path)
+            project = self.project_store.load_project(project_id)
+        except (MediaIntegrityError, ProjectValidationError, ProjectStoreError) as exc:
+            raise ReplacementCandidateError(
+                f"candidate artifact identity could not be established: {exc}"
+            ) from exc
+
+        matches = [
+            item
+            for item in project.artifacts
+            if item.id == candidate.artifact_id and item.path == candidate.artifact_path
+        ]
+        if len(matches) != 1:
+            raise ReplacementCandidateError(
+                "candidate artifact must be registered exactly once in Project Store"
+            )
+        current = matches[0]
+        existing_sha = current.metadata.get("sha256")
+        existing_size = current.metadata.get("size_bytes")
+        if existing_sha is not None and existing_sha != identity.sha256:
+            raise ReplacementCandidateError(
+                "candidate artifact sha256 metadata does not match current file bytes"
+            )
+        if existing_size is not None and existing_size != identity.size_bytes:
+            raise ReplacementCandidateError(
+                "candidate artifact size_bytes metadata does not match current file bytes"
+            )
+        if existing_sha == identity.sha256 and existing_size == identity.size_bytes:
+            return
+
+        bound = ProjectReference(
+            id=current.id,
+            kind=current.kind,
+            path=current.path,
+            metadata={
+                **current.metadata,
+                "sha256": identity.sha256,
+                "size_bytes": identity.size_bytes,
+            },
+        )
+        artifacts = tuple(
+            bound if item.id == current.id and item.path == current.path else item
+            for item in project.artifacts
+        )
+        self.project_store.update_project(project_id, artifacts=artifacts)
+
     def register(self, project_id: str, candidate: ReplacementCandidate) -> ReplacementCandidateState:
         if not isinstance(candidate, ReplacementCandidate):
             raise ReplacementCandidateError("register requires ReplacementCandidate")
         with self.project_store._lock:
+            self._bind_artifact_identity(project_id, candidate)
             self._validate_candidate(project_id, candidate, require_sample_for_full=True)
             current = self.load(project_id)
             return self._write(project_id, current.add_candidate(candidate))
@@ -437,6 +502,12 @@ class ReplacementCandidateStore:
         ]
         if len(matching) != 1:
             raise ReplacementCandidateError("candidate artifact must be registered exactly once in Project Store")
+        try:
+            verify_registered_media_bytes(artifact_path, matching[0].metadata)
+        except MediaIntegrityError as exc:
+            raise ReplacementCandidateError(
+                f"candidate artifact identity no longer matches current bytes: {exc}"
+            ) from exc
 
         if (
             require_sample_for_full
