@@ -1,11 +1,11 @@
-"""Real browser user-outcome coverage for the Stage 4C and Stage 5 product surfaces.
+"""Real browser user-outcome coverage for the Stage 4C, Stage 5 and Stage 6 surfaces.
 
 The suite runs the built Next.js frontend against the real UV Studio FastAPI app,
 uses real FFmpeg media fixtures, and drives user-visible workflow controls with
-Playwright Chromium. Optional ASR/provider execution is not a browser-test
-precondition: the dubbing test seeds a reviewed transcript through the same
-UV-owned semantic editor command API, then completes translation, prepared
-speech, Review, Accept and render through the product UI.
+Playwright Chromium. Optional ASR/provider/VLM execution is not a browser-test
+precondition: provider-independent fixture setup uses UV-owned semantic APIs,
+while targeted edit, dubbing and linked-shot continuity Review/Accept flows are
+completed through the production UI.
 """
 
 from __future__ import annotations
@@ -198,6 +198,16 @@ def _card_for(page_or_section: Any, title: str):
     )
 
 
+def _select_option_containing(select: Any, needle: str) -> None:
+    options = select.locator("option")
+    for index in range(options.count()):
+        text = options.nth(index).text_content() or ""
+        if needle in text:
+            select.select_option(index=index)
+            return
+    raise AssertionError(f"select had no option containing {needle!r}")
+
+
 class BrowserUserOutcomes(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -287,7 +297,7 @@ class BrowserUserOutcomes(unittest.TestCase):
     def _create_project(self, page: Page) -> str:
         page.goto("/projects")
         expect(page.get_by_role("heading", name="Проекты", exact=True)).to_be_visible()
-        title = "E2E Stage 4C + Stage 5"
+        title = "E2E Stage 4C + Stage 5 + Stage 6"
         page.get_by_placeholder("Название нового проекта").fill(title)
         page.get_by_role("button", name="Создать проект", exact=True).click()
         project_title = page.get_by_text(title, exact=True)
@@ -317,8 +327,6 @@ class BrowserUserOutcomes(unittest.TestCase):
         box = track.bounding_box()
         self.assertIsNotNone(box)
         assert box is not None
-        # Default zoom is 80 px/s. Drag exactly 1.0s -> 3.0s; timeline snapping
-        # normalizes the interaction to canonical integer microseconds.
         y = box["y"] + min(45.0, box["height"] / 2)
         page.mouse.move(box["x"] + 80.0, y)
         page.mouse.down()
@@ -451,7 +459,127 @@ class BrowserUserOutcomes(unittest.TestCase):
             timeout=90_000
         )
 
-    def test_targeted_edit_and_dubbing_user_outcomes(self) -> None:
+    def _complete_sequence_continuity(self, page: Page, project_id: str) -> None:
+        optional_panel = page.get_by_text(
+            "Непрерывность связанных кадров", exact=True
+        ).locator("xpath=ancestor::section[1]")
+        expect(optional_panel.get_by_text("Stage 6 · необязательно", exact=True)).to_be_visible()
+        optional_panel.get_by_role("button", name="Включить последовательность", exact=True).click()
+
+        sequence = page.get_by_text(
+            "Принятый дубль → следующий связанный кадр", exact=True
+        ).locator("xpath=ancestor::section[1]")
+        expect(sequence).to_be_visible(timeout=30_000)
+
+        sequence.get_by_label("Замысел связанного кадра", exact=True).fill(
+            "Зафиксировать первый factual anchor для следующего связанного кадра."
+        )
+        sequence.get_by_label("Фиксированное условие непрерывности", exact=True).fill(
+            "Сохранить идентичность субъекта и направление движения вправо."
+        )
+        sequence.get_by_role("button", name="Сохранить план кадра", exact=True).click()
+        expect(
+            sequence.get_by_label("Кадр для подготовленного дубля", exact=True).locator("option:checked")
+        ).to_contain_text("shot_01", timeout=30_000)
+
+        video_select = sequence.get_by_label("Видео для подготовленного дубля", exact=True)
+        _select_option_containing(video_select, self.source_video.name)
+        sequence.get_by_role("button", name="Зарегистрировать дубль", exact=True).click()
+        take_select = sequence.get_by_label("Дубль последовательности", exact=True)
+        expect(take_select.locator("option:checked")).to_contain_text("shot_01", timeout=30_000)
+        expect(take_select.locator("option:checked")).to_contain_text("prepared")
+
+        sequence.get_by_role("button", name="Показать контекст границы", exact=True).click()
+        boundary = sequence.get_by_text("3. Bounded TimelineContext", exact=True).locator(
+            "xpath=ancestor::div[contains(@class,'rounded-xl')][1]"
+        )
+        expect(boundary.get_by_text("Первый кадр последовательности не требует опоры.", exact=True)).to_be_visible()
+        expect(boundary.get_by_text("Проверяемый дубль · начало", exact=True)).to_be_visible()
+
+        sequence.get_by_label("Результат shot_01.continuity", exact=True).select_option("pass")
+        sequence.get_by_label("Наблюдение по принятому дублю", exact=True).fill(
+            "Subject exits screen-right."
+        )
+        sequence.get_by_label("Вердикт Review последовательности", exact=True).select_option("approved")
+        sequence.get_by_role("button", name="Сохранить Review", exact=True).click()
+        expect(sequence.get_by_text("Текущий Review: Одобрить", exact=True)).to_be_visible(timeout=30_000)
+        sequence.get_by_role("button", name="Accept дубль", exact=True).click()
+        expect(sequence.get_by_text("Дубль принят и может стать factual anchor.", exact=True)).to_be_visible(timeout=30_000)
+        anchor_button = sequence.get_by_role("button", name="Сделать опорой", exact=True)
+        anchor_button.click()
+        expect(anchor_button).to_be_disabled(timeout=30_000)
+
+        state_after_anchor = _api_json("GET", _project_path(project_id, "/sequence/state"))
+        sequence_state = state_after_anchor["sequences"][0]
+        first_anchor_id = sequence_state["anchor_take_id"]
+        self.assertIsNotNone(first_anchor_id)
+
+        sequence.get_by_label("Замысел связанного кадра", exact=True).fill(
+            "Продолжить принятый выход вправо в более крупном втором кадре."
+        )
+        sequence.get_by_label("Фиксированное условие непрерывности", exact=True).fill(
+            "Продолжить screen-right направление принятой опоры."
+        )
+        sequence.get_by_label("Разрешённое изменение непрерывности", exact=True).fill(
+            "Разрешить более крупное кадрирование."
+        )
+        sequence.get_by_role("button", name="Сохранить план кадра", exact=True).click()
+        expect(
+            sequence.get_by_label("Кадр для подготовленного дубля", exact=True).locator("option:checked")
+        ).to_contain_text("shot_02", timeout=30_000)
+
+        _select_option_containing(video_select, self.replacement_video.name)
+        sequence.get_by_role("button", name="Зарегистрировать дубль", exact=True).click()
+        expect(take_select.locator("option:checked")).to_contain_text("shot_02", timeout=30_000)
+        expect(take_select.locator("option:checked")).to_contain_text("prepared")
+
+        sequence.get_by_role("button", name="Показать контекст границы", exact=True).click()
+        expect(boundary.get_by_text("Принятая опора · хвост", exact=True)).to_be_visible(timeout=30_000)
+        expect(boundary.get_by_text("Проверяемый дубль · начало", exact=True)).to_be_visible()
+        expect(boundary.locator("video")).to_have_count(2)
+
+        current_state = _api_json("GET", _project_path(project_id, "/sequence/state"))
+        current_sequence = current_state["sequences"][0]
+        prepared_take = next(
+            take
+            for take in current_sequence["takes"]
+            if take["shot_id"] == "shot_02" and take["status"] == "prepared"
+        )
+        observed_context = _api_json(
+            "GET",
+            _project_path(
+                project_id,
+                f"/sequence/{urllib.parse.quote(current_sequence['sequence_id'], safe='')}/takes/{urllib.parse.quote(prepared_take['take_id'], safe='')}/context?window_us=1000000&samples=3",
+            ),
+        )
+        self.assertEqual(observed_context["anchor"]["take_id"], first_anchor_id)
+        self.assertEqual(
+            observed_context["anchor"]["observations"][0]["statement"],
+            "Subject exits screen-right.",
+        )
+        self.assertEqual(len(observed_context["anchor"]["sample_times_us"]), 3)
+        self.assertEqual(len(observed_context["candidate"]["sample_times_us"]), 3)
+
+        sequence.get_by_label("Результат shot_02.continuity", exact=True).select_option("pass")
+        sequence.get_by_label("Наблюдение по принятому дублю", exact=True).fill(
+            "Candidate continues the accepted screen-right direction."
+        )
+        sequence.get_by_label("Вердикт Review последовательности", exact=True).select_option("approved")
+        sequence.get_by_role("button", name="Сохранить Review", exact=True).click()
+        expect(sequence.get_by_text("Текущий Review: Одобрить", exact=True)).to_be_visible(timeout=30_000)
+        sequence.get_by_role("button", name="Accept дубль", exact=True).click()
+        expect(sequence.get_by_text("Дубль принят и может стать factual anchor.", exact=True)).to_be_visible(timeout=30_000)
+        anchor_button = sequence.get_by_role("button", name="Сделать опорой", exact=True)
+        anchor_button.click()
+        expect(anchor_button).to_be_disabled(timeout=30_000)
+
+        final_state = _api_json("GET", _project_path(project_id, "/sequence/state"))["sequences"][0]
+        accepted = [take for take in final_state["takes"] if take["status"] == "accepted"]
+        self.assertEqual(len(accepted), 2)
+        self.assertEqual(final_state["anchor_take_id"], accepted[-1]["take_id"])
+        self.assertNotEqual(final_state["anchor_take_id"], first_anchor_id)
+
+    def test_targeted_edit_dubbing_and_sequence_user_outcomes(self) -> None:
         page = self._new_page()
         try:
             project_id = self._create_project(page)
@@ -459,11 +587,13 @@ class BrowserUserOutcomes(unittest.TestCase):
             self._upload_editor_video(page, self.replacement_video)
             self._complete_targeted_edit(page)
             self._complete_dubbing(page, project_id)
+            self._complete_sequence_continuity(page, project_id)
 
             report = {
                 "project_id": project_id,
                 "targeted_edit": "accepted_and_rendered",
                 "dubbing": "accepted_and_rendered",
+                "sequence_continuity": "two_linked_takes_accepted_and_reanchored",
                 "frontend": FRONTEND_ORIGIN,
             }
             (self.artifact_dir / "user-outcomes.json").write_text(
