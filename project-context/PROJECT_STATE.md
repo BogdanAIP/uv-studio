@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: stage-5-correctness-browser-e2e -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: stage-5-correctness-browser-e2e -->
 
 **Updated:** 2026-08-14
 
@@ -9,7 +9,7 @@
 
 ## Product now
 
-Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`.
+Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`, with the bounded post-merge hardening completed by PR #34 / merge commit `e98015da54834a2684e075ede121847df59eda0a`.
 
 UV Studio currently has:
 
@@ -23,7 +23,8 @@ UV Studio currently has:
 - Stage 5 transcript/translation/PreparedSpeech/alignment/review/accepted-dubbing state;
 - local whisper.cpp ASR baseline, optional Argos translation and optional WhisperX alignment;
 - D-017-protected Edge TTS reuse;
-- deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download.
+- deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download;
+- maintained production-browser E2E for the targeted replacement and dubbing user outcomes on Ubuntu and Windows.
 
 ## Architecture invariants
 
@@ -40,15 +41,15 @@ PR #32's final implementation and review-context heads passed the five permanent
 
 Real-media Stage 5 evidence proves that accepted dubbing replaces only the accepted target range, preserves original audio before/after the range and preserves expected output duration.
 
-PR #33 then established the explicit idle/draft/review lifecycle. Its post-merge closure head `453832323bcf992714863a4ccc7675c8102b6ba2` passed all five permanent checks while `active_slice` was null.
+PR #33 established the explicit idle/draft/review lifecycle. Its post-merge closure head `453832323bcf992714863a4ccc7675c8102b6ba2` passed all five permanent checks while `active_slice` was null.
 
-The Stage 5 hardening implementation head `775b2a5d4bac687b0375a129ad56cf77a66a604e` passed the full required PR CI run `31799027680`: development-context, Ubuntu/Windows bootstrap, and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real FFmpeg/MLT media coverage, frontend lint, high-severity dependency audit and production build.
+PR #34's implementation head `775b2a5d4bac687b0375a129ad56cf77a66a604e` passed the full required PR CI run `31799027680`. The final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` then passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap, and Ubuntu/Windows app-baseline were all green.
 
-The permanent Playwright browser user-outcome scenario also passed on both Ubuntu and Windows. It creates a project through the production UI and completes targeted media replacement through Review -> Accept -> render, then completes transcript translation, PreparedSpeech import/binding, dubbing Review -> Accept and dubbing master render. Browser CI preserves screenshots on failure plus backend/frontend logs and full unittest output artifacts.
+Both final app-baseline jobs passed API integration, HTTP smoke, real FFmpeg/MLT media evidence, frontend lint, high-severity dependency audit and production build. The permanent Playwright browser user-outcome scenario passed on both Ubuntu and Windows: create a project through the production UI, complete targeted media replacement through Review -> Accept -> render, then complete transcript translation, PreparedSpeech import/binding, dubbing Review -> Accept and dubbing master render. Browser CI preserves backend/frontend logs, full unittest output, failure screenshots when applicable and a success outcome report.
 
-## Stage 5 hardening ready for review
+## Stage 5 hardening complete
 
-PR #34 closes the bounded post-merge audit findings before Stage 6:
+PR #34 closed the bounded post-merge audit findings before Stage 6:
 
 - explicit current/superseded semantics for dubbing Review history;
 - immutable translation identity across target language and dubbing identity;
@@ -58,12 +59,12 @@ PR #34 closes the bounded post-merge audit findings before Stage 6:
 - retirement of the unsupported legacy VideoClaw root workspace;
 - maintained browser E2E for the targeted existing-video and dubbing user outcomes on both continuous engineering targets.
 
-The implementation is complete on the verified implementation head. This lifecycle is now in `review`; merge remains a reviewer/integration action rather than part of the implementation slice.
+The PR was reviewed with no unresolved review threads and merged at `e98015da54834a2684e075ede121847df59eda0a`. This closure returns repository lifecycle memory to explicit `idle` without product implementation changes.
 
 ## Cross-cutting backlog
 
-After Stage 5 hardening, remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
+Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. PR #34 is the current review slice. The declared handoff is `stage-6-sequence-continuity-review`, but Stage 6 remains blocked until PR #34 merges, `main` closes back to `idle`, and the post-merge closure CI is green.
+D-038 keeps one canonical active slice. The repository is idle after `stage-5-correctness-browser-e2e`; `active_slice` is null and `last_completed` records PR #34 plus merge commit `e98015da54834a2684e075ede121847df59eda0a`. The declared handoff remains `stage-6-sequence-continuity-review`, which may start only after this idle closure head passes the permanent CI matrix.

@@ -20,3 +20,4 @@ Compact record of completed development slices. Detailed rationale remains in th
 | 4C workflow | PR #31, `03b3c0b` | Complete targeted existing-video UI workflow and strict MLT/FFmpeg real-media parity | D-032, D-033 |
 | 5 | PR #32, `6f7531d9` | Dubbing/translation: ASR, translation, PreparedSpeech, alignment, Review/Accept, render, subtitles and real-media evidence | D-034–D-037 |
 | Process | PR #33, `c9031f2c` | Explicit idle/draft/review lifecycle and synchronized post-Stage-5 repository memory | D-038 |
+| 5 hardening | PR #34, `e98015da` | Current Review semantics, media byte-integrity gates, translation/take identity fixes, legacy-root retirement and permanent cross-platform browser E2E | D-032, D-035, D-038 |
