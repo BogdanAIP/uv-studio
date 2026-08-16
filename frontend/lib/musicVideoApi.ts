@@ -1,6 +1,7 @@
 'use client';
 
 import type { ProjectReference } from '@/lib/projectsApi';
+import type { CapabilityVideoEnvelope, CapabilityVideoResult } from '@/lib/renderApi';
 
 export type MusicSectionKind =
   | 'intro'
@@ -78,6 +79,23 @@ export interface MusicDirectionState {
   revision_sha256: string;
 }
 
+export interface MusicVisualBinding {
+  shot_id: string;
+  source_id: string;
+  source_path: string;
+  source_sha256: string;
+  source_size_bytes: number;
+  source_start_us: number;
+  source_end_us: number;
+}
+
+export interface MusicAssemblyState {
+  schema_version: number;
+  music_direction_revision_sha256: string;
+  bindings: MusicVisualBinding[];
+  revision_sha256: string;
+}
+
 export interface RhythmAuditCut {
   shot_id: string;
   cut_time_us: number;
@@ -124,10 +142,46 @@ export interface ClearMusicDirectionCommand {
   command: 'clear_music_direction';
 }
 
+export interface MusicVisualAssignmentInput {
+  shot_id: string;
+  source_id: string;
+  source_start_us: number;
+}
+
+export interface SetMusicAssemblyCommand {
+  command: 'set_music_assembly';
+  music_direction_revision_sha256: string;
+  assignments: MusicVisualAssignmentInput[];
+}
+
+export interface ClearMusicAssemblyCommand {
+  command: 'clear_music_assembly';
+}
+
+export interface RenderMusicVideoOutput {
+  path: string;
+  composition_mode: string;
+  music_map_revision_sha256: string;
+  music_direction_revision_sha256: string;
+  music_assembly_revision_sha256: string;
+  song_reference_id: string;
+  song_excerpt: MusicExcerpt;
+  visual_shot_ids: string[];
+  actual_output_video_duration_us: number;
+  actual_output_audio_duration_us: number;
+}
+
+export interface RenderMusicVideoResult extends CapabilityVideoResult {
+  capability_id: 'video.render_music_video';
+  output: RenderMusicVideoOutput & Record<string, unknown>;
+}
+
 async function apiError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
-  const detail = body && typeof body.detail === 'string' ? body.detail : fallback;
-  return new Error(detail);
+  const detail = body?.detail;
+  if (typeof detail === 'string') return new Error(detail);
+  if (detail !== undefined) return new Error(JSON.stringify(detail));
+  return new Error(fallback);
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -136,21 +190,44 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export async function uploadProjectAudioSource(projectId: string, file: File): Promise<ProjectReference> {
+async function uploadProjectSource(
+  projectId: string,
+  file: File,
+  kind: 'video' | 'audio',
+): Promise<ProjectReference> {
+  const suffix = kind === 'audio' ? '/audio' : '';
   const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/sources/audio?filename=${encodeURIComponent(file.name)}`,
+    `/api/uv/projects/${encodeURIComponent(projectId)}/sources${suffix}?filename=${encodeURIComponent(file.name)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file,
     },
   );
-  if (!response.ok) throw await apiError(response, 'Не удалось загрузить песню');
+  if (!response.ok) {
+    throw await apiError(response, kind === 'audio' ? 'Не удалось загрузить песню' : 'Не удалось загрузить видео');
+  }
   return response.json();
+}
+
+export async function uploadProjectAudioSource(projectId: string, file: File): Promise<ProjectReference> {
+  return uploadProjectSource(projectId, file, 'audio');
+}
+
+export async function uploadProjectVideoSource(projectId: string, file: File): Promise<ProjectReference> {
+  return uploadProjectSource(projectId, file, 'video');
 }
 
 export function projectAudioUrl(projectId: string, sourceId: string): string {
   return `/api/uv/projects/${encodeURIComponent(projectId)}/sources/audio/${encodeURIComponent(sourceId)}/media`;
+}
+
+export function projectVideoUrl(projectId: string, sourceId: string): string {
+  return `/api/uv/projects/${encodeURIComponent(projectId)}/sources/${encodeURIComponent(sourceId)}/media`;
+}
+
+export function projectVideoArtifactUrl(projectId: string, artifactId: string): string {
+  return `/api/uv/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}/media`;
 }
 
 export async function getMusicMap(projectId: string): Promise<MusicMapState | null> {
@@ -189,8 +266,43 @@ export async function executeMusicDirectionCommand(
   });
 }
 
+export async function getMusicAssembly(projectId: string): Promise<MusicAssemblyState | null> {
+  const response = await requestJson<{ music_assembly: MusicAssemblyState | null }>(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/music-assembly`,
+  );
+  return response.music_assembly;
+}
+
+export async function executeMusicAssemblyCommand(
+  projectId: string,
+  command: SetMusicAssemblyCommand | ClearMusicAssemblyCommand,
+): Promise<{ command: string; payload: MusicAssemblyState | null }> {
+  return requestJson(`/api/uv/projects/${encodeURIComponent(projectId)}/music-assembly/commands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(command),
+  });
+}
+
 export async function getRhythmAudit(projectId: string, toleranceUs = 120_000): Promise<RhythmAudit> {
   return requestJson(
     `/api/uv/projects/${encodeURIComponent(projectId)}/music-direction/rhythm-audit?tolerance_us=${encodeURIComponent(String(toleranceUs))}`,
+  );
+}
+
+export async function renderMusicVideo(
+  projectId: string,
+  assemblyRevisionSha256: string,
+): Promise<CapabilityVideoEnvelope<RenderMusicVideoResult>> {
+  return requestJson(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.render_music_video/execute`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        selection_policy: 'local_free_first',
+        input: { assembly_revision_sha256: assemblyRevisionSha256 },
+      }),
+    },
   );
 }
