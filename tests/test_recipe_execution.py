@@ -101,6 +101,33 @@ class RecipeExecutionPlanTests(unittest.TestCase):
         self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
         self.assertEqual(plan.production_policy.sample_first, PolicyMode.REQUIRED)
 
+    def test_stage8_photo_to_video_has_typed_local_capability_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "photo_to_video")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(slots["images"].kind, InputSlotKind.IMAGE)
+        self.assertTrue(slots["images"].required)
+        self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
+        self.assertFalse(slots["audio"].required)
+        self.assertEqual(slots["duration_per_image"].kind, InputSlotKind.NUMBER)
+        self.assertFalse(slots["duration_per_image"].required)
+        self.assertEqual(slots["duration_per_image"].default, 2.0)
+        self.assertIn("video.compose_photos", plan.reason)
+
+    def test_stage8_visualizer_has_typed_local_capability_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "visualizer")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
+        self.assertTrue(slots["audio"].required)
+        self.assertEqual(slots["artwork"].kind, InputSlotKind.IMAGE)
+        self.assertFalse(slots["artwork"].required)
+        self.assertIn("audio.visualize", plan.reason)
+
     def test_stage8_performance_is_partial_and_does_not_fake_native_launch(self) -> None:
         plan = resolve_project_execution(self.registry, "performance_lip_sync")
         self.assertEqual(plan.compatibility, ExecutionCompatibility.PARTIAL)
@@ -137,7 +164,6 @@ class RecipeExecutionPlanTests(unittest.TestCase):
             self.assertNotIn("dashscope", encoded)
             self.assertNotIn("qwen", encoded)
             self.assertNotIn("openclaw", encoded)
-            # Native compatibility is allowed to name the adapter, but never a concrete provider/model ID.
             self.assertNotIn("wan2", encoded)
             self.assertNotIn("seedance", encoded)
             self.assertNotIn("kling", encoded)
