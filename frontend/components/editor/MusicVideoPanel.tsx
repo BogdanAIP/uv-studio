@@ -87,19 +87,52 @@ const transitionLabels: Record<MusicTransition, string> = {
   other: 'Другое',
 };
 
+const inputClass = 'rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs';
+
 function seconds(us: number): string {
   return (us / 1_000_000).toFixed(3).replace(/\.000$/, '');
 }
 
 function secondsToUs(value: string, field: string): number {
   const parsed = Number(value.replace(',', '.'));
-  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${field}: укажите неотрицательное число секунд`);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${field}: укажите неотрицательное число секунд`);
+  }
   return Math.round(parsed * 1_000_000);
 }
 
 function sourceLabel(source: ProjectReference): string {
   const name = source.metadata.original_name;
   return typeof name === 'string' && name.trim() ? name : source.path;
+}
+
+function vttTimestamp(us: number): string {
+  const totalMs = Math.max(0, Math.round(us / 1_000));
+  const hours = Math.floor(totalMs / 3_600_000);
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000);
+  const secs = Math.floor((totalMs % 60_000) / 1_000);
+  const ms = totalMs % 1_000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+}
+
+function musicCaptionTrackUrl(map: MusicMapState | null, source: ProjectReference | null): string {
+  const cues: string[] = [];
+  if (map && map.lyric_phrases.length > 0) {
+    for (const phrase of map.lyric_phrases) {
+      cues.push(`${vttTimestamp(phrase.start_us)} --> ${vttTimestamp(phrase.end_us)}\n${phrase.text}`);
+    }
+  } else if (map && map.sections.length > 0) {
+    for (const section of map.sections) {
+      cues.push(`${vttTimestamp(section.start_us)} --> ${vttTimestamp(section.end_us)}\n${section.label}`);
+    }
+  } else {
+    const duration = source?.metadata.duration_us;
+    const endUs = typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+      ? duration
+      : 30_000_000;
+    cues.push(`${vttTimestamp(0)} --> ${vttTimestamp(endUs)}\nМузыкальное превью. Music Map ещё не подтверждён.`);
+  }
+  return `data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n${cues.join('\n\n')}\n`)}`;
 }
 
 function hydrateSections(map: MusicMapState | null): SectionDraft[] {
@@ -149,13 +182,12 @@ function directionDraft(map: MusicMapState): ShotDraft[] {
     if (end <= start) continue;
     const midpoint = start + Math.floor((end - start) / 2);
     const section = map.sections.find(item => midpoint >= item.start_us && midpoint < item.end_us);
-    const marker = markerAt.get(end);
     result.push({
       shot_id: `mv_shot_${String(result.length + 1).padStart(2, '0')}`,
       start_us: start,
       end_us: end,
       intent: section ? `${section.label}: визуальный план` : 'Переход между музыкальными участками',
-      sync_marker_id: marker?.marker_id ?? '',
+      sync_marker_id: markerAt.get(end)?.marker_id ?? '',
       transition_out: index === ordered.length - 2 ? 'fade' : 'cut',
     });
   }
@@ -234,6 +266,10 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
   const selectedSong = useMemo(
     () => audioSources.find(source => source.id === selectedSongId) ?? null,
     [audioSources, selectedSongId],
+  );
+  const captionTrackUrl = useMemo(
+    () => musicCaptionTrackUrl(musicMap, selectedSong),
+    [musicMap, selectedSong],
   );
 
   const run = async (operation: () => Promise<void>) => {
@@ -356,7 +392,6 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
               onChange={event => {
                 const file = event.target.files?.[0];
                 if (file) void uploadSong(file);
-                event.currentTarget.value = '';
               }}
             />
             <button
@@ -379,7 +414,9 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
             )}
           </div>
           {selectedSong && (
-            <audio className="mt-4 w-full" controls src={projectAudioUrl(projectId, selectedSong.id)} />
+            <audio className="mt-4 w-full" controls src={projectAudioUrl(projectId, selectedSong.id)}>
+              <track kind="captions" srcLang="ru" label="Music Map" src={captionTrackUrl} default />
+            </audio>
           )}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <NumberField label="Начало фрагмента, с" value={excerptStart} onChange={setExcerptStart} aria="Начало музыкального фрагмента" />
@@ -396,14 +433,14 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
           <div className="mt-4 space-y-3">
             {sections.map((item, index) => (
               <div key={`${item.section_id}-${index}`} className="grid gap-2 rounded-lg border border-slate-800 p-3 sm:grid-cols-6">
-                <input aria-label={`ID музыкальной секции ${index + 1}`} value={item.section_id} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, section_id: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs sm:col-span-1" />
-                <select aria-label={`Тип музыкальной секции ${index + 1}`} value={item.kind} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, kind: event.target.value as MusicSectionKind } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs sm:col-span-1">
+                <input aria-label={`ID музыкальной секции ${index + 1}`} value={item.section_id} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, section_id: event.target.value } : entry))} className={`${inputClass} sm:col-span-1`} />
+                <select aria-label={`Тип музыкальной секции ${index + 1}`} value={item.kind} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, kind: event.target.value as MusicSectionKind } : entry))} className={`${inputClass} sm:col-span-1`}>
                   {sectionKinds.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
-                <input aria-label={`Название музыкальной секции ${index + 1}`} value={item.label} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs sm:col-span-2" />
-                <input aria-label={`Начало музыкальной секции ${index + 1}`} value={item.start} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, start: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
+                <input aria-label={`Название музыкальной секции ${index + 1}`} value={item.label} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} className={`${inputClass} sm:col-span-2`} />
+                <input aria-label={`Начало музыкальной секции ${index + 1}`} value={item.start} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, start: event.target.value } : entry))} className={inputClass} />
                 <div className="flex gap-1">
-                  <input aria-label={`Конец музыкальной секции ${index + 1}`} value={item.end} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, end: event.target.value } : entry))} className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
+                  <input aria-label={`Конец музыкальной секции ${index + 1}`} value={item.end} onChange={event => setSections(current => current.map((entry, i) => i === index ? { ...entry, end: event.target.value } : entry))} className={`${inputClass} min-w-0 flex-1`} />
                   <button type="button" aria-label={`Удалить музыкальную секцию ${index + 1}`} onClick={() => setSections(current => current.filter((_, i) => i !== index))} className="px-2 text-slate-500 hover:text-red-300">×</button>
                 </div>
               </div>
@@ -431,12 +468,12 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
           <div className="mt-4 space-y-2">
             {markers.map((item, index) => (
               <div key={`${item.marker_id}-${index}`} className="grid gap-2 sm:grid-cols-4">
-                <input aria-label={`ID музыкального маркера ${index + 1}`} value={item.marker_id} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, marker_id: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
-                <select aria-label={`Тип музыкального маркера ${index + 1}`} value={item.kind} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, kind: event.target.value as MusicMarkerKind } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs sm:col-span-2">
+                <input aria-label={`ID музыкального маркера ${index + 1}`} value={item.marker_id} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, marker_id: event.target.value } : entry))} className={inputClass} />
+                <select aria-label={`Тип музыкального маркера ${index + 1}`} value={item.kind} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, kind: event.target.value as MusicMarkerKind } : entry))} className={`${inputClass} sm:col-span-2`}>
                   {markerKinds.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
                 <div className="flex gap-1">
-                  <input aria-label={`Время музыкального маркера ${index + 1}`} value={item.time} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, time: event.target.value } : entry))} className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
+                  <input aria-label={`Время музыкального маркера ${index + 1}`} value={item.time} onChange={event => setMarkers(current => current.map((entry, i) => i === index ? { ...entry, time: event.target.value } : entry))} className={`${inputClass} min-w-0 flex-1`} />
                   <button type="button" aria-label={`Удалить музыкальный маркер ${index + 1}`} onClick={() => setMarkers(current => current.filter((_, i) => i !== index))} className="px-2 text-slate-500 hover:text-red-300">×</button>
                 </div>
               </div>
@@ -450,10 +487,10 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
           <div className="mt-4 space-y-2">
             {lyrics.map((item, index) => (
               <div key={`${item.phrase_id}-${index}`} className="grid gap-2 sm:grid-cols-6">
-                <input aria-label={`ID вокальной фразы ${index + 1}`} value={item.phrase_id} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, phrase_id: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
-                <input aria-label={`Начало вокальной фразы ${index + 1}`} value={item.start} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, start: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
-                <input aria-label={`Конец вокальной фразы ${index + 1}`} value={item.end} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, end: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
-                <input aria-label={`Текст вокальной фразы ${index + 1}`} value={item.text} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, text: event.target.value } : entry))} className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs sm:col-span-2" />
+                <input aria-label={`ID вокальной фразы ${index + 1}`} value={item.phrase_id} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, phrase_id: event.target.value } : entry))} className={inputClass} />
+                <input aria-label={`Начало вокальной фразы ${index + 1}`} value={item.start} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, start: event.target.value } : entry))} className={inputClass} />
+                <input aria-label={`Конец вокальной фразы ${index + 1}`} value={item.end} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, end: event.target.value } : entry))} className={inputClass} />
+                <input aria-label={`Текст вокальной фразы ${index + 1}`} value={item.text} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, text: event.target.value } : entry))} className={`${inputClass} sm:col-span-2`} />
                 <button type="button" aria-label={`Удалить вокальную фразу ${index + 1}`} onClick={() => setLyrics(current => current.filter((_, i) => i !== index))} className="text-slate-500 hover:text-red-300">Удалить</button>
               </div>
             ))}
