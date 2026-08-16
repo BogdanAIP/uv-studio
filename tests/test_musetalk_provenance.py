@@ -12,6 +12,7 @@ from uv_studio.capabilities.adapters.musetalk_verified import (
     MUSE_TALK_INFERENCE_BLOB_SHA1,
     _checkout_problem,
     _git_blob_sha1,
+    _runtime_problem,
 )
 
 
@@ -60,6 +61,20 @@ class MuseTalkProvenanceTests(unittest.TestCase):
                 git_path="git",
             )
         self.assertIn("pinned upstream blob", mismatch or "")
+
+    def test_runtime_probe_requires_importable_environment_and_cuda(self) -> None:
+        python = Path("python")
+
+        def completed(returncode: int):
+            def run(command, **kwargs):
+                self.assertEqual(command[0], str(python))
+                self.assertEqual(command[1], "-c")
+                return subprocess.CompletedProcess(command, returncode, "", "")
+            return run
+
+        self.assertIsNone(_runtime_problem(python, runner=completed(0)))
+        self.assertIn("CUDA", _runtime_problem(python, runner=completed(3)) or "")
+        self.assertIn("cannot import", _runtime_problem(python, runner=completed(1)) or "")
 
     def test_git_blob_hash_matches_git_object_format(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
