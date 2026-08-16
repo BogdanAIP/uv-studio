@@ -1,25 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: stage-7-music-video-mode -->
+<!-- uv-next-slice: stage-8-additional-recipes -->
 
 ## Goal
 
-Start Stage 7 Music Video Mode only after Stage 6 sequence continuity/review is reviewed, merged and the repository returns to a green idle lifecycle.
+Start Stage 8 Additional Recipes only after Stage 7 Music Video Mode is reviewed, merged and the repository returns to a green idle lifecycle.
 
 ## Required direction
 
-- compose existing Project Store, Capability Registry, editor/render and production-policy primitives rather than introducing a second project/media engine;
-- integrate `musical-mv-storyboard` only through a tested, license-compatible adapter boundary;
-- make song/lyrics/structure analysis and the Music Map explicit project-owned state where persistence is required;
-- keep music-aware shot timing, beat-sync, source review, sample-first generation and evidence-based final review as music-specific policy rather than universal editor behavior;
-- preserve local/free baselines where viable and keep remote/non-free generation behind D-017 authorization;
-- keep GUI, scripts, AI and MCP on the same UV-owned semantic command/workflow contracts;
-- add a complete user-facing music-video excerpt path without making music mandatory for general video, dubbing or targeted existing-video editing.
+- broaden the studio mainly by composing the Project Store, Recipe Registry, Capability Registry, production-policy hooks and existing editor/render primitives rather than adding new universal engines;
+- add story video, commercial/product, photo-to-video, visualizer, performance/lip-sync and free-project modes as focused recipes/capability mappings with only the product-owned state and UI each actually needs;
+- keep paid/remote providers optional and behind D-017 authorization;
+- preserve local/free baselines where viable and keep provider IDs out of canonical project state;
+- reuse Stage 4 targeted edit, Stage 5 dubbing, Stage 6 continuity and Stage 7 music primitives selectively instead of forcing them into every recipe;
+- keep GUI, scripts, AI and MCP on the same UV-owned semantic command/workflow boundaries;
+- maintain all permanent regression scenarios while adding representative user-facing paths for the new recipe families.
 
 ## Completion proof
 
-Stage 7 must prove a 20–30 second music-video excerpt can be planned, assembled, reviewed and rendered through the product UI with music-aware timing and explicit provider/cost behavior, while permanent non-music regression scenarios remain green.
+Stage 8 is complete when the additional modes are mostly recipe + capability mapping + production policy + minimal task-specific UI, each can execute its relevant user outcome without introducing a competing project/media engine, and the permanent general-video, narrated-video, music-video, dubbing and targeted-edit scenarios remain green.
 
 ## Entry gate
 
-Do not start this slice until `stage-6-sequence-continuity-review` is merged, its lifecycle is closed to `idle`, and the post-merge idle head passes all permanent required checks.
+Do not start this slice until `stage-7-music-video-mode` is merged, its lifecycle is closed to `idle`, and the post-merge idle head passes all permanent required checks.

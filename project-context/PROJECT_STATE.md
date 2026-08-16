@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-6-sequence-continuity-review -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: stage-7-music-video-mode -->
 
 **Updated:** 2026-08-16
 
@@ -9,83 +9,66 @@
 
 ## Product now
 
-Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`, with the bounded post-merge hardening completed by PR #34 / merge commit `e98015da54834a2684e075ede121847df59eda0a`. Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
+Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Its exact idle closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` passed post-merge push CI #1321 with all five permanent jobs green, including the maintained browser E2E on Ubuntu and Windows. This satisfies the Stage 7 entry gate.
 
-UV Studio currently has:
-
-- UV-owned FastAPI runtime and secret/configuration boundary;
-- canonical file-first Project Store and portable `.uvproj.zip` archives;
-- provider-neutral Recipe Registry and Production Policy;
-- semantic Capability Registry with local, MCP and exact native compatibility adapters;
-- D-017 exact one-shot authorization for remote/non-free execution;
-- MLT behind a UV-owned editor adapter and FFmpeg as the deterministic authoritative media/render layer;
-- complete targeted existing-video range workflow through Brief -> Plan -> Candidate -> Review -> Accept -> render/preview;
-- Stage 5 transcript/translation/PreparedSpeech/alignment/review/accepted-dubbing state;
-- local whisper.cpp ASR baseline, optional Argos translation and optional WhisperX alignment;
-- D-017-protected Edge TTS reuse;
-- deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download;
-- optional Stage 6 linked-shot continuity state with explicit planned/observed separation, SHA-bound takes, accepted/rejected lifecycle, current Review semantics and explicit re-anchor;
-- bounded TimelineContext over accepted-anchor tail and candidate head with fail-closed trust checks for approved anchor observations;
-- provider-neutral ephemeral Review Assist over semantic `media.understand`, where VLM suggestions never create canonical Review/Accept/re-anchor state and suggestion collections are bounded before normalization;
-- acceptance-time revalidation of exact current review-target coverage and required pass outcomes;
-- load/reopen-time revalidation that every already accepted take still has a current approved Review bound to the exact current plan, anchor, take SHA, complete target set and passing required targets;
-- maintained production-browser E2E composing targeted replacement, dubbing and linked-shot continuity on Ubuntu and Windows.
+UV Studio currently has a product-owned Project Store, Recipe and Capability registries, D-017 authorization for remote/non-free execution, deterministic FFmpeg media/render paths, MLT behind a UV-owned editor adapter, targeted existing-video editing, dubbing/translation and optional linked-shot continuity/review. Stage 7 must compose these primitives rather than create another project or media engine.
 
 ## Architecture invariants
 
-- Project Store/domain state is canonical. MLT, FFmpeg, VideoClaw compatibility code and optional model runtimes are adapters/engines, not second project authorities.
-- Reuse-first/orchestration-first is mandatory for general editor/media primitives.
-- GUI, scripts, AI and MCP must converge on UV-owned semantic commands/workflows; direct canonical-state mutation is not an automation API.
-- Remote/non-free execution stays behind D-017.
-- Optional continuity, dubbing, music and other specialized workflows must remain optional.
+- Project Store/domain state remains canonical; external skills, model runtimes, MLT and FFmpeg are adapters/engines, not second authorities.
+- GUI, scripts, AI and MCP converge on UV-owned semantic commands/workflows.
+- Remote/non-free execution remains behind D-017 with explicit provider/cost behavior.
+- Music-video behavior is an optional recipe/policy and must not become mandatory for general video, narration, dubbing or targeted editing.
+- Local/free deterministic work is preferred where viable; generated assets may use optional providers without embedding provider IDs into canonical project state.
 - Windows and Linux remain continuous engineering targets.
-- Development and PR review are Chat-first under D-040: automatic Codex code review is excluded from the UV Studio workflow and Codex is used only when the repository owner explicitly launches it manually.
+- Development/review remains Chat-first under D-040; automatic Codex code review is excluded.
 
-## What is verified
+## Stage 6 completion evidence
 
-PR #34's final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline were all green, including the permanent Playwright browser user-outcome scenario on both operating systems.
+PR #35 final review head `55ca0e9c138594c34b8563f6267c6823cbc5794b` passed complete PR CI runs #1318 and #1319. PR #35 merged as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Atomic closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` returned lifecycle to idle and passed push CI #1321: development-context, both bootstrap jobs and both app-baseline jobs succeeded, including API/real HTTP, FFmpeg/MLT real-media coverage, frontend lint/audit/build and browser E2E on both operating systems.
 
-PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfied the Stage 6 entry gate.
+Stage 6 preserves optional planned/observed continuity, SHA-bound takes, explicit Review/Accept/re-anchor, bounded TimelineContext and non-authoritative provider-neutral Review Assist. Its Chat-only audit regressions fail closed on stale/corrupted review evidence before and after acceptance.
 
-The initial Stage 6 implementation head `9c0f9dbc0ff67dc6bce283d5ebc2db1f106669fc` passed exact-head PR run `31809934767` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
+## Stage 7 Music Video Mode — active draft
 
-The browser scenario creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review.
+The Stage 7 goal is a professional, optional 20–30 second music-video excerpt workflow. The baseline direction is:
 
-A later Chat-only pre-merge audit hardened two additional trust boundaries. Exact code head `5d075abb1aad35498baab5a46d0895c928097dd1` passed PR CI run `31945066401` / #1316 with all five required jobs green, including Ubuntu and Windows browser E2E. Accepted state now fails closed on load/reopen if its approved Review is later corrupted or no longer matches the current plan/anchor/targets/required pass outcomes, so such a take cannot remain usable for re-anchor or future-shot anchoring. Review Assist normalization also rejects result-count mismatches and more than `MAX_OBSERVATIONS_PER_REVIEW` observations before constructing suggestion objects. The transient earlier run #1314 exposed only an obsolete test message expectation after the accepted-state check intentionally moved earlier; the test was updated to require the stronger load-time failure and #1316 verified the result.
+- add a dedicated `music_video` recipe instead of widening `general_video` semantics;
+- treat the selected song/excerpt as the authoritative timing reference for this mode while Project Store remains the canonical project authority;
+- persist a typed/versioned UV-owned Music Map where durable state is required: exact song reference/identity, excerpt range, musical sections, beat/downbeat or other timing markers, lyric/vocal phrases when known, climax/emphasis windows and revision identity;
+- keep Music Director decisions and shot timing plans provider-neutral and bound to the exact Music Map revision;
+- support manual/project-supplied timing as a complete provider-free path; automatic analysis is optional and must enter through a tested capability/adapter boundary;
+- use existing editor/render primitives for assembly and master-audio preservation rather than a second EDL/render engine;
+- make generated assets sample-first; remote/non-free generation stays behind D-017;
+- add deterministic rhythm/timing audit from known Music Map markers and edit boundaries, plus evidence-based final review;
+- add a product UI Music Map / Music Director workflow and permanent browser scenario C for a 20–30 second excerpt using provider-free fixtures.
 
-Final review head `55ca0e9c138594c34b8563f6267c6823cbc5794b` passed complete PR CI runs #1318 and #1319. PR #35 then merged into `main` as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
+## `musical-mv-storyboard` evaluation
 
-Focused tests prove project archive round-trip, stale plan/media rejection, Review Assist non-authority and bounded suggestion input, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance, and fail-closed reopen/re-anchor when the same corruption occurs after acceptance.
+The named upstream `huangserva/musical-mv-storyboard` was inspected at exact commit `3b73fe98a8953df13cae80238ad9bcd1bc5ae490` (V2.11 status commit). It contains useful workflow concepts around song-first timing, director score, visual-duration planning, phrase/lip-sync mapping, sample-first work and rhythm audit.
 
-## Stage 6 sequence continuity/review merged
+However, GitHub currently reports no repository license and the repository contains no `LICENSE` file. Therefore Stage 7 will not copy, vendor, import or derive its scripts/templates/code. Until compatible licensing provenance exists, it is architecture/reference material only. UV Studio may independently express general workflow ideas through its own typed contracts and existing engines.
 
-PR #35 implements optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows remain free of sequence state and review overhead until the user explicitly enables the mode.
+## Completion gates for Stage 7
 
-The merged architecture is:
+Engineering gate:
 
-- planned continuity is distinct from observed accepted-take state;
-- plans carry explicit locks, allowed changes and review targets;
-- prepared takes bind exact project-owned video bytes and exact plan revisions;
-- Review binds candidate SHA, plan revision and anchor identity;
-- Accept independently revalidates current target coverage, required pass outcomes, candidate bytes, plan revision and anchor binding before promotion;
-- accepted state independently revalidates the same authoritative Review evidence on load/reopen, preventing corrupted accepted records from remaining trusted anchors;
-- re-anchor remains an explicit semantic command over an accepted current take;
-- bounded `TimelineContext` is a derived inspection view from canonical Project Store state, never a second timeline/EDL authority;
-- trusted anchor observations are exposed only from a current approved Review whose take/SHA/plan/anchor/target binding still matches current state;
-- optional VLM assistance uses an ephemeral provider-neutral `media.understand` Review Assist package and suggestion schema; even a normalized `approved` suggestion leaves the take prepared until a human creates the canonical Review and explicitly accepts it;
-- Review Assist enforces its advertised result/observation collection bounds before normalizing external model output;
-- `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
+- music state is typed, versioned, portable and provider-neutral;
+- exact song/media identity and Music Map revisions are trust-boundary inputs;
+- automatic analysis suggestions cannot mutate canonical state without explicit UV-owned commands;
+- assembly uses existing deterministic editor/render boundaries;
+- remote/non-free work cannot bypass D-017;
+- archive/reopen/stale-binding/failure behavior is tested;
+- non-music regression scenarios remain green.
 
-The full Chat-only pre-merge audit found four trust/input-boundary issues and all are covered by regression tests: stale/corrupted approved-anchor observations cannot be reused as TimelineContext facts; corrupted approved Review outcomes cannot pass Accept; post-Accept corruption invalidates the accepted state itself before it can be reused as an anchor; and Review Assist cannot normalize oversized observation collections. No Qwen-specific Stage 6 binding was added.
+User-outcome gate:
 
-D-040 records the repository-owner development policy: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
-
-The lifecycle is now closed to `idle`. Stage 7 remains gated on the exact post-merge idle closure head passing all permanent required checks.
+- from the production UI, a user can select a song/excerpt, define or inspect the Music Map, plan music-aware shots, use prepared or explicitly generated assets, assemble, audit/review and render a 20–30 second excerpt without manual API calls or a required paid provider.
 
 ## Cross-cutting backlog
 
-Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries, richer continuity-authoring UX and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
+Existing non-blocking debt remains: broader codec/device fixtures, dependency reproducibility, renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces. Stage 7 should not absorb unrelated cleanup unless it blocks the music-video user outcome or trust boundary.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. Stage 6 is now the last completed slice: PR #35 merged as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`, and this closure returns `main` to `idle`. The declared next handoff is `stage-7-music-video-mode`; it may start only after this exact idle closure head passes all permanent required checks.
+D-038 keeps one canonical active slice. The active slice is `stage-7-music-video-mode` on `stage-7/music-video-mode`, based on verified idle main head `89bb51cbba301c85e7822fd4120bc67de43fec54`. The declared next handoff is `stage-8-additional-recipes`.

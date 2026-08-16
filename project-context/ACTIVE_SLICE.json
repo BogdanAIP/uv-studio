@@ -1,14 +1,43 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "stage-7-music-video-mode",
+    "kind": "stage",
+    "roadmap_stage": "stage-7",
+    "goal": "Add an optional professional music-video workflow for a 20-30 second excerpt using UV-owned Music Map state, music-aware timing, sample-first assembly, rhythm audit and evidence-based review without turning music into a universal video-engine requirement.",
+    "base_branch": "main",
+    "branch": "stage-7/music-video-mode",
+    "pull_request": 36,
+    "write_scope": [
+      ".github/workflows/ci.yml",
+      "ROADMAP.md",
+      "THIRD_PARTY_NOTICES.md",
+      "docs/**",
+      "e2e/**",
+      "frontend/**",
+      "project-context/**",
+      "requirements-uv-dev.txt",
+      "requirements-uv.txt",
+      "tests/**",
+      "tests_api/**",
+      "tests_real_media/**",
+      "tools/**",
+      "uv_studio/api/**",
+      "uv_studio/capabilities/**",
+      "uv_studio/editor/**",
+      "uv_studio/projects/**",
+      "uv_studio/recipes/**",
+      "uv_studio/server.py"
+    ]
+  },
   "last_completed": {
     "id": "stage-6-sequence-continuity-review",
     "pull_request": 35,
     "merge_commit": "ea0b766c03d216a154961ca0cd3043e3d3e94d43"
   },
   "handoff": {
-    "next_slice_id": "stage-7-music-video-mode",
+    "next_slice_id": "stage-8-additional-recipes",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
