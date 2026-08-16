@@ -40,6 +40,13 @@ export function PerformanceLipSyncPanel({
   const [error, setError] = useState<string | null>(null);
   const [artifactId, setArtifactId] = useState<string | null>(null);
 
+  const selectedPortraitId = images.some(source => source.id === portraitId)
+    ? portraitId
+    : images[0]?.id ?? '';
+  const selectedSpeechId = audios.some(source => source.id === speechId)
+    ? speechId
+    : audios[0]?.id ?? '';
+
   useEffect(() => {
     let active = true;
     void getPerformanceLipSyncOffers()
@@ -91,7 +98,7 @@ export function PerformanceLipSyncPanel({
   };
 
   const render = async () => {
-    if (!portraitId || !speechId) {
+    if (!selectedPortraitId || !selectedSpeechId) {
       setError('Выберите портрет и готовую речь.');
       return;
     }
@@ -103,7 +110,7 @@ export function PerformanceLipSyncPanel({
     setError(null);
     setMessage(null);
     try {
-      const response = await renderPerformanceLipSync(projectId, portraitId, speechId);
+      const response = await renderPerformanceLipSync(projectId, selectedPortraitId, selectedSpeechId);
       setArtifactId(response.result.artifact.id);
       setMessage('Lip-sync выполнен локальным MuseTalk capability.');
       await onProjectChanged();
@@ -173,7 +180,7 @@ export function PerformanceLipSyncPanel({
           Портрет/персонаж
           <select
             aria-label="Выбранный портрет lip-sync"
-            value={portraitId}
+            value={selectedPortraitId}
             onChange={event => setPortraitId(event.target.value)}
             className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
           >
@@ -185,7 +192,7 @@ export function PerformanceLipSyncPanel({
           Готовая речь
           <select
             aria-label="Выбранная речь lip-sync"
-            value={speechId}
+            value={selectedSpeechId}
             onChange={event => setSpeechId(event.target.value)}
             className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
           >
@@ -197,7 +204,7 @@ export function PerformanceLipSyncPanel({
 
       <button
         type="button"
-        disabled={busy || !available || !portraitId || !speechId}
+        disabled={busy || !available || !selectedPortraitId || !selectedSpeechId}
         onClick={() => void render()}
         className="mt-6 rounded-lg bg-fuchsia-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40"
       >
