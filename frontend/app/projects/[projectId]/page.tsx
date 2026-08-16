@@ -9,6 +9,7 @@ import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
+import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import { Stage8MediaPanel } from '@/components/editor/Stage8MediaPanel';
@@ -116,6 +117,15 @@ export default function ProjectPage() {
                 key={`stage8-media-${project.sources.length}`}
                 projectId={project.project_id}
                 recipeId={project.recipe_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
+            )}
+
+            {project.recipe_id === 'performance_lip_sync' && (
+              <PerformanceLipSyncPanel
+                key={`performance-lip-sync-${project.sources.length}`}
+                projectId={project.project_id}
                 sources={project.sources}
                 onProjectChanged={refreshProject}
               />
