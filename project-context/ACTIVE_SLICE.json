@@ -1,37 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "stage-8-additional-recipes",
-    "kind": "stage",
-    "roadmap_stage": "stage-8",
-    "goal": "Add story video, commercial/product, photo-to-video, visualizer, performance/lip-sync and free-project modes mainly by composing existing Project Store, Recipe Registry, Capability Registry, production-policy and editor/render primitives rather than adding new universal engines.",
-    "base_branch": "main",
-    "branch": "stage-8/additional-recipes",
-    "pull_request": 37,
-    "write_scope": [
-      ".github/workflows/ci.yml",
-      "ROADMAP.md",
-      "docs/**",
-      "e2e/**",
-      "frontend/**",
-      "project-context/**",
-      "tests/**",
-      "tests_api/**",
-      "tests_real_media/**",
-      "tools/**",
-      "uv_studio/api/**",
-      "uv_studio/capabilities/**",
-      "uv_studio/editor/**",
-      "uv_studio/projects/**",
-      "uv_studio/recipes/**",
-      "uv_studio/server.py"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "stage-7-music-video-mode",
-    "pull_request": 36,
-    "merge_commit": "523424bf8b58aa1d2da21664fc985f26f757b3b3"
+    "id": "stage-8-additional-recipes",
+    "pull_request": 37,
+    "merge_commit": "5eb8f6c2256b9b67dd1e896fc929682eb19b16ca"
   },
   "handoff": {
     "next_slice_id": "stage-9-desktop-productization-release-hardening",
