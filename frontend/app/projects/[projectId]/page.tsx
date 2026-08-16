@@ -11,6 +11,7 @@ import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
+import { Stage8MediaPanel } from '@/components/editor/Stage8MediaPanel';
 import {
   getProjectExecutionPlan,
   getUVProject,
@@ -108,6 +109,16 @@ export default function ProjectPage() {
                   onProjectChanged={refreshProject}
                 />
               </>
+            )}
+
+            {(project.recipe_id === 'photo_to_video' || project.recipe_id === 'visualizer') && (
+              <Stage8MediaPanel
+                key={`stage8-media-${project.sources.length}`}
+                projectId={project.project_id}
+                recipeId={project.recipe_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
             )}
 
             <SequenceContinuityPanel
