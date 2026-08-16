@@ -13,6 +13,7 @@ from .audio_visualizer import render_audio_visualizer
 from .dubbing_render import render_dubbing_state
 from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
+from .musetalk import MuseTalkAdapter
 from .music_video_render import render_music_video_state
 from .native_videoclaw import NativeVideoClawAdapter
 from .photo_slideshow import compose_photo_slideshow
@@ -109,6 +110,7 @@ class LocalFFmpegAdapter:
 __all__ = [
     "LocalFFmpegAdapter",
     "MCPBindingOfferAdapter",
+    "MuseTalkAdapter",
     "NativeVideoClawAdapter",
     "WhisperCppAdapter",
 ]
