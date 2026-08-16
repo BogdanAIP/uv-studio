@@ -40,7 +40,9 @@ The packaging boundary must remain fail-closed and locally auditable. Bundled ex
 
 D-044 defines the product-owned immutable release payload boundary. `release-manifest.json` schema v1 records product/build/target identity, the exact baseline component set and a complete sorted file inventory with byte sizes and SHA-256. Manifest parsing rejects non-canonical/traversing paths, duplicate/missing components, missing entrypoints and unsupported targets. Release verification rejects symlinks, missing payloads, unlisted extra files and size mismatches; explicit deep verification also detects same-size SHA-256 substitution.
 
-Secret-safe diagnostics now distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed to the product API and the Stage 9 release utility so launcher, installer, support and CI can converge on one contract.
+Secret-safe diagnostics distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed to the product API and the Stage 9 release utility so launcher, installer, support and CI can converge on one contract.
+
+D-045 separates mutable packaged state from the immutable release payload. Development keeps repository-local `data/projects` and `data/config`; packaged mode defaults to `%LOCALAPPDATA%/UV Studio/projects` and `%LOCALAPPDATA%/UV Studio/config`, with explicit `UV_STUDIO_USER_DATA_DIR`, `UV_STUDIO_PROJECTS_DIR` and `UV_STUDIO_CONFIG_DIR` overrides retained. Project/config roots must not overlap vendor, the configured release payload or one another.
 
 This foundation deliberately does not make repository `PATH` discovery authoritative for packaged media. The actual packaged launcher must resolve trusted component entrypoints from the verified release manifest.
 

@@ -51,3 +51,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-042 — Stage 8 composition-first additional recipes](decisions/D-042-stage-8-composition-first-additional-recipes.md)
 - [D-043 — MuseTalk optional lip-sync pack](decisions/D-043-musetalk-optional-lipsync-pack.md)
 - [D-044 — Stage 9 product-owned release runtime manifest](decisions/D-044-stage-9-release-runtime-manifest.md)
+- [D-045 — Packaged mutable state outside immutable release payload](decisions/D-045-packaged-mutable-state-boundary.md)
