@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
+import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import {
@@ -80,6 +81,13 @@ export default function ProjectPage() {
               projectId={project.project_id}
               onProjectChanged={refreshProject}
             />
+
+            {project.recipe_id === 'music_video' && (
+              <MusicVideoPanel
+                projectId={project.project_id}
+                onProjectChanged={refreshProject}
+              />
+            )}
 
             <SequenceContinuityPanel
               projectId={project.project_id}
