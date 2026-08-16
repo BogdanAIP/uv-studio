@@ -17,6 +17,9 @@ MUSIC_VIDEO_REVIEW_SCHEMA_VERSION = 1
 MUSIC_VIDEO_REVIEW_PATH = "reviews/music-video-review.json"
 MUSIC_VIDEO_RELEASE_MIN_DURATION_US = 20_000_000
 MUSIC_VIDEO_RELEASE_MAX_DURATION_US = 30_000_000
+_EXPECTED_CAPABILITY_ID = "video.render_music_video"
+_EXPECTED_COMPOSITION_MODE = "music_assembly_visual_concat_with_exact_master_song_excerpt"
+_RENDER_DURATION_TOLERANCE_US = 180_000
 _VERDICTS = frozenset({"approved", "needs_revision", "rejected"})
 _OUTCOMES = frozenset({"pass", "fail", "uncertain"})
 
@@ -40,6 +43,12 @@ def _identifier(value: Any, *, field: str) -> str:
         return validate_identifier(value, field_name=field)
     except ProjectValidationError as exc:
         raise MusicVideoReviewError(str(exc)) from exc
+
+
+def _duration(value: Any, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise MusicVideoReviewError(f"canonical render metadata requires positive {field}")
+    return value
 
 
 @dataclass(frozen=True)
@@ -153,11 +162,12 @@ class MusicVideoReviewStore:
                 and evidence["rhythm_alignment"]["outcome"] == "pass"
                 and evidence["master_audio_binding"]["outcome"] == "pass"
                 and evidence["visual_assembly_binding"]["outcome"] == "pass"
+                and evidence["render_output_binding"]["outcome"] == "pass"
                 and transition_outcome == "pass"
             )
             if verdict == "approved" and not required_pass:
                 raise MusicVideoReviewError(
-                    "approved Music Video review requires 20–30 s duration, aligned rhythm, exact master/assembly bindings and passing transition review"
+                    "approved Music Video review requires 20–30 s duration, aligned rhythm, exact master/assembly/render bindings and passing transition review"
                 )
             review = MusicVideoReview(
                 artifact_id=evidence["binding"]["artifact_id"],
@@ -200,6 +210,10 @@ class MusicVideoReviewStore:
         metadata = artifact.metadata
         if metadata.get("lifecycle") != "music_video_render":
             raise MusicVideoReviewError("final review accepts only canonical music_video_render artifacts")
+        if metadata.get("capability_id") != _EXPECTED_CAPABILITY_ID:
+            raise MusicVideoReviewError("final review artifact was not produced by video.render_music_video")
+        if metadata.get("composition_mode") != _EXPECTED_COMPOSITION_MODE:
+            raise MusicVideoReviewError("final review artifact has an unexpected Music Video composition mode")
         path = self.store.resolve_project_file(
             project_id, artifact.path, must_exist=True, allowed_roots=("artifacts",)
         )
@@ -221,8 +235,25 @@ class MusicVideoReviewStore:
             raise MusicVideoReviewError("render artifact is stale for current Music Director")
         if metadata.get("music_assembly_revision_sha256") != assembly.revision_sha256:
             raise MusicVideoReviewError("render artifact is stale for current Music Assembly")
+        if metadata.get("song_reference_id") != music_map.song.reference_id:
+            raise MusicVideoReviewError("render artifact master-song reference is stale")
         if metadata.get("song_sha256") != music_map.song.sha256:
             raise MusicVideoReviewError("render artifact master-song binding is stale")
+        if metadata.get("song_excerpt") != music_map.excerpt.to_dict():
+            raise MusicVideoReviewError("render artifact excerpt no longer matches current Music Map")
+        if metadata.get("visual_bindings") != [item.to_dict() for item in assembly.bindings]:
+            raise MusicVideoReviewError("render artifact visual bindings no longer match current Music Assembly")
+        video_duration_us = _duration(
+            metadata.get("actual_output_video_duration_us"), field="actual_output_video_duration_us"
+        )
+        audio_duration_us = _duration(
+            metadata.get("actual_output_audio_duration_us"), field="actual_output_audio_duration_us"
+        )
+        expected_duration_us = music_map.excerpt.duration_us
+        if abs(video_duration_us - expected_duration_us) > _RENDER_DURATION_TOLERANCE_US:
+            raise MusicVideoReviewError("render artifact video duration no longer matches current excerpt")
+        if abs(audio_duration_us - expected_duration_us) > _RENDER_DURATION_TOLERANCE_US:
+            raise MusicVideoReviewError("render artifact audio duration no longer matches current excerpt")
         if expected is not None:
             expected_binding = {
                 "artifact_id": expected.artifact_id,
@@ -234,13 +265,12 @@ class MusicVideoReviewStore:
             }
             if binding != expected_binding:
                 raise MusicVideoReviewError("stored Music Video review is stale for current project state")
-        duration_us = music_map.excerpt.duration_us
         rhythm = self.directions.rhythm_audit(project_id)
         return {
             "binding": binding,
             "release_duration": {
-                "outcome": "pass" if MUSIC_VIDEO_RELEASE_MIN_DURATION_US <= duration_us <= MUSIC_VIDEO_RELEASE_MAX_DURATION_US else "fail",
-                "duration_us": duration_us,
+                "outcome": "pass" if MUSIC_VIDEO_RELEASE_MIN_DURATION_US <= expected_duration_us <= MUSIC_VIDEO_RELEASE_MAX_DURATION_US else "fail",
+                "duration_us": expected_duration_us,
                 "required_min_us": MUSIC_VIDEO_RELEASE_MIN_DURATION_US,
                 "required_max_us": MUSIC_VIDEO_RELEASE_MAX_DURATION_US,
             },
@@ -259,5 +289,12 @@ class MusicVideoReviewStore:
                 "outcome": "pass",
                 "binding_count": len(assembly.bindings),
                 "shot_ids": [item.shot_id for item in assembly.bindings],
+            },
+            "render_output_binding": {
+                "outcome": "pass",
+                "capability_id": _EXPECTED_CAPABILITY_ID,
+                "composition_mode": _EXPECTED_COMPOSITION_MODE,
+                "actual_output_video_duration_us": video_duration_us,
+                "actual_output_audio_duration_us": audio_duration_us,
             },
         }
