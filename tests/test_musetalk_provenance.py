@@ -14,6 +14,7 @@ from uv_studio.capabilities.adapters.musetalk_verified import (
     _checkout_problem,
     _git_blob_sha1,
     _runtime_code_path,
+    _runtime_path_is_untrusted,
     _runtime_problem,
 )
 
@@ -109,6 +110,13 @@ class MuseTalkProvenanceTests(unittest.TestCase):
         self.assertIn("torch.py", source_shadow or "")
         self.assertIn(".pyc", ignored_bytecode or "")
         self.assertIn("ffmpeg", ignored_local_tool or "")
+
+    def test_untracked_symlink_shadow_is_rejected_even_without_code_suffix(self) -> None:
+        root = Path("checkout")
+        with mock.patch.object(Path, "is_symlink", return_value=True):
+            self.assertTrue(_runtime_path_is_untrusted(root, "torch"))
+        with mock.patch.object(Path, "is_symlink", return_value=False):
+            self.assertFalse(_runtime_path_is_untrusted(root, "notes"))
 
     def test_runtime_environment_and_non_code_data_are_not_treated_as_checkout_code(self) -> None:
         self.assertFalse(_runtime_code_path(".venv/lib/python3.11/site-packages/torch/__init__.py"))
