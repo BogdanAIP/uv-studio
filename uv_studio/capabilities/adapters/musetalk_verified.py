@@ -302,6 +302,18 @@ class MuseTalkAdapter(BaseMuseTalkAdapter):
 
     adapter_id = _ADAPTER_ID
 
+    def _invoke(
+        self,
+        command: list[str],
+        *,
+        cwd: Path,
+        tool: str,
+    ) -> subprocess.CompletedProcess[str]:
+        verified_command = command
+        if tool == "MuseTalk" and len(command) >= 2 and command[1] != "-B":
+            verified_command = [command[0], "-B", *command[1:]]
+        return super()._invoke(verified_command, cwd=cwd, tool=tool)
+
     def _runtime(self):
         root, python, ffmpeg, ffprobe = super()._runtime()
         problem = _checkout_problem(root) or _runtime_problem(python)
