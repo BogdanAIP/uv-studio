@@ -46,3 +46,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-037 — Stage 5 language/audio precision stack](decisions/D-037-stage-5-language-audio-precision-stack.md)
 - [D-038 — Explicit idle development lifecycle](decisions/D-038-explicit-idle-development-lifecycle.md)
 - [D-039 — Optional sequence continuity and bounded inspection](decisions/D-039-sequence-continuity-bounded-inspection.md)
+- [D-040 — Chat-first development; no automatic Codex review](decisions/D-040-chat-first-no-automatic-codex-review.md)
