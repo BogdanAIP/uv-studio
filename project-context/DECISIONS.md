@@ -52,3 +52,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-043 — MuseTalk optional lip-sync pack](decisions/D-043-musetalk-optional-lipsync-pack.md)
 - [D-044 — Stage 9 product-owned release runtime manifest](decisions/D-044-stage-9-release-runtime-manifest.md)
 - [D-045 — Packaged mutable state outside immutable release payload](decisions/D-045-packaged-mutable-state-boundary.md)
+- [D-046 — Exact supported language runtimes and Windows Python release lock](decisions/D-046-stage-9-release-runtime-lock.md)

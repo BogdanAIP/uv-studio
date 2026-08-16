@@ -1,0 +1,5 @@
+# Exact Windows x86_64 UV Studio shipping runtime resolution.
+# The direct dependency intent remains in requirements-uv.txt; this file applies
+# the reviewed Stage 9 constraints for CPython 3.13.14.
+-c requirements-uv-release-win-x86_64.txt
+-r requirements-uv.txt

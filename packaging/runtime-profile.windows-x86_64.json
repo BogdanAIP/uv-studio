@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "target": {"os": "windows", "arch": "x86_64"},
+  "python": {"version": "3.13.14", "constraints": "requirements-uv-release-win-x86_64.txt"},
+  "node": {"version": "24.19.0", "lock": "frontend/package-lock.json"}
+}
