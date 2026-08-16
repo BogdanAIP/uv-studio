@@ -34,6 +34,7 @@ from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStore
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Project Media"])
 MAX_SOURCE_UPLOAD_BYTES = 100 * 1024**3
 _SOURCE_MEDIA_OFFER_ID = "local_ffmpeg.media_probe"
+_STILL_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"})
 
 SourceMediaProbe = Callable[[ProjectStore, str, str], dict[str, Any]]
 
@@ -150,6 +151,45 @@ def _portable_probe_metadata(
             "sample_rate": stream.get("sample_rate"),
             "channels": stream.get("channels"),
             "channel_layout": stream.get("channel_layout"),
+        }
+    elif media_kind == "image":
+        suffix = Path(original_name).suffix.lower()
+        if suffix not in _STILL_IMAGE_SUFFIXES:
+            raise SourceMediaError(
+                f"uploaded image must use one of {sorted(_STILL_IMAGE_SUFFIXES)!r}"
+            )
+        if probe.get("has_video") is not True:
+            raise SourceMediaError("uploaded image does not contain a decodable visual stream")
+        if probe.get("has_audio") is True:
+            raise SourceMediaError("uploaded image must not contain an audio stream")
+        duration_us = probe.get("duration_us")
+        if isinstance(duration_us, int) and not isinstance(duration_us, bool) and duration_us > 0:
+            raise SourceMediaError("uploaded image must be a still image, not moving media")
+        stream = probe.get("video") if isinstance(probe.get("video"), dict) else {}
+        width = stream.get("width")
+        height = stream.get("height")
+        if (
+            isinstance(width, bool)
+            or not isinstance(width, int)
+            or width <= 0
+            or isinstance(height, bool)
+            or not isinstance(height, int)
+            or height <= 0
+        ):
+            raise SourceMediaError("uploaded image must have known positive dimensions")
+        expected_prefix = "image/"
+        metadata = {
+            "original_name": original_name,
+            "content_type": "application/octet-stream",
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "width": width,
+            "height": height,
+            "has_audio": False,
+        }
+        optional = {
+            "format_name": probe.get("format_name"),
+            "image_codec": stream.get("codec"),
         }
     else:  # pragma: no cover - internal invariant
         raise SourceMediaError(f"unsupported source media kind: {media_kind!r}")
@@ -309,6 +349,30 @@ async def upload_source_audio(
     )
 
 
+@router.post(
+    "/{project_id}/sources/image",
+    response_model=ProjectReferencePayload,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_source_image(
+    project_id: str,
+    request: Request,
+    filename: str = Query(min_length=1, max_length=1024),
+    store: ProjectStore = Depends(get_project_store),
+    probe_media: SourceMediaProbe = Depends(get_source_media_probe),
+) -> ProjectReferencePayload:
+    """Stream one still image into Project Store for photo/video composition workflows."""
+
+    return await _upload_source(
+        project_id=project_id,
+        request=request,
+        filename=filename,
+        media_kind="image",
+        store=store,
+        probe_media=probe_media,
+    )
+
+
 @router.get(
     "/{project_id}/sources/audio/{source_id}",
     response_model=ProjectReferencePayload,
@@ -337,6 +401,40 @@ def stream_audio_source(
     try:
         reference, path = ProjectSourceMediaStore(store).resolve(
             project_id, source_id, expected_kind="audio"
+        )
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+    return _source_file_response(reference, path)
+
+
+@router.get(
+    "/{project_id}/sources/image/{source_id}",
+    response_model=ProjectReferencePayload,
+)
+def get_image_source(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> ProjectReferencePayload:
+    try:
+        return _reference_payload(
+            ProjectSourceMediaStore(store).get(
+                project_id, source_id, expected_kind="image"
+            )
+        )
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/{project_id}/sources/image/{source_id}/media", response_class=FileResponse)
+def stream_image_source(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    try:
+        reference, path = ProjectSourceMediaStore(store).resolve(
+            project_id, source_id, expected_kind="image"
         )
     except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
