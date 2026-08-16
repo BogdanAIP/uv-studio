@@ -87,7 +87,8 @@ class MuseTalkAdapterTests(unittest.TestCase):
         return next(item for item in project.sources if item.id == allocation.source_id)
 
     def _runner(self, command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-        if command[0] == str(self.ffmpeg):
+        executable = Path(command[0]).resolve()
+        if executable == self.ffmpeg.resolve():
             Path(command[-1]).write_bytes(b"avatar-video")
             return subprocess.CompletedProcess(command, 0, "", "")
         if "scripts.inference" in command:
@@ -96,7 +97,7 @@ class MuseTalkAdapterTests(unittest.TestCase):
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(b"musetalk-output")
             return subprocess.CompletedProcess(command, 0, "", "")
-        if command[0] == str(self.ffprobe):
+        if executable == self.ffprobe.resolve():
             payload = {
                 "streams": [
                     {"codec_type": "video", "codec_name": "h264", "width": 512, "height": 512},
@@ -173,7 +174,7 @@ class MuseTalkAdapterTests(unittest.TestCase):
 
     def test_success_exit_without_expected_output_fails_closed(self) -> None:
         def runner(command: list[str], **kwargs):
-            if command[0] == str(self.ffmpeg):
+            if Path(command[0]).resolve() == self.ffmpeg.resolve():
                 Path(command[-1]).write_bytes(b"avatar-video")
             return subprocess.CompletedProcess(command, 0, "", "")
 
