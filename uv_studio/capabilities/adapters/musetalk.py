@@ -164,6 +164,8 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
 
 class MuseTalkAdapter:
     adapter_id = _ADAPTER_ID
+    runtime_profile: str | None = None
+    model_payload_sha256: Mapping[str, str] = {}
 
     def __init__(
         self,
@@ -352,6 +354,14 @@ class MuseTalkAdapter:
 
             if not output_path.is_file() or output_path.is_symlink() or output_path.stat().st_size <= 0:
                 raise CapabilityToolFailed("MuseTalk artifact copy failed")
+            runtime_provenance = (
+                {
+                    "runtime_profile": self.runtime_profile,
+                    "model_payload_sha256": dict(self.model_payload_sha256),
+                }
+                if self.runtime_profile is not None
+                else {}
+            )
             artifact = ProjectReference(
                 id=artifact_id,
                 kind="video",
@@ -362,6 +372,7 @@ class MuseTalkAdapter:
                     "lifecycle": "performance_lip_sync_render",
                     "engine": "musetalk_v15",
                     "upstream_commit": MUSE_TALK_UPSTREAM_COMMIT,
+                    **runtime_provenance,
                     "content_type": "video/mp4",
                     "portrait_binding": {
                         "source_id": portrait.id, "path": portrait.path,
