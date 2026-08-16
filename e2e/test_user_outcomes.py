@@ -199,13 +199,12 @@ def _card_for(page_or_section: Any, title: str):
 
 
 def _select_option_containing(select: Any, needle: str) -> None:
-    options = select.locator("option")
-    for index in range(options.count()):
-        text = options.nth(index).text_content() or ""
-        if needle in text:
-            select.select_option(index=index)
-            return
-    raise AssertionError(f"select had no option containing {needle!r}")
+    option = select.locator("option").filter(has_text=needle).first
+    option.wait_for(state="attached", timeout=60_000)
+    value = option.get_attribute("value")
+    if not value:
+        raise AssertionError(f"select option containing {needle!r} had no value")
+    select.select_option(value=value)
 
 
 class BrowserUserOutcomes(unittest.TestCase):
