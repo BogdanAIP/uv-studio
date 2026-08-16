@@ -18,7 +18,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from .config import VENDOR_ROOT, projects_root, runtime_config_path, runtime_secrets_path
+from .config import (
+    projects_root,
+    runtime_config_path,
+    runtime_secrets_path,
+    validate_mutable_path,
+)
 
 
 class RuntimeConfigError(ValueError):
@@ -211,9 +216,12 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any], *, secret: bool) -> 
 
 
 def _resolve_machine_config_file(path: Path | str) -> Path:
-    resolved = Path(path).expanduser().resolve()
-    if resolved == VENDOR_ROOT or VENDOR_ROOT in resolved.parents:
-        raise RuntimeConfigError("machine runtime configuration files must not live inside vendor/")
+    try:
+        resolved = validate_mutable_path(
+            Path(path), label="machine runtime configuration file"
+        )
+    except RuntimeError as exc:
+        raise RuntimeConfigError(str(exc)) from exc
     project_store = projects_root()
     if resolved == project_store or project_store in resolved.parents:
         raise RuntimeConfigError(

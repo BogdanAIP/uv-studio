@@ -84,6 +84,32 @@ class RuntimeConfigStoreTests(unittest.TestCase):
                 secrets_path=vendor_secrets,
             )
 
+    def test_runtime_config_store_rejects_direct_release_payload_paths(self) -> None:
+        root = Path(self.tempdir.name)
+        release = root / "installed-app"
+        release.mkdir()
+        release_runtime = release / "runtime.json"
+        release_secrets = release / "secrets.json"
+        with patch.dict(
+            os.environ,
+            {
+                "UV_STUDIO_RELEASE_ROOT": str(release),
+                "UV_STUDIO_PROJECTS_DIR": str(root / "projects"),
+                "UV_STUDIO_CONFIG_DIR": str(root / "config"),
+            },
+            clear=False,
+        ):
+            with self.assertRaises(RuntimeConfigError):
+                RuntimeConfigStore(
+                    config_path=release_runtime,
+                    secrets_path=self.secrets_path,
+                )
+            with self.assertRaises(RuntimeConfigError):
+                RuntimeConfigStore(
+                    config_path=self.config_path,
+                    secrets_path=release_secrets,
+                )
+
     def test_runtime_config_store_rejects_direct_project_store_paths(self) -> None:
         root = Path(self.tempdir.name)
         project_store = root / "canonical-projects"
