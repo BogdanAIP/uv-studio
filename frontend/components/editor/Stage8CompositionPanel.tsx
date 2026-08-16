@@ -20,18 +20,18 @@ function sourceName(source: ProjectReference): string {
 
 const recipeCopy: Record<Stage8CompositionRecipeId, { title: string; description: string; briefLabel: string }> = {
   story_video: {
-    title: 'Сюжетный workspace',
-    description: 'Зафиксируйте задачу, сценарий и материалы истории. Сцены, continuity и generation остаются отдельными существующими UV capabilities.',
+    title: 'Сюжетное рабочее пространство',
+    description: 'Зафиксируйте задачу, сценарий и материалы истории. Сцены, связность и генерация остаются отдельными существующими возможностями UV Studio.',
     briefLabel: 'Задача / идея истории',
   },
   commercial_product: {
-    title: 'Продуктовый workspace',
+    title: 'Продуктовое рабочее пространство',
     description: 'Зафиксируйте рекламную задачу, текст и точные продуктовые материалы до генерации или сборки.',
     briefLabel: 'Что рекламируем и какой результат нужен?',
   },
   free_project: {
-    title: 'Свободный workspace',
-    description: 'Соберите исходные материалы и заметки без навязанного pipeline. Дальше используются только выбранные semantic capabilities.',
+    title: 'Свободное рабочее пространство',
+    description: 'Соберите исходные материалы и заметки без навязанного конвейера. Дальше используются только выбранные возможности UV Studio.',
     briefLabel: 'Задача / заметка (необязательно)',
   },
 };
@@ -78,7 +78,7 @@ export function Stage8CompositionPanel({
       })
       .catch(err => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить workspace');
+        setError(err instanceof Error ? err.message : 'Не удалось загрузить рабочее пространство');
         setLoaded(true);
       });
     return () => {
@@ -99,7 +99,7 @@ export function Stage8CompositionPanel({
       const source = await uploadProjectImageSource(projectId, file);
       selectNewSource(source.id);
       await onProjectChanged();
-      setMessage('Изображение добавлено в project-owned материалы.');
+      setMessage('Изображение добавлено в материалы проекта.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить изображение');
     } finally {
@@ -116,7 +116,7 @@ export function Stage8CompositionPanel({
       const source = await uploadProjectSource(projectId, file);
       selectNewSource(source.id);
       await onProjectChanged();
-      setMessage('Видео добавлено в project-owned материалы.');
+      setMessage('Видео добавлено в материалы проекта.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить видео');
     } finally {
@@ -133,7 +133,7 @@ export function Stage8CompositionPanel({
       const source = await uploadStage8AudioSource(projectId, file);
       selectNewSource(source.id);
       await onProjectChanged();
-      setMessage('Аудио добавлено в project-owned материалы.');
+      setMessage('Аудио добавлено в материалы проекта.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить аудио');
     } finally {
@@ -161,10 +161,10 @@ export function Stage8CompositionPanel({
       });
       setRevision(workspace.revision_sha256);
       setSelectedIds(workspace.sources.map(source => source.source_id));
-      setMessage('Workspace сохранён с точной SHA-привязкой выбранных материалов.');
+      setMessage('Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.');
       await onProjectChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить workspace');
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить рабочее пространство');
     } finally {
       setBusy(false);
     }
@@ -173,14 +173,14 @@ export function Stage8CompositionPanel({
   if (!loaded) {
     return (
       <section className="mb-6 mt-8 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-6 text-sm text-slate-400">
-        Загрузка recipe workspace…
+        Загрузка рабочего пространства…
       </section>
     );
   }
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-cyan-400">Stage 8 · composition-first</p>
+      <p className="text-xs uppercase tracking-wider text-cyan-400">Stage 8 · композиционный режим</p>
       <h2 className="mt-2 text-xl font-medium">{copy.title}</h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{copy.description}</p>
 
@@ -225,7 +225,7 @@ export function Stage8CompositionPanel({
 
       <div className="mt-6">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-medium text-slate-200">Материалы workspace</h3>
+          <h3 className="text-sm font-medium text-slate-200">Материалы рабочего пространства</h3>
           <span className="text-xs text-slate-500">Выбрано: {selectedIds.length}</span>
         </div>
         {mediaSources.length === 0 ? (
@@ -254,7 +254,7 @@ export function Stage8CompositionPanel({
         onClick={() => void save()}
         className="mt-6 rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40"
       >
-        Сохранить workspace
+        Сохранить рабочее пространство
       </button>
 
       {revision && (
