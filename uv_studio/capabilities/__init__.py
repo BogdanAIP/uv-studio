@@ -57,12 +57,14 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     from .adapters.music_video_render import register_music_video_render_capability
     from .adapters.webvtt_subtitles import register_webvtt_subtitle_adapter
     from .adapters.whisperx_alignment import register_whisperx_alignment_adapter
+    from .music_analysis import register_music_analysis_capability
 
     register_edit_render_capability(registry)
     register_artifact_preview_capability(registry)
     register_audio_loudness_capability(registry)
     register_dubbing_render_capability(registry)
     register_music_video_render_capability(registry)
+    register_music_analysis_capability(registry)
     register_argos_translate_adapter(registry)
     register_whisperx_alignment_adapter(registry)
     register_webvtt_subtitle_adapter(registry)
