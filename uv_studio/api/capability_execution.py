@@ -29,7 +29,7 @@ from uv_studio.capabilities.adapters.mcp_execution import (
     MCPExecutionAdapter,
     MCPExecutionInputRejected,
 )
-from uv_studio.capabilities.adapters.musetalk import MuseTalkAdapter
+from uv_studio.capabilities.adapters.musetalk_verified import MuseTalkAdapter
 from uv_studio.capabilities.adapters.webvtt_subtitles import WebVTTSubtitleAdapter
 from uv_studio.capabilities.adapters.whisperx_alignment import WhisperXAlignmentAdapter
 from uv_studio.capabilities.authorization import (
