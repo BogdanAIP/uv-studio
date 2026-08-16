@@ -1,0 +1,87 @@
+name: Stage 9 Windows Release
+
+on:
+  push:
+    branches: ["stage-9/**"]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-release.yml"
+      - "packaging/**"
+      - "requirements-uv*.txt"
+      - "tools/**"
+      - "uv_studio/**"
+
+jobs:
+  backend-component:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact shipping Python runtime graph
+        run: python -m pip install -r requirements-uv-release.txt
+
+      - name: Verify shipping Python runtime before build tools
+        run: |
+          python -m pip check
+          python tools/verify_release_python_lock.py
+
+      - name: Install exact PyInstaller compatibility candidate
+        run: python -m pip install "pyinstaller==6.21.0"
+
+      - name: Build Windows one-folder backend component
+        run: >-
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --onedir
+          --noupx
+          --paths .
+          --name uv-studio-backend
+          packaging/backend_entry.py
+
+      - name: Smoke frozen backend without system Python execution
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'dist\uv-studio-backend\uv-studio-backend.exe'
+          if (-not (Test-Path $exe)) { throw 'frozen backend executable is missing' }
+          $env:UV_STUDIO_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'uv-studio-frozen-user-data'
+          $proc = Start-Process -FilePath $exe -PassThru -NoNewWindow
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            $ready = $false
+            while ((Get-Date) -lt $deadline) {
+              if ($proc.HasExited) { throw "frozen backend exited early with code $($proc.ExitCode)" }
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/api/health' -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch {
+                Start-Sleep -Milliseconds 500
+              }
+            }
+            if (-not $ready) { throw 'frozen backend did not become healthy' }
+            $payload = Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/health' -TimeoutSec 10
+            if ($payload.status -ne 'ok' -or $payload.service -ne 'uv-studio') {
+              throw 'frozen backend returned unexpected health payload'
+            }
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
+      - name: Record build-only dependency graph
+        run: python -m pip freeze
+
+      - name: Upload frozen backend component
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-studio-backend-windows-x86_64
+          path: dist/uv-studio-backend/**
+          if-no-files-found: error
+          retention-days: 7
