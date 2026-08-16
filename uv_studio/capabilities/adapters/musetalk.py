@@ -7,8 +7,8 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -75,9 +75,8 @@ def _configured_root(value: str | Path | None = None) -> Path | None:
     raw = value if value is not None else os.environ.get("UV_STUDIO_MUSETALK_ROOT")
     if raw is None:
         return None
-    candidate = Path(raw).expanduser()
     try:
-        resolved = candidate.resolve(strict=True)
+        resolved = Path(raw).expanduser().resolve(strict=True)
     except OSError:
         return None
     return resolved if resolved.is_dir() else None
@@ -106,9 +105,9 @@ def _configured_python(root: Path | None, value: str | Path | None = None) -> Pa
 
 
 def _missing_runtime_parts(root: Path | None, python: Path | None) -> list[str]:
-    missing: list[str] = []
     if root is None:
         return ["UV_STUDIO_MUSETALK_ROOT"]
+    missing: list[str] = []
     if python is None:
         missing.append("MuseTalk Python environment")
     for relative in _REQUIRED_RELATIVE_PATHS:
@@ -142,11 +141,7 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
             capability_id="video.digital_human",
             adapter_id=_ADAPTER_ID,
             title="MuseTalk 1.5 portrait + speech lip-sync",
-            availability=(
-                OfferAvailability.AVAILABLE
-                if not missing
-                else OfferAvailability.CONFIGURATION_REQUIRED
-            ),
+            availability=OfferAvailability.AVAILABLE if not missing else OfferAvailability.CONFIGURATION_REQUIRED,
             reason=(
                 "MuseTalk 1.5 optional pack найден; UV Studio будет выполнять локальный fp16 lip-sync."
                 if not missing
@@ -201,17 +196,6 @@ class MuseTalkAdapter:
         if offer.locality is not LocalityClass.LOCAL or offer.cost_class is not CostClass.FREE:
             raise UnsupportedCapabilityExecution("MuseTalk adapter accepts only local/free offers")
 
-    def _runtime(self) -> tuple[Path, Path, Path, Path]:
-        root = _configured_root(self.root_path)
-        python = _configured_python(root, self.python_path)
-        missing = _missing_runtime_parts(root, python)
-        if missing:
-            raise CapabilityToolUnavailable("MuseTalk runtime is incomplete: " + ", ".join(missing[:8]))
-        assert root is not None and python is not None
-        ffmpeg = self._runtime_file(self.ffmpeg_path or shutil.which("ffmpeg"), "ffmpeg")
-        ffprobe = self._runtime_file(self.ffprobe_path or shutil.which("ffprobe"), "ffprobe")
-        return root, python, ffmpeg, ffprobe
-
     @staticmethod
     def _runtime_file(value: str | Path | None, label: str) -> Path:
         if value is None:
@@ -223,6 +207,17 @@ class MuseTalkAdapter:
         if not path.is_file():
             raise CapabilityToolUnavailable(f"{label} is not a regular file")
         return path
+
+    def _runtime(self) -> tuple[Path, Path, Path, Path]:
+        root = _configured_root(self.root_path)
+        python = _configured_python(root, self.python_path)
+        missing = _missing_runtime_parts(root, python)
+        if missing:
+            raise CapabilityToolUnavailable("MuseTalk runtime is incomplete: " + ", ".join(missing[:8]))
+        assert root is not None and python is not None
+        ffmpeg = self._runtime_file(self.ffmpeg_path or shutil.which("ffmpeg"), "ffmpeg")
+        ffprobe = self._runtime_file(self.ffprobe_path or shutil.which("ffprobe"), "ffprobe")
+        return root, python, ffmpeg, ffprobe
 
     def _invoke(self, command: list[str], *, cwd: Path, tool: str) -> subprocess.CompletedProcess[str]:
         try:
@@ -245,16 +240,7 @@ class MuseTalkAdapter:
 
     def _probe(self, ffprobe: Path, path: Path, *, cwd: Path) -> tuple[int, int | None, int | None]:
         completed = self._invoke(
-            [
-                str(ffprobe),
-                "-v",
-                "error",
-                "-show_streams",
-                "-show_format",
-                "-of",
-                "json",
-                str(path),
-            ],
+            [str(ffprobe), "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)],
             cwd=cwd,
             tool="ffprobe",
         )
@@ -302,12 +288,8 @@ class MuseTalkAdapter:
         if not isinstance(speech_id, str) or not speech_id.strip():
             raise InvalidCapabilityInput("speech_source_id must be a non-empty string")
         try:
-            portrait, portrait_path = self.source_media.resolve_verified(
-                project_id, portrait_id.strip(), expected_kind="image"
-            )
-            speech, speech_path = self.source_media.resolve_verified(
-                project_id, speech_id.strip(), expected_kind="audio"
-            )
+            portrait, portrait_path = self.source_media.resolve_verified(project_id, portrait_id.strip(), expected_kind="image")
+            speech, speech_path = self.source_media.resolve_verified(project_id, speech_id.strip(), expected_kind="audio")
         except SourceMediaError as exc:
             raise InvalidCapabilityInput(str(exc)) from exc
         duration_us = speech.metadata.get("duration_us")
@@ -319,9 +301,7 @@ class MuseTalkAdapter:
         root, python, ffmpeg, ffprobe = self._runtime()
         artifact_id = f"art_{uuid.uuid4().hex}"
         canonical_output = f"artifacts/{artifact_id}.mp4"
-        output_path = self.store.resolve_project_file(
-            project_id, canonical_output, must_exist=False, allowed_roots=("artifacts",)
-        )
+        output_path = self.store.resolve_project_file(project_id, canonical_output, must_exist=False, allowed_roots=("artifacts",))
         tasks_dir = self.store.project_directory(project_id) / "tasks"
         try:
             with tempfile.TemporaryDirectory(prefix="musetalk-", dir=tasks_dir) as tmp:
@@ -332,11 +312,9 @@ class MuseTalkAdapter:
                 self._invoke(
                     [
                         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
-                        "-loop", "1", "-i", str(portrait_path),
-                        "-t", f"{duration_us}us", "-r", "25",
+                        "-loop", "1", "-i", str(portrait_path), "-t", f"{duration_us}us", "-r", "25",
                         "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
-                        "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-                        str(avatar_video),
+                        "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "18", str(avatar_video),
                     ],
                     cwd=task_dir,
                     tool="ffmpeg",
@@ -350,20 +328,20 @@ class MuseTalkAdapter:
                     "  result_name: 'output.mp4'\n",
                     encoding="utf-8",
                 )
-                command = [
-                    str(python),
-                    "-m", "scripts.inference",
-                    "--inference_config", str(config_path),
-                    "--result_dir", str(result_dir),
-                    "--unet_model_path", str(root / "models/musetalkV15/unet.pth"),
-                    "--unet_config", str(root / "models/musetalkV15/musetalk.json"),
-                    "--whisper_dir", str(root / "models/whisper"),
-                    "--version", "v15",
-                    "--fps", "25",
-                    "--use_float16",
-                    "--ffmpeg_path", str(ffmpeg.parent),
-                ]
-                self._invoke(command, cwd=root, tool="MuseTalk")
+                self._invoke(
+                    [
+                        str(python), "-m", "scripts.inference",
+                        "--inference_config", str(config_path),
+                        "--result_dir", str(result_dir),
+                        "--unet_model_path", str(root / "models/musetalkV15/unet.pth"),
+                        "--unet_config", str(root / "models/musetalkV15/musetalk.json"),
+                        "--whisper_dir", str(root / "models/whisper"),
+                        "--version", "v15", "--fps", "25", "--use_float16",
+                        "--ffmpeg_path", str(ffmpeg.parent),
+                    ],
+                    cwd=root,
+                    tool="MuseTalk",
+                )
                 generated = result_dir / "v15" / "output.mp4"
                 if not generated.is_file() or generated.is_symlink() or generated.stat().st_size <= 0:
                     raise CapabilityToolFailed("MuseTalk did not produce the expected output.mp4")
@@ -386,16 +364,12 @@ class MuseTalkAdapter:
                     "upstream_commit": MUSE_TALK_UPSTREAM_COMMIT,
                     "content_type": "video/mp4",
                     "portrait_binding": {
-                        "source_id": portrait.id,
-                        "path": portrait.path,
-                        "sha256": portrait.metadata.get("sha256"),
-                        "size_bytes": portrait.metadata.get("size_bytes"),
+                        "source_id": portrait.id, "path": portrait.path,
+                        "sha256": portrait.metadata.get("sha256"), "size_bytes": portrait.metadata.get("size_bytes"),
                     },
                     "speech_binding": {
-                        "source_id": speech.id,
-                        "path": speech.path,
-                        "sha256": speech.metadata.get("sha256"),
-                        "size_bytes": speech.metadata.get("size_bytes"),
+                        "source_id": speech.id, "path": speech.path,
+                        "sha256": speech.metadata.get("sha256"), "size_bytes": speech.metadata.get("size_bytes"),
                     },
                     "expected_duration_us": duration_us,
                     "actual_duration_us": actual_duration_us,
@@ -414,11 +388,6 @@ class MuseTalkAdapter:
         return CapabilityExecutionResult.from_offer(
             project_id=project_id,
             offer=offer,
-            output={
-                "path": canonical_output,
-                "artifact_id": artifact_id,
-                "duration_us": actual_duration_us,
-                "engine": "musetalk_v15",
-            },
+            output={"path": canonical_output, "artifact_id": artifact_id, "duration_us": actual_duration_us, "engine": "musetalk_v15"},
             artifact=artifact.to_dict(),
         )
