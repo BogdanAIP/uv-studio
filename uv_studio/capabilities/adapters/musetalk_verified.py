@@ -34,6 +34,7 @@ from .musetalk import (
 MUSE_TALK_INFERENCE_BLOB_SHA1 = "428afb99a8fbb3175598e18c096b12dbfdf943d5"
 _ADAPTER_ID = "local_musetalk"
 _OFFER_ID = "local_musetalk.video_digital_human"
+_RUNTIME_PROFILE = "musetalk_v15_uv_verified_sha256_v1"
 _RUNTIME_PROBE = (
     "import cv2, omegaconf, torch, transformers; "
     "raise SystemExit(0 if torch.cuda.is_available() else 3)"
@@ -372,6 +373,8 @@ class MuseTalkAdapter(BaseMuseTalkAdapter):
     """Base bounded executor plus exact checkout/model/CUDA verification at execution time."""
 
     adapter_id = _ADAPTER_ID
+    runtime_profile = _RUNTIME_PROFILE
+    model_payload_sha256 = dict(_PINNED_MODEL_SHA256)
 
     def _invoke(
         self,
