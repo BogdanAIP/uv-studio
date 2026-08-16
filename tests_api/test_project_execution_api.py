@@ -79,6 +79,55 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertIsNone(plan["target"])
         self.assertIn("does not accept", plan["reason"])
 
+    def test_stage8_story_execution_plan_keeps_media_types_and_no_native_target(self) -> None:
+        project_id = self._create("story_video")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}
+        self.assertEqual(slots["brief"]["kind"], "text")
+        self.assertEqual(slots["image"]["kind"], "image")
+        self.assertEqual(slots["video"]["kind"], "video")
+        self.assertEqual(slots["audio"]["kind"], "audio")
+        self.assertEqual(plan["production_policy"]["scene_ledger"], "required")
+
+    def test_stage8_commercial_execution_plan_keeps_product_media_types(self) -> None:
+        project_id = self._create("commercial_product")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertEqual(slots["brief"]["kind"], "text")
+        self.assertEqual(slots["product_image"]["kind"], "image")
+        self.assertEqual(slots["product_video"]["kind"], "video")
+        self.assertEqual(slots["audio"]["kind"], "audio")
+        self.assertEqual(plan["production_policy"]["sample_first"], "required")
+
+    def test_stage8_performance_is_partial_without_fake_target(self) -> None:
+        project_id = self._create("performance_lip_sync")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        self.assertEqual(plan["compatibility"], "partial")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}
+        self.assertEqual(slots["portrait"]["kind"], "image")
+        self.assertEqual(slots["speech"]["kind"], "audio")
+        self.assertEqual(slots["performance_video"]["kind"], "video")
+        self.assertIn("no accepted executable offer", plan["reason"])
+
+    def test_stage8_free_project_has_no_required_inputs_or_native_target(self) -> None:
+        project_id = self._create("free_project")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        self.assertTrue(plan["input_slots"])
+        self.assertTrue(all(not slot["required"] for slot in plan["input_slots"]))
+        self.assertEqual(
+            [slot["kind"] for slot in plan["input_slots"]],
+            ["text", "image", "video", "audio"],
+        )
+
     def test_unknown_recovered_recipe_returns_unavailable_plan(self) -> None:
         project = self.store.create_project(
             title="Future recipe",
