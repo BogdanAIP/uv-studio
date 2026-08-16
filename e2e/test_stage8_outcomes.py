@@ -203,10 +203,16 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         )
         expect(page.get_by_text("1. red.png", exact=True)).to_be_visible(timeout=60_000)
         expect(page.get_by_text("2. blue.png", exact=True)).to_be_visible(timeout=60_000)
+        red_row = page.get_by_text("1. red.png", exact=True).locator("xpath=parent::div")
+        red_row.get_by_role("button", name="↓", exact=True).click()
+        expect(page.get_by_text("1. blue.png", exact=True)).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("2. red.png", exact=True)).to_be_visible(timeout=60_000)
         page.locator('input[aria-label="Аудио Stage 8"]').set_input_files(str(self.audio))
         photo_audio = page.get_by_label("Аудио для фото-видео")
         expect(photo_audio).to_be_visible(timeout=60_000)
         _select_option_containing(photo_audio, self.audio.name)
+        expect(page.get_by_text("1. blue.png", exact=True)).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("2. red.png", exact=True)).to_be_visible(timeout=60_000)
         page.get_by_role("button", name="Собрать видео из фотографий", exact=True).click()
         expect(page.get_by_role("link", name="Открыть готовый рендер", exact=True)).to_be_visible(
             timeout=120_000
@@ -219,13 +225,14 @@ class Stage8BrowserOutcomes(unittest.TestCase):
             if item.get("metadata", {}).get("lifecycle") == "photo_to_video_render"
         ]
         self.assertEqual(len(photo_artifacts), 1)
+        photo_images = {
+            item.get("metadata", {}).get("original_name"): item["id"]
+            for item in photo_project["sources"]
+            if item["kind"] == "image"
+        }
         self.assertEqual(
             [item["source_id"] for item in photo_artifacts[0]["metadata"]["image_bindings"]],
-            [
-                item["id"]
-                for item in photo_project["sources"]
-                if item["kind"] == "image"
-            ],
+            [photo_images[self.blue_image.name], photo_images[self.red_image.name]],
         )
         self.assertIsNotNone(photo_artifacts[0]["metadata"]["audio_binding"])
 
