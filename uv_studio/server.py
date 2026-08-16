@@ -34,6 +34,7 @@ from uv_studio.api.music_analysis_assist import router as music_analysis_assist_
 from uv_studio.api.music_assembly import router as music_assembly_router  # noqa: E402
 from uv_studio.api.music_direction import router as music_direction_router  # noqa: E402
 from uv_studio.api.music_map import router as music_map_router  # noqa: E402
+from uv_studio.api.music_video_review import router as music_video_review_router  # noqa: E402
 from uv_studio.api.prepared_audio import router as prepared_audio_router  # noqa: E402
 from uv_studio.api.prepared_audio_promotion import router as prepared_audio_promotion_router  # noqa: E402
 from uv_studio.api.project_media import router as project_media_router  # noqa: E402
@@ -96,6 +97,7 @@ app.include_router(music_map_router)
 app.include_router(music_direction_router)
 app.include_router(music_assembly_router)
 app.include_router(music_analysis_assist_router)
+app.include_router(music_video_review_router)
 
 
 @app.get("/api/health", tags=["Health"])
