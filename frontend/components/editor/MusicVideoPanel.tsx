@@ -570,7 +570,7 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
         </div>
       )}
 
-      {notice && <p className="mt-5 text-sm text-emerald-300">{notice}</p>}
+      {notice && !busy && <p className="mt-5 text-sm text-emerald-300">{notice}</p>}
       {error && <p className="mt-5 text-sm text-red-300">{error}</p>}
     </section>
   );
