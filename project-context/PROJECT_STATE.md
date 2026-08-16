@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: stage-7-music-video-mode -->
 
 **Updated:** 2026-08-16
@@ -9,66 +9,64 @@
 
 ## Product now
 
-Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Its exact idle closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` passed post-merge push CI #1321 with all five permanent jobs green, including the maintained browser E2E on Ubuntu and Windows. This satisfies the Stage 7 entry gate.
+Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Atomic idle closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` passed post-merge CI #1321 with all five permanent jobs green.
 
-UV Studio currently has a product-owned Project Store, Recipe and Capability registries, D-017 authorization for remote/non-free execution, deterministic FFmpeg media/render paths, MLT behind a UV-owned editor adapter, targeted existing-video editing, dubbing/translation and optional linked-shot continuity/review. Stage 7 must compose these primitives rather than create another project or media engine.
+Stage 7 is implemented in PR #36 on `stage-7/music-video-mode` and is now in review. The final product-code head before this context-only transition is `9fdee22614e39551e4e9d63276ece32b29e6e7e1`; CI #1424 passed all five required jobs on that exact head: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app baselines passed API integration, real HTTP, FFmpeg/MLT real-media evidence, frontend lint/audit/build and Playwright browser E2E.
 
 ## Architecture invariants
 
 - Project Store/domain state remains canonical; external skills, model runtimes, MLT and FFmpeg are adapters/engines, not second authorities.
 - GUI, scripts, AI and MCP converge on UV-owned semantic commands/workflows.
 - Remote/non-free execution remains behind D-017 with explicit provider/cost behavior.
-- Music-video behavior is an optional recipe/policy and must not become mandatory for general video, narration, dubbing or targeted editing.
-- Local/free deterministic work is preferred where viable; generated assets may use optional providers without embedding provider IDs into canonical project state.
+- Music-video behavior is an optional recipe/policy and does not become mandatory for general video, narration, dubbing or targeted editing.
+- Provider/model identifiers stay outside canonical music state; local/manual operation remains a complete fallback.
 - Windows and Linux remain continuous engineering targets.
 - Development/review remains Chat-first under D-040; automatic Codex code review is excluded.
 
-## Stage 6 completion evidence
+## Stage 7 Music Video Mode — ready for review
 
-PR #35 final review head `55ca0e9c138594c34b8563f6267c6823cbc5794b` passed complete PR CI runs #1318 and #1319. PR #35 merged as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Atomic closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` returned lifecycle to idle and passed push CI #1321: development-context, both bootstrap jobs and both app-baseline jobs succeeded, including API/real HTTP, FFmpeg/MLT real-media coverage, frontend lint/audit/build and browser E2E on both operating systems.
+Stage 7 now provides a complete provider-free production path for a 20–30 second music-video excerpt:
 
-Stage 6 preserves optional planned/observed continuity, SHA-bound takes, explicit Review/Accept/re-anchor, bounded TimelineContext and non-authoritative provider-neutral Review Assist. Its Chat-only audit regressions fail closed on stale/corrupted review evidence before and after acceptance.
+- dedicated `music_video` recipe without widening `general_video` semantics;
+- first-class project-owned audio upload with bounded streaming, FFprobe validation, SHA/size identity and rollback;
+- typed/versioned Music Map bound to exact song bytes, excerpt, sections, timing markers and lyric/vocal phrases with deterministic revision identity;
+- provider-neutral Music Director bound to the exact Music Map revision with contiguous shot coverage and validated sync markers;
+- deterministic rhythm audit over current Map/Director timing;
+- provider-neutral Music Analysis Assist through semantic capability `audio.analyze_music`; suggestions are ephemeral/advisory and cannot mutate canonical Music Map without an explicit UV-owned command;
+- Music Assembly bound to the exact Music Director revision and exact project-owned visual SHA/size/source intervals;
+- canonical FFmpeg music-video render where visual-source audio is discarded and the exact selected master-song excerpt is the final audio track;
+- render-time verification of current media identity and measured output duration;
+- production UI for song upload, Music Map, Music Director, rhythm audit, visual assignment, assembly, render and final review;
+- evidence-bound Final Music Video Review tied to exact render SHA plus current Map/Director/Assembly revisions, exact composition metadata, rhythm evidence and human transition assessment;
+- `approved` final review is impossible outside the 20–30 second release window or when required rhythm/master/assembly/render/transition evidence fails;
+- generated visual work reuses the existing Stage 4B `generative_transform -> sample -> explicit SampleApproval -> full` gate; full generative candidates cannot register without an approved sample for the same plan SHA;
+- project archive/reopen and stale/substitution paths are covered by permanent tests;
+- maintained real-media and browser E2E exercise the real production flow on Ubuntu and Windows.
 
-## Stage 7 Music Video Mode — active draft
+## Stage 7 trust-boundary review findings
 
-The Stage 7 goal is a professional, optional 20–30 second music-video excerpt workflow. The baseline direction is:
+Chat review during implementation closed several concrete defects rather than only adding happy-path coverage:
 
-- add a dedicated `music_video` recipe instead of widening `general_video` semantics;
-- treat the selected song/excerpt as the authoritative timing reference for this mode while Project Store remains the canonical project authority;
-- persist a typed/versioned UV-owned Music Map where durable state is required: exact song reference/identity, excerpt range, musical sections, beat/downbeat or other timing markers, lyric/vocal phrases when known, climax/emphasis windows and revision identity;
-- keep Music Director decisions and shot timing plans provider-neutral and bound to the exact Music Map revision;
-- support manual/project-supplied timing as a complete provider-free path; automatic analysis is optional and must enter through a tested capability/adapter boundary;
-- use existing editor/render primitives for assembly and master-audio preservation rather than a second EDL/render engine;
-- make generated assets sample-first; remote/non-free generation stays behind D-017;
-- add deterministic rhythm/timing audit from known Music Map markers and edit boundaries, plus evidence-based final review;
-- add a product UI Music Map / Music Director workflow and permanent browser scenario C for a 20–30 second excerpt using provider-free fixtures.
+- a React success message previously appeared before cross-panel refresh/remount completed, producing an Ubuntu-only upload race; success visibility now follows completed synchronization, and browser E2E is green on both OSes;
+- Music Assembly rejects stale Director revisions, substituted visual bytes and invalid source intervals before render;
+- render revalidates actual media identity/duration and records exact composition provenance rather than trusting client-supplied paths;
+- Music Analysis Assist rejects stale song bytes and remains non-canonical;
+- Final Review rejects fake/incomplete render provenance, stale revisions, substituted artifacts, bad duration/rhythm evidence and failing human transition review.
 
-## `musical-mv-storyboard` evaluation
+## D-041 / upstream boundary
 
-The named upstream `huangserva/musical-mv-storyboard` was inspected at exact commit `3b73fe98a8953df13cae80238ad9bcd1bc5ae490` (V2.11 status commit). It contains useful workflow concepts around song-first timing, director score, visual-duration planning, phrase/lip-sync mapping, sample-first work and rhythm audit.
+D-041 is accepted. `huangserva/musical-mv-storyboard@3b73fe98a8953df13cae80238ad9bcd1bc5ae490` remains reference-only because the inspected upstream reported no repository license and no `LICENSE` file. No upstream code, scripts or templates were copied, vendored, imported or translated into UV Studio. General workflow ideas were independently implemented through UV-owned contracts.
 
-However, GitHub currently reports no repository license and the repository contains no `LICENSE` file. Therefore Stage 7 will not copy, vendor, import or derive its scripts/templates/code. Until compatible licensing provenance exists, it is architecture/reference material only. UV Studio may independently express general workflow ideas through its own typed contracts and existing engines.
+## Stage 7 completion gate
 
-## Completion gates for Stage 7
+The engineering and user-outcome gates are satisfied on product-code head `9fdee22614e39551e4e9d63276ece32b29e6e7e1` with CI #1424 fully green. This context-only transition moves the active slice from `draft` to `review`; one final CI run on the resulting context head is required before PR #36 is marked Ready for review.
 
-Engineering gate:
-
-- music state is typed, versioned, portable and provider-neutral;
-- exact song/media identity and Music Map revisions are trust-boundary inputs;
-- automatic analysis suggestions cannot mutate canonical state without explicit UV-owned commands;
-- assembly uses existing deterministic editor/render boundaries;
-- remote/non-free work cannot bypass D-017;
-- archive/reopen/stale-binding/failure behavior is tested;
-- non-music regression scenarios remain green.
-
-User-outcome gate:
-
-- from the production UI, a user can select a song/excerpt, define or inspect the Music Map, plan music-aware shots, use prepared or explicitly generated assets, assemble, audit/review and render a 20–30 second excerpt without manual API calls or a required paid provider.
+Stage 8 remains blocked until PR #36 is merged, `main` is atomically returned to `idle`, and post-merge CI is green.
 
 ## Cross-cutting backlog
 
-Existing non-blocking debt remains: broader codec/device fixtures, dependency reproducibility, renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces. Stage 7 should not absorb unrelated cleanup unless it blocks the music-video user outcome or trust boundary.
+Non-blocking debt remains: broader codec/device fixtures, dependency reproducibility, renderer file-handle/TOCTOU hardening beyond current identity checks, richer continuity authoring and eventual retirement of transitional compatibility surfaces. These are not Stage 7 release blockers.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. The active slice is `stage-7-music-video-mode` on `stage-7/music-video-mode`, based on verified idle main head `89bb51cbba301c85e7822fd4120bc67de43fec54`. The declared next handoff is `stage-8-additional-recipes`.
+D-038 keeps one canonical active slice. The active slice is `stage-7-music-video-mode` on `stage-7/music-video-mode`, based on verified idle main head `89bb51cbba301c85e7822fd4120bc67de43fec54`, and is now in `review`. The declared next handoff is `stage-8-additional-recipes`.
