@@ -20,17 +20,17 @@ _STAGE8_CAPABILITY_RECIPES = {
     "photo_to_video": (
         "video.compose_photos",
         "Photo-to-video is ready through the registered video.compose_photos semantic capability.",
-        "Photo-to-video is configured as a UV-owned semantic workflow, but its local media capability is not executable on this machine yet.",
+        "Photo-to-video is configured as a UV-owned semantic workflow, but its video.compose_photos local media capability is not executable on this machine yet.",
     ),
     "visualizer": (
         "audio.visualize",
         "Visualizer is ready through the registered audio.visualize semantic capability.",
-        "Visualizer is configured as a UV-owned semantic workflow, but its local media capability is not executable on this machine yet.",
+        "Visualizer is configured as a UV-owned semantic workflow, but its audio.visualize local media capability is not executable on this machine yet.",
     ),
     "performance_lip_sync": (
         "video.digital_human",
         "Performance/lip-sync is ready through a verified supplied portrait + speech video.digital_human offer.",
-        "Performance/lip-sync is capability-gated. Configure and verify the optional local MuseTalk pack before execution; no incompatible legacy fallback is used.",
+        "Performance/lip-sync is capability-gated because video.digital_human has no verified executable supplied portrait + speech offer. Configure and verify the optional local MuseTalk pack before execution; no incompatible legacy fallback is used.",
     ),
 }
 
