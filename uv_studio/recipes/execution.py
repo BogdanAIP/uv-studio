@@ -199,6 +199,30 @@ def _narrated_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     )
 
 
+def _music_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Music Video Mode is a UV Studio-owned project workflow and must not be routed through "
+            "a legacy native VideoClaw pipeline. Configure the project song and Music Map through "
+            "the UV Studio music workflow instead."
+        ),
+        input_slots=(
+            ExecutionInputSlot(
+                "song",
+                "Песня или музыкальный фрагмент",
+                InputSlotKind.AUDIO,
+                description="Project-owned master audio used as the timing reference for Music Video Mode.",
+            ),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+        target=None,
+    )
+
+
 def _action_transfer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     return RecipeExecutionPlan(
         recipe_id=recipe.recipe_id,
@@ -252,6 +276,7 @@ def _digital_human(recipe: RecipeDefinition) -> RecipeExecutionPlan:
 _RESOLVERS = {
     "general_video": _general_video,
     "narrated_video": _narrated_video,
+    "music_video": _music_video,
     "action_transfer": _action_transfer,
     "digital_human": _digital_human,
 }
