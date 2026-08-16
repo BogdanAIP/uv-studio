@@ -35,6 +35,21 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
   const [error, setError] = useState<string | null>(null);
   const [artifactId, setArtifactId] = useState<string | null>(null);
 
+  const orderedImageIds = useMemo(() => {
+    const availableIds = new Set(images.map(source => source.id));
+    const preserved = imageOrder.filter(sourceId => availableIds.has(sourceId));
+    const preservedIds = new Set(preserved);
+    const appended = images
+      .map(source => source.id)
+      .filter(sourceId => !preservedIds.has(sourceId));
+    return [...preserved, ...appended];
+  }, [imageOrder, images]);
+  const selectedPhotoAudioId = audios.some(source => source.id === photoAudioId) ? photoAudioId : '';
+  const selectedVisualizerAudioId = audios.some(source => source.id === visualizerAudioId)
+    ? visualizerAudioId
+    : audios[0]?.id ?? '';
+  const selectedArtworkId = images.some(source => source.id === artworkId) ? artworkId : '';
+
   const uploadImages = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy(true);
@@ -69,17 +84,15 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
 
   const moveImage = (index: number, delta: -1 | 1) => {
     const target = index + delta;
-    if (target < 0 || target >= imageOrder.length) return;
-    setImageOrder(current => {
-      const next = [...current];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
+    if (target < 0 || target >= orderedImageIds.length) return;
+    const next = [...orderedImageIds];
+    [next[index], next[target]] = [next[target], next[index]];
+    setImageOrder(next);
   };
 
   const renderPhotos = async () => {
     const duration = Number(durationSeconds);
-    if (!imageOrder.length) {
+    if (!orderedImageIds.length) {
       setError('Сначала загрузите хотя бы одно изображение.');
       return;
     }
@@ -93,9 +106,9 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
     try {
       const response = await renderPhotoToVideo(
         projectId,
-        imageOrder,
+        orderedImageIds,
         Math.round(duration * 1_000_000),
-        photoAudioId || undefined,
+        selectedPhotoAudioId || undefined,
       );
       setArtifactId(response.result.artifact.id);
       setMessage('Видео из фотографий собрано локальным FFmpeg capability.');
@@ -108,7 +121,7 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
   };
 
   const renderVisualizer = async () => {
-    if (!visualizerAudioId) {
+    if (!selectedVisualizerAudioId) {
       setError('Сначала выберите master-аудио.');
       return;
     }
@@ -116,7 +129,11 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
     setError(null);
     setMessage(null);
     try {
-      const response = await renderAudioVisualizer(projectId, visualizerAudioId, artworkId || undefined);
+      const response = await renderAudioVisualizer(
+        projectId,
+        selectedVisualizerAudioId,
+        selectedArtworkId || undefined,
+      );
       setArtifactId(response.result.artifact.id);
       setMessage('Аудиовизуализатор собран локальным FFmpeg capability.');
       await onProjectChanged();
@@ -168,11 +185,11 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
         <div className="mt-6 space-y-5">
           <div>
             <h3 className="text-sm font-medium text-slate-200">Порядок фотографий</h3>
-            {imageOrder.length === 0 ? (
+            {orderedImageIds.length === 0 ? (
               <p className="mt-2 text-sm text-slate-500">Изображений пока нет.</p>
             ) : (
               <div className="mt-3 space-y-2">
-                {imageOrder.map((sourceId, index) => {
+                {orderedImageIds.map((sourceId, index) => {
                   const source = images.find(item => item.id === sourceId);
                   if (!source) return null;
                   return (
@@ -180,7 +197,7 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
                       <span className="text-sm text-slate-300">{index + 1}. {sourceName(source)}</span>
                       <div className="flex gap-2">
                         <button type="button" disabled={busy || index === 0} onClick={() => moveImage(index, -1)} className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-30">↑</button>
-                        <button type="button" disabled={busy || index === imageOrder.length - 1} onClick={() => moveImage(index, 1)} className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-30">↓</button>
+                        <button type="button" disabled={busy || index === orderedImageIds.length - 1} onClick={() => moveImage(index, 1)} className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-30">↓</button>
                       </div>
                     </div>
                   );
@@ -195,13 +212,13 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
             </label>
             <label className="text-sm text-slate-300">
               Аудиодорожка (необязательно)
-              <select aria-label="Аудио для фото-видео" value={photoAudioId} onChange={event => setPhotoAudioId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+              <select aria-label="Аудио для фото-видео" value={selectedPhotoAudioId} onChange={event => setPhotoAudioId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
                 <option value="">Без аудио</option>
                 {audios.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
               </select>
             </label>
           </div>
-          <button type="button" disabled={busy || imageOrder.length === 0} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
+          <button type="button" disabled={busy || orderedImageIds.length === 0} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
             Собрать видео из фотографий
           </button>
         </div>
@@ -210,20 +227,20 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm text-slate-300">
               Master-аудио
-              <select aria-label="Master-аудио визуализатора" value={visualizerAudioId} onChange={event => setVisualizerAudioId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+              <select aria-label="Master-аудио визуализатора" value={selectedVisualizerAudioId} onChange={event => setVisualizerAudioId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
                 <option value="">Выберите аудио</option>
                 {audios.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
               </select>
             </label>
             <label className="text-sm text-slate-300">
               Обложка (необязательно)
-              <select aria-label="Обложка визуализатора" value={artworkId} onChange={event => setArtworkId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+              <select aria-label="Обложка визуализатора" value={selectedArtworkId} onChange={event => setArtworkId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
                 <option value="">Только waveform</option>
                 {images.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
               </select>
             </label>
           </div>
-          <button type="button" disabled={busy || !visualizerAudioId} onClick={() => void renderVisualizer()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
+          <button type="button" disabled={busy || !selectedVisualizerAudioId} onClick={() => void renderVisualizer()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
             Собрать аудиовизуализатор
           </button>
         </div>
