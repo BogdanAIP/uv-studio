@@ -119,11 +119,16 @@ class MuseTalkAdapterTests(unittest.TestCase):
         )
 
     def test_exact_project_sources_produce_sha_bound_artifact(self) -> None:
+        adapter = self._adapter()
+        adapter.runtime_profile = "verified-test-profile"
+        adapter.model_payload_sha256 = {
+            "models/musetalkV15/unet.pth": "a" * 64,
+        }
         with mock.patch(
             "uv_studio.capabilities.adapters.musetalk.shutil.which",
             side_effect=lambda tool: str(self.ffmpeg if tool == "ffmpeg" else self.ffprobe),
         ):
-            result = self._adapter().execute(
+            result = adapter.execute(
                 project_id=self.project.project_id,
                 offer=self.offer,
                 payload={
@@ -134,6 +139,11 @@ class MuseTalkAdapterTests(unittest.TestCase):
         self.assertEqual(result.output["engine"], "musetalk_v15")
         artifact = self.store.load_project(self.project.project_id).artifacts[-1]
         self.assertEqual(artifact.metadata["upstream_commit"], MUSE_TALK_UPSTREAM_COMMIT)
+        self.assertEqual(artifact.metadata["runtime_profile"], "verified-test-profile")
+        self.assertEqual(
+            artifact.metadata["model_payload_sha256"],
+            {"models/musetalkV15/unet.pth": "a" * 64},
+        )
         self.assertEqual(artifact.metadata["portrait_binding"]["source_id"], self.portrait.id)
         self.assertEqual(artifact.metadata["speech_binding"]["source_id"], self.speech.id)
         self.assertEqual(artifact.metadata["expected_duration_us"], 3_000_000)
