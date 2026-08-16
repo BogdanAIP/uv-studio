@@ -39,6 +39,7 @@ _RUNTIME_PROBE = (
     "raise SystemExit(0 if torch.cuda.is_available() else 3)"
 )
 _RUNTIME_ENV_PREFIXES = (".venv/", "venv/")
+_IGNORED_DATA_PREFIXES = ("models/", "results/", "dataset/")
 _UNTRUSTED_RUNTIME_SUFFIXES = frozenset(
     {
         ".py",
@@ -68,13 +69,26 @@ def _git_blob_sha1(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _normalize_runtime_relative_path(relative: str) -> str:
+    return relative.replace("\\", "/").lstrip("./")
+
+
 def _runtime_code_path(relative: str) -> bool:
-    normalized = relative.replace("\\", "/").lstrip("./")
+    normalized = _normalize_runtime_relative_path(relative)
     if not normalized or normalized.startswith(_RUNTIME_ENV_PREFIXES):
         return False
     name = normalized.rsplit("/", 1)[-1].lower()
     suffix = Path(name).suffix.lower()
     return suffix in _UNTRUSTED_RUNTIME_SUFFIXES or name in _UNTRUSTED_RUNTIME_NAMES
+
+
+def _runtime_path_is_untrusted(root: Path, relative: str) -> bool:
+    normalized = _normalize_runtime_relative_path(relative)
+    if not normalized or normalized.startswith(_RUNTIME_ENV_PREFIXES):
+        return False
+    if _runtime_code_path(normalized):
+        return True
+    return (root / normalized).is_symlink()
 
 
 def _untracked_runtime_problem(
@@ -83,15 +97,18 @@ def _untracked_runtime_problem(
     *,
     runner: Any = subprocess.run,
 ) -> str | None:
-    """Reject checkout-local code/binaries that Git's tracked-clean check cannot see.
+    """Reject checkout-local code, binaries or symlinks that tracked-clean Git status cannot see.
 
-    MuseTalk intentionally keeps model weights and often a local virtual environment
-    outside Git. Those data/runtime-environment files are valid, but checkout-local
-    importable code or executables can shadow the pinned Python sources when the
-    upstream module is launched from the repository root.
+    MuseTalk intentionally keeps model weights, generated results/datasets and often a
+    local virtual environment outside Git. Those data/runtime-environment paths are
+    valid, but checkout-local importable code, executables or symlink shadows can alter
+    what Python or an external tool resolves when upstream inference runs from the repo.
     """
 
     exclude_env = (":(exclude).venv/**", ":(exclude)venv/**")
+    exclude_ignored_data = tuple(
+        f":(exclude){prefix}**" for prefix in _IGNORED_DATA_PREFIXES
+    )
     try:
         untracked = runner(
             [
@@ -121,24 +138,8 @@ def _untracked_runtime_problem(
                 "--exclude-standard",
                 "-z",
                 "--",
-                "*.py",
-                "*.pyw",
-                "*.pyc",
-                "*.pyo",
-                "*.pyd",
-                "*.so",
-                "*.dll",
-                "*.dylib",
-                "*.exe",
-                "*.com",
-                "*.bat",
-                "*.cmd",
-                "*.ps1",
-                "*.sh",
-                "ffmpeg",
-                "ffprobe",
-                "ffplay",
                 *exclude_env,
+                *exclude_ignored_data,
             ],
             check=False,
             capture_output=True,
@@ -156,13 +157,19 @@ def _untracked_runtime_problem(
         for item in output.split("\0")
         if item
     ]
-    unsafe = sorted({item.replace("\\", "/") for item in candidates if _runtime_code_path(item)})
+    unsafe = sorted(
+        {
+            _normalize_runtime_relative_path(item)
+            for item in candidates
+            if _runtime_path_is_untrusted(root, item)
+        }
+    )
     if unsafe:
         preview = ", ".join(unsafe[:4])
         if len(unsafe) > 4:
             preview += f", +{len(unsafe) - 4} more"
         return (
-            "MuseTalk checkout contains untracked executable/importable runtime files; "
+            "MuseTalk checkout contains untracked executable/importable/symlink runtime files; "
             f"remove them before execution: {preview}"
         )
     return None
@@ -261,7 +268,7 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
     if available:
         reason = (
             "MuseTalk 1.5 optional pack найден, проверен как pinned checkout без "
-            "неотслеживаемого исполняемого/импортируемого кода и подтвердил CUDA runtime; "
+            "неотслеживаемого исполняемого/импортируемого/symlink-кода и подтвердил CUDA runtime; "
             "UV Studio будет выполнять локальный fp16 lip-sync."
         )
     elif missing:
