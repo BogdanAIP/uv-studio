@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .models import PolicyMode, ProductionPolicy, RecipeDefinition, RecipeStep, RecipeUIHints
 from .registry import RecipeRegistry
+from .stage8_media import STAGE8_MEDIA_RECIPES
 
 GENERAL_VIDEO = RecipeDefinition(
     recipe_id="general_video",
@@ -343,6 +344,7 @@ BUILTIN_RECIPES = (
     DIGITAL_HUMAN,
     STORY_VIDEO,
     COMMERCIAL_PRODUCT,
+    *STAGE8_MEDIA_RECIPES,
     PERFORMANCE_LIP_SYNC,
     FREE_PROJECT,
 )
