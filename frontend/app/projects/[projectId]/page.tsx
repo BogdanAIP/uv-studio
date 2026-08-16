@@ -50,6 +50,10 @@ export default function ProjectPage() {
 
   const refreshProject = async () => {
     setProject(await getUVProject(projectId));
+  };
+
+  const refreshMusicPrerequisites = async () => {
+    await refreshProject();
     setWorkflowRefresh(current => current + 1);
   };
 
@@ -89,7 +93,7 @@ export default function ProjectPage() {
               <>
                 <MusicVideoPanel
                   projectId={project.project_id}
-                  onProjectChanged={refreshProject}
+                  onProjectChanged={refreshMusicPrerequisites}
                 />
                 <MusicAssemblyPanel
                   key={workflowRefresh}
