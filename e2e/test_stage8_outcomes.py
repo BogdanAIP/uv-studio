@@ -269,9 +269,11 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         ).to_be_visible()
         expect(page.get_by_text("configuration_required", exact=True)).to_be_visible(timeout=60_000)
         page.locator('input[aria-label="Портрет lip-sync"]').set_input_files(str(self.red_image))
-        expect(page.get_by_label("Выбранный портрет lip-sync")).to_be_visible(timeout=60_000)
+        performance_portrait = page.get_by_label("Выбранный портрет lip-sync")
+        _select_option_containing(performance_portrait, self.red_image.name)
         page.locator('input[aria-label="Готовая речь lip-sync"]').set_input_files(str(self.audio))
-        expect(page.get_by_label("Выбранная речь lip-sync")).to_be_visible(timeout=60_000)
+        performance_speech = page.get_by_label("Выбранная речь lip-sync")
+        _select_option_containing(performance_speech, self.audio.name)
         expect(page.get_by_text("configuration_required", exact=True)).to_be_visible(timeout=60_000)
         expect(page.get_by_role("button", name="Выполнить lip-sync", exact=True)).to_be_disabled()
 
