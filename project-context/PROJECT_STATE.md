@@ -3,7 +3,7 @@
 <!-- uv-context-state: review -->
 <!-- uv-active-slice: stage-6-sequence-continuity-review -->
 
-**Updated:** 2026-08-14
+**Updated:** 2026-08-16
 
 **Repository:** `BogdanAIP/uv-studio`
 
@@ -38,6 +38,7 @@ UV Studio currently has:
 - Remote/non-free execution stays behind D-017.
 - Optional continuity, dubbing, music and other specialized workflows must remain optional.
 - Windows and Linux remain continuous engineering targets.
+- Development and PR review are Chat-first under D-040: automatic Codex code review is excluded from the UV Studio workflow and Codex is used only when the repository owner explicitly launches it manually.
 
 ## What is verified
 
@@ -67,6 +68,8 @@ The implemented architecture is:
 - `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
 
 The full pre-merge audit found two trust-boundary issues and both are now covered by regression tests: stale/corrupted approved-anchor observations cannot be reused as TimelineContext facts, and corrupted approved Review outcomes cannot pass Accept. No Qwen-specific Stage 6 binding was added.
+
+D-040 also records the repository-owner development policy discovered during review: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
 
 The lifecycle is now `review`; merge remains a reviewer/integration action and is not part of this transition.
 
