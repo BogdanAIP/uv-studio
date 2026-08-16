@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: stage-6-sequence-continuity-review -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: stage-6-sequence-continuity-review -->
 
 **Updated:** 2026-08-16
 
@@ -9,7 +9,7 @@
 
 ## Product now
 
-Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`, with the bounded post-merge hardening completed by PR #34 / merge commit `e98015da54834a2684e075ede121847df59eda0a`.
+Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`, with the bounded post-merge hardening completed by PR #34 / merge commit `e98015da54834a2684e075ede121847df59eda0a`. Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
 
 UV Studio currently has:
 
@@ -53,13 +53,15 @@ The browser scenario creates one project and composes the targeted existing-vide
 
 A later Chat-only pre-merge audit hardened two additional trust boundaries. Exact code head `5d075abb1aad35498baab5a46d0895c928097dd1` passed PR CI run `31945066401` / #1316 with all five required jobs green, including Ubuntu and Windows browser E2E. Accepted state now fails closed on load/reopen if its approved Review is later corrupted or no longer matches the current plan/anchor/targets/required pass outcomes, so such a take cannot remain usable for re-anchor or future-shot anchoring. Review Assist normalization also rejects result-count mismatches and more than `MAX_OBSERVATIONS_PER_REVIEW` observations before constructing suggestion objects. The transient earlier run #1314 exposed only an obsolete test message expectation after the accepted-state check intentionally moved earlier; the test was updated to require the stronger load-time failure and #1316 verified the result.
 
-Focused tests now prove project archive round-trip, stale plan/media rejection, Review Assist non-authority and bounded suggestion input, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance, and fail-closed reopen/re-anchor when the same corruption occurs after acceptance.
+Final review head `55ca0e9c138594c34b8563f6267c6823cbc5794b` passed complete PR CI runs #1318 and #1319. PR #35 then merged into `main` as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
 
-## Stage 6 sequence continuity/review ready for review
+Focused tests prove project archive round-trip, stale plan/media rejection, Review Assist non-authority and bounded suggestion input, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance, and fail-closed reopen/re-anchor when the same corruption occurs after acceptance.
+
+## Stage 6 sequence continuity/review merged
 
 PR #35 implements optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows remain free of sequence state and review overhead until the user explicitly enables the mode.
 
-The implemented architecture is:
+The merged architecture is:
 
 - planned continuity is distinct from observed accepted-take state;
 - plans carry explicit locks, allowed changes and review targets;
@@ -78,7 +80,7 @@ The full Chat-only pre-merge audit found four trust/input-boundary issues and al
 
 D-040 records the repository-owner development policy: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
 
-The lifecycle remains `review`; merge remains a reviewer/integration action and is not part of this transition.
+The lifecycle is now closed to `idle`. Stage 7 remains gated on the exact post-merge idle closure head passing all permanent required checks.
 
 ## Cross-cutting backlog
 
@@ -86,4 +88,4 @@ Remaining non-blocking debt includes recursive portability validation for genera
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. PR #35 is the current review slice on `stage-6/sequence-continuity-review`, based on verified idle main head `9f47f5ac2e4c6cc608162550313894bdb6e194ae`. The declared next handoff is `stage-7-music-video-mode`; it remains blocked until PR #35 is reviewed, merged, `main` closes back to `idle`, and the post-merge closure checks are green.
+D-038 keeps one canonical active slice. Stage 6 is now the last completed slice: PR #35 merged as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`, and this closure returns `main` to `idle`. The declared next handoff is `stage-7-music-video-mode`; it may start only after this exact idle closure head passes all permanent required checks.

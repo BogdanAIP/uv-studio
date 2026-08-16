@@ -1,37 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "stage-6-sequence-continuity-review",
-    "kind": "stage",
-    "roadmap_stage": "stage-6",
-    "goal": "Add optional linked-shot sequence continuity and review with explicit planned/observed state, accepted anchors, bounded timeline context and rendered-output evidence without imposing continuity machinery on standalone clips.",
-    "base_branch": "main",
-    "branch": "stage-6/sequence-continuity-review",
-    "pull_request": 35,
-    "write_scope": [
-      ".github/workflows/ci.yml",
-      "THIRD_PARTY_NOTICES.md",
-      "docs/**",
-      "e2e/**",
-      "frontend/components/editor/**",
-      "frontend/lib/**",
-      "project-context/**",
-      "requirements-uv-dev.txt",
-      "tests/**",
-      "tests_api/**",
-      "tests_real_media/**",
-      "uv_studio/api/**",
-      "uv_studio/capabilities/**",
-      "uv_studio/editor/**",
-      "uv_studio/projects/**",
-      "uv_studio/server.py"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "stage-5-correctness-browser-e2e",
-    "pull_request": 34,
-    "merge_commit": "e98015da54834a2684e075ede121847df59eda0a"
+    "id": "stage-6-sequence-continuity-review",
+    "pull_request": 35,
+    "merge_commit": "ea0b766c03d216a154961ca0cd3043e3d3e94d43"
   },
   "handoff": {
     "next_slice_id": "stage-7-music-video-mode",
