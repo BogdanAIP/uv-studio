@@ -29,6 +29,10 @@ class RecipeRegistryTests(unittest.TestCase):
                 "music_video",
                 "action_transfer",
                 "digital_human",
+                "story_video",
+                "commercial_product",
+                "performance_lip_sync",
+                "free_project",
             ),
         )
         self.assertEqual(registry.list(), BUILTIN_RECIPES)
@@ -72,6 +76,32 @@ class RecipeRegistryTests(unittest.TestCase):
             registry.get("digital_human").production_policy.source_review,
             PolicyMode.REQUIRED,
         )
+
+    def test_stage8_story_and_commercial_are_compositional_not_native_bindings(self) -> None:
+        registry = build_builtin_registry()
+        story = registry.get("story_video")
+        commercial = registry.get("commercial_product")
+        self.assertEqual(story.required_capabilities, ("timeline.assemble",))
+        self.assertEqual(commercial.required_capabilities, ("timeline.assemble",))
+        self.assertEqual(story.production_policy.scene_ledger, PolicyMode.REQUIRED)
+        self.assertEqual(commercial.production_policy.sample_first, PolicyMode.REQUIRED)
+        self.assertNotIn(story.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+        self.assertNotIn(commercial.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+
+    def test_stage8_performance_is_explicitly_capability_gated(self) -> None:
+        recipe = build_builtin_registry().get("performance_lip_sync")
+        self.assertEqual(recipe.required_inputs, ("portrait", "speech"))
+        self.assertEqual(recipe.required_capabilities, ("video.digital_human",))
+        self.assertEqual(recipe.production_policy.sample_first, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.final_review, PolicyMode.REQUIRED)
+        self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+
+    def test_stage8_free_project_has_no_fake_required_pipeline(self) -> None:
+        recipe = build_builtin_registry().get("free_project")
+        self.assertEqual(recipe.required_inputs, ())
+        self.assertEqual(recipe.required_capabilities, ())
+        self.assertIn("timeline.assemble", recipe.optional_capabilities)
+        self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
 
     def test_duplicate_registration_is_rejected(self) -> None:
         recipe = build_builtin_registry().get("general_video")
