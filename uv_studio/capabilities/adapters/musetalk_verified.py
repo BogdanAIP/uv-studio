@@ -1,8 +1,8 @@
 """Verified product wrapper for the optional MuseTalk 1.5 runtime.
 
 The base adapter owns bounded execution. This wrapper makes the public offer
-available only for the exact clean upstream checkout and executable CUDA
-Python environment inspected by UV Studio.
+available only for the exact reviewed upstream checkout, model payloads and
+executable CUDA Python environment inspected by UV Studio.
 """
 
 from __future__ import annotations
@@ -60,12 +60,42 @@ _UNTRUSTED_RUNTIME_SUFFIXES = frozenset(
 )
 _UNTRUSTED_RUNTIME_NAMES = frozenset({"ffmpeg", "ffprobe", "ffplay"})
 
+# These are the exact binary payloads used by the MuseTalk 1.5 download layout
+# accepted by UV Studio. Several are loaded through torch.load / legacy PyTorch
+# serialization, so existence alone is not a sufficient execution boundary.
+_PINNED_MODEL_SHA256 = {
+    "models/musetalkV15/unet.pth": "7ebf6c98c181e20838e4c0054e96e944ac60d5d692cc01db42839fe11b787007",
+    "models/sd-vae/diffusion_pytorch_model.bin": "1b4889b6b1d4ce7ae320a02dedaeff1780ad77d415ea0d744b476155c6377ddc",
+    "models/whisper/pytorch_model.bin": "9607f98a2b22d9e229ae43c52ecea79dcede9e0c5cfae67e8da6eda86d8aac1d",
+    "models/dwpose/dw-ll_ucoco_384.pth": "0d9408b13cd863c4e95a149dd31232f88f2a12aa6cf8964ed74d7d97748c7a07",
+    "models/face-parse-bisent/79999_iter.pth": "468e13ca13a9b43cc0881a9f99083a430e9c0a38abd935431d1c28ee94b26567",
+    "models/face-parse-bisent/resnet18-5c106cde.pth": "5c106cde386e87d4033832f2996f5493238eda96ccf559d1d62760c4de0613f8",
+}
+
+# The accepted Stage 8 layout deliberately follows MuseTalk's bounded download
+# script, which selects the legacy .bin payloads below. If an alternative file
+# is present, current Diffusers/Transformers resolution may prefer it instead of
+# the pinned file, so the offer must fail closed rather than execute different
+# model bytes than those verified above.
+_ALTERNATIVE_MODEL_PAYLOADS = (
+    "models/sd-vae/diffusion_pytorch_model.safetensors",
+    "models/whisper/model.safetensors",
+)
+
 
 def _git_blob_sha1(path: Path) -> str:
     body = path.read_bytes()
     digest = hashlib.sha1(usedforsecurity=False)
     digest.update(f"blob {len(body)}\0".encode("ascii"))
     digest.update(body)
+    return digest.hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -175,6 +205,34 @@ def _untracked_runtime_problem(
     return None
 
 
+def _model_payload_problem(
+    root: Path,
+    *,
+    hasher: Any = _sha256_file,
+) -> str | None:
+    """Verify every executable model payload before it can reach PyTorch loaders."""
+
+    for relative in _ALTERNATIVE_MODEL_PAYLOADS:
+        path = root / relative
+        if path.exists() or path.is_symlink():
+            return (
+                "MuseTalk verified layout contains an alternative model payload that may "
+                f"override pinned bytes: {relative}"
+            )
+
+    for relative, expected_sha256 in _PINNED_MODEL_SHA256.items():
+        path = root / relative
+        try:
+            if not path.is_file() or path.is_symlink():
+                return f"MuseTalk pinned model payload is not a regular file: {relative}"
+            actual_sha256 = hasher(path)
+        except OSError as exc:
+            return f"MuseTalk pinned model payload could not be verified ({relative}): {exc}"
+        if actual_sha256.lower() != expected_sha256:
+            return f"MuseTalk pinned model payload hash mismatch: {relative}"
+    return None
+
+
 def _checkout_problem(
     root: Path,
     *,
@@ -245,7 +303,7 @@ def _runtime_problem(
 
 
 def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
-    """Register only a truthfully executable exact MuseTalk checkout."""
+    """Register only a truthfully executable exact MuseTalk checkout and model payload."""
 
     registry.register_adapter(
         AdapterDefinition(
@@ -263,13 +321,18 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
     missing = _missing_runtime_parts(root, python)
     verification_problem = None
     if not missing and root is not None and python is not None:
-        verification_problem = _checkout_problem(root) or _runtime_problem(python)
+        verification_problem = (
+            _checkout_problem(root)
+            or _model_payload_problem(root)
+            or _runtime_problem(python)
+        )
     available = not missing and verification_problem is None
     if available:
         reason = (
             "MuseTalk 1.5 optional pack найден, проверен как pinned checkout без "
-            "неотслеживаемого исполняемого/импортируемого/symlink-кода и подтвердил CUDA runtime; "
-            "UV Studio будет выполнять локальный fp16 lip-sync."
+            "неотслеживаемого исполняемого/импортируемого/symlink-кода, с точными "
+            "модельными payload SHA-256 и доступным CUDA runtime; UV Studio будет "
+            "выполнять локальный fp16 lip-sync."
         )
     elif missing:
         reason = "Настройте optional MuseTalk 1.5 pack: " + ", ".join(missing[:6])
@@ -296,6 +359,7 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
                 "audio.supplied",
                 "runtime.optional",
                 "runtime.cuda",
+                "runtime.model_sha256",
                 "musetalk.v15",
                 f"upstream.{MUSE_TALK_UPSTREAM_COMMIT[:12]}",
                 f"inference_blob.{MUSE_TALK_INFERENCE_BLOB_SHA1[:12]}",
@@ -305,7 +369,7 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
 
 
 class MuseTalkAdapter(BaseMuseTalkAdapter):
-    """Base bounded executor plus exact checkout/CUDA verification at execution time."""
+    """Base bounded executor plus exact checkout/model/CUDA verification at execution time."""
 
     adapter_id = _ADAPTER_ID
 
@@ -323,7 +387,11 @@ class MuseTalkAdapter(BaseMuseTalkAdapter):
 
     def _runtime(self):
         root, python, ffmpeg, ffprobe = super()._runtime()
-        problem = _checkout_problem(root) or _runtime_problem(python)
+        problem = (
+            _checkout_problem(root)
+            or _model_payload_problem(root)
+            or _runtime_problem(python)
+        )
         if problem is not None:
             raise CapabilityToolUnavailable(problem)
         return root, python, ffmpeg, ffprobe
