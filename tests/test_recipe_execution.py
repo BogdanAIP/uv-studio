@@ -4,6 +4,7 @@ import unittest
 
 from uv_studio.recipes import (
     ExecutionCompatibility,
+    InputSlotKind,
     PolicyMode,
     build_builtin_registry,
     resolve_project_execution,
@@ -35,6 +36,20 @@ class RecipeExecutionPlanTests(unittest.TestCase):
             [slot.slot_id for slot in plan.input_slots if slot.required],
             ["text"],
         )
+
+    def test_music_video_is_uv_owned_and_song_input_is_audio(self) -> None:
+        plan = resolve_project_execution(self.registry, "music_video")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        self.assertIn("UV Studio-owned", plan.reason)
+        self.assertEqual([slot.slot_id for slot in plan.input_slots], ["song"])
+        self.assertEqual(plan.input_slots[0].kind, InputSlotKind.AUDIO)
+        self.assertEqual(plan.production_policy.sample_first, PolicyMode.REQUIRED)
+        encoded = str(plan.to_dict()).lower()
+        self.assertNotIn("qwen", encoded)
+        self.assertNotIn("kling", encoded)
+        self.assertNotIn("seedance", encoded)
 
     def test_action_transfer_binding_is_available_and_sample_first(self) -> None:
         plan = resolve_project_execution(self.registry, "action_transfer")
