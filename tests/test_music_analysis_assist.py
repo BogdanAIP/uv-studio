@@ -71,7 +71,7 @@ class MusicAnalysisAssistTests(unittest.TestCase):
             store, project_id = self._setup(tmp)
             package = build_music_analysis_assist(store, project_id, song_reference_id="song")
             (store.project_directory(project_id) / "sources/song.wav").write_bytes(b"substituted")
-            with self.assertRaises((MusicAnalysisAssistError, Exception)) as caught:
+            with self.assertRaises(MusicAnalysisAssistError):
                 normalize_music_analysis_suggestion(
                     store,
                     project_id,
@@ -82,7 +82,6 @@ class MusicAnalysisAssistTests(unittest.TestCase):
                         "sections": [], "markers": [], "lyric_phrases": [], "note": None,
                     },
                 )
-            self.assertTrue(str(caught.exception))
 
     def test_suggested_times_must_stay_inside_excerpt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
