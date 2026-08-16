@@ -28,17 +28,15 @@ class RecipesApiTests(unittest.TestCase):
                 "digital_human",
                 "story_video",
                 "commercial_product",
+                "photo_to_video",
+                "visualizer",
                 "performance_lip_sync",
                 "free_project",
             ],
         )
         encoded = str(recipes).lower()
-        self.assertNotIn("dashscope", encoded)
-        self.assertNotIn("openclaw", encoded)
-        self.assertNotIn("qwen", encoded)
-        self.assertNotIn("videoclaw", encoded)
-        self.assertNotIn("kling", encoded)
-        self.assertNotIn("seedance", encoded)
+        for provider in ("dashscope", "openclaw", "qwen", "videoclaw", "kling", "seedance"):
+            self.assertNotIn(provider, encoded)
 
     def test_get_general_video_recipe(self) -> None:
         response = self.client.get("/api/uv/recipes/general_video")
@@ -88,6 +86,22 @@ class RecipesApiTests(unittest.TestCase):
         self.assertIn("product_image", commercial["optional_inputs"])
         self.assertIn("product_video", commercial["optional_inputs"])
         self.assertEqual(commercial["production_policy"]["sample_first"], "required")
+
+    def test_stage8_photo_and_visualizer_expose_deterministic_local_capabilities(self) -> None:
+        photo_response = self.client.get("/api/uv/recipes/photo_to_video")
+        visualizer_response = self.client.get("/api/uv/recipes/visualizer")
+        self.assertEqual(photo_response.status_code, 200, photo_response.text)
+        self.assertEqual(visualizer_response.status_code, 200, visualizer_response.text)
+        photo = photo_response.json()
+        visualizer = visualizer_response.json()
+        self.assertEqual(photo["required_inputs"], ["images"])
+        self.assertEqual(photo["required_capabilities"], ["video.compose_photos"])
+        self.assertEqual(photo["production_policy"]["source_review"], "required")
+        self.assertEqual(photo["production_policy"]["final_review"], "required")
+        self.assertEqual(visualizer["required_inputs"], ["audio"])
+        self.assertEqual(visualizer["required_capabilities"], ["audio.visualize"])
+        self.assertIn("artwork", visualizer["optional_inputs"])
+        self.assertIn("audio.analyze_music", visualizer["optional_capabilities"])
 
     def test_stage8_performance_and_free_project_do_not_claim_fake_pipeline(self) -> None:
         performance_response = self.client.get("/api/uv/recipes/performance_lip_sync")
