@@ -31,6 +31,8 @@ class RecipeRegistryTests(unittest.TestCase):
                 "digital_human",
                 "story_video",
                 "commercial_product",
+                "photo_to_video",
+                "visualizer",
                 "performance_lip_sync",
                 "free_project",
             ),
@@ -87,6 +89,21 @@ class RecipeRegistryTests(unittest.TestCase):
         self.assertEqual(commercial.production_policy.sample_first, PolicyMode.REQUIRED)
         self.assertNotIn(story.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
         self.assertNotIn(commercial.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+
+    def test_stage8_photo_and_visualizer_require_real_local_semantic_capabilities(self) -> None:
+        registry = build_builtin_registry()
+        photo = registry.get("photo_to_video")
+        visualizer = registry.get("visualizer")
+        self.assertEqual(photo.required_inputs, ("images",))
+        self.assertEqual(photo.required_capabilities, ("video.compose_photos",))
+        self.assertEqual(photo.production_policy.source_review, PolicyMode.REQUIRED)
+        self.assertEqual(photo.production_policy.final_review, PolicyMode.REQUIRED)
+        self.assertEqual(visualizer.required_inputs, ("audio",))
+        self.assertEqual(visualizer.required_capabilities, ("audio.visualize",))
+        self.assertIn("audio.analyze_music", visualizer.optional_capabilities)
+        self.assertEqual(visualizer.production_policy.final_review, PolicyMode.REQUIRED)
+        self.assertNotIn(photo.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+        self.assertNotIn(visualizer.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
 
     def test_stage8_performance_is_explicitly_capability_gated(self) -> None:
         recipe = build_builtin_registry().get("performance_lip_sync")
