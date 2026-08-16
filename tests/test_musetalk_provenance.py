@@ -11,11 +11,14 @@ from uv_studio.capabilities.adapters.musetalk import MUSE_TALK_UPSTREAM_COMMIT
 from uv_studio.capabilities.adapters.musetalk_verified import (
     MUSE_TALK_INFERENCE_BLOB_SHA1,
     MuseTalkAdapter,
+    _PINNED_MODEL_SHA256,
     _checkout_problem,
     _git_blob_sha1,
+    _model_payload_problem,
     _runtime_code_path,
     _runtime_path_is_untrusted,
     _runtime_problem,
+    _sha256_file,
 )
 
 
@@ -127,6 +130,38 @@ class MuseTalkProvenanceTests(unittest.TestCase):
         self.assertTrue(_runtime_code_path("cv2.pyd"))
         self.assertTrue(_runtime_code_path("ffmpeg"))
 
+    def test_pinned_model_payloads_fail_closed_on_hash_or_loader_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in _PINNED_MODEL_SHA256:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(relative.encode("utf-8"))
+
+            def trusted_hasher(path: Path) -> str:
+                relative = path.relative_to(root).as_posix()
+                return _PINNED_MODEL_SHA256[relative]
+
+            self.assertIsNone(_model_payload_problem(root, hasher=trusted_hasher))
+
+            mismatched_relative = "models/musetalkV15/unet.pth"
+
+            def mismatched_hasher(path: Path) -> str:
+                relative = path.relative_to(root).as_posix()
+                if relative == mismatched_relative:
+                    return "0" * 64
+                return _PINNED_MODEL_SHA256[relative]
+
+            mismatch = _model_payload_problem(root, hasher=mismatched_hasher)
+            self.assertIn(mismatched_relative, mismatch or "")
+            self.assertIn("hash mismatch", mismatch or "")
+
+            alternative = root / "models/sd-vae/diffusion_pytorch_model.safetensors"
+            alternative.write_bytes(b"different-loader-payload")
+            override = _model_payload_problem(root, hasher=trusted_hasher)
+            self.assertIn("alternative model payload", override or "")
+            self.assertIn("safetensors", override or "")
+
     def test_runtime_probe_requires_importable_environment_and_cuda(self) -> None:
         python = Path("python")
 
@@ -156,16 +191,17 @@ class MuseTalkProvenanceTests(unittest.TestCase):
         command = base_invoke.call_args.args[0]
         self.assertEqual(command[:4], ["python", "-B", "-m", "scripts.inference"])
 
-    def test_git_blob_hash_matches_git_object_format(self) -> None:
+    def test_hash_helpers_match_expected_formats(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "file.py"
             body = b"print('uv')\n"
             path.write_bytes(body)
-            expected = hashlib.sha1(
+            expected_blob = hashlib.sha1(
                 f"blob {len(body)}\0".encode("ascii") + body,
                 usedforsecurity=False,
             ).hexdigest()
-            self.assertEqual(_git_blob_sha1(path), expected)
+            self.assertEqual(_git_blob_sha1(path), expected_blob)
+            self.assertEqual(_sha256_file(path), hashlib.sha256(body).hexdigest())
 
 
 if __name__ == "__main__":
