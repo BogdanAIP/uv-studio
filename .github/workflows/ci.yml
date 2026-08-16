@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -30,9 +30,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -78,9 +78,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13.14"
 
@@ -99,6 +99,40 @@ jobs:
       - name: Record resolved release Python candidate graph
         run: python -m pip freeze
 
+  release-frontend-compatibility:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.19.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Record release Node candidate
+        run: |
+          node --version
+          npm --version
+
+      - name: Install locked frontend graph on release Node candidate
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend on release Node candidate
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Audit frontend on release Node candidate
+        working-directory: frontend
+        run: npm run audit:high
+
+      - name: Build frontend on release Node candidate
+        working-directory: frontend
+        run: npm run build
+
   app-baseline:
     strategy:
       fail-fast: false
@@ -109,13 +143,13 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
