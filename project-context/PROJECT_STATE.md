@@ -26,8 +26,9 @@ UV Studio currently has:
 - deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download;
 - optional Stage 6 linked-shot continuity state with explicit planned/observed separation, SHA-bound takes, accepted/rejected lifecycle, current Review semantics and explicit re-anchor;
 - bounded TimelineContext over accepted-anchor tail and candidate head with fail-closed trust checks for approved anchor observations;
-- provider-neutral ephemeral Review Assist over semantic `media.understand`, where VLM suggestions never create canonical Review/Accept/re-anchor state;
+- provider-neutral ephemeral Review Assist over semantic `media.understand`, where VLM suggestions never create canonical Review/Accept/re-anchor state and suggestion collections are bounded before normalization;
 - acceptance-time revalidation of exact current review-target coverage and required pass outcomes;
+- load/reopen-time revalidation that every already accepted take still has a current approved Review bound to the exact current plan, anchor, take SHA, complete target set and passing required targets;
 - maintained production-browser E2E composing targeted replacement, dubbing and linked-shot continuity on Ubuntu and Windows.
 
 ## Architecture invariants
@@ -46,9 +47,13 @@ PR #34's final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` passed exa
 
 PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfied the Stage 6 entry gate.
 
-The final Stage 6 implementation head `9c0f9dbc0ff67dc6bce283d5ebc2db1f106669fc` passed exact-head PR run `31809934767` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
+The initial Stage 6 implementation head `9c0f9dbc0ff67dc6bce283d5ebc2db1f106669fc` passed exact-head PR run `31809934767` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
 
-The browser scenario creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review. Focused tests also prove archive round-trip, stale plan/media rejection, Review Assist non-authority, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, and fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance.
+The browser scenario creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review.
+
+A later Chat-only pre-merge audit hardened two additional trust boundaries. Exact code head `5d075abb1aad35498baab5a46d0895c928097dd1` passed PR CI run `31945066401` / #1316 with all five required jobs green, including Ubuntu and Windows browser E2E. Accepted state now fails closed on load/reopen if its approved Review is later corrupted or no longer matches the current plan/anchor/targets/required pass outcomes, so such a take cannot remain usable for re-anchor or future-shot anchoring. Review Assist normalization also rejects result-count mismatches and more than `MAX_OBSERVATIONS_PER_REVIEW` observations before constructing suggestion objects. The transient earlier run #1314 exposed only an obsolete test message expectation after the accepted-state check intentionally moved earlier; the test was updated to require the stronger load-time failure and #1316 verified the result.
+
+Focused tests now prove project archive round-trip, stale plan/media rejection, Review Assist non-authority and bounded suggestion input, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance, and fail-closed reopen/re-anchor when the same corruption occurs after acceptance.
 
 ## Stage 6 sequence continuity/review ready for review
 
@@ -61,17 +66,19 @@ The implemented architecture is:
 - prepared takes bind exact project-owned video bytes and exact plan revisions;
 - Review binds candidate SHA, plan revision and anchor identity;
 - Accept independently revalidates current target coverage, required pass outcomes, candidate bytes, plan revision and anchor binding before promotion;
+- accepted state independently revalidates the same authoritative Review evidence on load/reopen, preventing corrupted accepted records from remaining trusted anchors;
 - re-anchor remains an explicit semantic command over an accepted current take;
 - bounded `TimelineContext` is a derived inspection view from canonical Project Store state, never a second timeline/EDL authority;
 - trusted anchor observations are exposed only from a current approved Review whose take/SHA/plan/anchor/target binding still matches current state;
 - optional VLM assistance uses an ephemeral provider-neutral `media.understand` Review Assist package and suggestion schema; even a normalized `approved` suggestion leaves the take prepared until a human creates the canonical Review and explicitly accepts it;
+- Review Assist enforces its advertised result/observation collection bounds before normalizing external model output;
 - `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
 
-The full pre-merge audit found two trust-boundary issues and both are now covered by regression tests: stale/corrupted approved-anchor observations cannot be reused as TimelineContext facts, and corrupted approved Review outcomes cannot pass Accept. No Qwen-specific Stage 6 binding was added.
+The full Chat-only pre-merge audit found four trust/input-boundary issues and all are covered by regression tests: stale/corrupted approved-anchor observations cannot be reused as TimelineContext facts; corrupted approved Review outcomes cannot pass Accept; post-Accept corruption invalidates the accepted state itself before it can be reused as an anchor; and Review Assist cannot normalize oversized observation collections. No Qwen-specific Stage 6 binding was added.
 
-D-040 also records the repository-owner development policy discovered during review: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
+D-040 records the repository-owner development policy: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
 
-The lifecycle is now `review`; merge remains a reviewer/integration action and is not part of this transition.
+The lifecycle remains `review`; merge remains a reviewer/integration action and is not part of this transition.
 
 ## Cross-cutting backlog
 
