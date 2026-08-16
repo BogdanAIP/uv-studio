@@ -163,7 +163,7 @@ class MusicMapTests(unittest.TestCase):
             song_path.write_bytes(b"music-map-audio")
             state_path = store.project_directory(project.project_id) / MUSIC_MAP_PATH
             raw = json.loads(state_path.read_text(encoding="utf-8"))
-            raw["excerpt"]["end_us"] -= 1_000_000
+            raw["sections"][0]["label"] = "Changed without revision refresh"
             state_path.write_text(json.dumps(raw), encoding="utf-8")
             with self.assertRaisesRegex(MusicMapError, "revision"):
                 service.load(project.project_id)
