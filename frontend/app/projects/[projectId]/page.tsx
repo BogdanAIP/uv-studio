@@ -12,6 +12,7 @@ import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel
 import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
+import { Stage8CompositionPanel } from '@/components/editor/Stage8CompositionPanel';
 import { Stage8MediaPanel } from '@/components/editor/Stage8MediaPanel';
 import {
   getProjectExecutionPlan,
@@ -86,6 +87,15 @@ export default function ProjectPage() {
               <ProjectStat label="Создан" value={new Date(project.created_at).toLocaleDateString()} />
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
+
+            {(project.recipe_id === 'story_video' || project.recipe_id === 'commercial_product' || project.recipe_id === 'free_project') && (
+              <Stage8CompositionPanel
+                projectId={project.project_id}
+                recipeId={project.recipe_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
+            )}
 
             <ProjectEditor
               projectId={project.project_id}
