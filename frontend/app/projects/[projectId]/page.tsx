@@ -8,6 +8,7 @@ import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleE
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
+import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import {
@@ -98,6 +99,12 @@ export default function ProjectPage() {
                 <MusicAssemblyPanel
                   key={workflowRefresh}
                   projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
+                <MusicVideoReviewPanel
+                  key={`review-${project.artifacts.length}`}
+                  projectId={project.project_id}
+                  refreshRevision={project.artifacts.length}
                   onProjectChanged={refreshProject}
                 />
               </>
