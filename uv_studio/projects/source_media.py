@@ -14,7 +14,7 @@ from .store import ProjectStore, ProjectStoreError
 
 _MAX_ORIGINAL_NAME_LENGTH = 255
 _SAFE_EXTENSION_RE = re.compile(r"^\.[A-Za-z0-9]{1,16}$")
-_SOURCE_MEDIA_KINDS = frozenset({"video", "audio"})
+_SOURCE_MEDIA_KINDS = frozenset({"video", "audio", "image"})
 
 
 class SourceMediaError(ProjectValidationError):
