@@ -7,6 +7,7 @@ from pathlib import Path
 
 from uv_studio.projects.archive import export_project, import_project
 from uv_studio.projects.models import ProjectReference
+from uv_studio.projects.music_assembly import MusicAssemblyStore, MusicVisualAssignment
 from uv_studio.projects.music_direction import MusicDirectionStore, MusicShotPlan
 from uv_studio.projects.music_map import (
     MusicExcerpt,
@@ -18,14 +19,16 @@ from uv_studio.projects.store import ProjectStore
 
 
 class MusicWorkflowArchiveTests(unittest.TestCase):
-    def test_export_import_preserves_music_map_direction_and_exact_song_binding(self) -> None:
+    def test_export_import_preserves_music_map_direction_assembly_and_exact_media_bindings(self) -> None:
         with tempfile.TemporaryDirectory() as source_tmp, tempfile.TemporaryDirectory() as target_tmp:
             source = ProjectStore(Path(source_tmp) / "projects")
             project = source.create_project(title="Portable music workflow", recipe_id="music_video")
             project_dir = source.project_directory(project.project_id)
             song_bytes = b"portable-music-song"
+            video_bytes = b"portable-music-video"
             (project_dir / "sources" / "song.wav").write_bytes(song_bytes)
-            reference = ProjectReference(
+            (project_dir / "sources" / "visual.mp4").write_bytes(video_bytes)
+            song_reference = ProjectReference(
                 id="song",
                 kind="audio",
                 path="sources/song.wav",
@@ -35,8 +38,21 @@ class MusicWorkflowArchiveTests(unittest.TestCase):
                     "duration_us": 24_000_000,
                 },
             )
+            video_reference = ProjectReference(
+                id="visual",
+                kind="video",
+                path="sources/visual.mp4",
+                metadata={
+                    "sha256": hashlib.sha256(video_bytes).hexdigest(),
+                    "size_bytes": len(video_bytes),
+                    "duration_us": 24_000_000,
+                },
+            )
             current = source.load_project(project.project_id)
-            source.update_project(project.project_id, sources=(*current.sources, reference))
+            source.update_project(
+                project.project_id,
+                sources=(*current.sources, song_reference, video_reference),
+            )
 
             music_map = MusicMapStore(source).set_map(
                 project.project_id,
@@ -60,6 +76,15 @@ class MusicWorkflowArchiveTests(unittest.TestCase):
                     MusicShotPlan("shot_3", 2, 12_000_000, 22_000_000, "Chorus shot"),
                 ),
             )
+            assembly = MusicAssemblyStore(source).set_assembly(
+                project.project_id,
+                music_direction_revision_sha256=direction.revision_sha256,
+                assignments=(
+                    MusicVisualAssignment("shot_1", "visual", 0),
+                    MusicVisualAssignment("shot_2", "visual", 6_000_000),
+                    MusicVisualAssignment("shot_3", "visual", 10_000_000),
+                ),
+            )
 
             archive = Path(source_tmp) / "music.uvproj.zip"
             export_project(source, project.project_id, archive)
@@ -72,13 +97,30 @@ class MusicWorkflowArchiveTests(unittest.TestCase):
             reopened_direction = MusicDirectionStore(target).load(
                 project.project_id, validate_current=True
             )
+            reopened_assembly = MusicAssemblyStore(target).load(
+                project.project_id, validate_current=True
+            )
             self.assertIsNotNone(reopened_map)
             self.assertIsNotNone(reopened_direction)
-            assert reopened_map is not None and reopened_direction is not None
+            self.assertIsNotNone(reopened_assembly)
+            assert (
+                reopened_map is not None
+                and reopened_direction is not None
+                and reopened_assembly is not None
+            )
             self.assertEqual(reopened_map.revision_sha256, music_map.revision_sha256)
             self.assertEqual(reopened_direction.revision_sha256, direction.revision_sha256)
+            self.assertEqual(reopened_assembly.revision_sha256, assembly.revision_sha256)
             self.assertEqual(reopened_map.song.sha256, hashlib.sha256(song_bytes).hexdigest())
             self.assertEqual(reopened_direction.music_map_revision_sha256, reopened_map.revision_sha256)
+            self.assertEqual(
+                reopened_assembly.music_direction_revision_sha256,
+                reopened_direction.revision_sha256,
+            )
+            self.assertEqual(
+                reopened_assembly.bindings[0].source_sha256,
+                hashlib.sha256(video_bytes).hexdigest(),
+            )
 
 
 if __name__ == "__main__":
