@@ -22,3 +22,4 @@ Compact record of completed development slices. Detailed rationale remains in th
 | Process | PR #33, `c9031f2c` | Explicit idle/draft/review lifecycle and synchronized post-Stage-5 repository memory | D-038 |
 | 5 hardening | PR #34, `e98015da` | Current Review semantics, media byte-integrity gates, translation/take identity fixes, legacy-root retirement and permanent cross-platform browser E2E | D-032, D-035, D-038 |
 | 6 | PR #35, `ea0b766c` | Optional linked-shot continuity, SHA-bound accepted anchors, bounded TimelineContext, provider-neutral Review Assist and fail-closed Review/Accept trust boundaries | D-039, D-040 |
+| 7 | PR #36, `523424bf` | Optional Music Video Mode: exact-song Music Map, Music Director, rhythm audit, sample-first generated assets, SHA-bound Assembly, master-audio FFmpeg render, Analysis Assist, evidence-bound Final Review and cross-platform browser/real-media proof | D-041 |
