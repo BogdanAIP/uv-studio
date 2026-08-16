@@ -22,6 +22,9 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertIn("video.generate", ids)
         self.assertIn("timeline.assemble", ids)
         self.assertIn("speech.synthesize", ids)
+        self.assertIn("video.compose_photos", ids)
+        self.assertIn("audio.visualize", ids)
+        self.assertIn("video.digital_human", ids)
 
         encoded = str(capabilities).lower()
         for forbidden in ("api_key", "secret", "bearer "):
@@ -47,10 +50,19 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(offer["cost_class"], "potentially_paid")
         self.assertEqual(offer["adapter"]["adapter_id"], "native_videoclaw")
 
-    def test_digital_human_has_no_false_offer(self) -> None:
+    def test_digital_human_exposes_only_optional_local_musetalk_offer(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.digital_human/offers")
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json(), [])
+        offers = response.json()
+        self.assertEqual(len(offers), 1)
+        offer = offers[0]
+        self.assertEqual(offer["offer_id"], "local_musetalk.video_digital_human")
+        self.assertEqual(offer["adapter"]["adapter_id"], "local_musetalk")
+        self.assertEqual(offer["adapter"]["kind"], "local")
+        self.assertEqual(offer["locality"], "local")
+        self.assertEqual(offer["cost_class"], "free")
+        self.assertEqual(offer["availability"], "configuration_required")
+        self.assertNotIn("native_videoclaw", offer["offer_id"])
 
     def test_capability_detail_contains_offer_summary(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.generate")
@@ -58,6 +70,10 @@ class CapabilitiesApiTests(unittest.TestCase):
         detail = response.json()
         self.assertEqual(detail["offer_summary"]["total"], 1)
         self.assertEqual(detail["offer_summary"]["configuration_required"], 1)
+
+        digital_human = self.client.get("/api/uv/capabilities/video.digital_human").json()
+        self.assertEqual(digital_human["offer_summary"]["total"], 1)
+        self.assertEqual(digital_human["offer_summary"]["configuration_required"], 1)
 
     def test_unknown_capability_is_404(self) -> None:
         self.assertEqual(self.client.get("/api/uv/capabilities/missing.capability").status_code, 404)
