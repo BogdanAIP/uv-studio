@@ -12,6 +12,7 @@ from .audio_loudness import measure_prepared_audio_loudness
 from .dubbing_render import render_dubbing_state
 from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
+from .music_video_render import render_music_video_state
 from .native_videoclaw import NativeVideoClawAdapter
 from .range_reinsertion import LocalFFmpegRangeAdapter
 from .whisper_cpp import WhisperCppAdapter
@@ -51,6 +52,14 @@ class LocalFFmpegAdapter:
         if offer.capability_id == "video.render_dubbing":
             self._delegate._validate_offer(offer)
             return render_dubbing_state(
+                self._delegate,
+                project_id=project_id,
+                offer=offer,
+                payload=payload,
+            )
+        if offer.capability_id == "video.render_music_video":
+            self._delegate._validate_offer(offer)
+            return render_music_video_state(
                 self._delegate,
                 project_id=project_id,
                 offer=offer,

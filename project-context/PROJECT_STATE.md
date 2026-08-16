@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-6-sequence-continuity-review -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: stage-7-music-video-mode -->
 
 **Updated:** 2026-08-16
 
@@ -9,83 +9,64 @@
 
 ## Product now
 
-Stage 5 is merged on `main` through PR #32 / merge commit `6f7531d9b87f569074a632972ca11e36562e8bd7`, with the bounded post-merge hardening completed by PR #34 / merge commit `e98015da54834a2684e075ede121847df59eda0a`. Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
+Stage 6 is merged through PR #35 / merge commit `ea0b766c03d216a154961ca0cd3043e3d3e94d43`. Atomic idle closure head `89bb51cbba301c85e7822fd4120bc67de43fec54` passed post-merge CI #1321 with all five permanent jobs green.
 
-UV Studio currently has:
-
-- UV-owned FastAPI runtime and secret/configuration boundary;
-- canonical file-first Project Store and portable `.uvproj.zip` archives;
-- provider-neutral Recipe Registry and Production Policy;
-- semantic Capability Registry with local, MCP and exact native compatibility adapters;
-- D-017 exact one-shot authorization for remote/non-free execution;
-- MLT behind a UV-owned editor adapter and FFmpeg as the deterministic authoritative media/render layer;
-- complete targeted existing-video range workflow through Brief -> Plan -> Candidate -> Review -> Accept -> render/preview;
-- Stage 5 transcript/translation/PreparedSpeech/alignment/review/accepted-dubbing state;
-- local whisper.cpp ASR baseline, optional Argos translation and optional WhisperX alignment;
-- D-017-protected Edge TTS reuse;
-- deterministic accepted dubbing render, project-owned WebVTT export and bounded artifact download;
-- optional Stage 6 linked-shot continuity state with explicit planned/observed separation, SHA-bound takes, accepted/rejected lifecycle, current Review semantics and explicit re-anchor;
-- bounded TimelineContext over accepted-anchor tail and candidate head with fail-closed trust checks for approved anchor observations;
-- provider-neutral ephemeral Review Assist over semantic `media.understand`, where VLM suggestions never create canonical Review/Accept/re-anchor state and suggestion collections are bounded before normalization;
-- acceptance-time revalidation of exact current review-target coverage and required pass outcomes;
-- load/reopen-time revalidation that every already accepted take still has a current approved Review bound to the exact current plan, anchor, take SHA, complete target set and passing required targets;
-- maintained production-browser E2E composing targeted replacement, dubbing and linked-shot continuity on Ubuntu and Windows.
+Stage 7 is implemented in PR #36 on `stage-7/music-video-mode` and is now in review. The final product-code head before this context-only transition is `9fdee22614e39551e4e9d63276ece32b29e6e7e1`; CI #1424 passed all five required jobs on that exact head: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app baselines passed API integration, real HTTP, FFmpeg/MLT real-media evidence, frontend lint/audit/build and Playwright browser E2E.
 
 ## Architecture invariants
 
-- Project Store/domain state is canonical. MLT, FFmpeg, VideoClaw compatibility code and optional model runtimes are adapters/engines, not second project authorities.
-- Reuse-first/orchestration-first is mandatory for general editor/media primitives.
-- GUI, scripts, AI and MCP must converge on UV-owned semantic commands/workflows; direct canonical-state mutation is not an automation API.
-- Remote/non-free execution stays behind D-017.
-- Optional continuity, dubbing, music and other specialized workflows must remain optional.
+- Project Store/domain state remains canonical; external skills, model runtimes, MLT and FFmpeg are adapters/engines, not second authorities.
+- GUI, scripts, AI and MCP converge on UV-owned semantic commands/workflows.
+- Remote/non-free execution remains behind D-017 with explicit provider/cost behavior.
+- Music-video behavior is an optional recipe/policy and does not become mandatory for general video, narration, dubbing or targeted editing.
+- Provider/model identifiers stay outside canonical music state; local/manual operation remains a complete fallback.
 - Windows and Linux remain continuous engineering targets.
-- Development and PR review are Chat-first under D-040: automatic Codex code review is excluded from the UV Studio workflow and Codex is used only when the repository owner explicitly launches it manually.
+- Development/review remains Chat-first under D-040; automatic Codex code review is excluded.
 
-## What is verified
+## Stage 7 Music Video Mode — ready for review
 
-PR #34's final review head `e0f143dcb25e3e8a3190f86b92230fd0af11d0de` passed exact-head PR run `31800185611`: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline were all green, including the permanent Playwright browser user-outcome scenario on both operating systems.
+Stage 7 now provides a complete provider-free production path for a 20–30 second music-video excerpt:
 
-PR #34 merged at `e98015da54834a2684e075ede121847df59eda0a`. The mechanical idle closure head `9f47f5ac2e4c6cc608162550313894bdb6e194ae` then passed push run `31801356588` with all five permanent checks green, including browser E2E on Ubuntu and Windows. This satisfied the Stage 6 entry gate.
+- dedicated `music_video` recipe without widening `general_video` semantics;
+- first-class project-owned audio upload with bounded streaming, FFprobe validation, SHA/size identity and rollback;
+- typed/versioned Music Map bound to exact song bytes, excerpt, sections, timing markers and lyric/vocal phrases with deterministic revision identity;
+- provider-neutral Music Director bound to the exact Music Map revision with contiguous shot coverage and validated sync markers;
+- deterministic rhythm audit over current Map/Director timing;
+- provider-neutral Music Analysis Assist through semantic capability `audio.analyze_music`; suggestions are ephemeral/advisory and cannot mutate canonical Music Map without an explicit UV-owned command;
+- Music Assembly bound to the exact Music Director revision and exact project-owned visual SHA/size/source intervals;
+- canonical FFmpeg music-video render where visual-source audio is discarded and the exact selected master-song excerpt is the final audio track;
+- render-time verification of current media identity and measured output duration;
+- production UI for song upload, Music Map, Music Director, rhythm audit, visual assignment, assembly, render and final review;
+- evidence-bound Final Music Video Review tied to exact render SHA plus current Map/Director/Assembly revisions, exact composition metadata, rhythm evidence and human transition assessment;
+- `approved` final review is impossible outside the 20–30 second release window or when required rhythm/master/assembly/render/transition evidence fails;
+- generated visual work reuses the existing Stage 4B `generative_transform -> sample -> explicit SampleApproval -> full` gate; full generative candidates cannot register without an approved sample for the same plan SHA;
+- project archive/reopen and stale/substitution paths are covered by permanent tests;
+- maintained real-media and browser E2E exercise the real production flow on Ubuntu and Windows.
 
-The initial Stage 6 implementation head `9c0f9dbc0ff67dc6bce283d5ebc2db1f106669fc` passed exact-head PR run `31809934767` with all five required jobs green: development-context, Ubuntu/Windows bootstrap and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real HTTP, FFmpeg/MLT real-media coverage, frontend lint, high-severity dependency audit, production build and the permanent Playwright browser scenario.
+## Stage 7 trust-boundary review findings
 
-The browser scenario creates one project and composes the targeted existing-video workflow, Stage 5 dubbing and Stage 6 linked-shot continuity. It accepts and explicitly re-anchors two linked video takes and verifies bounded TimelineContext contains observations from the exact current approved anchor Review.
+Chat review during implementation closed several concrete defects rather than only adding happy-path coverage:
 
-A later Chat-only pre-merge audit hardened two additional trust boundaries. Exact code head `5d075abb1aad35498baab5a46d0895c928097dd1` passed PR CI run `31945066401` / #1316 with all five required jobs green, including Ubuntu and Windows browser E2E. Accepted state now fails closed on load/reopen if its approved Review is later corrupted or no longer matches the current plan/anchor/targets/required pass outcomes, so such a take cannot remain usable for re-anchor or future-shot anchoring. Review Assist normalization also rejects result-count mismatches and more than `MAX_OBSERVATIONS_PER_REVIEW` observations before constructing suggestion objects. The transient earlier run #1314 exposed only an obsolete test message expectation after the accepted-state check intentionally moved earlier; the test was updated to require the stronger load-time failure and #1316 verified the result.
+- a React success message previously appeared before cross-panel refresh/remount completed, producing an Ubuntu-only upload race; success visibility now follows completed synchronization, and browser E2E is green on both OSes;
+- Music Assembly rejects stale Director revisions, substituted visual bytes and invalid source intervals before render;
+- render revalidates actual media identity/duration and records exact composition provenance rather than trusting client-supplied paths;
+- Music Analysis Assist rejects stale song bytes and remains non-canonical;
+- Final Review rejects fake/incomplete render provenance, stale revisions, substituted artifacts, bad duration/rhythm evidence and failing human transition review.
 
-Final review head `55ca0e9c138594c34b8563f6267c6823cbc5794b` passed complete PR CI runs #1318 and #1319. PR #35 then merged into `main` as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`.
+## D-041 / upstream boundary
 
-Focused tests prove project archive round-trip, stale plan/media rejection, Review Assist non-authority and bounded suggestion input, preserved not-found semantics, fail-closed rejection of corrupted approved-anchor observations, fail-closed Accept when an approved Review's required result is corrupted from `pass` to `fail` before acceptance, and fail-closed reopen/re-anchor when the same corruption occurs after acceptance.
+D-041 is accepted. `huangserva/musical-mv-storyboard@3b73fe98a8953df13cae80238ad9bcd1bc5ae490` remains reference-only because the inspected upstream reported no repository license and no `LICENSE` file. No upstream code, scripts or templates were copied, vendored, imported or translated into UV Studio. General workflow ideas were independently implemented through UV-owned contracts.
 
-## Stage 6 sequence continuity/review merged
+## Stage 7 completion gate
 
-PR #35 implements optional linked-shot continuity only where an accepted prior shot/take must constrain a later shot. Standalone clips and existing one-shot workflows remain free of sequence state and review overhead until the user explicitly enables the mode.
+The engineering and user-outcome gates are satisfied on product-code head `9fdee22614e39551e4e9d63276ece32b29e6e7e1` with CI #1424 fully green. This context-only transition moves the active slice from `draft` to `review`; one final CI run on the resulting context head is required before PR #36 is marked Ready for review.
 
-The merged architecture is:
-
-- planned continuity is distinct from observed accepted-take state;
-- plans carry explicit locks, allowed changes and review targets;
-- prepared takes bind exact project-owned video bytes and exact plan revisions;
-- Review binds candidate SHA, plan revision and anchor identity;
-- Accept independently revalidates current target coverage, required pass outcomes, candidate bytes, plan revision and anchor binding before promotion;
-- accepted state independently revalidates the same authoritative Review evidence on load/reopen, preventing corrupted accepted records from remaining trusted anchors;
-- re-anchor remains an explicit semantic command over an accepted current take;
-- bounded `TimelineContext` is a derived inspection view from canonical Project Store state, never a second timeline/EDL authority;
-- trusted anchor observations are exposed only from a current approved Review whose take/SHA/plan/anchor/target binding still matches current state;
-- optional VLM assistance uses an ephemeral provider-neutral `media.understand` Review Assist package and suggestion schema; even a normalized `approved` suggestion leaves the take prepared until a human creates the canonical Review and explicitly accepts it;
-- Review Assist enforces its advertised result/observation collection bounds before normalizing external model output;
-- `browser-use/video-use` remains an architecture donor only, while PySceneDetect remains only a future optional scene-boundary candidate.
-
-The full Chat-only pre-merge audit found four trust/input-boundary issues and all are covered by regression tests: stale/corrupted approved-anchor observations cannot be reused as TimelineContext facts; corrupted approved Review outcomes cannot pass Accept; post-Accept corruption invalidates the accepted state itself before it can be reused as an anchor; and Review Assist cannot normalize oversized observation collections. No Qwen-specific Stage 6 binding was added.
-
-D-040 records the repository-owner development policy: Chat owns normal development/review, automatic Codex code review is not part of readiness or lifecycle, and Codex is reserved for explicit manual owner use. The repository itself contains no Codex review workflow; any automatic `chatgpt-codex-connector[bot]` review activity is external integration behavior rather than project automation.
-
-The lifecycle is now closed to `idle`. Stage 7 remains gated on the exact post-merge idle closure head passing all permanent required checks.
+Stage 8 remains blocked until PR #36 is merged, `main` is atomically returned to `idle`, and post-merge CI is green.
 
 ## Cross-cutting backlog
 
-Remaining non-blocking debt includes recursive portability validation for general JSON mappings, broader codec/device fixtures, measured Python/frontend quality gates, dependency reproducibility hardening, stronger renderer file-handle/TOCTOU hardening at media trust boundaries, richer continuity-authoring UX and eventual retirement of transitional compatibility surfaces such as `/api/stages`.
+Non-blocking debt remains: broader codec/device fixtures, dependency reproducibility, renderer file-handle/TOCTOU hardening beyond current identity checks, richer continuity authoring and eventual retirement of transitional compatibility surfaces. These are not Stage 7 release blockers.
 
 ## Development-memory lifecycle
 
-D-038 keeps one canonical active slice. Stage 6 is now the last completed slice: PR #35 merged as `ea0b766c03d216a154961ca0cd3043e3d3e94d43`, and this closure returns `main` to `idle`. The declared next handoff is `stage-7-music-video-mode`; it may start only after this exact idle closure head passes all permanent required checks.
+D-038 keeps one canonical active slice. The active slice is `stage-7-music-video-mode` on `stage-7/music-video-mode`, based on verified idle main head `89bb51cbba301c85e7822fd4120bc67de43fec54`, and is now in `review`. The declared next handoff is `stage-8-additional-recipes`.

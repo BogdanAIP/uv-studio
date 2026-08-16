@@ -6,6 +6,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
+import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
+import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
+import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import {
@@ -27,6 +30,7 @@ export default function ProjectPage() {
   const projectId = useMemo(() => decodeURIComponent(params.projectId), [params.projectId]);
   const [project, setProject] = useState<UVProject | null>(null);
   const [executionPlan, setExecutionPlan] = useState<ProjectExecutionPlan | null>(null);
+  const [workflowRefresh, setWorkflowRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +51,11 @@ export default function ProjectPage() {
 
   const refreshProject = async () => {
     setProject(await getUVProject(projectId));
+  };
+
+  const refreshMusicPrerequisites = async () => {
+    await refreshProject();
+    setWorkflowRefresh(current => current + 1);
   };
 
   return (
@@ -80,6 +89,26 @@ export default function ProjectPage() {
               projectId={project.project_id}
               onProjectChanged={refreshProject}
             />
+
+            {project.recipe_id === 'music_video' && (
+              <>
+                <MusicVideoPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshMusicPrerequisites}
+                />
+                <MusicAssemblyPanel
+                  key={workflowRefresh}
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
+                <MusicVideoReviewPanel
+                  key={`review-${project.artifacts.length}`}
+                  projectId={project.project_id}
+                  refreshRevision={project.artifacts.length}
+                  onProjectChanged={refreshProject}
+                />
+              </>
+            )}
 
             <SequenceContinuityPanel
               projectId={project.project_id}

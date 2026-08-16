@@ -54,6 +54,31 @@ class ProjectMediaApiTests(unittest.TestCase):
             "streams": [{"codec_type": "video", "host_path": "must-not-persist"}],
         }
 
+    @staticmethod
+    def _probe_audio(store: ProjectStore, project_id: str, relative_path: str) -> dict[str, object]:
+        path = store.resolve_project_file(
+            project_id,
+            relative_path,
+            must_exist=True,
+            allowed_roots=("sources",),
+        )
+        return {
+            "path": relative_path,
+            "duration_us": 22_000_000,
+            "format_name": "wav",
+            "size_bytes": path.stat().st_size,
+            "has_video": False,
+            "has_audio": True,
+            "audio": {
+                "codec": "pcm_s16le",
+                "sample_rate": 48_000,
+                "channels": 2,
+                "channel_layout": "stereo",
+                "duration_us": 22_000_000,
+            },
+            "streams": [{"codec_type": "audio", "host_path": "must-not-persist"}],
+        }
+
     def test_upload_registers_only_portable_metadata_and_delivers_ranges(self) -> None:
         body = b"0123456789abcdefghijklmnopqrstuvwxyz"
         upload = self.client.post(
@@ -110,6 +135,74 @@ class ProjectMediaApiTests(unittest.TestCase):
         self.assertEqual(ranged.content, body[2:6])
         self.assertEqual(ranged.headers.get("content-range"), f"bytes 2-5/{len(body)}")
 
+    def test_audio_source_upload_is_first_class_project_media(self) -> None:
+        app.dependency_overrides[get_source_media_probe] = lambda: self._probe_audio
+        body = b"RIFF-project-song-source"
+        upload = self.client.post(
+            f"/api/uv/projects/{self.project_id}/sources/audio",
+            params={"filename": r"D:\Music\Master Song.WAV"},
+            content=body,
+            headers={"Content-Type": "audio/wav"},
+        )
+        self.assertEqual(upload.status_code, 201, upload.text)
+        source = upload.json()
+        self.assertEqual(source["kind"], "audio")
+        self.assertTrue(source["path"].startswith("sources/src_"))
+        self.assertTrue(source["path"].endswith(".wav"))
+        metadata = source["metadata"]
+        self.assertEqual(metadata["original_name"], "Master Song.WAV")
+        self.assertEqual(metadata["content_type"], "audio/wav")
+        self.assertEqual(metadata["duration_us"], 22_000_000)
+        self.assertEqual(metadata["sha256"], hashlib.sha256(body).hexdigest())
+        self.assertEqual(metadata["audio_codec"], "pcm_s16le")
+        self.assertEqual(metadata["sample_rate"], 48_000)
+        self.assertEqual(metadata["channels"], 2)
+        self.assertNotIn("streams", metadata)
+        self.assertNotIn("host_path", str(metadata))
+
+        detail = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/audio/{source['id']}"
+        )
+        self.assertEqual(detail.status_code, 200, detail.text)
+        self.assertEqual(detail.json(), source)
+
+        whole = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/audio/{source['id']}/media"
+        )
+        self.assertEqual(whole.status_code, 200, whole.text)
+        self.assertEqual(whole.content, body)
+        self.assertEqual(whole.headers["content-type"], "audio/wav")
+        self.assertEqual(whole.headers.get("accept-ranges"), "bytes")
+
+        ranged = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/audio/{source['id']}/media",
+            headers={"Range": "bytes=5-10"},
+        )
+        self.assertEqual(ranged.status_code, 206, ranged.text)
+        self.assertEqual(ranged.content, body[5:11])
+
+        video_endpoint = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/{source['id']}"
+        )
+        self.assertEqual(video_endpoint.status_code, 422, video_endpoint.text)
+        self.assertIn("not registered as video", video_endpoint.json()["detail"])
+
+    def test_audio_source_rejects_video_stream_and_rolls_back(self) -> None:
+        app.dependency_overrides[get_source_media_probe] = lambda: self._probe_video
+        rejected = self.client.post(
+            f"/api/uv/projects/{self.project_id}/sources/audio",
+            params={"filename": "video-disguised.wav"},
+            content=b"contains-video",
+            headers={"Content-Type": "audio/wav"},
+        )
+        self.assertEqual(rejected.status_code, 422, rejected.text)
+        self.assertIn("must not contain a video stream", rejected.json()["detail"])
+        self.assertEqual(self.store.load_project(self.project_id).sources, ())
+        self.assertEqual(
+            list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()),
+            [],
+        )
+
     def test_empty_or_non_video_upload_is_not_registered(self) -> None:
         empty = self.client.post(
             f"/api/uv/projects/{self.project_id}/sources",
@@ -154,6 +247,11 @@ class ProjectMediaApiTests(unittest.TestCase):
             f"/api/uv/projects/{self.project_id}/sources/src_missing/media"
         )
         self.assertEqual(missing_source.status_code, 404, missing_source.text)
+
+        missing_audio = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/audio/src_missing/media"
+        )
+        self.assertEqual(missing_audio.status_code, 404, missing_audio.text)
 
     def test_oversized_content_length_fails_before_creating_source(self) -> None:
         response = self.client.post(
