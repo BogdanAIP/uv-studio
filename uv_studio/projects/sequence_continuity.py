@@ -600,13 +600,45 @@ class SequenceRecord:
                     f"accepted take {take.take_id!r} requires a current approved review"
                 )
             review = reviews_by_id[take.current_review_id]
+            plan = plans_by_id[take.shot_id]
             if review.verdict != "approved":
                 raise SequenceContinuityError(
                     f"accepted take {take.take_id!r} current review is not approved"
                 )
-            if review.take_sha256 != take.artifact_sha256 or review.plan_revision_sha256 != take.plan_revision_sha256:
+            if (
+                take.plan_revision_sha256 != plan.revision_sha256
+                or review.plan_revision_sha256 != plan.revision_sha256
+            ):
                 raise SequenceContinuityError(
-                    f"accepted take {take.take_id!r} review binding is stale"
+                    f"accepted take {take.take_id!r} current plan binding is stale"
+                )
+            if review.take_sha256 != take.artifact_sha256:
+                raise SequenceContinuityError(
+                    f"accepted take {take.take_id!r} review take binding is stale"
+                )
+            if (
+                review.anchor_take_id != plan.anchor_take_id
+                or review.anchor_take_sha256 != plan.anchor_take_sha256
+            ):
+                raise SequenceContinuityError(
+                    f"accepted take {take.take_id!r} review anchor binding is stale"
+                )
+            expected_ids = {item.target_id for item in plan.review_targets}
+            actual_ids = {item.target_id for item in review.results}
+            if expected_ids != actual_ids or len(review.results) != len(actual_ids):
+                raise SequenceContinuityError(
+                    f"accepted take {take.take_id!r} review target coverage is stale"
+                )
+            by_id = {item.target_id: item for item in review.results}
+            failing_required = [
+                target.target_id
+                for target in plan.review_targets
+                if target.required and by_id[target.target_id].outcome != "pass"
+            ]
+            if failing_required:
+                raise SequenceContinuityError(
+                    f"accepted take {take.take_id!r} review no longer passes required targets: "
+                    f"{sorted(failing_required)!r}"
                 )
         for review in reviews:
             take = takes_by_id.get(review.take_id)
