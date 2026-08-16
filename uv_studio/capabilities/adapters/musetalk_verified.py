@@ -38,6 +38,26 @@ _RUNTIME_PROBE = (
     "import cv2, omegaconf, torch, transformers; "
     "raise SystemExit(0 if torch.cuda.is_available() else 3)"
 )
+_RUNTIME_ENV_PREFIXES = (".venv/", "venv/")
+_UNTRUSTED_RUNTIME_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".pyw",
+        ".pyc",
+        ".pyo",
+        ".pyd",
+        ".so",
+        ".dll",
+        ".dylib",
+        ".exe",
+        ".com",
+        ".bat",
+        ".cmd",
+        ".ps1",
+        ".sh",
+    }
+)
+_UNTRUSTED_RUNTIME_NAMES = frozenset({"ffmpeg", "ffprobe", "ffplay"})
 
 
 def _git_blob_sha1(path: Path) -> str:
@@ -46,6 +66,106 @@ def _git_blob_sha1(path: Path) -> str:
     digest.update(f"blob {len(body)}\0".encode("ascii"))
     digest.update(body)
     return digest.hexdigest()
+
+
+def _runtime_code_path(relative: str) -> bool:
+    normalized = relative.replace("\\", "/").lstrip("./")
+    if not normalized or normalized.startswith(_RUNTIME_ENV_PREFIXES):
+        return False
+    name = normalized.rsplit("/", 1)[-1].lower()
+    suffix = Path(name).suffix.lower()
+    return suffix in _UNTRUSTED_RUNTIME_SUFFIXES or name in _UNTRUSTED_RUNTIME_NAMES
+
+
+def _untracked_runtime_problem(
+    root: Path,
+    git: str,
+    *,
+    runner: Any = subprocess.run,
+) -> str | None:
+    """Reject checkout-local code/binaries that Git's tracked-clean check cannot see.
+
+    MuseTalk intentionally keeps model weights and often a local virtual environment
+    outside Git. Those data/runtime-environment files are valid, but checkout-local
+    importable code or executables can shadow the pinned Python sources when the
+    upstream module is launched from the repository root.
+    """
+
+    exclude_env = (":(exclude).venv/**", ":(exclude)venv/**")
+    try:
+        untracked = runner(
+            [
+                git,
+                "-C",
+                str(root),
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "-z",
+                "--",
+                *exclude_env,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        ignored = runner(
+            [
+                git,
+                "-C",
+                str(root),
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+                "--",
+                "*.py",
+                "*.pyw",
+                "*.pyc",
+                "*.pyo",
+                "*.pyd",
+                "*.so",
+                "*.dll",
+                "*.dylib",
+                "*.exe",
+                "*.com",
+                "*.bat",
+                "*.cmd",
+                "*.ps1",
+                "*.sh",
+                "ffmpeg",
+                "ffprobe",
+                "ffplay",
+                *exclude_env,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"MuseTalk untracked runtime-code check failed: {exc}"
+    if untracked.returncode != 0 or ignored.returncode != 0:
+        return "MuseTalk untracked runtime-code state could not be verified"
+
+    candidates = [
+        item
+        for output in (untracked.stdout or "", ignored.stdout or "")
+        for item in output.split("\0")
+        if item
+    ]
+    unsafe = sorted({item.replace("\\", "/") for item in candidates if _runtime_code_path(item)})
+    if unsafe:
+        preview = ", ".join(unsafe[:4])
+        if len(unsafe) > 4:
+            preview += f", +{len(unsafe) - 4} more"
+        return (
+            "MuseTalk checkout contains untracked executable/importable runtime files; "
+            f"remove them before execution: {preview}"
+        )
+    return None
 
 
 def _checkout_problem(
@@ -82,6 +202,9 @@ def _checkout_problem(
         return "MuseTalk git worktree status could not be verified"
     if (status.stdout or "").strip():
         return "MuseTalk tracked worktree must be clean before execution"
+    untracked_problem = _untracked_runtime_problem(root, git, runner=runner)
+    if untracked_problem is not None:
+        return untracked_problem
     inference = root / "scripts" / "inference.py"
     try:
         fingerprint = _git_blob_sha1(inference)
@@ -99,7 +222,7 @@ def _runtime_problem(
 ) -> str | None:
     try:
         completed = runner(
-            [str(python), "-c", _RUNTIME_PROBE],
+            [str(python), "-B", "-c", _RUNTIME_PROBE],
             check=False,
             capture_output=True,
             text=True,
@@ -137,8 +260,9 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
     available = not missing and verification_problem is None
     if available:
         reason = (
-            "MuseTalk 1.5 optional pack найден, проверен как чистый pinned checkout и "
-            "подтвердил CUDA runtime; UV Studio будет выполнять локальный fp16 lip-sync."
+            "MuseTalk 1.5 optional pack найден, проверен как pinned checkout без "
+            "неотслеживаемого исполняемого/импортируемого кода и подтвердил CUDA runtime; "
+            "UV Studio будет выполнять локальный fp16 lip-sync."
         )
     elif missing:
         reason = "Настройте optional MuseTalk 1.5 pack: " + ", ".join(missing[:6])
