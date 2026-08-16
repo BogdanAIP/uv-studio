@@ -131,11 +131,21 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(offers[0].availability, OfferAvailability.CONFIGURATION_REQUIRED)
         self.assertEqual(offers[0].cost_class, CostClass.POTENTIALLY_PAID)
 
-    def test_digital_human_has_no_false_native_offer(self) -> None:
-        self.assertEqual(
-            build_builtin_capability_registry().offers_for("video.digital_human"),
-            (),
-        )
+    def test_digital_human_has_only_optional_musetalk_offer_not_false_native_offer(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"UV_STUDIO_MUSETALK_ROOT": "", "UV_STUDIO_MUSETALK_PYTHON": ""},
+            clear=False,
+        ):
+            offers = build_builtin_capability_registry().offers_for("video.digital_human")
+        self.assertEqual(len(offers), 1)
+        offer = offers[0]
+        self.assertEqual(offer.offer_id, "local_musetalk.video_digital_human")
+        self.assertEqual(offer.adapter_id, "local_musetalk")
+        self.assertEqual(offer.availability, OfferAvailability.CONFIGURATION_REQUIRED)
+        self.assertEqual(offer.locality, LocalityClass.LOCAL)
+        self.assertEqual(offer.cost_class, CostClass.FREE)
+        self.assertNotIn("native_videoclaw", offer.offer_id)
 
     def test_offer_preference_is_available_then_free_then_local(self) -> None:
         cap = CapabilityDefinition(
