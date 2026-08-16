@@ -28,33 +28,36 @@ Stage 9 must cover the complete release surface rather than only a development l
 - final license/security/dependency audit and signed release artifacts;
 - packaged-app proof for the permanent browser/user outcomes.
 
-## Initial architecture direction
+## Release architecture fixed so far
 
-The current frontend is Next.js and still contains the dynamic `/projects/[projectId]` route. Its development configuration uses a Next rewrite to proxy `/api/uv/*` to the FastAPI backend. Therefore Stage 9 will not assume that a static export can replace the runtime without first proving routing compatibility.
+D-044 defines the immutable product-owned release payload. `release-manifest.json` schema v1 records product/build/target identity, the exact baseline component set and a complete sorted file inventory with byte sizes and SHA-256. Manifest parsing rejects non-canonical/traversing paths, duplicate/missing components, missing entrypoints and unsupported targets. Release verification rejects symlinks, missing payloads, unlisted extra files and size mismatches; deep verification detects same-size SHA-256 substitution.
 
-The release contract is user-facing, not implementation-facing: the user must not need a system Python, Node/npm or FFmpeg. A release may initially carry its own pinned/versioned runtimes inside the installed product if that preserves routing and behavior more safely. Removing a bundled Node runtime is desirable only if the frontend can be exported/served by UV Studio without breaking arbitrary project routes or browser outcomes.
+Secret-safe diagnostics distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed through the product API and `tools/uv_release.py`.
 
-The packaging boundary must remain fail-closed and locally auditable. Bundled executables and runtime payloads need explicit version/provenance information; optional WSL/cloud/provider integrations must not become prerequisites for normal native-Windows startup.
+D-045 separates mutable installed state from the immutable release payload. Development keeps repository-local `data/projects` and `data/config`; packaged mode defaults to `%LOCALAPPDATA%/UV Studio/projects` and `%LOCALAPPDATA%/UV Studio/config`, with explicit user/admin overrides retained. Project/config roots cannot overlap vendor, the release payload or one another. `RuntimeConfigStore` applies the same boundary even to explicit constructor paths.
 
-## Implemented Stage 9 foundation
+D-046 pins the first Windows x86_64 shipping language runtimes only after dedicated compatibility proof: CPython 3.13.14 passed the complete unit contract and Node.js 24.19.0 passed locked frontend install/lint/audit/build. `requirements-uv-release-win-x86_64.txt` contains the exact 32-package Python shipping graph; `packaging/runtime-profile.windows-x86_64.json` records exact Python/Node versions. The release Python CI installs through the lock and rejects wrong Python versions, package drift or unmanaged runtime packages.
 
-D-044 defines the product-owned immutable release payload boundary. `release-manifest.json` schema v1 records product/build/target identity, the exact baseline component set and a complete sorted file inventory with byte sizes and SHA-256. Manifest parsing rejects non-canonical/traversing paths, duplicate/missing components, missing entrypoints and unsupported targets. Release verification rejects symlinks, missing payloads, unlisted extra files and size mismatches; explicit deep verification also detects same-size SHA-256 substitution.
+D-047 makes release-manifest executable identity authoritative in packaged mode. The local FFmpeg facade receives manifest-verified `ffmpeg`/`ffprobe` paths, and packaged capability availability is projected from the same verified release toolchain rather than development PATH. A system PATH shadow must not become an execution fallback; release corruption must make the local capability unavailable. Deep release verification is cached per immutable running payload, with update/recovery expected to activate a new payload through process restart rather than mutate the active installation.
 
-Secret-safe diagnostics distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed to the product API and the Stage 9 release utility so launcher, installer, support and CI can converge on one contract.
+The current frontend remains Next.js with dynamic `/projects/[projectId]`; Stage 9 therefore uses the official standalone-server path rather than assuming static export. The user-facing contract is no separately prepared Node/npm: a versioned Node runtime may be bundled until equivalent routing is proven without it.
 
-D-045 separates mutable packaged state from the immutable release payload. Development keeps repository-local `data/projects` and `data/config`; packaged mode defaults to `%LOCALAPPDATA%/UV Studio/projects` and `%LOCALAPPDATA%/UV Studio/config`, with explicit `UV_STUDIO_USER_DATA_DIR`, `UV_STUDIO_PROJECTS_DIR` and `UV_STUDIO_CONFIG_DIR` overrides retained. Project/config roots must not overlap vendor, the configured release payload or one another.
+## Current evidence
 
-This foundation deliberately does not make repository `PATH` discovery authoritative for packaged media. The actual packaged launcher must resolve trusted component entrypoints from the verified release manifest.
+The runtime-lock head `beda2a39bd9cf3400a4ffbd93a46c424576d56c4` has green `development-context`, both bootstrap jobs, the exact Python 3.13.14 release-runtime gate and exact Node 24.19.0 release-frontend gate. Both Ubuntu and Windows real-media steps also passed while the remaining permanent browser tails continued.
 
-## Release-hardening priorities
+Python 3.13.14 Windows evidence includes successful server import, `pip check`, all 379 unit tests and the captured 32-package graph used by the release lock. Node 24.19.0 Windows evidence includes `npm ci`, lint, high-severity audit and production Next build.
 
-1. Replace broad Python runtime ranges with a reproducible release dependency graph while keeping provider/optional ML runtimes outside the baseline.
-2. Define a machine-readable release manifest and diagnostics contract before building an installer around opaque files. **Foundation implemented; packaging integration and CI proof remain.**
-3. Package backend/frontend/media prerequisites into a deterministic Windows release layout and test it without relying on repository development paths.
-4. Add launcher supervision, logs, cancellation/shutdown, backup/recovery and version/migration checks before installer/update UX is declared complete.
-5. Build installer/uninstaller and update/recovery flows only on top of the verified release layout.
-6. Extend CI with packaged-app and clean-machine-oriented evidence while retaining all permanent existing gates.
-7. Finish with license/security/dependency review, artifact integrity metadata and signing/release documentation.
+## Next implementation layers
+
+1. Complete packaged toolchain execution/availability evidence on the current head.
+2. Enable/stage official Next standalone output and prove arbitrary project routes with the bundled Node 24 runtime.
+3. Build a Windows one-folder backend bundle on CPython 3.13.14 with build tooling kept outside the installed runtime graph.
+4. Stage the pinned FFmpeg/FFprobe/MLT dependency closure and assemble one complete Windows release folder under D-044.
+5. Launch backend + frontend from that folder with no repository/system Python/Node/npm/FFmpeg dependency and run packaged HTTP/browser outcomes.
+6. Add launcher/process supervision, logs, cancellation/shutdown, backup/recovery and version/migration state.
+7. Build installer/uninstaller and staged update/recovery on top of the verified release folder.
+8. Finish clean-machine/weak-hardware evidence, license/security audit, checksums/signing and final packaged regressions.
 
 ## Preserved invariants
 
@@ -68,6 +71,6 @@ This foundation deliberately does not make repository `PATH` discovery authorita
 
 ## Completion gate
 
-Stage 9 may move to review only after the packaged product is proven through the required Windows release/installer flows, existing permanent user outcomes remain green, project backup/upgrade/recovery behavior is demonstrated, release diagnostics and security/license evidence are present, and the exact review head passes all permanent required checks.
+Stage 9 may move to review only after the packaged product is proven through required Windows release/installer flows, existing permanent user outcomes remain green, project backup/upgrade/recovery behavior is demonstrated, release diagnostics and security/license evidence are present, and the exact review head passes all permanent required checks.
 
 After Stage 9 is merged and atomically closed to a green idle `main`, roadmap-driven development hands off to `post-roadmap-release-maintenance` for release feedback, security/compatibility maintenance and explicitly scoped future enhancements.

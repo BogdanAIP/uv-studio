@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import lru_cache
 from typing import Any
 
@@ -12,13 +13,54 @@ from uv_studio.capabilities import (
     UnknownCapability,
     build_builtin_capability_registry,
 )
+from uv_studio.capabilities.models import OfferAvailability
+from uv_studio.config import release_root
+from uv_studio.toolchain import ToolchainResolutionError, packaged_tool_paths
 
 router = APIRouter(prefix="/api/uv/capabilities", tags=["UV Studio Capabilities"])
 
 
+def _project_packaged_local_media_offers(registry: CapabilityRegistry) -> None:
+    """Replace development PATH readiness with verified packaged-tool readiness."""
+
+    if release_root() is None:
+        return
+    try:
+        tools = packaged_tool_paths()
+        ready = all(tools.get(name) for name in ("ffmpeg", "ffprobe"))
+        problem = None
+    except ToolchainResolutionError as exc:
+        ready = False
+        problem = str(exc)
+
+    for capability in registry.list_capabilities():
+        for offer in registry.offers_for(capability.capability_id):
+            if offer.adapter_id != "local_ffmpeg":
+                continue
+            registry.upsert_offer(
+                replace(
+                    offer,
+                    availability=(
+                        OfferAvailability.AVAILABLE
+                        if ready
+                        else OfferAvailability.UNAVAILABLE
+                    ),
+                    reason=(
+                        "Verified UV Studio release FFmpeg/FFprobe components are available; "
+                        "local deterministic media execution is enabled."
+                        if ready
+                        else "Packaged local media toolchain is not executable: "
+                        + (problem or "required release components are unavailable")
+                    ),
+                )
+            )
+
+
 @lru_cache(maxsize=1)
 def get_capability_registry() -> CapabilityRegistry:
-    return build_builtin_capability_registry()
+    registry = build_builtin_capability_registry()
+    _project_packaged_local_media_offers(registry)
+    return registry
 
 
 def _capability_payload(registry: CapabilityRegistry, capability_id: str) -> dict[str, Any]:

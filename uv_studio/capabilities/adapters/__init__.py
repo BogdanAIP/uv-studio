@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from uv_studio.toolchain import local_ffmpeg_tool_overrides
+
 from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
 from .artifact_preview import create_artifact_preview
@@ -27,11 +29,18 @@ class LocalFFmpegAdapter:
     The historical range adapter remains the delegate for probe/extract/assemble and
     exact single-range reinsertion. New project render/preview/analysis operations are
     explicit handlers, not another inheritance layer.
+
+    In packaged mode the facade injects exact manifest-verified FFmpeg/FFprobe paths,
+    so the delegate's legacy PATH lookup is never reached by product execution.
     """
 
     adapter_id = LocalFFmpegRangeAdapter.adapter_id
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if "tool_paths" not in kwargs:
+            packaged = local_ffmpeg_tool_overrides()
+            if packaged is not None:
+                kwargs["tool_paths"] = packaged
         self._delegate = LocalFFmpegRangeAdapter(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
