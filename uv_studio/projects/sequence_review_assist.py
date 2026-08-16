@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from .sequence_context import build_sequence_timeline_context
 from .sequence_continuity import (
+    MAX_OBSERVATIONS_PER_REVIEW,
     SequenceContinuityError,
     SequenceContinuityStore,
     SequenceNotFound,
@@ -178,7 +179,7 @@ def build_sequence_review_assist(
                 for target in plan.review_targets
             ],
             "observations": {
-                "max_items": 128,
+                "max_items": MAX_OBSERVATIONS_PER_REVIEW,
                 "kind": ["observation", "inference"],
                 "category": [
                     "visual",
@@ -244,12 +245,21 @@ def normalize_sequence_review_suggestion(
     observations_raw = payload["observations"]
     if not isinstance(results_raw, list) or not isinstance(observations_raw, list):
         raise SequenceReviewAssistError("review-assist results/observations must be lists")
-    results = tuple(SequenceReviewResult.from_dict(item) for item in results_raw)
-    observations = tuple(SequenceObservation.from_dict(item) for item in observations_raw)
 
     state = service.load(project_id)
     sequence = state.sequence(sequence_id)
     plan = sequence.plan(sequence.take(take_id).shot_id)
+    if len(results_raw) != len(plan.review_targets):
+        raise SequenceReviewAssistError(
+            "review-assist results must cover each current review target exactly once"
+        )
+    if len(observations_raw) > MAX_OBSERVATIONS_PER_REVIEW:
+        raise SequenceReviewAssistError(
+            f"review-assist observations must contain at most {MAX_OBSERVATIONS_PER_REVIEW} items"
+        )
+
+    results = tuple(SequenceReviewResult.from_dict(item) for item in results_raw)
+    observations = tuple(SequenceObservation.from_dict(item) for item in observations_raw)
     expected_ids = {item.target_id for item in plan.review_targets}
     actual_ids = {item.target_id for item in results}
     if expected_ids != actual_ids or len(results) != len(actual_ids):
