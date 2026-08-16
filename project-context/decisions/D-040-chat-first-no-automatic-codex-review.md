@@ -21,6 +21,7 @@ During PR #35, comments from `chatgpt-codex-connector[bot]` showed that automati
 
 - `project-context/ACTIVE_SLICE.json.required_checks` remains limited to the permanent non-Codex CI set validated by `tools/validate_development_context.py`.
 - Repository workflows must not add Codex review automation.
+- `tests/test_no_automatic_codex_review.py` scans `.github` and fails the permanent unit-test suite if a Codex review trigger/integration is added there.
 - PR templates, instructions and coordinator actions must not ask Codex for automatic review.
 - A Codex review result, absence, failure or usage-limit message cannot block or satisfy a UV Studio lifecycle transition.
 
