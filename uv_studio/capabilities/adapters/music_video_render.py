@@ -32,7 +32,12 @@ from ..models import (
     OperationKind,
 )
 from ..registry import CapabilityRegistry
-from .range_reinsertion import _audio_duration_us, _stream_count, _video_duration_us
+from .range_reinsertion import (
+    _audio_duration_us,
+    _primary_stream,
+    _stream_count,
+    _video_duration_us,
+)
 
 if TYPE_CHECKING:
     from .range_reinsertion import LocalFFmpegRangeAdapter
@@ -148,6 +153,12 @@ def render_music_video_state(
         raise InvalidCapabilityInput(
             "video.render_music_video requires 64-character assembly_revision_sha256"
         )
+    try:
+        int(requested_revision, 16)
+    except ValueError as exc:
+        raise InvalidCapabilityInput(
+            "video.render_music_video requires hexadecimal assembly_revision_sha256"
+        ) from exc
 
     try:
         assembly = MusicAssemblyStore(adapter.store).load(project_id, validate_current=True)
@@ -199,12 +210,22 @@ def render_music_video_state(
                 raise InvalidCapabilityInput(
                     f"visual source for shot {binding.shot_id!r} must contain exactly one video stream"
                 )
+            actual_duration_us = _video_duration_us(probe)
+            if actual_duration_us is None or binding.source_end_us > actual_duration_us:
+                raise InvalidCapabilityInput(
+                    f"visual source for shot {binding.shot_id!r} is shorter than its bound interval"
+                )
             visual_inputs.append((binding, path, probe))
 
         song_probe = adapter._probe_path(canonical_path=song_ref.path, source=song_path)
         if _stream_count(song_probe, "audio") != 1 or _stream_count(song_probe, "video") != 0:
             raise InvalidCapabilityInput(
                 "Music Map master song must contain exactly one audio stream and no video"
+            )
+        actual_song_duration_us = _audio_duration_us(song_probe)
+        if actual_song_duration_us is None or music_map.excerpt.end_us > actual_song_duration_us:
+            raise InvalidCapabilityInput(
+                "Music Map excerpt exceeds the actual ffprobe duration of current song bytes"
             )
     except InvalidCapabilityInput:
         raise
@@ -218,9 +239,7 @@ def render_music_video_state(
     ) as exc:
         raise InvalidCapabilityInput(str(exc)) from exc
 
-    first_video = visual_inputs[0][2].get("video")
-    if not isinstance(first_video, Mapping):
-        first_video = {}
+    first_video = _primary_stream(visual_inputs[0][2], "video") or {}
     width = _even_dimension(first_video.get("width"), fallback=1280, maximum=3840)
     height = _even_dimension(first_video.get("height"), fallback=720, maximum=2160)
 
