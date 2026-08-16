@@ -79,6 +79,31 @@ class ProjectMediaApiTests(unittest.TestCase):
             "streams": [{"codec_type": "audio", "host_path": "must-not-persist"}],
         }
 
+    @staticmethod
+    def _probe_image(store: ProjectStore, project_id: str, relative_path: str) -> dict[str, object]:
+        path = store.resolve_project_file(
+            project_id,
+            relative_path,
+            must_exist=True,
+            allowed_roots=("sources",),
+        )
+        return {
+            "path": relative_path,
+            "duration_us": None,
+            "format_name": "png_pipe",
+            "size_bytes": path.stat().st_size,
+            "has_video": True,
+            "has_audio": False,
+            "video": {
+                "codec": "png",
+                "width": 1600,
+                "height": 900,
+                "avg_frame_rate": "25/1",
+                "duration_us": None,
+            },
+            "streams": [{"codec_type": "video", "host_path": "must-not-persist"}],
+        }
+
     def test_upload_registers_only_portable_metadata_and_delivers_ranges(self) -> None:
         body = b"0123456789abcdefghijklmnopqrstuvwxyz"
         upload = self.client.post(
@@ -187,6 +212,73 @@ class ProjectMediaApiTests(unittest.TestCase):
         self.assertEqual(video_endpoint.status_code, 422, video_endpoint.text)
         self.assertIn("not registered as video", video_endpoint.json()["detail"])
 
+    def test_image_source_upload_is_first_class_project_media(self) -> None:
+        app.dependency_overrides[get_source_media_probe] = lambda: self._probe_image
+        body = b"portable-png-bytes"
+        upload = self.client.post(
+            f"/api/uv/projects/{self.project_id}/sources/image",
+            params={"filename": r"E:\Photos\Hero Product.PNG"},
+            content=body,
+            headers={"Content-Type": "image/png"},
+        )
+        self.assertEqual(upload.status_code, 201, upload.text)
+        source = upload.json()
+        self.assertEqual(source["kind"], "image")
+        self.assertTrue(source["path"].startswith("sources/src_"))
+        self.assertTrue(source["path"].endswith(".png"))
+        metadata = source["metadata"]
+        self.assertEqual(metadata["original_name"], "Hero Product.PNG")
+        self.assertEqual(metadata["content_type"], "image/png")
+        self.assertEqual(metadata["sha256"], hashlib.sha256(body).hexdigest())
+        self.assertEqual(metadata["size_bytes"], len(body))
+        self.assertEqual(metadata["width"], 1600)
+        self.assertEqual(metadata["height"], 900)
+        self.assertEqual(metadata["image_codec"], "png")
+        self.assertFalse(metadata["has_audio"])
+        self.assertNotIn("streams", metadata)
+        self.assertNotIn("host_path", str(metadata))
+
+        detail = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/image/{source['id']}"
+        )
+        self.assertEqual(detail.status_code, 200, detail.text)
+        self.assertEqual(detail.json(), source)
+
+        whole = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/image/{source['id']}/media"
+        )
+        self.assertEqual(whole.status_code, 200, whole.text)
+        self.assertEqual(whole.content, body)
+        self.assertEqual(whole.headers["content-type"], "image/png")
+        self.assertEqual(whole.headers.get("accept-ranges"), "bytes")
+
+        video_endpoint = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/{source['id']}"
+        )
+        self.assertEqual(video_endpoint.status_code, 422, video_endpoint.text)
+        self.assertIn("not registered as video", video_endpoint.json()["detail"])
+
+    def test_image_source_rejects_moving_audio_or_unsupported_extension_and_rolls_back(self) -> None:
+        cases = (
+            ("moving.png", self._probe_video, "must not contain an audio stream"),
+            ("still.svg", self._probe_image, "must use one of"),
+        )
+        for filename, probe, message in cases:
+            app.dependency_overrides[get_source_media_probe] = lambda probe=probe: probe
+            rejected = self.client.post(
+                f"/api/uv/projects/{self.project_id}/sources/image",
+                params={"filename": filename},
+                content=b"not-an-accepted-still",
+                headers={"Content-Type": "image/png"},
+            )
+            self.assertEqual(rejected.status_code, 422, rejected.text)
+            self.assertIn(message, rejected.json()["detail"])
+            self.assertEqual(self.store.load_project(self.project_id).sources, ())
+            self.assertEqual(
+                list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()),
+                [],
+            )
+
     def test_audio_source_rejects_video_stream_and_rolls_back(self) -> None:
         app.dependency_overrides[get_source_media_probe] = lambda: self._probe_video
         rejected = self.client.post(
@@ -252,6 +344,11 @@ class ProjectMediaApiTests(unittest.TestCase):
             f"/api/uv/projects/{self.project_id}/sources/audio/src_missing/media"
         )
         self.assertEqual(missing_audio.status_code, 404, missing_audio.text)
+
+        missing_image = self.client.get(
+            f"/api/uv/projects/{self.project_id}/sources/image/src_missing/media"
+        )
+        self.assertEqual(missing_image.status_code, 404, missing_image.text)
 
     def test_oversized_content_length_fails_before_creating_source(self) -> None:
         response = self.client.post(

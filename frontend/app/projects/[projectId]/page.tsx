@@ -9,8 +9,11 @@ import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
+import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
+import { Stage8CompositionPanel } from '@/components/editor/Stage8CompositionPanel';
+import { Stage8MediaPanel } from '@/components/editor/Stage8MediaPanel';
 import {
   getProjectExecutionPlan,
   getUVProject,
@@ -85,6 +88,15 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
+            {(project.recipe_id === 'story_video' || project.recipe_id === 'commercial_product' || project.recipe_id === 'free_project') && (
+              <Stage8CompositionPanel
+                projectId={project.project_id}
+                recipeId={project.recipe_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
+            )}
+
             <ProjectEditor
               projectId={project.project_id}
               onProjectChanged={refreshProject}
@@ -108,6 +120,23 @@ export default function ProjectPage() {
                   onProjectChanged={refreshProject}
                 />
               </>
+            )}
+
+            {(project.recipe_id === 'photo_to_video' || project.recipe_id === 'visualizer') && (
+              <Stage8MediaPanel
+                projectId={project.project_id}
+                recipeId={project.recipe_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
+            )}
+
+            {project.recipe_id === 'performance_lip_sync' && (
+              <PerformanceLipSyncPanel
+                projectId={project.project_id}
+                sources={project.sources}
+                onProjectChanged={refreshProject}
+              />
             )}
 
             <SequenceContinuityPanel

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .models import PolicyMode, ProductionPolicy, RecipeDefinition, RecipeStep, RecipeUIHints
 from .registry import RecipeRegistry
+from .stage8_media import STAGE8_MEDIA_RECIPES
 
 GENERAL_VIDEO = RecipeDefinition(
     recipe_id="general_video",
@@ -177,12 +178,175 @@ DIGITAL_HUMAN = RecipeDefinition(
     ),
 )
 
+STORY_VIDEO = RecipeDefinition(
+    recipe_id="story_video",
+    title="Сюжетное видео",
+    description=(
+        "Сюжетный ролик, где сценарная структура, сцены и continuity компонуются поверх "
+        "существующих UV Studio project/editor primitives без отдельного story-движка."
+    ),
+    required_inputs=("brief",),
+    optional_inputs=("script", "image", "video", "audio"),
+    required_capabilities=("timeline.assemble",),
+    optional_capabilities=(
+        "text.generate",
+        "image.generate",
+        "video.generate",
+        "speech.synthesize",
+        "media.understand",
+    ),
+    steps=(
+        RecipeStep("story_plan", "Сюжетный план", "Разбить задачу на сцены, смысловые повороты и ожидаемый ритм."),
+        RecipeStep("scene_assets", "Материалы сцен", "Подготовить или создать недостающие материалы для каждой сцены.", "video.generate", optional=True),
+        RecipeStep("continuity", "Связность сцен", "Использовать continuity только для связанных сцен, где она действительно нужна."),
+        RecipeStep("assemble", "Сборка", "Собрать утверждённые сцены существующим UV Studio assembly-путём.", "timeline.assemble"),
+        RecipeStep("review", "Проверка истории", "Проверить понятность, темп и переходы готового ролика."),
+    ),
+    production_policy=ProductionPolicy(
+        source_review=PolicyMode.OPTIONAL,
+        direction_gate=PolicyMode.REQUIRED,
+        sample_first=PolicyMode.OPTIONAL,
+        plan_gate=PolicyMode.REQUIRED,
+        scene_ledger=PolicyMode.REQUIRED,
+        final_review=PolicyMode.REQUIRED,
+        continuity=PolicyMode.OPTIONAL,
+    ),
+    ui=RecipeUIHints(
+        category="create",
+        primary_input_label="О чём история?",
+        visible_sections=("brief", "story"),
+        advanced_sections=("continuity", "style", "providers"),
+        featured=True,
+    ),
+)
+
+COMMERCIAL_PRODUCT = RecipeDefinition(
+    recipe_id="commercial_product",
+    title="Реклама / продукт",
+    description=(
+        "Продуктовый или рекламный ролик с явной проверкой исходников, режиссёрского направления, "
+        "пробных материалов и финального результата."
+    ),
+    required_inputs=("brief",),
+    optional_inputs=("product_image", "product_video", "script", "audio"),
+    required_capabilities=("timeline.assemble",),
+    optional_capabilities=(
+        "text.generate",
+        "image.generate",
+        "video.generate",
+        "speech.synthesize",
+        "media.understand",
+    ),
+    steps=(
+        RecipeStep("source_review", "Проверка продукта", "Проверить исходные фото/видео и обязательные продуктовые детали."),
+        RecipeStep("direction", "Направление", "Зафиксировать оффер, композицию, стиль и ограничения до генерации."),
+        RecipeStep("sample", "Пробный материал", "Сначала проверить ограниченный sample для дорогих/генеративных материалов.", "video.generate", optional=True),
+        RecipeStep("assemble", "Сборка", "Собрать утверждённые продуктовые материалы без отдельного рекламного движка.", "timeline.assemble"),
+        RecipeStep("review", "Финальная проверка", "Проверить продукт, текст, темп и отсутствие подмены ключевых деталей."),
+    ),
+    production_policy=ProductionPolicy(
+        source_review=PolicyMode.REQUIRED,
+        direction_gate=PolicyMode.REQUIRED,
+        sample_first=PolicyMode.REQUIRED,
+        plan_gate=PolicyMode.REQUIRED,
+        final_review=PolicyMode.REQUIRED,
+        continuity=PolicyMode.OPTIONAL,
+    ),
+    ui=RecipeUIHints(
+        category="create",
+        primary_input_label="Что рекламируем и какой результат нужен?",
+        visible_sections=("brief", "product"),
+        advanced_sections=("script", "style", "providers"),
+        featured=True,
+    ),
+)
+
+PERFORMANCE_LIP_SYNC = RecipeDefinition(
+    recipe_id="performance_lip_sync",
+    title="Performance / lip-sync",
+    description=(
+        "Performance-ориентированный режим для персонажа и готовой речи. Семантическая возможность "
+        "говорящего персонажа уже существует, но конкретный исполняемый offer выбирается только через Capability Registry."
+    ),
+    required_inputs=("portrait", "speech"),
+    optional_inputs=("performance_video", "instruction"),
+    required_capabilities=("video.digital_human",),
+    optional_capabilities=("video.action_transfer", "media.understand"),
+    steps=(
+        RecipeStep("source_review", "Проверка performance", "Проверить персонажа, речь и при наличии видео-референс исполнения."),
+        RecipeStep("sample", "Пробный lip-sync", "Проверить короткий sample до полного исполнения.", "video.digital_human"),
+        RecipeStep("render", "Performance", "Выполнить выбранный capability после явной проверки доступного offer.", "video.digital_human"),
+        RecipeStep("review", "Проверка синхронизации", "Проверить губы, лицо, речь, временную синхронизацию и артефакты."),
+    ),
+    production_policy=ProductionPolicy(
+        source_review=PolicyMode.REQUIRED,
+        direction_gate=PolicyMode.OPTIONAL,
+        sample_first=PolicyMode.REQUIRED,
+        final_review=PolicyMode.REQUIRED,
+        continuity=PolicyMode.OPTIONAL,
+    ),
+    ui=RecipeUIHints(
+        category="performance",
+        primary_input_label="Персонаж и готовая речь",
+        visible_sections=("portrait", "speech"),
+        advanced_sections=("performance_video", "instruction", "providers"),
+    ),
+)
+
+FREE_PROJECT = RecipeDefinition(
+    recipe_id="free_project",
+    title="Свободный проект",
+    description=(
+        "Нейтральное рабочее пространство без обязательной песни, диктора, генерации или специализированного pipeline. "
+        "Пользователь подключает только нужные существующие UV Studio primitives."
+    ),
+    required_inputs=(),
+    optional_inputs=("brief", "image", "video", "audio"),
+    required_capabilities=(),
+    optional_capabilities=(
+        "text.generate",
+        "image.generate",
+        "video.generate",
+        "speech.synthesize",
+        "timeline.assemble",
+        "audio.mix",
+        "media.understand",
+    ),
+    steps=(
+        RecipeStep("workspace", "Материалы", "Добавить только те исходники и задачи, которые нужны этому проекту."),
+        RecipeStep("edit", "Работа", "Использовать существующие монтажные, генеративные и review primitives по необходимости."),
+        RecipeStep("assemble", "Сборка", "При необходимости собрать подготовленные видеофрагменты.", "timeline.assemble", optional=True),
+        RecipeStep("review", "Проверка", "Проверить результат в соответствии с реальной задачей проекта."),
+    ),
+    production_policy=ProductionPolicy(
+        source_review=PolicyMode.OPTIONAL,
+        direction_gate=PolicyMode.OPTIONAL,
+        sample_first=PolicyMode.OPTIONAL,
+        plan_gate=PolicyMode.OPTIONAL,
+        scene_ledger=PolicyMode.OPTIONAL,
+        final_review=PolicyMode.OPTIONAL,
+        continuity=PolicyMode.OPTIONAL,
+    ),
+    ui=RecipeUIHints(
+        category="create",
+        primary_input_label="Начните с любого материала или задачи",
+        visible_sections=("workspace",),
+        advanced_sections=("providers",),
+        featured=True,
+    ),
+)
+
 BUILTIN_RECIPES = (
     GENERAL_VIDEO,
     NARRATED_VIDEO,
     MUSIC_VIDEO,
     ACTION_TRANSFER,
     DIGITAL_HUMAN,
+    STORY_VIDEO,
+    COMMERCIAL_PRODUCT,
+    *STAGE8_MEDIA_RECIPES,
+    PERFORMANCE_LIP_SYNC,
+    FREE_PROJECT,
 )
 
 # Temporary compatibility metadata. This is deliberately kept outside the

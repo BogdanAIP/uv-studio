@@ -74,6 +74,84 @@ class RecipeExecutionPlanTests(unittest.TestCase):
         self.assertIn("does not accept", plan.reason)
         self.assertEqual([slot.slot_id for slot in plan.input_slots], ["portrait", "speech"])
 
+    def test_stage8_story_uses_typed_compositional_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "story_video")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertIsNone(plan.target)
+        self.assertIn("compositional", plan.reason)
+        self.assertEqual(
+            [(slot.slot_id, slot.kind, slot.required) for slot in plan.input_slots],
+            [
+                ("brief", InputSlotKind.TEXT, True),
+                ("script", InputSlotKind.TEXT, False),
+                ("image", InputSlotKind.IMAGE, False),
+                ("video", InputSlotKind.VIDEO, False),
+                ("audio", InputSlotKind.AUDIO, False),
+            ],
+        )
+        self.assertEqual(plan.production_policy.scene_ledger, PolicyMode.REQUIRED)
+
+    def test_stage8_commercial_preserves_product_media_types(self) -> None:
+        plan = resolve_project_execution(self.registry, "commercial_product")
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertEqual(slots["brief"].kind, InputSlotKind.TEXT)
+        self.assertEqual(slots["product_image"].kind, InputSlotKind.IMAGE)
+        self.assertEqual(slots["product_video"].kind, InputSlotKind.VIDEO)
+        self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
+        self.assertEqual(plan.production_policy.sample_first, PolicyMode.REQUIRED)
+
+    def test_stage8_photo_to_video_has_typed_local_capability_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "photo_to_video")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(slots["images"].kind, InputSlotKind.IMAGE)
+        self.assertTrue(slots["images"].required)
+        self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
+        self.assertFalse(slots["audio"].required)
+        self.assertEqual(slots["duration_per_image"].kind, InputSlotKind.NUMBER)
+        self.assertFalse(slots["duration_per_image"].required)
+        self.assertEqual(slots["duration_per_image"].default, 2.0)
+        self.assertIn("video.compose_photos", plan.reason)
+
+    def test_stage8_visualizer_has_typed_local_capability_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "visualizer")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(slots["audio"].kind, InputSlotKind.AUDIO)
+        self.assertTrue(slots["audio"].required)
+        self.assertEqual(slots["artwork"].kind, InputSlotKind.IMAGE)
+        self.assertFalse(slots["artwork"].required)
+        self.assertIn("audio.visualize", plan.reason)
+
+    def test_stage8_performance_is_partial_and_does_not_fake_native_launch(self) -> None:
+        plan = resolve_project_execution(self.registry, "performance_lip_sync")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.PARTIAL)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        slots = {slot.slot_id: slot for slot in plan.input_slots}
+        self.assertEqual(slots["portrait"].kind, InputSlotKind.IMAGE)
+        self.assertEqual(slots["speech"].kind, InputSlotKind.AUDIO)
+        self.assertEqual(slots["performance_video"].kind, InputSlotKind.VIDEO)
+        self.assertFalse(slots["performance_video"].required)
+        self.assertIn("no accepted executable offer", plan.reason)
+
+    def test_stage8_free_project_has_only_optional_typed_inputs(self) -> None:
+        plan = resolve_project_execution(self.registry, "free_project")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertTrue(plan.input_slots)
+        self.assertTrue(all(not slot.required for slot in plan.input_slots))
+        self.assertEqual(
+            [slot.kind for slot in plan.input_slots],
+            [InputSlotKind.TEXT, InputSlotKind.IMAGE, InputSlotKind.VIDEO, InputSlotKind.AUDIO],
+        )
+        self.assertIn("no one-click", plan.reason)
+
     def test_execution_plan_preserves_recipe_production_policy(self) -> None:
         recipe = self.registry.get("action_transfer")
         plan = resolve_project_execution(self.registry, recipe.recipe_id)
@@ -86,7 +164,6 @@ class RecipeExecutionPlanTests(unittest.TestCase):
             self.assertNotIn("dashscope", encoded)
             self.assertNotIn("qwen", encoded)
             self.assertNotIn("openclaw", encoded)
-            # Native compatibility is allowed to name the adapter, but never a concrete provider/model ID.
             self.assertNotIn("wan2", encoded)
             self.assertNotIn("seedance", encoded)
             self.assertNotIn("kling", encoded)

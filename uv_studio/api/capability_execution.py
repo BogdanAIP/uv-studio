@@ -29,6 +29,7 @@ from uv_studio.capabilities.adapters.mcp_execution import (
     MCPExecutionAdapter,
     MCPExecutionInputRejected,
 )
+from uv_studio.capabilities.adapters.musetalk_verified import MuseTalkAdapter
 from uv_studio.capabilities.adapters.webvtt_subtitles import WebVTTSubtitleAdapter
 from uv_studio.capabilities.adapters.whisperx_alignment import WhisperXAlignmentAdapter
 from uv_studio.capabilities.authorization import (
@@ -98,6 +99,12 @@ def get_webvtt_subtitle_adapter(
     store: ProjectStore = Depends(get_project_store),
 ) -> WebVTTSubtitleAdapter:
     return WebVTTSubtitleAdapter(store)
+
+
+def get_musetalk_adapter(
+    store: ProjectStore = Depends(get_project_store),
+) -> MuseTalkAdapter:
+    return MuseTalkAdapter(store)
 
 
 def get_native_videoclaw_adapter(
@@ -371,6 +378,7 @@ async def execute_project_capability(
     local_argos_translate: ArgosTranslateAdapter = Depends(get_argos_translate_adapter),
     local_whisperx_alignment: WhisperXAlignmentAdapter = Depends(get_whisperx_alignment_adapter),
     local_webvtt: WebVTTSubtitleAdapter = Depends(get_webvtt_subtitle_adapter),
+    local_musetalk: MuseTalkAdapter = Depends(get_musetalk_adapter),
     native_videoclaw: NativeVideoClawAdapter = Depends(get_native_videoclaw_adapter),
     mcp_execution: MCPExecutionAdapter = Depends(get_mcp_execution_adapter),
     authorizations: OneShotAuthorizationStore = Depends(get_execution_authorization_store),
@@ -434,6 +442,13 @@ async def execute_project_capability(
         elif offer.adapter_id == WebVTTSubtitleAdapter.adapter_id:
             result = await run_in_threadpool(
                 local_webvtt.execute,
+                project_id=project_id,
+                offer=offer,
+                payload=input_payload,
+            )
+        elif offer.adapter_id == MuseTalkAdapter.adapter_id:
+            result = await run_in_threadpool(
+                local_musetalk.execute,
                 project_id=project_id,
                 offer=offer,
                 payload=input_payload,

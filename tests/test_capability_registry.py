@@ -30,6 +30,8 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertIn("video.extract_range", ids)
         self.assertIn("timeline.assemble", ids)
         self.assertIn("speech.synthesize", ids)
+        self.assertIn("video.compose_photos", ids)
+        self.assertIn("audio.visualize", ids)
 
     def test_local_ffmpeg_offer_is_free_and_local(self) -> None:
         offer = next(
@@ -40,6 +42,38 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(offer.cost_class, CostClass.FREE)
         self.assertEqual(offer.locality, LocalityClass.LOCAL)
         self.assertIn(offer.availability, {OfferAvailability.AVAILABLE, OfferAvailability.UNAVAILABLE})
+
+    def test_stage8_local_media_offers_are_free_local_and_require_ffmpeg_ffprobe(self) -> None:
+        modules = (
+            "uv_studio.capabilities.adapters.photo_slideshow.shutil.which",
+            "uv_studio.capabilities.adapters.audio_visualizer.shutil.which",
+        )
+        for patch_target, capability_id, offer_id in (
+            (modules[0], "video.compose_photos", "local_ffmpeg.video_compose_photos"),
+            (modules[1], "audio.visualize", "local_ffmpeg.audio_visualize"),
+        ):
+            with self.subTest(capability_id=capability_id):
+                with mock.patch(
+                    patch_target,
+                    side_effect=lambda tool: f"/tools/{tool}" if tool == "ffmpeg" else None,
+                ):
+                    missing_probe = next(
+                        item
+                        for item in build_builtin_capability_registry().offers_for(capability_id)
+                        if item.offer_id == offer_id
+                    )
+                self.assertEqual(missing_probe.availability, OfferAvailability.UNAVAILABLE)
+                self.assertIn("ffprobe", missing_probe.reason)
+
+                with mock.patch(patch_target, side_effect=lambda tool: f"/tools/{tool}"):
+                    available = next(
+                        item
+                        for item in build_builtin_capability_registry().offers_for(capability_id)
+                        if item.offer_id == offer_id
+                    )
+                self.assertEqual(available.availability, OfferAvailability.AVAILABLE)
+                self.assertEqual(available.locality, LocalityClass.LOCAL)
+                self.assertEqual(available.cost_class, CostClass.FREE)
 
     def test_range_extract_offer_requires_both_ffmpeg_and_ffprobe(self) -> None:
         patch_target = "uv_studio.capabilities.builtin.shutil.which"
@@ -97,11 +131,21 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(offers[0].availability, OfferAvailability.CONFIGURATION_REQUIRED)
         self.assertEqual(offers[0].cost_class, CostClass.POTENTIALLY_PAID)
 
-    def test_digital_human_has_no_false_native_offer(self) -> None:
-        self.assertEqual(
-            build_builtin_capability_registry().offers_for("video.digital_human"),
-            (),
-        )
+    def test_digital_human_has_only_optional_musetalk_offer_not_false_native_offer(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {"UV_STUDIO_MUSETALK_ROOT": "", "UV_STUDIO_MUSETALK_PYTHON": ""},
+            clear=False,
+        ):
+            offers = build_builtin_capability_registry().offers_for("video.digital_human")
+        self.assertEqual(len(offers), 1)
+        offer = offers[0]
+        self.assertEqual(offer.offer_id, "local_musetalk.video_digital_human")
+        self.assertEqual(offer.adapter_id, "local_musetalk")
+        self.assertEqual(offer.availability, OfferAvailability.CONFIGURATION_REQUIRED)
+        self.assertEqual(offer.locality, LocalityClass.LOCAL)
+        self.assertEqual(offer.cost_class, CostClass.FREE)
+        self.assertNotIn("native_videoclaw", offer.offer_id)
 
     def test_offer_preference_is_available_then_free_then_local(self) -> None:
         cap = CapabilityDefinition(

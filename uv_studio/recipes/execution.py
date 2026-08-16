@@ -273,12 +273,144 @@ def _digital_human(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     )
 
 
+def _story_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Story Video is a UV Studio-owned compositional workflow. It intentionally has no legacy native pipeline "
+            "target; scene planning, optional generation, continuity and assembly stay on UV semantic boundaries."
+        ),
+        input_slots=(
+            ExecutionInputSlot("brief", "Задача/сюжет", InputSlotKind.TEXT),
+            ExecutionInputSlot("script", "Готовый сценарий", InputSlotKind.TEXT, required=False),
+            ExecutionInputSlot("image", "Изображения", InputSlotKind.IMAGE, required=False),
+            ExecutionInputSlot("video", "Видео", InputSlotKind.VIDEO, required=False),
+            ExecutionInputSlot("audio", "Аудио", InputSlotKind.AUDIO, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _commercial_product(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Commercial/Product is a UV Studio-owned compositional workflow. Product sources, optional generation and "
+            "assembly are deliberately kept separate from the legacy digital_human promo pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("brief", "Задача рекламы", InputSlotKind.TEXT),
+            ExecutionInputSlot("product_image", "Фото продукта", InputSlotKind.IMAGE, required=False),
+            ExecutionInputSlot("product_video", "Видео продукта", InputSlotKind.VIDEO, required=False),
+            ExecutionInputSlot("script", "Текст/сценарий", InputSlotKind.TEXT, required=False),
+            ExecutionInputSlot("audio", "Аудио", InputSlotKind.AUDIO, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _photo_to_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Photo-to-video is a UV Studio-owned deterministic capability workflow. Use registered image sources "
+            "through video.compose_photos rather than a legacy native pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("images", "Фотографии", InputSlotKind.IMAGE),
+            ExecutionInputSlot("audio", "Аудиодорожка", InputSlotKind.AUDIO, required=False),
+            ExecutionInputSlot(
+                "duration_per_image",
+                "Секунд на фотографию",
+                InputSlotKind.NUMBER,
+                required=False,
+                default=2.0,
+            ),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _visualizer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Visualizer is a UV Studio-owned deterministic capability workflow. Use registered project audio "
+            "through audio.visualize rather than a legacy native pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("audio", "Master-аудио", InputSlotKind.AUDIO),
+            ExecutionInputSlot("artwork", "Обложка", InputSlotKind.IMAGE, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _performance_lip_sync(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.PARTIAL,
+        reason=(
+            "The provider-neutral video.digital_human capability exists, but this build intentionally has no accepted "
+            "executable offer for supplied portrait + speech lip-sync. The mode is therefore capability-gated rather "
+            "than falsely launchable through the legacy product-promo pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("portrait", "Персонаж/портрет", InputSlotKind.IMAGE),
+            ExecutionInputSlot("speech", "Готовая речь", InputSlotKind.AUDIO),
+            ExecutionInputSlot("performance_video", "Видео-референс исполнения", InputSlotKind.VIDEO, required=False),
+            ExecutionInputSlot("instruction", "Инструкция", InputSlotKind.TEXT, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _free_project(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Free Project intentionally has no one-click compatibility pipeline. It is a UV Studio workspace that "
+            "composes only the semantic capabilities the user actually chooses."
+        ),
+        input_slots=(
+            ExecutionInputSlot("brief", "Задача", InputSlotKind.TEXT, required=False),
+            ExecutionInputSlot("image", "Изображения", InputSlotKind.IMAGE, required=False),
+            ExecutionInputSlot("video", "Видео", InputSlotKind.VIDEO, required=False),
+            ExecutionInputSlot("audio", "Аудио", InputSlotKind.AUDIO, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
 _RESOLVERS = {
     "general_video": _general_video,
     "narrated_video": _narrated_video,
     "music_video": _music_video,
     "action_transfer": _action_transfer,
     "digital_human": _digital_human,
+    "story_video": _story_video,
+    "commercial_product": _commercial_product,
+    "photo_to_video": _photo_to_video,
+    "visualizer": _visualizer,
+    "performance_lip_sync": _performance_lip_sync,
+    "free_project": _free_project,
 }
 
 
