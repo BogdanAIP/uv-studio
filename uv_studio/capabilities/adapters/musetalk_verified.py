@@ -1,7 +1,8 @@
 """Verified product wrapper for the optional MuseTalk 1.5 runtime.
 
 The base adapter owns bounded execution. This wrapper makes the public offer
-available only for the exact clean upstream checkout inspected by UV Studio.
+available only for the exact clean upstream checkout and executable CUDA
+Python environment inspected by UV Studio.
 """
 
 from __future__ import annotations
@@ -33,6 +34,10 @@ from .musetalk import (
 MUSE_TALK_INFERENCE_BLOB_SHA1 = "428afb99a8fbb3175598e18c096b12dbfdf943d5"
 _ADAPTER_ID = "local_musetalk"
 _OFFER_ID = "local_musetalk.video_digital_human"
+_RUNTIME_PROBE = (
+    "import cv2, omegaconf, torch, transformers; "
+    "raise SystemExit(0 if torch.cuda.is_available() else 3)"
+)
 
 
 def _git_blob_sha1(path: Path) -> str:
@@ -87,6 +92,28 @@ def _checkout_problem(
     return None
 
 
+def _runtime_problem(
+    python: Path,
+    *,
+    runner: Any = subprocess.run,
+) -> str | None:
+    try:
+        completed = runner(
+            [str(python), "-c", _RUNTIME_PROBE],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "MuseTalk Python runtime probe could not be executed"
+    if completed.returncode == 3:
+        return "MuseTalk fp16 offer requires an available CUDA device"
+    if completed.returncode != 0:
+        return "MuseTalk Python environment cannot import the required inference runtime"
+    return None
+
+
 def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
     """Register only a truthfully executable exact MuseTalk checkout."""
 
@@ -104,19 +131,19 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
     root = _configured_root()
     python = _configured_python(root)
     missing = _missing_runtime_parts(root, python)
-    provenance_problem = None
-    if not missing and root is not None:
-        provenance_problem = _checkout_problem(root)
-    available = not missing and provenance_problem is None
+    verification_problem = None
+    if not missing and root is not None and python is not None:
+        verification_problem = _checkout_problem(root) or _runtime_problem(python)
+    available = not missing and verification_problem is None
     if available:
         reason = (
-            "MuseTalk 1.5 optional pack найден и проверен как чистый pinned checkout; "
-            "UV Studio будет выполнять локальный fp16 lip-sync."
+            "MuseTalk 1.5 optional pack найден, проверен как чистый pinned checkout и "
+            "подтвердил CUDA runtime; UV Studio будет выполнять локальный fp16 lip-sync."
         )
     elif missing:
         reason = "Настройте optional MuseTalk 1.5 pack: " + ", ".join(missing[:6])
     else:
-        reason = provenance_problem or "MuseTalk provenance could not be verified"
+        reason = verification_problem or "MuseTalk runtime could not be verified"
     registry.register_offer(
         CapabilityOffer(
             offer_id=_OFFER_ID,
@@ -137,6 +164,7 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
                 "image.portrait",
                 "audio.supplied",
                 "runtime.optional",
+                "runtime.cuda",
                 "musetalk.v15",
                 f"upstream.{MUSE_TALK_UPSTREAM_COMMIT[:12]}",
                 f"inference_blob.{MUSE_TALK_INFERENCE_BLOB_SHA1[:12]}",
@@ -146,13 +174,13 @@ def register_musetalk_adapter(registry: CapabilityRegistry) -> None:
 
 
 class MuseTalkAdapter(BaseMuseTalkAdapter):
-    """Base bounded executor plus exact clean-checkout verification at execution time."""
+    """Base bounded executor plus exact checkout/CUDA verification at execution time."""
 
     adapter_id = _ADAPTER_ID
 
     def _runtime(self):
         root, python, ffmpeg, ffprobe = super()._runtime()
-        problem = _checkout_problem(root)
+        problem = _checkout_problem(root) or _runtime_problem(python)
         if problem is not None:
             raise CapabilityToolUnavailable(problem)
         return root, python, ffmpeg, ffprobe
