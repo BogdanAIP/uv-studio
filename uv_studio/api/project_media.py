@@ -66,10 +66,7 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source media not found")
     if isinstance(exc, (SourceMediaError, ProjectValidationError, InvalidCapabilityInput)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    if isinstance(
-        exc,
-        (CapabilityToolUnavailable, UnsupportedCapabilityExecution),
-    ):
+    if isinstance(exc, (CapabilityToolUnavailable, UnsupportedCapabilityExecution)):
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Local media inspection is unavailable in this installation",
@@ -91,71 +88,94 @@ def _reference_payload(reference: ProjectReference) -> ProjectReferencePayload:
     return ProjectReferencePayload.model_validate(reference.to_dict())
 
 
+def _positive_duration(probe: dict[str, Any], *, media_kind: str) -> int:
+    duration_us = probe.get("duration_us")
+    if isinstance(duration_us, bool) or not isinstance(duration_us, int) or duration_us <= 0:
+        stream = probe.get(media_kind)
+        duration_us = stream.get("duration_us") if isinstance(stream, dict) else None
+    if isinstance(duration_us, bool) or not isinstance(duration_us, int) or duration_us <= 0:
+        raise SourceMediaError(f"uploaded {media_kind} must have a known positive duration")
+    return duration_us
+
+
 def _portable_probe_metadata(
     *,
+    media_kind: str,
     original_name: str,
     request_content_type: str | None,
     size_bytes: int,
     sha256: str,
     probe: dict[str, Any],
 ) -> dict[str, Any]:
-    if probe.get("has_video") is not True:
-        raise SourceMediaError("uploaded source does not contain a video stream")
-    duration_us = probe.get("duration_us")
-    if isinstance(duration_us, bool) or not isinstance(duration_us, int) or duration_us <= 0:
-        video = probe.get("video")
-        duration_us = video.get("duration_us") if isinstance(video, dict) else None
-    if isinstance(duration_us, bool) or not isinstance(duration_us, int) or duration_us <= 0:
-        raise SourceMediaError("uploaded video must have a known positive duration")
+    if media_kind == "video":
+        if probe.get("has_video") is not True:
+            raise SourceMediaError("uploaded source does not contain a video stream")
+        duration_us = _positive_duration(probe, media_kind="video")
+        stream = probe.get("video") if isinstance(probe.get("video"), dict) else {}
+        expected_prefix = "video/"
+        metadata: dict[str, Any] = {
+            "original_name": original_name,
+            "content_type": "application/octet-stream",
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "duration_us": duration_us,
+            "has_audio": probe.get("has_audio") is True,
+        }
+        optional = {
+            "format_name": probe.get("format_name"),
+            "video_codec": stream.get("codec"),
+            "width": stream.get("width"),
+            "height": stream.get("height"),
+            "avg_frame_rate": stream.get("avg_frame_rate"),
+        }
+    elif media_kind == "audio":
+        if probe.get("has_audio") is not True:
+            raise SourceMediaError("uploaded source does not contain an audio stream")
+        if probe.get("has_video") is True:
+            raise SourceMediaError("uploaded audio source must not contain a video stream")
+        duration_us = _positive_duration(probe, media_kind="audio")
+        stream = probe.get("audio") if isinstance(probe.get("audio"), dict) else {}
+        expected_prefix = "audio/"
+        metadata = {
+            "original_name": original_name,
+            "content_type": "application/octet-stream",
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "duration_us": duration_us,
+            "has_audio": True,
+        }
+        optional = {
+            "format_name": probe.get("format_name"),
+            "audio_codec": stream.get("codec"),
+            "sample_rate": stream.get("sample_rate"),
+            "channels": stream.get("channels"),
+            "channel_layout": stream.get("channel_layout"),
+        }
+    else:  # pragma: no cover - internal invariant
+        raise SourceMediaError(f"unsupported source media kind: {media_kind!r}")
 
-    video = probe.get("video") if isinstance(probe.get("video"), dict) else {}
     content_type = (
         request_content_type.split(";", 1)[0].strip().lower()
         if isinstance(request_content_type, str)
         else ""
     )
-    if not content_type.startswith("video/"):
-        content_type = "application/octet-stream"
-
-    metadata: dict[str, Any] = {
-        "original_name": original_name,
-        "content_type": content_type,
-        "size_bytes": size_bytes,
-        "sha256": sha256,
-        "duration_us": duration_us,
-        "has_audio": probe.get("has_audio") is True,
-    }
-    optional = {
-        "format_name": probe.get("format_name"),
-        "video_codec": video.get("codec"),
-        "width": video.get("width"),
-        "height": video.get("height"),
-        "avg_frame_rate": video.get("avg_frame_rate"),
-    }
+    if content_type.startswith(expected_prefix):
+        metadata["content_type"] = content_type
     for key, value in optional.items():
         if isinstance(value, (str, int)) and not isinstance(value, bool):
             metadata[key] = value
     return metadata
 
 
-@router.post(
-    "/{project_id}/sources",
-    response_model=ProjectReferencePayload,
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_source_media(
+async def _upload_source(
+    *,
     project_id: str,
     request: Request,
-    filename: str = Query(min_length=1, max_length=1024),
-    store: ProjectStore = Depends(get_project_store),
-    probe_media: SourceMediaProbe = Depends(get_source_media_probe),
+    filename: str,
+    media_kind: str,
+    store: ProjectStore,
+    probe_media: SourceMediaProbe,
 ) -> ProjectReferencePayload:
-    """Stream one source video into the Project Store and register it after probing.
-
-    The caller supplies only a display filename and raw body bytes. It never supplies
-    a host path or final project-relative path.
-    """
-
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -204,6 +224,7 @@ async def upload_source_media(
         final_written = True
         probe = probe_media(store, project_id, allocation.relative_path)
         metadata = _portable_probe_metadata(
+            media_kind=media_kind,
             original_name=allocation.original_name,
             request_content_type=request.headers.get("content-type"),
             size_bytes=written,
@@ -214,6 +235,7 @@ async def upload_source_media(
             project_id,
             allocation,
             metadata=metadata,
+            media_kind=media_kind,
         )
         registered = next(item for item in project.sources if item.id == allocation.source_id)
         return _reference_payload(registered)
@@ -239,6 +261,88 @@ async def upload_source_media(
                 allocation.absolute_path.unlink(missing_ok=True)
 
 
+@router.post(
+    "/{project_id}/sources",
+    response_model=ProjectReferencePayload,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_source_media(
+    project_id: str,
+    request: Request,
+    filename: str = Query(min_length=1, max_length=1024),
+    store: ProjectStore = Depends(get_project_store),
+    probe_media: SourceMediaProbe = Depends(get_source_media_probe),
+) -> ProjectReferencePayload:
+    """Stream one source video into the Project Store and register it after probing."""
+
+    return await _upload_source(
+        project_id=project_id,
+        request=request,
+        filename=filename,
+        media_kind="video",
+        store=store,
+        probe_media=probe_media,
+    )
+
+
+@router.post(
+    "/{project_id}/sources/audio",
+    response_model=ProjectReferencePayload,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_source_audio(
+    project_id: str,
+    request: Request,
+    filename: str = Query(min_length=1, max_length=1024),
+    store: ProjectStore = Depends(get_project_store),
+    probe_media: SourceMediaProbe = Depends(get_source_media_probe),
+) -> ProjectReferencePayload:
+    """Stream one audio-only source into Project Store for music and other audio workflows."""
+
+    return await _upload_source(
+        project_id=project_id,
+        request=request,
+        filename=filename,
+        media_kind="audio",
+        store=store,
+        probe_media=probe_media,
+    )
+
+
+@router.get(
+    "/{project_id}/sources/audio/{source_id}",
+    response_model=ProjectReferencePayload,
+)
+def get_audio_source(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> ProjectReferencePayload:
+    try:
+        return _reference_payload(
+            ProjectSourceMediaStore(store).get(
+                project_id, source_id, expected_kind="audio"
+            )
+        )
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/{project_id}/sources/audio/{source_id}/media", response_class=FileResponse)
+def stream_audio_source(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    try:
+        reference, path = ProjectSourceMediaStore(store).resolve(
+            project_id, source_id, expected_kind="audio"
+        )
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+    return _source_file_response(reference, path)
+
+
 @router.get(
     "/{project_id}/sources/{source_id}",
     response_model=ProjectReferencePayload,
@@ -254,19 +358,7 @@ def get_source_media(
         raise _translate(exc) from exc
 
 
-@router.get("/{project_id}/sources/{source_id}/media", response_class=FileResponse)
-def stream_source_media(
-    project_id: str,
-    source_id: str,
-    store: ProjectStore = Depends(get_project_store),
-) -> FileResponse:
-    """Deliver only a registered project source; Starlette handles byte ranges."""
-
-    try:
-        reference, path = ProjectSourceMediaStore(store).resolve(project_id, source_id)
-    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
-        raise _translate(exc) from exc
-
+def _source_file_response(reference: ProjectReference, path: Path) -> FileResponse:
     metadata = reference.metadata
     media_type = metadata.get("content_type")
     if not isinstance(media_type, str) or not media_type:
@@ -282,17 +374,28 @@ def stream_source_media(
     )
 
 
+@router.get("/{project_id}/sources/{source_id}/media", response_class=FileResponse)
+def stream_source_media(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    """Deliver only a registered project video source; Starlette handles byte ranges."""
+
+    try:
+        reference, path = ProjectSourceMediaStore(store).resolve(project_id, source_id)
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+    return _source_file_response(reference, path)
+
+
 @router.get("/{project_id}/artifacts/{artifact_id}/media", response_class=FileResponse)
 def stream_video_artifact(
     project_id: str,
     artifact_id: str,
     store: ProjectStore = Depends(get_project_store),
 ) -> FileResponse:
-    """Deliver only a registered project-owned video artifact for browser review.
-
-    The caller selects by stable artifact ID. A project-relative or host path is never
-    accepted from the request, and symlinks are rejected before FileResponse sees it.
-    """
+    """Deliver only a registered project-owned video artifact for browser review."""
 
     try:
         project = store.load_project(project_id)
@@ -326,7 +429,11 @@ def stream_video_artifact(
     media_type = metadata.get("content_type")
     if not isinstance(media_type, str) or not media_type.startswith("video/"):
         guessed, _encoding = mimetypes.guess_type(path.name)
-        media_type = guessed if isinstance(guessed, str) and guessed.startswith("video/") else "application/octet-stream"
+        media_type = (
+            guessed
+            if isinstance(guessed, str) and guessed.startswith("video/")
+            else "application/octet-stream"
+        )
     original_name = metadata.get("original_name")
     if not isinstance(original_name, str) or not original_name:
         original_name = path.name
