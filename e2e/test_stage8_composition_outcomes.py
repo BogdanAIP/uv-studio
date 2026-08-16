@@ -44,29 +44,11 @@ def _run(command: list[str]) -> None:
 def _video_fixture(path: Path) -> None:
     _run(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=green:s=320x180:r=24:d=2",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=440:sample_rate=48000:duration=2",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-pix_fmt",
-            "yuv420p",
-            "-c:a",
-            "aac",
-            "-shortest",
-            str(path),
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=green:s=320x180:r=24:d=2",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=2",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-shortest", str(path),
         ]
     )
 
@@ -74,20 +56,9 @@ def _video_fixture(path: Path) -> None:
 def _image_fixture(path: Path) -> None:
     _run(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "color=c=orange:s=320x180:d=0.04",
-            "-frames:v",
-            "1",
-            "-update",
-            "1",
-            str(path),
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=orange:s=320x180:d=0.04",
+            "-frames:v", "1", "-update", "1", str(path),
         ]
     )
 
@@ -95,18 +66,9 @@ def _image_fixture(path: Path) -> None:
 def _audio_fixture(path: Path) -> None:
     _run(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=770:sample_rate=48000:duration=2",
-            "-c:a",
-            "pcm_s16le",
-            str(path),
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=770:sample_rate=48000:duration=2",
+            "-c:a", "pcm_s16le", str(path),
         ]
     )
 
@@ -226,43 +188,43 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
     def test_story_commercial_and_free_workspaces_round_trip_through_ui(self) -> None:
         page = self._new_page()
 
-        story_id, story_encoded = self._create_project("E2E Stage 8 Story", "story_video")
+        _story_id, story_encoded = self._create_project("E2E Stage 8 Story", "story_video")
         page.goto(f"/projects/{story_encoded}")
-        expect(page.get_by_role("heading", name="Сюжетный workspace", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Сюжетное рабочее пространство", exact=True)).to_be_visible()
         page.get_by_label("Stage 8 brief").fill("Герой возвращается домой после долгого путешествия")
         page.get_by_label("Stage 8 script").fill("Сцена 1. Герой входит в кадр.")
         page.locator('input[aria-label="Stage 8 workspace video"]').set_input_files(str(self.video))
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить workspace", exact=True).click()
-        expect(page.get_by_text("Workspace сохранён с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
+        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(story_encoded, "story_video", "video", "story_video")
         page.reload()
         expect(page.get_by_label("Stage 8 brief")).to_have_value("Герой возвращается домой после долгого путешествия")
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
 
-        commercial_id, commercial_encoded = self._create_project(
+        _commercial_id, commercial_encoded = self._create_project(
             "E2E Stage 8 Commercial", "commercial_product"
         )
         page.goto(f"/projects/{commercial_encoded}")
-        expect(page.get_by_role("heading", name="Продуктовый workspace", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Продуктовое рабочее пространство", exact=True)).to_be_visible()
         page.get_by_label("Stage 8 brief").fill("Показать продукт крупно и сохранить точные детали упаковки")
         page.get_by_label("Stage 8 script").fill("Текст оффера без подмены продукта")
         page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить workspace", exact=True).click()
-        expect(page.get_by_text("Workspace сохранён с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
+        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(commercial_encoded, "commercial_product", "image", "product_image")
         page.reload()
         expect(page.get_by_label("Stage 8 script")).to_have_value("Текст оффера без подмены продукта")
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
 
-        free_id, free_encoded = self._create_project("E2E Stage 8 Free", "free_project")
+        _free_id, free_encoded = self._create_project("E2E Stage 8 Free", "free_project")
         page.goto(f"/projects/{free_encoded}")
-        expect(page.get_by_role("heading", name="Свободный workspace", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Свободное рабочее пространство", exact=True)).to_be_visible()
         page.locator('input[aria-label="Stage 8 workspace audio"]').set_input_files(str(self.audio))
         expect(page.get_by_label(f"Использовать {self.audio.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить workspace", exact=True).click()
-        expect(page.get_by_text("Workspace сохранён с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
+        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(free_encoded, "free_project", "audio", "audio")
         page.reload()
         expect(page.get_by_label("Stage 8 brief")).to_have_value("")
