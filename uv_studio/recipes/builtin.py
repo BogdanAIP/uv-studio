@@ -64,6 +64,65 @@ NARRATED_VIDEO = RecipeDefinition(
     ),
 )
 
+MUSIC_VIDEO = RecipeDefinition(
+    recipe_id="music_video",
+    title="Музыкальный клип",
+    description=(
+        "Музыкально-ориентированный монтаж, где выбранная песня и Music Map задают "
+        "тайминг, структуру и точки проверки, не становясь универсальным режимом редактора."
+    ),
+    required_inputs=("song",),
+    optional_inputs=("brief", "lyrics", "image", "video", "style"),
+    required_capabilities=("timeline.assemble",),
+    optional_capabilities=("video.generate", "image.generate", "audio.mix", "media.understand"),
+    steps=(
+        RecipeStep(
+            "music_map",
+            "Карта музыки",
+            "Зафиксировать excerpt, структуру, ритмические маркеры и вокальные фразы.",
+        ),
+        RecipeStep(
+            "music_direction",
+            "Музыкальная режиссура",
+            "Связать смысловые и ритмические участки с планом кадров без выбора конкретного провайдера.",
+        ),
+        RecipeStep(
+            "sample_assets",
+            "Пробные материалы",
+            "Проверить короткие подготовленные или сгенерированные материалы до полной сборки.",
+            "video.generate",
+            optional=True,
+        ),
+        RecipeStep(
+            "assemble",
+            "Музыкальная сборка",
+            "Собрать утверждённые визуальные материалы по Music Map с сохранением master-аудио.",
+            "timeline.assemble",
+        ),
+        RecipeStep(
+            "rhythm_review",
+            "Проверка ритма",
+            "Проверить монтажные границы, музыкальные акценты и переходы по измеримым временным данным.",
+        ),
+    ),
+    production_policy=ProductionPolicy(
+        source_review=PolicyMode.REQUIRED,
+        direction_gate=PolicyMode.REQUIRED,
+        sample_first=PolicyMode.REQUIRED,
+        plan_gate=PolicyMode.REQUIRED,
+        scene_ledger=PolicyMode.OPTIONAL,
+        final_review=PolicyMode.REQUIRED,
+        continuity=PolicyMode.OPTIONAL,
+    ),
+    ui=RecipeUIHints(
+        category="create",
+        primary_input_label="Песня или музыкальный фрагмент",
+        visible_sections=("song", "music_map"),
+        advanced_sections=("lyrics", "visual_style", "providers"),
+        featured=True,
+    ),
+)
+
 ACTION_TRANSFER = RecipeDefinition(
     recipe_id="action_transfer",
     title="Перенос движения",
@@ -121,6 +180,7 @@ DIGITAL_HUMAN = RecipeDefinition(
 BUILTIN_RECIPES = (
     GENERAL_VIDEO,
     NARRATED_VIDEO,
+    MUSIC_VIDEO,
     ACTION_TRANSFER,
     DIGITAL_HUMAN,
 )

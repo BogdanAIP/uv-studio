@@ -23,7 +23,13 @@ class RecipeRegistryTests(unittest.TestCase):
         registry = build_builtin_registry()
         self.assertEqual(
             registry.ids(),
-            ("general_video", "narrated_video", "action_transfer", "digital_human"),
+            (
+                "general_video",
+                "narrated_video",
+                "music_video",
+                "action_transfer",
+                "digital_human",
+            ),
         )
         self.assertEqual(registry.list(), BUILTIN_RECIPES)
 
@@ -31,10 +37,24 @@ class RecipeRegistryTests(unittest.TestCase):
         recipe = build_builtin_registry().get("general_video")
         self.assertNotIn("narration", recipe.required_inputs)
         self.assertNotIn("music", recipe.required_inputs)
+        self.assertNotIn("song", recipe.required_inputs)
         self.assertNotIn("story", recipe.required_inputs)
         self.assertEqual(recipe.production_policy.continuity, PolicyMode.OFF)
         self.assertNotEqual(recipe.production_policy.final_review, PolicyMode.REQUIRED)
         self.assertNotIn("speech.synthesize", recipe.required_capabilities)
+
+    def test_music_video_is_explicit_music_specific_recipe(self) -> None:
+        recipe = build_builtin_registry().get("music_video")
+        self.assertEqual(recipe.required_inputs, ("song",))
+        self.assertEqual(recipe.required_capabilities, ("timeline.assemble",))
+        self.assertIn("media.understand", recipe.optional_capabilities)
+        self.assertEqual(recipe.production_policy.source_review, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.direction_gate, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.sample_first, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.plan_gate, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.final_review, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.continuity, PolicyMode.OPTIONAL)
+        self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
 
     def test_narrated_video_is_not_the_general_default(self) -> None:
         recipe = build_builtin_registry().get("narrated_video")
