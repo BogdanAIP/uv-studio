@@ -29,6 +29,7 @@ export default function ProjectPage() {
   const projectId = useMemo(() => decodeURIComponent(params.projectId), [params.projectId]);
   const [project, setProject] = useState<UVProject | null>(null);
   const [executionPlan, setExecutionPlan] = useState<ProjectExecutionPlan | null>(null);
+  const [workflowRefresh, setWorkflowRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function ProjectPage() {
 
   const refreshProject = async () => {
     setProject(await getUVProject(projectId));
+    setWorkflowRefresh(current => current + 1);
   };
 
   return (
@@ -90,6 +92,7 @@ export default function ProjectPage() {
                   onProjectChanged={refreshProject}
                 />
                 <MusicAssemblyPanel
+                  key={workflowRefresh}
                   projectId={project.project_id}
                   onProjectChanged={refreshProject}
                 />
