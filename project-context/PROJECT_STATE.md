@@ -1,71 +1,61 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-8-additional-recipes -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: stage-9-desktop-productization-release-hardening -->
 
-**Updated:** 2026-08-16
+## Current lifecycle
 
-**Repository:** `BogdanAIP/uv-studio`
+Stage 9 Desktop Productization & Release Hardening is active in draft on `stage-9/desktop-productization-release-hardening`, based on exact green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 Additional Recipes merged as PR #37 (`5eb8f6c2256b9b67dd1e896fc929682eb19b16ca`).
 
-## Product now
+The Stage 8 post-merge idle CI #1614 / Actions run `31971649798` passed all five permanent required jobs on that exact base, including cross-platform bootstrap, API/HTTP, real-media, frontend build and Playwright user outcomes.
 
-Stage 8 Additional Recipes is merged through PR #37 / merge commit `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca` after Chat-first review on exact head `91dcf820b8df76730584f3c27457c782db00b213`. The final pre-merge review head passed all five permanent CI jobs in Actions run `31971331754`, including API integration, real HTTP, FFmpeg/MLT real-media evidence, frontend lint/audit/build and Playwright browser outcomes on Ubuntu and Windows.
+## Stage 9 product goal
 
-The repository is now intentionally returning to the canonical `idle` lifecycle. This closure commit advances `last_completed` to `stage-8-additional-recipes` and keeps `stage-9-desktop-productization-release-hardening` as the next handoff. Stage 9 remains blocked until this exact post-merge idle head itself passes all permanent required checks.
+Produce a native Windows release that a user can install and run without separately preparing Python, Node/npm or FFmpeg, while preserving the canonical Project Store, portable archives, semantic capability boundaries and all permanent user-facing regression scenarios.
 
-## Stage 8 delivered product modes
+Stage 9 must cover the complete release surface rather than only a development launcher:
 
-Stage 8 broadens UV Studio by composition rather than by introducing another universal project, timeline or provider engine:
+- reproducible product-owned Python and frontend dependency resolution;
+- a versioned self-contained release layout and runtime manifest;
+- bundled/provisioned required media binaries with provenance and diagnostics;
+- launcher/process supervision and clean shutdown/cancellation behavior;
+- installer/uninstaller plus versioned update and project migration behavior;
+- backup/recovery and user-readable diagnostics;
+- capability self-checks for required and optional dependencies;
+- clean-machine Windows evidence plus representative weak-hardware/long-project evidence;
+- final license/security/dependency audit and signed release artifacts;
+- packaged-app proof for the permanent browser/user outcomes.
 
-1. **Story Video** — composition-first brief/script workspace with exact project-owned image/video/audio bindings.
-2. **Commercial / Product** — the same portable workspace model with product-oriented media roles and truthful capability readiness.
-3. **Photo → Video** — semantic capability `video.compose_photos` through deterministic local FFmpeg, ordered project-owned stills plus optional project-owned audio, bounded render settings and artifact provenance.
-4. **Audio Visualizer** — semantic capability `audio.visualize` through deterministic local FFmpeg, project-owned master audio plus optional artwork, waveform rendering and measured-duration verification.
-5. **Performance / Lip-sync** — optional local MuseTalk 1.5 supplied portrait + finished speech path, exposed only when the reviewed runtime boundary is satisfied.
-6. **Free Project** — intentionally no required one-click pipeline; users compose the UV-owned primitives their project needs.
+## Initial architecture direction
 
-Story/commercial/free persist typed/versioned Stage 8 input workspaces beneath the canonical Project Store. Photo/visualizer remain bounded local/free deterministic media operations. Performance/lip-sync keeps heavyweight ML/runtime/model installation outside the normal UV Studio dependency graph.
+The current frontend is Next.js and still contains the dynamic `/projects/[projectId]` route. Its development configuration uses a Next rewrite to proxy `/api/uv/*` to the FastAPI backend. Therefore Stage 9 will not assume that a static export can replace the runtime without first proving routing compatibility.
 
-## Stage 8 review findings closed
+The release contract is user-facing, not implementation-facing: the user must not need a system Python, Node/npm or FFmpeg. A release may initially carry its own pinned/versioned runtimes inside the installed product if that preserves routing and behavior more safely. Removing a bundled Node runtime is desirable only if the frontend can be exported/served by UV Studio without breaking arbitrary project routes or browser outcomes.
 
-Before merge, review and exact-head CI closed the following concrete defects and trust-boundary gaps:
+The packaging boundary must remain fail-closed and locally auditable. Bundled executables and runtime payloads need explicit version/provenance information; optional WSL/cloud/provider integrations must not become prerequisites for normal native-Windows startup.
 
-- restored semantic capability identity `video.compose_photos` in blocked execution-plan diagnostics;
-- removed browser races that treated an already-visible control as proof of completed asynchronous project-source registration;
-- synchronized performance portrait/speech selection with exact registered source IDs;
-- removed source-count-driven component remounts that could discard user-selected media and manual photo order;
-- added browser regression proving a user-defined photo order survives a later audio upload and is preserved in final render provenance;
-- hardened the verified MuseTalk checkout against untracked/ignored importable or executable shadows and untracked symlinks outside explicitly allowed `.venv/` / `venv/` trees;
-- disabled MuseTalk checkout bytecode creation with Python `-B`;
-- pinned exact SHA-256 identities for the six binary model payloads used by the accepted MuseTalk 1.5 inference profile because those payloads participate in executable deserialization/runtime loading;
-- rejected loader-preferred alternative VAE/Whisper payloads that could cause different bytes to execute while pinned files remained present;
-- persisted stable `runtime_profile` and full `model_payload_sha256` provenance into successful verified lip-sync artifacts.
+## Release-hardening priorities
 
-D-043 records the complete optional MuseTalk trust boundary. The accepted Stage 8 profile is deliberately fail-closed: future upstream/model revisions require an explicit reviewed profile/fingerprint update rather than silent compatibility.
+1. Replace broad Python runtime ranges with a reproducible release dependency graph while keeping provider/optional ML runtimes outside the baseline.
+2. Define a machine-readable release manifest and diagnostics contract before building an installer around opaque files.
+3. Package backend/frontend/media prerequisites into a deterministic Windows release layout and test it without relying on repository development paths.
+4. Add launcher supervision, logs, cancellation/shutdown, backup/recovery and version/migration checks before installer/update UX is declared complete.
+5. Build installer/uninstaller and update/recovery flows only on top of the verified release layout.
+6. Extend CI with packaged-app and clean-machine-oriented evidence while retaining all permanent existing gates.
+7. Finish with license/security/dependency review, artifact integrity metadata and signing/release documentation.
 
-## Architecture invariants
+## Preserved invariants
 
-- Project Store and UV-owned domain state are canonical; engines, model runtimes and compatibility surfaces are adapters rather than competing authorities.
-- GUI, scripts, AI and MCP converge on UV-owned semantic capabilities/commands/workflows.
-- Paid/remote execution remains optional and behind D-017; provider/model identifiers remain outside canonical project state.
-- Stage 8 remains composition-first under D-042; it did not add a second universal media/project/timeline engine.
-- Performance/lip-sync remains `configuration_required`/partial unless the exact D-043 checkout, shadow-code, model-payload, runtime and CUDA preflight succeeds.
-- Windows and Linux remain continuous engineering targets.
-- Development/review remains Chat-first under D-040; automatic Codex review is excluded.
+- Project Store remains canonical; generated/runtime/provider state does not replace project truth.
+- External model/provider IDs remain adapter/runtime concerns, not canonical project semantics.
+- Paid/remote execution remains optional and explicit under D-017.
+- Existing FFmpeg/MLT and Stage 8 execution boundaries remain bounded to project-owned verified media.
+- MuseTalk remains optional and fail-closed under D-043; its large runtime/model pack is not a baseline desktop dependency.
+- Chat-first review plus permanent CI remain readiness authority under D-040.
+- Stage 9 is one active development slice/PR; internal productization phases are commits/evidence within that slice, not parallel lifecycle slices.
 
-## Verification history
+## Completion gate
 
-- Stable Stage 7 idle base: `main@b68669a9eb56e2d85601b9e35f1783ce23a33c1a`, green CI #1431.
-- Stage 8 product baseline: `2fb903794cf6b6bef576f941c21c18bee9059377`, green CI #1572 / Actions `31969309483`.
-- Initial Stage 8 review transition: `18f46b504feffad7d67878408c15070244381af9`, green CI #1574 / Actions `31969673721`.
-- Final security-reviewed Stage 8 head: `91dcf820b8df76730584f3c27457c782db00b213`, all five permanent jobs green in Actions run `31971331754`.
-- Stage 8 merge commit: `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca`.
-- The exact idle closure head created by this document update is the final Stage 8 completion gate and must pass the same five permanent jobs before Stage 9 starts.
+Stage 9 may move to review only after the packaged product is proven through the required Windows release/installer flows, existing permanent user outcomes remain green, project backup/upgrade/recovery behavior is demonstrated, release diagnostics and security/license evidence are present, and the exact review head passes all permanent required checks.
 
-## Cross-cutting backlog
-
-Non-blocking debt remains deliberately outside Stage 8: broader codec/device fixtures, reproducible Python dependency locking, schema migration/versioning for growing extension state, generated frontend contracts, a future common command envelope, reusable frontend primitives, CI job decomposition, deeper renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces.
-
-## Next handoff
-
-`stage-9-desktop-productization-release-hardening` remains the declared next slice. Its entry conditions are defined in `project-context/NEXT_TASK.md`; it must not begin until the exact post-merge idle head is green across all permanent checks.
+After Stage 9 is merged and atomically closed to a green idle `main`, roadmap-driven development hands off to `post-roadmap-release-maintenance` for release feedback, security/compatibility maintenance and explicitly scoped future enhancements.

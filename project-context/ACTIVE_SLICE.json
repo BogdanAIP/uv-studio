@@ -1,14 +1,43 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "stage-9-desktop-productization-release-hardening",
+    "kind": "stage",
+    "roadmap_stage": "stage-9",
+    "goal": "Turn the proven UV Studio application into a reproducible, installable and diagnosable native Windows product that does not require users to prepare Python, Node/npm or FFmpeg separately, while preserving canonical projects and all permanent user outcomes through packaged execution.",
+    "base_branch": "main",
+    "branch": "stage-9/desktop-productization-release-hardening",
+    "pull_request": 38,
+    "write_scope": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "README.md",
+      "ROADMAP.md",
+      "THIRD_PARTY_NOTICES.md",
+      "docs/**",
+      "e2e/**",
+      "frontend/**",
+      "packaging/**",
+      "project-context/**",
+      "pyproject.toml",
+      "requirements-*.txt",
+      "scripts/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_real_media/**",
+      "tools/**",
+      "uv.lock",
+      "uv_studio/**"
+    ]
+  },
   "last_completed": {
     "id": "stage-8-additional-recipes",
     "pull_request": 37,
     "merge_commit": "5eb8f6c2256b9b67dd1e896fc929682eb19b16ca"
   },
   "handoff": {
-    "next_slice_id": "stage-9-desktop-productization-release-hardening",
+    "next_slice_id": "post-roadmap-release-maintenance",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
