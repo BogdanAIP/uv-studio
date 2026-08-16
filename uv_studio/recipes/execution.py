@@ -315,6 +315,49 @@ def _commercial_product(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     )
 
 
+def _photo_to_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Photo-to-video is a UV Studio-owned deterministic capability workflow. Use registered image sources "
+            "through video.compose_photos rather than a legacy native pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("images", "Фотографии", InputSlotKind.IMAGE),
+            ExecutionInputSlot("audio", "Аудиодорожка", InputSlotKind.AUDIO, required=False),
+            ExecutionInputSlot(
+                "duration_per_image",
+                "Секунд на фотографию",
+                InputSlotKind.NUMBER,
+                required=False,
+                default=2.0,
+            ),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
+def _visualizer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
+    return RecipeExecutionPlan(
+        recipe_id=recipe.recipe_id,
+        recipe_title=recipe.title,
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "Visualizer is a UV Studio-owned deterministic capability workflow. Use registered project audio "
+            "through audio.visualize rather than a legacy native pipeline."
+        ),
+        input_slots=(
+            ExecutionInputSlot("audio", "Master-аудио", InputSlotKind.AUDIO),
+            ExecutionInputSlot("artwork", "Обложка", InputSlotKind.IMAGE, required=False),
+        ),
+        runtime_config_slots=(),
+        production_policy=recipe.production_policy,
+    )
+
+
 def _performance_lip_sync(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     return RecipeExecutionPlan(
         recipe_id=recipe.recipe_id,
@@ -364,6 +407,8 @@ _RESOLVERS = {
     "digital_human": _digital_human,
     "story_video": _story_video,
     "commercial_product": _commercial_product,
+    "photo_to_video": _photo_to_video,
+    "visualizer": _visualizer,
     "performance_lip_sync": _performance_lip_sync,
     "free_project": _free_project,
 }
