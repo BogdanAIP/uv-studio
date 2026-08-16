@@ -103,6 +103,34 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertEqual(slots["audio"]["kind"], "audio")
         self.assertEqual(plan["production_policy"]["sample_first"], "required")
 
+    def test_stage8_photo_execution_plan_keeps_image_audio_number_types(self) -> None:
+        project_id = self._create("photo_to_video")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}
+        self.assertEqual(slots["images"]["kind"], "image")
+        self.assertTrue(slots["images"]["required"])
+        self.assertEqual(slots["audio"]["kind"], "audio")
+        self.assertFalse(slots["audio"]["required"])
+        self.assertEqual(slots["duration_per_image"]["kind"], "number")
+        self.assertEqual(slots["duration_per_image"]["default"], 2.0)
+        self.assertIn("video.compose_photos", plan["reason"])
+
+    def test_stage8_visualizer_execution_plan_keeps_audio_and_artwork_types(self) -> None:
+        project_id = self._create("visualizer")
+        plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}
+        self.assertEqual(slots["audio"]["kind"], "audio")
+        self.assertTrue(slots["audio"]["required"])
+        self.assertEqual(slots["artwork"]["kind"], "image")
+        self.assertFalse(slots["artwork"]["required"])
+        self.assertIn("audio.visualize", plan["reason"])
+
     def test_stage8_performance_is_partial_without_fake_target(self) -> None:
         project_id = self._create("performance_lip_sync")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
