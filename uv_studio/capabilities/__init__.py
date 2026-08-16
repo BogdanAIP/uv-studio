@@ -55,6 +55,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     from .adapters.audio_visualizer import register_audio_visualizer_capability
     from .adapters.dubbing_render import register_dubbing_render_capability
     from .adapters.edit_render import register_edit_render_capability
+    from .adapters.musetalk import register_musetalk_adapter
     from .adapters.music_video_render import register_music_video_render_capability
     from .adapters.photo_slideshow import register_photo_slideshow_capability
     from .adapters.webvtt_subtitles import register_webvtt_subtitle_adapter
@@ -69,6 +70,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     register_photo_slideshow_capability(registry)
     register_audio_visualizer_capability(registry)
     register_music_analysis_capability(registry)
+    register_musetalk_adapter(registry)
     register_argos_translate_adapter(registry)
     register_whisperx_alignment_adapter(registry)
     register_webvtt_subtitle_adapter(registry)
