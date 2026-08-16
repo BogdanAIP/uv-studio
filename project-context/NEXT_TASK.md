@@ -1,28 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: stage-6-sequence-continuity-review -->
-
-Updated: 2026-08-13
+<!-- uv-next-slice: stage-7-music-video-mode -->
 
 ## Goal
 
-Add optional linked-shot/sequence continuity only where accepted prior state matters, while keeping standalone clips and simple projects free of continuity machinery.
+Start Stage 7 Music Video Mode only after Stage 6 sequence continuity/review is reviewed, merged and the repository returns to a green idle lifecycle.
 
 ## Required direction
 
-- keep Project Store/domain state canonical;
-- represent planned and observed continuity state with typed, versioned, provider-neutral contracts;
-- model locks, allowed changes, accepted/rejected takes and re-anchor policy explicitly rather than hiding them in prompts;
-- keep GUI, scripts, AI and MCP on the same UV-owned command/workflow boundaries;
-- use Capability Registry for optional VLM/generation/review providers and D-017 for remote/non-free execution;
-- preserve a human confirmation fallback when automated visual evidence is unavailable or uncertain;
-- reuse mature professional open-source components for visual/reference analysis before adding custom general-purpose infrastructure;
-- do not force sequence state onto independent one-shot clips.
-
-## Entry gate
-
-Do not start this slice until `stage-5-correctness-browser-e2e` has merged, its post-merge context has returned `main` to `idle`, and the idle closure CI is green.
+- compose existing Project Store, Capability Registry, editor/render and production-policy primitives rather than introducing a second project/media engine;
+- integrate `musical-mv-storyboard` only through a tested, license-compatible adapter boundary;
+- make song/lyrics/structure analysis and the Music Map explicit project-owned state where persistence is required;
+- keep music-aware shot timing, beat-sync, source review, sample-first generation and evidence-based final review as music-specific policy rather than universal editor behavior;
+- preserve local/free baselines where viable and keep remote/non-free generation behind D-017 authorization;
+- keep GUI, scripts, AI and MCP on the same UV-owned semantic command/workflow contracts;
+- add a complete user-facing music-video excerpt path without making music mandatory for general video, dubbing or targeted existing-video editing.
 
 ## Completion proof
 
-Continuity state must survive archive/reopen, distinguish planned from observed evidence, reject stale/rejected take bindings, provide an explicit re-anchor path and prove through UI/tests that simple standalone clips do not inherit sequence complexity.
+Stage 7 must prove a 20–30 second music-video excerpt can be planned, assembled, reviewed and rendered through the product UI with music-aware timing and explicit provider/cost behavior, while permanent non-music regression scenarios remain green.
+
+## Entry gate
+
+Do not start this slice until `stage-6-sequence-continuity-review` is merged, its lifecycle is closed to `idle`, and the post-merge idle head passes all permanent required checks.

@@ -7,6 +7,7 @@ import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
+import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import {
   getProjectExecutionPlan,
   getUVProject,
@@ -76,6 +77,11 @@ export default function ProjectPage() {
             </section>
 
             <ProjectEditor
+              projectId={project.project_id}
+              onProjectChanged={refreshProject}
+            />
+
+            <SequenceContinuityPanel
               projectId={project.project_id}
               onProjectChanged={refreshProject}
             />
