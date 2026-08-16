@@ -254,12 +254,17 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
   }, [projectId]);
 
   useEffect(() => {
-    let active = true;
-    refresh().catch(reason => {
-      if (active) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить Music Video Mode');
-    });
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void refresh().catch(reason => {
+        if (!cancelled) {
+          setError(reason instanceof Error ? reason.message : 'Не удалось загрузить Music Video Mode');
+        }
+      });
+    }, 0);
     return () => {
-      active = false;
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [refresh]);
 
@@ -491,7 +496,7 @@ export function MusicVideoPanel({ projectId, onProjectChanged }: MusicVideoPanel
                 <input aria-label={`Начало вокальной фразы ${index + 1}`} value={item.start} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, start: event.target.value } : entry))} className={inputClass} />
                 <input aria-label={`Конец вокальной фразы ${index + 1}`} value={item.end} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, end: event.target.value } : entry))} className={inputClass} />
                 <input aria-label={`Текст вокальной фразы ${index + 1}`} value={item.text} onChange={event => setLyrics(current => current.map((entry, i) => i === index ? { ...entry, text: event.target.value } : entry))} className={`${inputClass} sm:col-span-2`} />
-                <button type="button" aria-label={`Удалить вокальную фразу ${index + 1}`} onClick={() => setLyrics(current => current.filter((_, i) => i !== index))} className="text-slate-500 hover:text-red-300">Удалить</button>
+                <button type="button" aria-label={`Удалить вокальную фразу ${index + 1}`} onClick={() => setLyrics(current => current.filter((_, i) => i !== index)} className="text-slate-500 hover:text-red-300">Удалить</button>
               </div>
             ))}
           </div>
