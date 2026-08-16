@@ -124,7 +124,6 @@ export default function ProjectPage() {
 
             {(project.recipe_id === 'photo_to_video' || project.recipe_id === 'visualizer') && (
               <Stage8MediaPanel
-                key={`stage8-media-${project.sources.length}`}
                 projectId={project.project_id}
                 recipeId={project.recipe_id}
                 sources={project.sources}
@@ -134,7 +133,6 @@ export default function ProjectPage() {
 
             {project.recipe_id === 'performance_lip_sync' && (
               <PerformanceLipSyncPanel
-                key={`performance-lip-sync-${project.sources.length}`}
                 projectId={project.project_id}
                 sources={project.sources}
                 onProjectChanged={refreshProject}
