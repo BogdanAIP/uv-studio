@@ -48,3 +48,6 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-039 — Optional sequence continuity and bounded inspection](decisions/D-039-sequence-continuity-bounded-inspection.md)
 - [D-040 — Chat-first development; no automatic Codex review](decisions/D-040-chat-first-no-automatic-codex-review.md)
 - [D-041 — Music Video Mode: UV-owned Music Map and reference-only storyboard research](decisions/D-041-music-video-map-reference-only-storyboard.md)
+- [D-042 — Stage 8 composition-first additional recipes](decisions/D-042-stage-8-composition-first-additional-recipes.md)
+- [D-043 — MuseTalk optional lip-sync pack](decisions/D-043-musetalk-optional-lipsync-pack.md)
+- [D-044 — Stage 9 product-owned release runtime manifest](decisions/D-044-stage-9-release-runtime-manifest.md)

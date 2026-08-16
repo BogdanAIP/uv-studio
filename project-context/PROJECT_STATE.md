@@ -9,6 +9,8 @@ Stage 9 Desktop Productization & Release Hardening is active in draft on `stage-
 
 The Stage 8 post-merge idle CI #1614 / Actions run `31971649798` passed all five permanent required jobs on that exact base, including cross-platform bootstrap, API/HTTP, real-media, frontend build and Playwright user outcomes.
 
+Stage 9 draft PR #38 is the single active implementation slice. Internal productization phases remain commits/evidence inside this PR rather than separate lifecycle PRs.
+
 ## Stage 9 product goal
 
 Produce a native Windows release that a user can install and run without separately preparing Python, Node/npm or FFmpeg, while preserving the canonical Project Store, portable archives, semantic capability boundaries and all permanent user-facing regression scenarios.
@@ -34,10 +36,18 @@ The release contract is user-facing, not implementation-facing: the user must no
 
 The packaging boundary must remain fail-closed and locally auditable. Bundled executables and runtime payloads need explicit version/provenance information; optional WSL/cloud/provider integrations must not become prerequisites for normal native-Windows startup.
 
+## Implemented Stage 9 foundation
+
+D-044 defines the product-owned immutable release payload boundary. `release-manifest.json` schema v1 records product/build/target identity, the exact baseline component set and a complete sorted file inventory with byte sizes and SHA-256. Manifest parsing rejects non-canonical/traversing paths, duplicate/missing components, missing entrypoints and unsupported targets. Release verification rejects symlinks, missing payloads, unlisted extra files and size mismatches; explicit deep verification also detects same-size SHA-256 substitution.
+
+Secret-safe diagnostics now distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed to the product API and the Stage 9 release utility so launcher, installer, support and CI can converge on one contract.
+
+This foundation deliberately does not make repository `PATH` discovery authoritative for packaged media. The actual packaged launcher must resolve trusted component entrypoints from the verified release manifest.
+
 ## Release-hardening priorities
 
 1. Replace broad Python runtime ranges with a reproducible release dependency graph while keeping provider/optional ML runtimes outside the baseline.
-2. Define a machine-readable release manifest and diagnostics contract before building an installer around opaque files.
+2. Define a machine-readable release manifest and diagnostics contract before building an installer around opaque files. **Foundation implemented; packaging integration and CI proof remain.**
 3. Package backend/frontend/media prerequisites into a deterministic Windows release layout and test it without relying on repository development paths.
 4. Add launcher supervision, logs, cancellation/shutdown, backup/recovery and version/migration checks before installer/update UX is declared complete.
 5. Build installer/uninstaller and update/recovery flows only on top of the verified release layout.
