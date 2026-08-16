@@ -143,7 +143,10 @@ class SequenceContextTests(unittest.TestCase):
                 json.dumps(corrupt, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(SequenceContinuityError, "stale or inconsistent"):
+            with self.assertRaisesRegex(
+                SequenceContinuityError,
+                "review no longer passes required targets",
+            ):
                 build_sequence_timeline_context(
                     service,
                     project.project_id,
