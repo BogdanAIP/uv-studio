@@ -56,3 +56,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-047 — Packaged product-owned executables never fall back to system PATH](decisions/D-047-packaged-toolchain-resolution.md)
 - [D-048 — Ship the current Next frontend as official standalone output](decisions/D-048-next-standalone-release-frontend.md)
 - [D-049 — One frozen executable owns desktop launch and backend-child supervision](decisions/D-049-stage-9-desktop-launcher-supervision.md)
+- [D-050 — Per-user versioned Windows installation with deep verification before activation](decisions/D-050-stage-9-versioned-windows-installation.md)
