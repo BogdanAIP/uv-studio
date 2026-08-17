@@ -191,7 +191,7 @@ jobs:
           & python tools/uv_release.py verify --root $env:UV_RELEASE_ROOT --deep
           if ($LASTEXITCODE -ne 0) { throw 'release did not verify after restoring the exact payload' }
 
-      - name: Smoke complete bundle through packaged frontend and frozen backend
+      - name: Smoke complete bundle through packaged frontend and frozen backend child
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -215,7 +215,7 @@ jobs:
 
           $env:UV_STUDIO_RELEASE_ROOT = $release
           $env:UV_STUDIO_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'uv-studio-packaged-user-data'
-          $backendProc = Start-Process -FilePath $backend -PassThru -NoNewWindow
+          $backendProc = Start-Process -FilePath $backend -ArgumentList '--backend-child' -PassThru -NoNewWindow
           $frontendProc = $null
           try {
             $deadline = (Get-Date).AddSeconds(45)
@@ -285,6 +285,17 @@ jobs:
           } finally {
             if ($frontendProc -and -not $frontendProc.HasExited) { Stop-Process -Id $frontendProc.Id -Force }
             if (-not $backendProc.HasExited) { Stop-Process -Id $backendProc.Id -Force }
+          }
+
+      - name: Smoke native desktop launcher supervision
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $backend = Join-Path $env:UV_RELEASE_ROOT $env:UV_BACKEND_ENTRYPOINT
+          $env:UV_STUDIO_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'uv-studio-desktop-launcher-user-data'
+          & $backend --desktop-smoke
+          if ($LASTEXITCODE -ne 0) {
+            throw "desktop launcher smoke failed with exit $LASTEXITCODE"
           }
 
       - name: Archive exact portable bundle
