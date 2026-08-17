@@ -1,15 +1,28 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from uv_studio.release_profile import ReleaseProfileError, load_release_profile
-from tools.export_release_profile import DEFAULT_PROFILE, profile_environment
+from tools.export_release_profile import DEFAULT_PROFILE, ROOT, profile_environment
 
 
 class ReleaseProfileTests(unittest.TestCase):
+    def test_direct_exporter_entrypoint_can_import_uv_studio_outside_repo_cwd(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "export_release_profile.py"), "--help"],
+            cwd=ROOT.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Export the validated Windows release profile", result.stdout)
+
     def test_checked_in_profile_has_exact_release_inputs(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
         self.assertEqual(profile["schema_version"], 3)
