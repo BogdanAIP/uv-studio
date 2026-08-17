@@ -56,6 +56,8 @@ The existing selection and one-shot authorization preparation are reused. Job re
 
 Jobs are deliberately process-local and ephemeral. Backend restart does not resume them; canonical Project Store outputs remain the durable state. The job registry is bounded and prunes old terminal jobs. A job id is project-scoped; cross-project reads and cancellation fail as not found.
 
+Backend shutdown is itself a cancellation boundary: every active job receives its token and the backend waits boundedly for worker threads to terminate and reap their local tool process. A normal desktop/backend shutdown must therefore not knowingly leave an owned FFmpeg/FFprobe child running after the job owner disappears.
+
 Unexpected exceptions are exposed only as a sanitized generic job failure, without traceback, absolute developer paths or secret-bearing environment data.
 
 ## Partial-output rule
@@ -75,8 +77,9 @@ An operation with unproven rollback semantics stays outside the allowlist even i
 7. successful jobs return the existing capability execution envelope;
 8. cross-project job access fails closed;
 9. unsupported local/remote/in-process operations are not falsely advertised as cancellable;
-10. the ordinary synchronous `/execute` API remains backward-compatible;
-11. unit and API integration suites pass on Linux and Windows, including the shipping Python runtime.
+10. backend shutdown requests cancellation for all active jobs and waits for their workers to exit;
+11. the ordinary synchronous `/execute` API remains backward-compatible;
+12. unit and API integration suites pass on Linux and Windows, including the shipping Python runtime.
 
 ## Follow-up boundary
 

@@ -214,15 +214,44 @@ class CapabilityExecutionJobStore:
     def cancel(self, *, project_id: str, job_id: str) -> dict[str, Any]:
         with self._lock:
             record = self._record_for_project(project_id, job_id)
-            if record.status in _TERMINAL_STATUSES:
-                return record.to_dict()
-            record.cancellation.cancel()
-            if record.status is CapabilityJobStatus.QUEUED:
-                record.status = CapabilityJobStatus.CANCELLED
-                record.finished_at_unix = time.time()
-            elif record.status is CapabilityJobStatus.RUNNING:
-                record.status = CapabilityJobStatus.CANCELLING
+            self._request_cancel_locked(record)
             return record.to_dict()
+
+    @staticmethod
+    def _request_cancel_locked(record: _CapabilityJobRecord) -> None:
+        if record.status in _TERMINAL_STATUSES:
+            return
+        record.cancellation.cancel()
+        if record.status is CapabilityJobStatus.QUEUED:
+            record.status = CapabilityJobStatus.CANCELLED
+            record.finished_at_unix = time.time()
+        elif record.status is CapabilityJobStatus.RUNNING:
+            record.status = CapabilityJobStatus.CANCELLING
+
+    def cancel_all(self, *, wait_timeout_sec: float = 5.0) -> bool:
+        """Request cancellation for every active job and wait boundedly for workers to exit.
+
+        This is the backend shutdown hook. A true result means every worker has
+        terminated/reaped its process boundary before shutdown continues.
+        """
+        if wait_timeout_sec < 0:
+            raise ValueError("wait_timeout_sec must be non-negative")
+        with self._lock:
+            for record in self._jobs.values():
+                self._request_cancel_locked(record)
+            threads = [
+                record.thread
+                for record in self._jobs.values()
+                if record.thread is not None and record.thread.is_alive()
+            ]
+
+        deadline = time.monotonic() + wait_timeout_sec
+        for thread in threads:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            thread.join(remaining)
+        return all(not thread.is_alive() for thread in threads)
 
     def wait_for_terminal(
         self,

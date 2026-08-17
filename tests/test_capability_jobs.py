@@ -62,6 +62,30 @@ class CapabilityExecutionJobStoreTests(unittest.TestCase):
         self.assertIsNone(terminal["result"])
         self.assertIsNone(terminal["error"])
 
+    def test_cancel_all_requests_shutdown_and_waits_for_workers(self) -> None:
+        store = CapabilityExecutionJobStore(max_jobs=4)
+        started = Event()
+
+        def execute(cancellation):
+            started.set()
+            while not cancellation.is_cancelled:
+                time.sleep(0.01)
+            cancellation.raise_if_cancelled()
+            raise AssertionError("unreachable")
+
+        created = store.create(
+            project_id="project_a",
+            capability_id="video.render_edits",
+            offer_id="local_ffmpeg.video_render_edits",
+            adapter_id="local_ffmpeg",
+            executor=execute,
+        )
+        self.assertTrue(started.wait(1.0))
+        self.assertTrue(store.cancel_all(wait_timeout_sec=2.0))
+        terminal = store.get(project_id="project_a", job_id=created["job_id"])
+        self.assertEqual(terminal["status"], "cancelled")
+        self.assertTrue(terminal["cancel_requested"])
+
     def test_cross_project_job_lookup_fails_closed(self) -> None:
         store = CapabilityExecutionJobStore(max_jobs=4)
         created = store.create(

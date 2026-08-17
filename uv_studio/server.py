@@ -24,7 +24,10 @@ from uv_studio import __version__  # noqa: E402
 from uv_studio.api.artifact_files import router as artifact_files_router  # noqa: E402
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
-from uv_studio.api.capability_jobs import router as capability_jobs_router  # noqa: E402
+from uv_studio.api.capability_jobs import (  # noqa: E402
+    get_capability_job_store,
+    router as capability_jobs_router,
+)
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
 from uv_studio.api.continuity_brief import router as continuity_brief_router  # noqa: E402
 from uv_studio.api.diagnostics import router as diagnostics_router  # noqa: E402
@@ -74,6 +77,13 @@ async def enforce_trusted_browser_origin(request: Request, call_next):
             content={"detail": "browser origin is not allowed by UV Studio"},
         )
     return await call_next(request)
+
+
+@app.on_event("shutdown")
+def cancel_capability_jobs_on_shutdown() -> None:
+    # Local process-backed jobs must not outlive the backend that owns their
+    # cancellation tokens and Project Store transaction boundary.
+    get_capability_job_store().cancel_all(wait_timeout_sec=5.0)
 
 
 app.include_router(configuration_router)
