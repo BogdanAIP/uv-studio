@@ -19,7 +19,7 @@ Name "UV Studio"
 OutFile "${UV_OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\UV Studio"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+SetCompressor zlib
 ShowInstDetails show
 ShowUninstDetails show
 BrandingText "UV Studio"
