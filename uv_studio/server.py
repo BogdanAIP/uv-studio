@@ -24,6 +24,7 @@ from uv_studio import __version__  # noqa: E402
 from uv_studio.api.artifact_files import router as artifact_files_router  # noqa: E402
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
+from uv_studio.api.capability_jobs import router as capability_jobs_router  # noqa: E402
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
 from uv_studio.api.continuity_brief import router as continuity_brief_router  # noqa: E402
 from uv_studio.api.diagnostics import router as diagnostics_router  # noqa: E402
@@ -79,6 +80,7 @@ app.include_router(configuration_router)
 app.include_router(diagnostics_router)
 app.include_router(capabilities_router)
 app.include_router(capability_execution_router)
+app.include_router(capability_jobs_router)
 app.include_router(mcp_router)
 app.include_router(qwen_mm_router)
 app.include_router(recipes_router)

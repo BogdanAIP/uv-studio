@@ -9,6 +9,7 @@ from uv_studio.toolchain import local_ffmpeg_tool_overrides
 
 from ..execution import CapabilityExecutionResult
 from ..models import CapabilityOffer
+from ..process_control import CancellationToken, CancellableProcessRunner
 from .artifact_preview import create_artifact_preview
 from .audio_loudness import measure_prepared_audio_loudness
 from .audio_visualizer import render_audio_visualizer
@@ -35,6 +36,19 @@ class LocalFFmpegAdapter:
     """
 
     adapter_id = LocalFFmpegRangeAdapter.adapter_id
+    cancellable_capability_ids = frozenset(
+        {
+            "media.probe",
+            "video.extract_range",
+            "video.replace_range",
+            "video.render_edits",
+            "video.render_music_video",
+            "video.preview_artifact",
+            "audio.measure_loudness",
+            "video.compose_photos",
+            "audio.visualize",
+        }
+    )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if "tool_paths" not in kwargs:
@@ -46,74 +60,91 @@ class LocalFFmpegAdapter:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._delegate, name)
 
+    @classmethod
+    def supports_cancellation(cls, capability_id: str) -> bool:
+        """Return true only for operations with a proven rollback-safe process boundary."""
+        return capability_id in cls.cancellable_capability_ids
+
     def execute(
         self,
         *,
         project_id: str,
         offer: CapabilityOffer,
         payload: Mapping[str, Any],
+        cancellation: CancellationToken | None = None,
     ) -> CapabilityExecutionResult:
-        if offer.capability_id == "video.render_edits":
-            self._delegate._validate_offer(offer)
-            return render_edit_state(
-                self._delegate,
+        previous_runner = self._delegate.runner
+        if cancellation is not None:
+            if not self.supports_cancellation(offer.capability_id):
+                raise UnsupportedCapabilityExecution(
+                    f"capability {offer.capability_id!r} has no proven cancellable process boundary"
+                )
+            cancellation.raise_if_cancelled()
+            self._delegate.runner = CancellableProcessRunner(cancellation)
+        try:
+            if offer.capability_id == "video.render_edits":
+                self._delegate._validate_offer(offer)
+                return render_edit_state(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "video.render_dubbing":
+                self._delegate._validate_offer(offer)
+                return render_dubbing_state(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "video.render_music_video":
+                self._delegate._validate_offer(offer)
+                return render_music_video_state(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "video.preview_artifact":
+                self._delegate._validate_offer(offer)
+                return create_artifact_preview(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "audio.measure_loudness":
+                self._delegate._validate_offer(offer)
+                return measure_prepared_audio_loudness(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "video.compose_photos":
+                self._delegate._validate_offer(offer)
+                return compose_photo_slideshow(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            if offer.capability_id == "audio.visualize":
+                self._delegate._validate_offer(offer)
+                return render_audio_visualizer(
+                    self._delegate,
+                    project_id=project_id,
+                    offer=offer,
+                    payload=payload,
+                )
+            return self._delegate.execute(
                 project_id=project_id,
                 offer=offer,
                 payload=payload,
             )
-        if offer.capability_id == "video.render_dubbing":
-            self._delegate._validate_offer(offer)
-            return render_dubbing_state(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        if offer.capability_id == "video.render_music_video":
-            self._delegate._validate_offer(offer)
-            return render_music_video_state(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        if offer.capability_id == "video.preview_artifact":
-            self._delegate._validate_offer(offer)
-            return create_artifact_preview(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        if offer.capability_id == "audio.measure_loudness":
-            self._delegate._validate_offer(offer)
-            return measure_prepared_audio_loudness(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        if offer.capability_id == "video.compose_photos":
-            self._delegate._validate_offer(offer)
-            return compose_photo_slideshow(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        if offer.capability_id == "audio.visualize":
-            self._delegate._validate_offer(offer)
-            return render_audio_visualizer(
-                self._delegate,
-                project_id=project_id,
-                offer=offer,
-                payload=payload,
-            )
-        return self._delegate.execute(
-            project_id=project_id,
-            offer=offer,
-            payload=payload,
-        )
+        finally:
+            self._delegate.runner = previous_runner
 
 
 __all__ = [

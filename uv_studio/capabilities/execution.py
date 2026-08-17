@@ -31,6 +31,10 @@ class CapabilityToolFailed(CapabilityExecutionError):
     code = "capability_tool_failed"
 
 
+class CapabilityExecutionCancelled(CapabilityExecutionError):
+    code = "capability_execution_cancelled"
+
+
 @dataclass(frozen=True)
 class CapabilityExecutionResult:
     project_id: str
