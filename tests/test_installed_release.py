@@ -57,7 +57,8 @@ class InstalledReleaseVerificationTests(unittest.TestCase):
             )
             self.assertTrue(result["ok"])
             self.assertTrue(result["verify_hashes"])
-            self.assertEqual(result["verified_files"], 6)
+            self.assertEqual(result["checked_files"], 6)
+            self.assertEqual(result["problems"], [])
 
     def test_deep_install_verification_rejects_same_size_substitution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
