@@ -12,14 +12,15 @@ Stage 9 also cannot simply copy historical development runtime versions into the
 
 ## Decision
 
-`packaging/runtime-profile.windows-x86_64.json` is the machine-readable source of truth for the first Windows x86_64 release build inputs. Schema version 2 records:
+`packaging/runtime-profile.windows-x86_64.json` is the machine-readable source of truth for the first Windows x86_64 release build inputs. Schema version 4 records:
 
 - **CPython 3.13.14** and the exact shipping constraints file;
 - **Node.js 24.19.0**, the existing npm lockfile, and the exact official Windows `node.exe` HTTPS source plus SHA-256;
 - **Kdenlive standalone 26.04.3** as the pinned Windows media distribution, with exact HTTPS source plus SHA-256;
-- **PyInstaller 6.21.0** as build-only freezer provenance.
+- **PyInstaller 6.21.0** as build-only freezer provenance;
+- **NSIS 3.12** as the build-only Windows installer compiler, acquired as exact Chocolatey package `nsis.install` version `3.12.0` from the configured HTTPS community feed and verified again by the actual `makensis /VERSION` result before use.
 
-The profile is parsed by `uv_studio.release_profile`, which rejects unknown fields, unsafe/non-canonical relative paths, non-HTTPS or credential-bearing download URLs, non-canonical SHA-256 values, and line-break injection before values may be exported into build automation.
+The profile is parsed by `uv_studio.release_profile`, which rejects unknown fields, unsafe/non-canonical relative paths, non-HTTPS or credential-bearing download/source URLs, non-canonical SHA-256 values, line-break injection, unsupported acquisition providers, and unsafe package/version tokens before values may be exported into build automation.
 
 `tools/export_release_profile.py` exports validated profile values for CI/release tooling. Product version is deliberately not duplicated in this profile: it comes from `uv_studio.__version__`.
 
@@ -51,7 +52,11 @@ The manifest component version for FFmpeg, FFprobe and MLT is the pinned distrib
 
 ### Build-tool ownership
 
-PyInstaller remains build-only. Its exact version is recorded in the same release input profile so a build cannot silently float freezer versions, but it must not appear in the installed Python runtime graph. Future installer/signing compilers follow the same separation: pinned build provenance, not application runtime dependencies.
+PyInstaller and NSIS remain build-only. Their exact versions and acquisition coordinates are recorded in the same release input profile so a build cannot silently float freezer or installer compiler versions, but neither tool is an application runtime dependency and neither belongs in the installed Python graph.
+
+NSIS is deliberately acquired by an exact package coordinate rather than by the SourceForge `/download` redirect previously used during early installer bring-up. Redirect/download landing behavior is not a stable byte-level release input. The release workflow requests exactly `nsis.install` `3.12.0`, requires the configured provider to be `chocolatey`, and refuses to compile the product installer unless the installed compiler reports exactly `v3.12`.
+
+Package-manager acquisition is a build-tool bootstrap boundary, not the final product trust boundary. The generated installer must still install the exact D-044-manifested immutable payload, and the installed product performs its own deep verification before activation/smoke testing.
 
 ## Evidence before acceptance
 
@@ -60,6 +65,8 @@ The Python 3.13.14 Windows compatibility job successfully installed the existing
 The Node 24.19.0 Windows compatibility job successfully installed the existing `package-lock.json` graph through `npm ci`, passed frontend lint and configured high-severity audit, and built the production Next frontend.
 
 The Kdenlive 26.04.3 standalone archive and its SHA-256 are already exercised by the permanent Windows real-media CI. Stage 9 reuses that exact proven payload for the package rather than selecting another FFmpeg/MLT distribution.
+
+The first direct NSIS SourceForge archive attempt failed closed because the bytes returned by the redirect did not match the pinned SHA-256. That failure is preserved as evidence for moving build-tool acquisition to the exact Chocolatey package coordinate instead of weakening or replacing the checksum with an unreviewed response hash.
 
 ## Byte-level reproducibility
 

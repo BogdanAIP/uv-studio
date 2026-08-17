@@ -315,21 +315,38 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:RUNNER_TEMP "nsis-$env:UV_NSIS_VERSION.zip"
-          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-nsis'
-          Invoke-WebRequest -Uri $env:UV_NSIS_URL -OutFile $archive
-          $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          if ($actualSha256 -ne $env:UV_NSIS_SHA256) {
-            throw "NSIS SHA-256 mismatch: expected $env:UV_NSIS_SHA256, got $actualSha256"
+          if ($env:UV_NSIS_PROVIDER -ne 'chocolatey') {
+            throw "unsupported NSIS acquisition provider: $env:UV_NSIS_PROVIDER"
           }
-          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
-          $makensis = Get-ChildItem -Path $extractRoot -Recurse -File -Filter makensis.exe | Select-Object -First 1
-          if (-not $makensis) { throw 'pinned NSIS archive did not contain makensis.exe' }
-          $versionOutput = (& $makensis.FullName /VERSION | Out-String).Trim()
-          if ($versionOutput -notmatch [regex]::Escape($env:UV_NSIS_VERSION)) {
+          $choco = Get-Command choco.exe -ErrorAction Stop
+          & $choco.Source install $env:UV_NSIS_PACKAGE `
+            "--version=$env:UV_NSIS_PACKAGE_VERSION" `
+            "--source=$env:UV_NSIS_SOURCE" `
+            --yes `
+            --no-progress `
+            --limit-output `
+            --allow-downgrade
+          $chocoExit = $LASTEXITCODE
+          if ($chocoExit -notin @(0, 1641, 3010)) {
+            throw "Chocolatey failed to install pinned NSIS package with exit $chocoExit"
+          }
+
+          $candidates = @()
+          if (${env:ProgramFiles(x86)}) {
+            $candidates += Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          }
+          if ($env:ProgramFiles) {
+            $candidates += Join-Path $env:ProgramFiles 'NSIS\makensis.exe'
+          }
+          $makensisPath = $candidates | Where-Object {
+            Test-Path -LiteralPath $_ -PathType Leaf
+          } | Select-Object -First 1
+          if (-not $makensisPath) { throw 'pinned NSIS package did not install makensis.exe' }
+          $versionOutput = (& $makensisPath /VERSION | Out-String).Trim()
+          if ($versionOutput -ne "v$env:UV_NSIS_VERSION") {
             throw "unexpected NSIS version output: $versionOutput"
           }
-          "UV_MAKENSIS=$($makensis.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_MAKENSIS=$makensisPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build per-user versioned Windows installer
         shell: pwsh

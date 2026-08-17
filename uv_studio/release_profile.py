@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-RELEASE_PROFILE_SCHEMA_VERSION = 3
+RELEASE_PROFILE_SCHEMA_VERSION = 4
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class ReleaseProfileError(ValueError):
@@ -26,6 +28,13 @@ def _string(value: Any, location: str) -> str:
     if "\r" in value or "\n" in value:
         raise ReleaseProfileError(f"{location} must not contain line breaks")
     return value
+
+
+def _token(value: Any, location: str) -> str:
+    raw = _string(value, location)
+    if not _TOKEN_RE.fullmatch(raw):
+        raise ReleaseProfileError(f"{location} must be a safe build-tool token")
+    return raw
 
 
 def _relative_path(value: Any, location: str) -> str:
@@ -62,6 +71,17 @@ def _download(value: Any, location: str) -> dict[str, Any]:
     return download
 
 
+def _chocolatey_acquisition(value: Any, location: str) -> dict[str, Any]:
+    acquisition = _object(value, location, {"provider", "package", "package_version", "source"})
+    acquisition["provider"] = _token(acquisition["provider"], f"{location}.provider")
+    if acquisition["provider"] != "chocolatey":
+        raise ReleaseProfileError(f"{location}.provider must be chocolatey")
+    acquisition["package"] = _token(acquisition["package"], f"{location}.package")
+    acquisition["package_version"] = _token(acquisition["package_version"], f"{location}.package_version")
+    acquisition["source"] = _https_url(acquisition["source"], f"{location}.source")
+    return acquisition
+
+
 def load_release_profile(path: Path | str) -> dict[str, Any]:
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -91,7 +111,7 @@ def load_release_profile(path: Path | str) -> dict[str, Any]:
 
     build_tools = _object(root["build_tools"], "build_tools", {"pyinstaller", "nsis"})
     build_tools["pyinstaller"] = _string(build_tools["pyinstaller"], "build_tools.pyinstaller")
-    nsis = _object(build_tools["nsis"], "build_tools.nsis", {"version", "download"})
+    nsis = _object(build_tools["nsis"], "build_tools.nsis", {"version", "acquisition"})
     nsis["version"] = _string(nsis["version"], "build_tools.nsis.version")
-    nsis["download"] = _download(nsis["download"], "build_tools.nsis.download")
+    nsis["acquisition"] = _chocolatey_acquisition(nsis["acquisition"], "build_tools.nsis.acquisition")
     return root

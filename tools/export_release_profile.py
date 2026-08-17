@@ -34,8 +34,8 @@ def profile_environment(profile: Mapping[str, object]) -> dict[str, str]:
     assert isinstance(node_download, dict)
     assert isinstance(media_download, dict)
     assert isinstance(nsis, dict)
-    nsis_download = nsis["download"]
-    assert isinstance(nsis_download, dict)
+    nsis_acquisition = nsis["acquisition"]
+    assert isinstance(nsis_acquisition, dict)
     return {
         "UV_PRODUCT_VERSION": __version__,
         "UV_PYTHON_VERSION": str(python["version"]),
@@ -50,8 +50,10 @@ def profile_environment(profile: Mapping[str, object]) -> dict[str, str]:
         "UV_MEDIA_SHA256": str(media_download["sha256"]),
         "UV_PYINSTALLER_VERSION": str(build_tools["pyinstaller"]),
         "UV_NSIS_VERSION": str(nsis["version"]),
-        "UV_NSIS_URL": str(nsis_download["url"]),
-        "UV_NSIS_SHA256": str(nsis_download["sha256"]),
+        "UV_NSIS_PROVIDER": str(nsis_acquisition["provider"]),
+        "UV_NSIS_PACKAGE": str(nsis_acquisition["package"]),
+        "UV_NSIS_PACKAGE_VERSION": str(nsis_acquisition["package_version"]),
+        "UV_NSIS_SOURCE": str(nsis_acquisition["source"]),
     }
 
 
