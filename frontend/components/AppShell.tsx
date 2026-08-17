@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Clock, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, Trash2, UserRound } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Clapperboard, Clock, FolderKanban, Hexagon, Home, Loader2, PanelLeftOpen, Repeat2, Settings, Trash2, UserRound } from 'lucide-react';
 import clsx from 'clsx';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { clearTempCache, fetchPipelineTasks, fetchSandboxTasks, fetchSessions, type PipelineTask, type SandboxTask } from '@/lib/workflowApi';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Video-Claw', icon: Home },
+  { href: '/', label: 'UV Studio', icon: Home },
+  { href: '/projects', label: 'Проекты', icon: FolderKanban },
+  { href: '/diagnostics', label: 'Диагностика', icon: Activity },
   { href: '/sandbox', label: '临时工作台', icon: Hexagon },
   { href: '/pipelines/standard', label: '文艺短视频', icon: Clapperboard },
   { href: '/pipelines/action-transfer', label: '动作迁移', icon: Repeat2 },
@@ -346,7 +348,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex h-16 items-center px-4 border-b border-gray-100">
             <div className="flex items-center gap-2 min-w-0">
               <PanelLeftOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
-              <span className="text-sm font-semibold text-gray-800 truncate">Video-Claw</span>
+              <span className="text-sm font-semibold text-gray-800 truncate">UV Studio</span>
             </div>
           </div>
           <nav className="min-h-0 flex-1 overflow-y-auto p-3 space-y-1">
