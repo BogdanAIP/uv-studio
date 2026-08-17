@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -19,6 +21,17 @@ class ReleasePythonLockTests(unittest.TestCase):
         assert isinstance(python_profile, dict)
         self.lock_path = ROOT / str(python_profile["constraints"])
         self.expected = parse_constraints(self.lock_path)
+
+    def test_direct_script_entrypoint_can_import_uv_studio_outside_repo_cwd(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "verify_release_python_lock.py"), "--help"],
+            cwd=ROOT.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Verify the exact Windows Python runtime graph", result.stdout)
 
     def test_profile_pins_proven_release_runtime_candidates(self) -> None:
         self.assertEqual(self.profile["target"], {"os": "windows", "arch": "x86_64"})

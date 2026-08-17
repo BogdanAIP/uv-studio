@@ -10,9 +10,12 @@ import sys
 from pathlib import Path
 from typing import Mapping, Sequence
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from uv_studio.release_profile import ReleaseProfileError, load_release_profile
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
 _ALLOWED_BOOTSTRAP_PACKAGES = frozenset({"pip", "setuptools", "wheel"})
 _NAME_NORMALIZER = re.compile(r"[-_.]+")
