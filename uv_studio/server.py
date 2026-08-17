@@ -134,12 +134,12 @@ def root() -> dict[str, str]:
     }
 
 
-def main() -> None:
+def main(*, host_override: str | None = None, port_override: int | None = None) -> None:
     server = RuntimeConfigStore().public_config()["server"]
     uvicorn.run(
         app,
-        host=server["host"],
-        port=server["port"],
+        host=host_override if host_override is not None else server["host"],
+        port=port_override if port_override is not None else server["port"],
         access_log=server["access_log"],
         log_level=str(server["log_level"]).lower(),
     )
