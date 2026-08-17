@@ -77,6 +77,22 @@ class InstalledReleaseVerificationTests(unittest.TestCase):
                     current_executable=executable,
                 )
 
+    def test_install_preflight_preserves_bounded_missing_file_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = self._release(root)
+            missing = root / "runtime" / "node" / "node.exe"
+            missing.unlink()
+            with self.assertRaises(InstalledReleaseVerificationError) as captured:
+                verify_installed_release(
+                    release_root=root,
+                    current_executable=executable,
+                )
+            message = str(captured.exception)
+            self.assertIn("installed release verification could not be completed", message)
+            self.assertIn("runtime/node/node.exe", message)
+            self.assertIn("missing", message.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

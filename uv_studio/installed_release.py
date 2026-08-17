@@ -29,8 +29,17 @@ def verify_installed_release(
         plan = build_launch_plan(release_root, current_executable=current_executable)
         manifest = load_release_manifest(plan.release_root)
         result = verify_release_tree(manifest, plan.release_root, verify_hashes=True)
-    except (DesktopLauncherError, OSError, ReleaseManifestError) as exc:
-        raise InstalledReleaseVerificationError("installed release verification could not be completed") from exc
+    except DesktopLauncherError as exc:
+        # DesktopLauncherError already bounds release-preflight detail to a small
+        # set of manifest-owned paths. Preserve that safe detail for installer
+        # diagnostics instead of replacing it with an opaque generic failure.
+        raise InstalledReleaseVerificationError(
+            f"installed release verification could not be completed: {exc}"
+        ) from exc
+    except (OSError, ReleaseManifestError) as exc:
+        raise InstalledReleaseVerificationError(
+            "installed release verification could not be completed"
+        ) from exc
 
     if not result.get("ok"):
         problems = result.get("problems", [])
