@@ -119,23 +119,12 @@ jobs:
           $melt = Get-ChildItem -Path $extractRoot -Recurse -File -Filter melt.exe | Select-Object -First 1
           if (-not $melt) { throw 'pinned media runtime did not contain melt.exe' }
 
-          $ffmpegLine = (& $ffmpeg.FullName -version | Select-Object -First 1)
-          if ($ffmpegLine -notmatch '^ffmpeg version (?<version>\S+)') {
-            throw "could not parse FFmpeg version from: $ffmpegLine"
-          }
-          $ffmpegVersion = $Matches.version
-          $meltOutput = (& $melt.FullName -version | Out-String)
-          if ($meltOutput -notmatch '(?m)^melt (?<version>\S+)') {
-            throw 'could not parse MLT version from melt output'
-          }
-          $meltVersion = $Matches.version
-
+          $mediaComponentVersion = "kdenlive-$env:UV_MEDIA_PACKAGE_VERSION"
           "UV_MEDIA_ROOT=$extractRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_FFMPEG_EXECUTABLE=$($ffmpeg.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_FFPROBE_EXECUTABLE=$ffprobe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_MLT_EXECUTABLE=$($melt.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "UV_FFMPEG_VERSION=$ffmpegVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "UV_MLT_VERSION=$meltVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_MEDIA_COMPONENT_VERSION=$mediaComponentVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Stage one immutable Windows payload
         shell: pwsh
@@ -176,9 +165,9 @@ jobs:
             --component "backend=$env:UV_PRODUCT_VERSION=$env:UV_BACKEND_ENTRYPOINT" `
             --component "frontend=$env:UV_PRODUCT_VERSION=$env:UV_FRONTEND_ENTRYPOINT" `
             --component "node=$env:UV_NODE_VERSION=$env:UV_NODE_ENTRYPOINT" `
-            --component "ffmpeg=$env:UV_FFMPEG_VERSION=$env:UV_FFMPEG_ENTRYPOINT" `
-            --component "ffprobe=$env:UV_FFMPEG_VERSION=$env:UV_FFPROBE_ENTRYPOINT" `
-            --component "mlt=$env:UV_MLT_VERSION=$env:UV_MLT_ENTRYPOINT"
+            --component "ffmpeg=$env:UV_MEDIA_COMPONENT_VERSION=$env:UV_FFMPEG_ENTRYPOINT" `
+            --component "ffprobe=$env:UV_MEDIA_COMPONENT_VERSION=$env:UV_FFPROBE_ENTRYPOINT" `
+            --component "mlt=$env:UV_MEDIA_COMPONENT_VERSION=$env:UV_MLT_ENTRYPOINT"
           if ($LASTEXITCODE -ne 0) { throw 'release manifest build failed' }
           & python tools/uv_release.py verify --root $env:UV_RELEASE_ROOT --deep
           if ($LASTEXITCODE -ne 0) { throw 'release manifest deep verification failed' }
