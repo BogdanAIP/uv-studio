@@ -1,11 +1,21 @@
 'use client';
 
 import { Download, Film, Loader2, MonitorPlay, ShieldCheck } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorState } from '@/lib/editorApi';
 import { projectArtifactMediaUrl } from '@/lib/editorApi';
 import type { ProjectReference } from '@/lib/projectsApi';
-import { createBrowserPreview, renderAcceptedEdits } from '@/lib/renderApi';
+import type { CapabilityJobStatus } from '@/lib/capabilityJobsApi';
+import {
+  cancelCapabilityJob,
+  startCapabilityJob,
+  waitForCapabilityJob,
+} from '@/lib/capabilityJobsApi';
+import {
+  createBrowserPreview,
+  type CapabilityVideoEnvelope,
+  type RenderAcceptedEditsResult,
+} from '@/lib/renderApi';
 import { formatTimelineTime } from '@/lib/timelineMath';
 
 interface EditorRenderPanelProps {
@@ -35,6 +45,18 @@ function sameEditRevision(acceptedIds: string[], renderedIds: string[]): boolean
   return acceptedIds.every((id, index) => id === renderedIds[index]);
 }
 
+function renderJobLabel(status: CapabilityJobStatus | null): string {
+  switch (status) {
+    case 'queued': return 'Рендер поставлен в очередь';
+    case 'running': return 'FFmpeg собирает мастер';
+    case 'cancelling': return 'Останавливаем FFmpeg';
+    case 'cancelled': return 'Рендер отменён';
+    case 'failed': return 'Рендер завершился ошибкой';
+    case 'succeeded': return 'Мастер собран';
+    default: return 'Подготовка рендера';
+  }
+}
+
 export function EditorRenderPanel({
   projectId,
   editorState,
@@ -45,8 +67,21 @@ export function EditorRenderPanel({
   const [busy, setBusy] = useState<'render' | 'preview' | null>(null);
   const [latestArtifactId, setLatestArtifactId] = useState<string | null>(null);
   const [latestPreviewId, setLatestPreviewId] = useState<string | null>(null);
+  const [renderJobId, setRenderJobId] = useState<string | null>(null);
+  const [renderJobStatus, setRenderJobStatus] = useState<CapabilityJobStatus | null>(null);
+  const [renderNotice, setRenderNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const activeJobRef = useRef<string | null>(null);
+  const pollingRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    pollingRef.current?.abort();
+    const activeJobId = activeJobRef.current;
+    if (activeJobId) {
+      void cancelCapabilityJob(projectId, activeJobId).catch(() => undefined);
+    }
+  }, [projectId]);
 
   const accepted = useMemo(
     () => editorState.accepted_edits.filter(edit => edit.source_path === source.path),
@@ -99,20 +134,70 @@ export function EditorRenderPanel({
     setLatestPreviewId(preview.result.artifact.id);
   };
 
+  const handleCancelRender = async () => {
+    const jobId = activeJobRef.current;
+    if (!jobId) return;
+    setError(null);
+    try {
+      const job = await cancelCapabilityJob(projectId, jobId);
+      setRenderJobStatus(job.status);
+      setRenderNotice('Запрошена отмена. UV Studio ждёт фактической остановки FFmpeg и очистки частичного результата.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось запросить отмену рендера');
+    }
+  };
+
   const handleRender = async () => {
     if (accepted.length === 0) return;
+    const polling = new AbortController();
+    pollingRef.current?.abort();
+    pollingRef.current = polling;
     setBusy('render');
     setError(null);
     setPreviewError(null);
+    setRenderNotice(null);
+    setRenderJobId(null);
+    setRenderJobStatus('queued');
     let masterCreated = false;
     try {
-      const envelope = await renderAcceptedEdits(projectId, source.path);
+      const started = await startCapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
+        projectId,
+        'video.render_edits',
+        { source_path: source.path },
+      );
+      activeJobRef.current = started.job_id;
+      setRenderJobId(started.job_id);
+      setRenderJobStatus(started.status);
+
+      const terminal = await waitForCapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
+        projectId,
+        started.job_id,
+        {
+          signal: polling.signal,
+          onUpdate: job => setRenderJobStatus(job.status),
+        },
+      );
+      activeJobRef.current = null;
+
+      if (terminal.status === 'cancelled') {
+        setRenderNotice('Рендер отменён. Частичный мастер не опубликован в проекте.');
+        return;
+      }
+      if (terminal.status === 'failed') {
+        throw new Error(terminal.error?.message ?? 'Не удалось собрать мастер-рендер');
+      }
+      if (terminal.status !== 'succeeded' || !terminal.result) {
+        throw new Error(`Неожиданное состояние рендера: ${terminal.status}`);
+      }
+
+      const envelope = terminal.result;
       if (!envelope.result.artifact?.id) {
         throw new Error('Рендер завершился без зарегистрированного artifact ID.');
       }
       const masterId = envelope.result.artifact.id;
       setLatestArtifactId(masterId);
       setLatestPreviewId(null);
+      setRenderNotice('Мастер собран. Создаём browser preview.');
       masterCreated = true;
       try {
         await makePreview(masterId);
@@ -124,9 +209,12 @@ export function EditorRenderPanel({
         );
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      activeJobRef.current = null;
       setError(err instanceof Error ? err.message : 'Не удалось собрать мастер-рендер');
     } finally {
       if (masterCreated) await refreshEverything();
+      if (pollingRef.current === polling) pollingRef.current = null;
       setBusy(null);
     }
   };
@@ -158,15 +246,27 @@ export function EditorRenderPanel({
             Accept остаётся лёгкой записью non-destructive edit state. Только эта явная операция запускает локальный FFmpeg и одним проходом материализует все принятые диапазоны текущего исходника. Browser preview затем кодируется из этого мастера, а не повторяет монтаж.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleRender()}
-          disabled={busy !== null || accepted.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy === 'render' ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />}
-          {busy === 'render' ? 'Сборка мастера…' : renders.length ? 'Пересобрать мастер' : 'Собрать мастер'}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void handleRender()}
+            disabled={busy !== null || accepted.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy === 'render' ? <Loader2 size={16} className="animate-spin" /> : <Film size={16} />}
+            {busy === 'render' ? renderJobLabel(renderJobStatus) : renders.length ? 'Пересобрать мастер' : 'Собрать мастер'}
+          </button>
+          {busy === 'render' && renderJobId && (
+            <button
+              type="button"
+              onClick={() => void handleCancelRender()}
+              disabled={renderJobStatus === 'cancelling' || renderJobStatus === 'cancelled'}
+              className="rounded-xl border border-red-800 bg-red-950/30 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:border-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {renderJobStatus === 'cancelling' ? 'Останавливаем…' : 'Отменить рендер'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -185,6 +285,14 @@ export function EditorRenderPanel({
         </div>
       )}
 
+      {renderNotice && (
+        <div className="mt-4 rounded-xl border border-sky-900/70 bg-sky-950/30 p-3 text-xs leading-5 text-sky-200">
+          {renderNotice}
+          {renderJobId && busy === 'render' && (
+            <span className="ml-2 font-mono text-[10px] text-sky-500">job {renderJobId.slice(-10)}</span>
+          )}
+        </div>
+      )}
       {error && (
         <div className="mt-4 rounded-xl border border-red-900/70 bg-red-950/40 p-3 text-xs leading-5 text-red-200">
           {error}
