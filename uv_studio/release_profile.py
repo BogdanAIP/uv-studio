@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-RELEASE_PROFILE_SCHEMA_VERSION = 2
+RELEASE_PROFILE_SCHEMA_VERSION = 3
 
 
 class ReleaseProfileError(ValueError):
@@ -55,6 +55,13 @@ def _https_url(value: Any, location: str) -> str:
     return raw
 
 
+def _download(value: Any, location: str) -> dict[str, Any]:
+    download = _object(value, location, {"url", "sha256"})
+    download["url"] = _https_url(download["url"], f"{location}.url")
+    download["sha256"] = _sha256(download["sha256"], f"{location}.sha256")
+    return download
+
+
 def load_release_profile(path: Path | str) -> dict[str, Any]:
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -75,17 +82,16 @@ def load_release_profile(path: Path | str) -> dict[str, Any]:
     node = _object(root["node"], "node", {"version", "lock", "download"})
     node["version"] = _string(node["version"], "node.version")
     node["lock"] = _relative_path(node["lock"], "node.lock")
-    node_download = _object(node["download"], "node.download", {"url", "sha256"})
-    node_download["url"] = _https_url(node_download["url"], "node.download.url")
-    node_download["sha256"] = _sha256(node_download["sha256"], "node.download.sha256")
+    node["download"] = _download(node["download"], "node.download")
 
     media = _object(root["media"], "media", {"distribution", "version", "download"})
     media["distribution"] = _string(media["distribution"], "media.distribution")
     media["version"] = _string(media["version"], "media.version")
-    media_download = _object(media["download"], "media.download", {"url", "sha256"})
-    media_download["url"] = _https_url(media_download["url"], "media.download.url")
-    media_download["sha256"] = _sha256(media_download["sha256"], "media.download.sha256")
+    media["download"] = _download(media["download"], "media.download")
 
-    build_tools = _object(root["build_tools"], "build_tools", {"pyinstaller"})
+    build_tools = _object(root["build_tools"], "build_tools", {"pyinstaller", "nsis"})
     build_tools["pyinstaller"] = _string(build_tools["pyinstaller"], "build_tools.pyinstaller")
+    nsis = _object(build_tools["nsis"], "build_tools.nsis", {"version", "download"})
+    nsis["version"] = _string(nsis["version"], "build_tools.nsis.version")
+    nsis["download"] = _download(nsis["download"], "build_tools.nsis.download")
     return root
