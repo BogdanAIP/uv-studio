@@ -24,6 +24,9 @@ ShowInstDetails show
 ShowUninstDetails show
 BrandingText "UV Studio"
 
+Var VerifyExit
+Var VerifyOutput
+
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch UV Studio"
@@ -34,17 +37,33 @@ BrandingText "UV Studio"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+Function VerifyInstalledRelease
+  nsExec::ExecToStack /TIMEOUT=300000 '"$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" --verify-release'
+  Pop $VerifyExit
+  Pop $VerifyOutput
+FunctionEnd
+
+Function RecordVerificationFailure
+  CreateDirectory "$LOCALAPPDATA\UV Studio"
+  CreateDirectory "$LOCALAPPDATA\UV Studio\logs"
+  FileOpen $1 "$LOCALAPPDATA\UV Studio\logs\installer-verification-error.txt" w
+  FileWrite $1 "release=${UV_RELEASE_ID}$\r$\n"
+  FileWrite $1 "verifier_exit=$VerifyExit$\r$\n"
+  FileWrite $1 "$VerifyOutput$\r$\n"
+  FileClose $1
+FunctionEnd
+
 Section "UV Studio" SEC_MAIN
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   CreateDirectory "$INSTDIR\versions"
+  ; A diagnostic belongs only to the current installation attempt.
+  Delete "$LOCALAPPDATA\UV Studio\logs\installer-verification-error.txt"
 
   ; Exact reinstall: reuse only an already deep-verified identical release.
   IfFileExists "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" 0 install_release
-  ExecWait '"$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" --verify-release' $0
-  ${If} $0 == 0
-    Goto activate_release
-  ${EndIf}
+  Call VerifyInstalledRelease
+  StrCmp $VerifyExit "0" activate_release
   RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
 
 install_release:
@@ -52,14 +71,14 @@ install_release:
   File /r "${UV_RELEASE_ROOT}\*"
 
   ; The copied payload is not activated until its own D-044 deep verifier accepts it.
-  ExecWait '"$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" --verify-release' $0
-  ${If} $0 != 0
-    RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
-    ; /SD keeps /S installations fail-closed instead of waiting on an invisible dialog.
-    MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated." /SD IDOK
-    SetErrorLevel 2
-    Quit
-  ${EndIf}
+  Call VerifyInstalledRelease
+  StrCmp $VerifyExit "0" activate_release
+  Call RecordVerificationFailure
+  RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
+  ; /SD keeps /S installations fail-closed instead of waiting on an invisible dialog.
+  MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated. See the UV Studio logs directory for diagnostics." /SD IDOK
+  SetErrorLevel 2
+  Quit
 
 activate_release:
   FileOpen $0 "$INSTDIR\current-release.txt" w

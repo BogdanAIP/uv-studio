@@ -26,7 +26,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             result = verify_installed_release()
         except InstalledReleaseVerificationError as exc:
-            print(f"UV Studio release verification failed: {exc}", file=sys.stderr)
+            # This is a private machine-facing mode used by the installer. Keep the
+            # message deliberately sanitized in InstalledReleaseVerificationError
+            # and emit it on stdout so NSIS can capture it without invoking a shell.
+            print(f"UV Studio release verification failed: {exc}")
             return 2
         print(
             "UV Studio release verification passed: "

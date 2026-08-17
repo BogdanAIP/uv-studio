@@ -380,7 +380,15 @@ jobs:
           if (Test-Path -LiteralPath $userDataRoot) { Remove-Item -LiteralPath $userDataRoot -Recurse -Force }
 
           $install = Start-Process -FilePath $env:UV_INSTALLER_PATH -ArgumentList '/S' -PassThru -Wait
-          if ($install.ExitCode -ne 0) { throw "silent installer failed with exit $($install.ExitCode)" }
+          if ($install.ExitCode -ne 0) {
+            $installerDiagnostic = Join-Path $userDataRoot 'logs\installer-verification-error.txt'
+            if (Test-Path -LiteralPath $installerDiagnostic -PathType Leaf) {
+              Write-Host '--- installer verification diagnostic ---'
+              Get-Content -LiteralPath $installerDiagnostic | Write-Host
+              Write-Host '--- end installer verification diagnostic ---'
+            }
+            throw "silent installer failed with exit $($install.ExitCode)"
+          }
 
           $currentRelease = Join-Path $installRoot 'current-release.txt'
           if (-not (Test-Path -LiteralPath $currentRelease -PathType Leaf)) { throw 'installer did not activate current-release.txt' }
