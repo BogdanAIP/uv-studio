@@ -69,17 +69,18 @@ An operation with unproven rollback semantics stays outside the allowlist even i
 ## Acceptance criteria
 
 1. a real long-running child process is terminated after cancellation and cannot perform a delayed write;
-2. timeout remains distinguishable from cancellation;
-3. injected synchronous adapter runners continue to work unchanged when no cancellation token is supplied;
-4. cancellation restores the request-local adapter runner in `finally`;
-5. an FFmpeg operation that has opened a partial output removes that output and publishes no Project Store artifact when `CapabilityExecutionCancelled` propagates;
-6. job start/cancel/poll reaches terminal `cancelled` with no result artifact;
-7. successful jobs return the existing capability execution envelope;
-8. cross-project job access fails closed;
-9. unsupported local/remote/in-process operations are not falsely advertised as cancellable;
-10. backend shutdown requests cancellation for all active jobs and waits for their workers to exit;
-11. the ordinary synchronous `/execute` API remains backward-compatible;
-12. unit and API integration suites pass on Linux and Windows, including the shipping Python runtime.
+2. the provisioned real-media suite proves the same cancellation path against an actual FFmpeg process whose nominal input duration is much longer than the cancellation interval;
+3. timeout remains distinguishable from cancellation;
+4. injected synchronous adapter runners continue to work unchanged when no cancellation token is supplied;
+5. cancellation restores the request-local adapter runner in `finally`;
+6. an FFmpeg operation that has opened a partial output removes that output and publishes no Project Store artifact when `CapabilityExecutionCancelled` propagates;
+7. job start/cancel/poll reaches terminal `cancelled` with no result artifact;
+8. successful jobs return the existing capability execution envelope;
+9. cross-project job access fails closed;
+10. unsupported local/remote/in-process operations are not falsely advertised as cancellable;
+11. backend shutdown requests cancellation for all active jobs and waits for their workers to exit;
+12. the ordinary synchronous `/execute` API remains backward-compatible;
+13. unit, API integration and real-media suites pass on Linux and Windows, including the shipping Python runtime.
 
 ## Follow-up boundary
 
