@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
-import json
 import re
 import sys
 from pathlib import Path
 from typing import Mapping, Sequence
+
+from uv_studio.release_profile import ReleaseProfileError, load_release_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
@@ -27,33 +28,9 @@ def canonical_name(value: str) -> str:
 
 def load_profile(path: Path) -> dict[str, object]:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ReleasePythonLockError("runtime profile is not readable valid JSON") from exc
-    if not isinstance(raw, dict) or set(raw) != {"schema_version", "target", "python", "node"}:
-        raise ReleasePythonLockError("runtime profile root has unexpected fields")
-    if raw["schema_version"] != 1 or isinstance(raw["schema_version"], bool):
-        raise ReleasePythonLockError("runtime profile schema_version must be integer 1")
-    target = raw["target"]
-    python = raw["python"]
-    node = raw["node"]
-    if not isinstance(target, dict) or set(target) != {"os", "arch"}:
-        raise ReleasePythonLockError("runtime profile target is malformed")
-    if target != {"os": "windows", "arch": "x86_64"}:
-        raise ReleasePythonLockError("runtime profile target must be windows/x86_64")
-    if not isinstance(python, dict) or set(python) != {"version", "constraints"}:
-        raise ReleasePythonLockError("runtime profile python section is malformed")
-    if not isinstance(node, dict) or set(node) != {"version", "lock"}:
-        raise ReleasePythonLockError("runtime profile node section is malformed")
-    for location, value in (
-        ("python.version", python["version"]),
-        ("python.constraints", python["constraints"]),
-        ("node.version", node["version"]),
-        ("node.lock", node["lock"]),
-    ):
-        if not isinstance(value, str) or not value.strip() or value != value.strip():
-            raise ReleasePythonLockError(f"runtime profile {location} must be a non-empty canonical string")
-    return raw
+        return load_release_profile(path)
+    except ReleaseProfileError as exc:
+        raise ReleasePythonLockError(str(exc)) from exc
 
 
 def parse_constraints(path: Path) -> dict[str, str]:

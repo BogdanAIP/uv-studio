@@ -1,6 +1,27 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "target": {"os": "windows", "arch": "x86_64"},
-  "python": {"version": "3.13.14", "constraints": "requirements-uv-release-win-x86_64.txt"},
-  "node": {"version": "24.19.0", "lock": "frontend/package-lock.json"}
+  "python": {
+    "version": "3.13.14",
+    "constraints": "requirements-uv-release-win-x86_64.txt"
+  },
+  "node": {
+    "version": "24.19.0",
+    "lock": "frontend/package-lock.json",
+    "download": {
+      "url": "https://nodejs.org/download/release/v24.19.0/win-x64/node.exe",
+      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237"
+    }
+  },
+  "media": {
+    "distribution": "kdenlive-standalone",
+    "version": "26.04.3",
+    "download": {
+      "url": "https://download.kde.org/stable/kdenlive/26.04/windows/kdenlive-26.04.3_standalone.exe",
+      "sha256": "f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9"
+    }
+  },
+  "build_tools": {
+    "pyinstaller": "6.21.0"
+  }
 }
