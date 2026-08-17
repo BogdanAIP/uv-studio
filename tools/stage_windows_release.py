@@ -15,6 +15,17 @@ class WindowsReleaseStageError(RuntimeError):
     pass
 
 
+# Kdenlive's standalone archive contains Qt's own test/build payload below
+# bin/Qt/test. Those objects are not runtime dependencies of FFmpeg, FFprobe or
+# MLT, and some paths are unsuitable for a normal per-user Windows install.
+# Keep this list deliberately narrow: expanding it requires an explicit runtime
+# proof, not a generic "delete tests" heuristic.
+_MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
+    ("bin", "qt", "test"),
+)
+_MEDIA_EXCLUSION_RULES = ("**/bin/Qt/test/**",)
+
+
 def _require_directory(path: Path | str, label: str) -> Path:
     candidate = Path(path).expanduser()
     if candidate.is_symlink():
@@ -79,6 +90,48 @@ def _copy_tree(source: Path, target: Path, label: str) -> None:
     shutil.copytree(source, target, symlinks=False)
 
 
+def _contains_segment_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]) -> bool:
+    folded = tuple(part.casefold() for part in parts)
+    width = len(sequence)
+    return any(folded[index : index + width] == sequence for index in range(len(folded) - width + 1))
+
+
+def _media_path_is_excluded(relative: Path) -> bool:
+    parts = relative.parts
+    return any(
+        _contains_segment_sequence(parts, sequence)
+        for sequence in _MEDIA_EXCLUDED_SEGMENT_SEQUENCES
+    )
+
+
+def _excluded_media_file_count(media_root: Path) -> int:
+    return sum(
+        1
+        for candidate in media_root.rglob("*")
+        if candidate.is_file() and _media_path_is_excluded(candidate.relative_to(media_root))
+    )
+
+
+def _copy_media_runtime(source: Path, target: Path) -> int:
+    # Security validation covers the full acquisition tree, including excluded
+    # content, before anything is staged.
+    _reject_symlinks(source, "media runtime")
+    excluded_file_count = _excluded_media_file_count(source)
+
+    def ignore(current: str, names: list[str]) -> set[str]:
+        current_path = Path(current)
+        ignored: set[str] = set()
+        for name in names:
+            candidate = current_path / name
+            relative = candidate.relative_to(source)
+            if _media_path_is_excluded(relative):
+                ignored.add(name)
+        return ignored
+
+    shutil.copytree(source, target, symlinks=False, ignore=ignore)
+    return excluded_file_count
+
+
 def stage_windows_release(
     *,
     backend_root: Path | str,
@@ -110,6 +163,15 @@ def stage_windows_release(
     ffmpeg_relative = _relative_file(ffmpeg, media, "FFmpeg executable")
     ffprobe_relative = _relative_file(ffprobe, media, "FFprobe executable")
     melt_relative = _relative_file(melt, media, "MLT executable")
+    for label, relative in (
+        ("FFmpeg executable", ffmpeg_relative),
+        ("FFprobe executable", ffprobe_relative),
+        ("MLT executable", melt_relative),
+    ):
+        if _media_path_is_excluded(Path(relative)):
+            raise WindowsReleaseStageError(
+                f"{label} is inside a non-runtime media exclusion: {relative}"
+            )
 
     output = Path(output_root).expanduser()
     if output.exists() or output.is_symlink():
@@ -129,7 +191,7 @@ def stage_windows_release(
         node_target = output / "runtime" / "node" / "node.exe"
         node_target.parent.mkdir(parents=True)
         shutil.copy2(node, node_target)
-        _copy_tree(media, output / "runtime" / "media", "media runtime")
+        excluded_media_file_count = _copy_media_runtime(media, output / "runtime" / "media")
 
         entrypoints = {
             "backend": "backend/uv-studio-backend.exe",
@@ -155,6 +217,8 @@ def stage_windows_release(
             "entrypoints": entrypoints,
             "file_count": file_count,
             "media_file_count": media_file_count,
+            "excluded_media_file_count": excluded_media_file_count,
+            "media_exclusion_rules": list(_MEDIA_EXCLUSION_RULES),
         }
     except Exception:
         shutil.rmtree(output, ignore_errors=True)
