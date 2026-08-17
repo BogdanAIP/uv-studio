@@ -164,7 +164,8 @@ jobs:
           "UV_FFMPEG_ENTRYPOINT=$($stage.entrypoints.ffmpeg)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_FFPROBE_ENTRYPOINT=$($stage.entrypoints.ffprobe)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_MLT_ENTRYPOINT=$($stage.entrypoints.mlt)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "staged files=$($stage.file_count), media files=$($stage.media_file_count)"
+          Write-Host "staged files=$($stage.file_count), media files=$($stage.media_file_count), excluded media files=$($stage.excluded_media_file_count)"
+          Write-Host "media exclusion rules=$($stage.media_exclusion_rules -join ',')"
 
       - name: Build and deep-verify D-044 release manifest
         shell: pwsh
@@ -184,6 +185,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'release manifest build failed' }
           & python tools/uv_release.py verify --root $env:UV_RELEASE_ROOT --deep
           if ($LASTEXITCODE -ne 0) { throw 'release manifest deep verification failed' }
+
+      - name: Report final per-user Windows path budget
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseId = "$env:UV_PRODUCT_VERSION-$($env:GITHUB_SHA.Substring(0, 12))"
+          if ($releaseId -notmatch '^[A-Za-z0-9._-]+$') {
+            throw "release id is not Windows-path-safe: $releaseId"
+          }
+          $installedReleaseRoot = Join-Path $env:LOCALAPPDATA "Programs\UV Studio\versions\$releaseId"
+          & python tools/check_windows_install_paths.py `
+            --release-root $env:UV_RELEASE_ROOT `
+            --install-root $installedReleaseRoot `
+            --report-only
+          if ($LASTEXITCODE -ne 0) { throw 'Windows path budget analyzer failed unexpectedly' }
 
       - name: Prove same-size payload tampering fails closed
         shell: pwsh
@@ -430,6 +446,22 @@ jobs:
             throw 'uninstaller modified D-045 user data'
           }
           Remove-Item -LiteralPath $userDataRoot -Recurse -Force
+
+      - name: Prove versioned update and rollback A to B to A
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & pwsh -NoProfile -File tools/prove_windows_update_rollback.ps1 `
+            -PrimaryInstallerPath $env:UV_INSTALLER_PATH `
+            -MakeNsisPath $env:UV_MAKENSIS `
+            -ReleaseRoot $env:UV_RELEASE_ROOT `
+            -PrimaryReleaseId $env:UV_RELEASE_ID `
+            -ProductVersion $env:UV_PRODUCT_VERSION `
+            -NsiScriptPath 'packaging/windows/uv-studio.nsi' `
+            -OutputDirectory $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) {
+            throw "versioned update/rollback proof failed with exit $LASTEXITCODE"
+          }
 
       - name: Archive exact portable bundle
         shell: pwsh
