@@ -97,6 +97,35 @@ function Invoke-DesktopSmoke([string]$ReleaseId) {
     }
 }
 
+function Invoke-CleanMachineDesktopSmoke([string]$ReleaseId) {
+    $backend = Get-ReleaseBackend $ReleaseId
+    $previousPath = $env:PATH
+    $previousPythonHome = $env:PYTHONHOME
+    $previousPythonPath = $env:PYTHONPATH
+    $previousNodePath = $env:NODE_PATH
+    try {
+        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+        Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+        Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+        Remove-Item Env:NODE_PATH -ErrorAction SilentlyContinue
+        foreach ($hostTool in @('python.exe', 'node.exe', 'ffmpeg.exe', 'ffprobe.exe', 'melt.exe')) {
+            if (Get-Command $hostTool -ErrorAction SilentlyContinue) {
+                throw "sanitized clean-machine PATH unexpectedly exposes $hostTool"
+            }
+        }
+        $env:UV_STUDIO_USER_DATA_DIR = $userDataRoot
+        & $backend --desktop-smoke
+        if ($LASTEXITCODE -ne 0) {
+            throw "clean-machine desktop smoke failed for selected release: $ReleaseId"
+        }
+    } finally {
+        $env:PATH = $previousPath
+        if ($null -eq $previousPythonHome) { Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue } else { $env:PYTHONHOME = $previousPythonHome }
+        if ($null -eq $previousPythonPath) { Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue } else { $env:PYTHONPATH = $previousPythonPath }
+        if ($null -eq $previousNodePath) { Remove-Item Env:NODE_PATH -ErrorAction SilentlyContinue } else { $env:NODE_PATH = $previousNodePath }
+    }
+}
+
 if (Test-Path -LiteralPath $installRoot) {
     Remove-Item -LiteralPath $installRoot -Recurse -Force
 }
@@ -125,6 +154,7 @@ if (-not (Test-Path -LiteralPath $secondaryInstaller -PathType Leaf)) {
 Invoke-Installer $primaryInstaller
 Assert-ReleaseSelected $PrimaryReleaseId
 Invoke-DesktopSmoke $PrimaryReleaseId
+Invoke-CleanMachineDesktopSmoke $PrimaryReleaseId
 
 New-Item -ItemType Directory -Force -Path $userDataRoot | Out-Null
 $sentinel = Join-Path $userDataRoot 'update-preserve-sentinel.txt'
@@ -137,6 +167,7 @@ if (-not (Test-Path -LiteralPath (Get-ReleaseBackend $PrimaryReleaseId) -PathTyp
 }
 Assert-ReleaseSelected $secondaryReleaseId
 Invoke-DesktopSmoke $secondaryReleaseId
+Invoke-CleanMachineDesktopSmoke $secondaryReleaseId
 if ((Get-Content -LiteralPath $sentinel -Raw) -ne 'PRESERVE_USER_DATA_ACROSS_UPDATE') {
     throw 'forward update modified D-045 user data'
 }
@@ -148,6 +179,7 @@ if (-not (Test-Path -LiteralPath (Get-ReleaseBackend $secondaryReleaseId) -PathT
 }
 Assert-ReleaseSelected $PrimaryReleaseId
 Invoke-DesktopSmoke $PrimaryReleaseId
+Invoke-CleanMachineDesktopSmoke $PrimaryReleaseId
 if ((Get-Content -LiteralPath $sentinel -Raw) -ne 'PRESERVE_USER_DATA_ACROSS_UPDATE') {
     throw 'rollback activation modified D-045 user data'
 }
@@ -178,4 +210,4 @@ if ((Get-Content -LiteralPath $sentinel -Raw) -ne 'PRESERVE_USER_DATA_ACROSS_UPD
 }
 Remove-Item -LiteralPath $userDataRoot -Recurse -Force
 
-Write-Host "versioned installer update/rollback proof passed: $PrimaryReleaseId -> $secondaryReleaseId -> $PrimaryReleaseId"
+Write-Host "versioned installer update/rollback + clean-machine proof passed: $PrimaryReleaseId -> $secondaryReleaseId -> $PrimaryReleaseId"
