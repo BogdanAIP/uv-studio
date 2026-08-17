@@ -17,5 +17,12 @@ def get_diagnostics(
         False,
         description="Hash every packaged release payload file in addition to structural checks.",
     ),
+    probe_storage: bool = Query(
+        False,
+        description="Write and remove temporary markers to verify UV Studio mutable storage and inspect migration recovery metadata.",
+    ),
 ) -> dict[str, Any]:
-    return build_diagnostics(verify_release=verify_release)
+    return build_diagnostics(
+        verify_release=verify_release,
+        probe_storage=probe_storage,
+    )
