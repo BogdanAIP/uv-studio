@@ -1,6 +1,6 @@
 # D-055 — Installed clean-machine runtime independence proof
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-17
 - **Stage:** Stage 9 Desktop Productization & Release Hardening
 
@@ -8,7 +8,7 @@
 
 D-046, D-047, D-048 and D-049 define the Windows shipping runtime: frozen Python backend, bundled Node standalone frontend and manifest-owned FFmpeg/FFprobe/MLT. D-050/D-053 prove installation, update and rollback, but a hosted Windows runner also contains development Python, Node and media tools. A green desktop smoke on such a host is insufficient evidence that an installed UV Studio does not accidentally fall back to machine tooling.
 
-## Proposed decision
+## Decision
 
 The existing installed A -> B -> A release proof also becomes the clean-machine runtime-independence proof.
 
@@ -27,6 +27,14 @@ This is deliberately performed against the installed immutable sibling rather th
 5. rollback-selected A completes the same clean-machine smoke after B -> A;
 6. D-044 deep verification, installer activation and D-045 user-data preservation remain unchanged;
 7. the exact-head Stage 9 Windows Release workflow is green.
+
+## Acceptance evidence
+
+Exact branch head `149e9baa1126e16de612e4b5f715885811d2ac7e` completed both required workflows successfully on 2026-08-17:
+
+- CI run #1693 (`32060462176`) — success;
+- Stage 9 Windows Release run #60 (`32060462175`) — success;
+- the Windows release job completed the installed A -> B -> A proof, including clean-machine desktop smoke for A, B and rollback-selected A, while the sanitized `PATH` exposed none of Python, Node, FFmpeg, FFprobe or MLT.
 
 ## Boundary
 
