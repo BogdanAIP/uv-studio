@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from .config import paths_overlap
+from .projects.maintenance import ProjectMaintenanceError, prepare_project_store_for_current_schema
+from .projects.store import ProjectStore
 from .release_manifest import (
     ReleaseManifestError,
     load_release_manifest,
@@ -173,6 +175,35 @@ def build_child_environment(
     environment["PORT"] = str(FRONTEND_PORT)
     environment["NODE_ENV"] = "production"
     return environment
+
+
+def prepare_packaged_project_store(
+    plan: DesktopLaunchPlan,
+    environment: Mapping[str, str],
+) -> None:
+    """Prepare canonical project metadata before any packaged child process starts."""
+
+    try:
+        user_data = Path(environment["UV_STUDIO_USER_DATA_DIR"]).expanduser().resolve()
+        configured_projects = environment.get("UV_STUDIO_PROJECTS_DIR", "").strip()
+        project_root = (
+            Path(configured_projects).expanduser().resolve()
+            if configured_projects
+            else (user_data / "projects").resolve()
+        )
+        recovery_root = (user_data / "recovery" / "migrations").resolve()
+        if paths_overlap(project_root, plan.release_root) or paths_overlap(
+            recovery_root, plan.release_root
+        ):
+            raise ProjectMaintenanceError(
+                "Project Store maintenance paths overlap the immutable release payload"
+            )
+        store = ProjectStore(project_root)
+        prepare_project_store_for_current_schema(store, recovery_root)
+    except (KeyError, OSError, ProjectMaintenanceError) as exc:
+        raise DesktopLauncherError(
+            "Project Store migration/recovery preflight failed; no UV Studio service was started"
+        ) from exc
 
 
 def port_is_available(host: str, port: int) -> bool:
@@ -372,6 +403,7 @@ def run_desktop(
         current_executable = inferred_executable
     plan = build_launch_plan(release_root, current_executable=current_executable)
     environment = build_child_environment(plan, base_environment=base_environment)
+    prepare_packaged_project_store(plan, environment)
     require_desktop_ports_available()
 
     backend: subprocess.Popen | None = None

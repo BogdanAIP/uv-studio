@@ -12,7 +12,9 @@ The installer also cannot make the release payload mutable in-place. Future upda
 
 ## Decision
 
-UV Studio uses NSIS for the Windows x86_64 installer build. The release build pins the NSIS compiler version and acquisition hash as build-only provenance; NSIS is not an application runtime dependency.
+UV Studio uses NSIS for the Windows x86_64 installer build. The release profile pins NSIS 3.12 and its exact build-only acquisition coordinate (`nsis.install` 3.12.0 from the configured Chocolatey community feed), and release CI verifies that the installed compiler reports exactly `v3.12` before it may build an installer. NSIS is not an application runtime dependency.
+
+The installer uses standard ZLIB compression rather than solid LZMA. Installer size is secondary to a practical, repeatable release gate: on the same complete Stage 9 payload, ZLIB materially reduced compiler time while preserving the identical D-044-manifested files and the same post-install deep-verification boundary.
 
 Installation is per-user and requests the normal user execution level. The stable installation root is:
 

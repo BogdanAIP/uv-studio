@@ -14,8 +14,11 @@ from uv_studio.desktop_launcher import (
     _start_children,
     build_child_environment,
     build_launch_plan,
+    prepare_packaged_project_store,
     require_desktop_ports_available,
+    run_desktop,
 )
+from uv_studio.projects.maintenance import ProjectMaintenanceError
 from uv_studio.release_manifest import (
     ReleaseComponent,
     build_release_manifest,
@@ -122,6 +125,104 @@ class DesktopLauncherTests(unittest.TestCase):
                         "UV_STUDIO_USER_DATA_DIR": str(root / "mutable"),
                     },
                 )
+
+    def test_project_store_preflight_uses_packaged_default_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "release"
+            root.mkdir()
+            executable = self._release(root)
+            plan = build_launch_plan(root, current_executable=executable)
+            user_data = (Path(temporary) / "local" / "UV Studio").resolve()
+            environment = {
+                "UV_STUDIO_USER_DATA_DIR": str(user_data),
+            }
+            with (
+                patch("uv_studio.desktop_launcher.ProjectStore") as store_class,
+                patch("uv_studio.desktop_launcher.prepare_project_store_for_current_schema") as prepare,
+            ):
+                prepare_packaged_project_store(plan, environment)
+            store_class.assert_called_once_with((user_data / "projects").resolve())
+            prepare.assert_called_once_with(
+                store_class.return_value,
+                (user_data / "recovery" / "migrations").resolve(),
+            )
+
+    def test_project_store_preflight_honors_explicit_project_store_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "release"
+            root.mkdir()
+            executable = self._release(root)
+            plan = build_launch_plan(root, current_executable=executable)
+            user_data = (Path(temporary) / "local" / "UV Studio").resolve()
+            projects = (Path(temporary) / "external-projects").resolve()
+            environment = {
+                "UV_STUDIO_USER_DATA_DIR": str(user_data),
+                "UV_STUDIO_PROJECTS_DIR": str(projects),
+            }
+            with (
+                patch("uv_studio.desktop_launcher.ProjectStore") as store_class,
+                patch("uv_studio.desktop_launcher.prepare_project_store_for_current_schema") as prepare,
+            ):
+                prepare_packaged_project_store(plan, environment)
+            store_class.assert_called_once_with(projects)
+            prepare.assert_called_once_with(
+                store_class.return_value,
+                (user_data / "recovery" / "migrations").resolve(),
+            )
+
+    def test_project_store_preflight_failure_aborts_as_launcher_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "release"
+            root.mkdir()
+            executable = self._release(root)
+            plan = build_launch_plan(root, current_executable=executable)
+            environment = {
+                "UV_STUDIO_USER_DATA_DIR": str(Path(temporary) / "data"),
+            }
+            with patch(
+                "uv_studio.desktop_launcher.prepare_project_store_for_current_schema",
+                side_effect=ProjectMaintenanceError("synthetic migration failure"),
+            ):
+                with self.assertRaisesRegex(DesktopLauncherError, "no UV Studio service was started"):
+                    prepare_packaged_project_store(plan, environment)
+
+    def test_desktop_prepares_project_store_before_ports_and_children(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "release"
+            root.mkdir()
+            executable = self._release(root)
+            order: list[str] = []
+            backend = Mock()
+            frontend = Mock()
+            with (
+                patch(
+                    "uv_studio.desktop_launcher.prepare_packaged_project_store",
+                    side_effect=lambda *_args, **_kwargs: order.append("prepare"),
+                ),
+                patch(
+                    "uv_studio.desktop_launcher.require_desktop_ports_available",
+                    side_effect=lambda: order.append("ports"),
+                ),
+                patch(
+                    "uv_studio.desktop_launcher._start_children",
+                    side_effect=lambda *_args, **_kwargs: (
+                        order.append("children") or backend,
+                        frontend,
+                    ),
+                ),
+                patch("uv_studio.desktop_launcher._wait_until_ready"),
+                patch("uv_studio.desktop_launcher._smoke_diagnostics"),
+                patch("uv_studio.desktop_launcher._stop_process"),
+            ):
+                result = run_desktop(
+                    release_root=root,
+                    current_executable=executable,
+                    open_browser=False,
+                    smoke=True,
+                    base_environment={"LOCALAPPDATA": str(Path(temporary) / "local")},
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(order[:3], ["prepare", "ports", "children"])
 
     def test_required_port_collision_fails_closed(self) -> None:
         with patch("uv_studio.desktop_launcher.port_is_available", side_effect=[False, True]):
