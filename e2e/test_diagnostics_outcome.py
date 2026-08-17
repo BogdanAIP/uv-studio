@@ -105,7 +105,7 @@ class DiagnosticsBrowserOutcome(unittest.TestCase):
 
         page.get_by_role("button", name="Запустить полную проверку", exact=True).click()
         expect(page.get_by_text("Выполнена полная проверка", exact=False)).to_be_visible(timeout=120_000)
-        expect(page.get_by_text("доступна запись", exact=True)).to_have_count(3)
+        expect(page.get_by_text("доступна запись", exact=False)).to_have_count(3)
         expect(page.get_by_text("проверено", exact=True)).to_be_visible()
 
         body = page.locator("body").inner_text()
