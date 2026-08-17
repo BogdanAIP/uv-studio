@@ -55,7 +55,8 @@ install_release:
   ExecWait '"$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" --verify-release' $0
   ${If} $0 != 0
     RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
-    MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated."
+    ; /SD keeps /S installations fail-closed instead of waiting on an invisible dialog.
+    MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated." /SD IDOK
     SetErrorLevel 2
     Quit
   ${EndIf}
