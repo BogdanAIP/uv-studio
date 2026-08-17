@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 
+from uv_studio import __version__  # noqa: E402
 from uv_studio.api.artifact_files import router as artifact_files_router  # noqa: E402
 from uv_studio.api.capabilities import router as capabilities_router  # noqa: E402
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
@@ -53,7 +54,7 @@ from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
 TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
 
-app = FastAPI(title="UV Studio", version="0.1.0")
+app = FastAPI(title="UV Studio", version=__version__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(TRUSTED_FRONTEND_ORIGINS),
@@ -127,7 +128,7 @@ def legacy_stage_catalog() -> dict[str, list[dict[str, object]]]:
 def root() -> dict[str, str]:
     return {
         "service": "UV Studio",
-        "version": "0.1.0",
+        "version": __version__,
         "health": "/api/health",
         "projects": "/api/uv/projects",
     }
