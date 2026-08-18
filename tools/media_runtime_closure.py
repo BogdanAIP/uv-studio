@@ -5,6 +5,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_MEDIA_COMPONENT_MANIFEST = (
+    ROOT / "packaging" / "media-runtime-components.windows-x86_64.json"
+)
+_DEFAULT_MEDIA_NOTICE = ROOT / "packaging" / "media-runtime-NOTICE.md"
+
 # Exact root PE dependency closure measured from Stage 9 artifact #120 using the
 # retained UV entrypoints (ffmpeg/ffprobe/melt), MLT framework/modules and the
 # Windows Qt platform plugin. Keep the carrier license/config files alongside it.
@@ -112,6 +118,36 @@ def _unique_runtime_entrypoints(root: Path) -> set[tuple[str, ...]]:
     return required
 
 
+def _is_product_release_carrier(root: Path) -> bool:
+    """True only for the exact Stage 9 staged layout, never for acquisition source trees."""
+    if len(root.parents) < 3:
+        return False
+    return (
+        root.name.casefold() == "shotcut"
+        and root.parent.name.casefold() == "media"
+        and root.parent.parent.name.casefold() == "runtime"
+    )
+
+
+def _stage_product_legal_bundle(root: Path) -> None:
+    if not _is_product_release_carrier(root):
+        return
+    try:
+        if __package__:
+            from tools.media_runtime_legal import stage_media_runtime_legal_bundle
+        else:
+            from media_runtime_legal import stage_media_runtime_legal_bundle
+
+        stage_media_runtime_legal_bundle(
+            release_root=root.parents[2],
+            media_root=root.parent,
+            manifest_file=_DEFAULT_MEDIA_COMPONENT_MANIFEST,
+            notice_file=_DEFAULT_MEDIA_NOTICE,
+        )
+    except Exception as exc:  # stage_windows_release converts RuntimeError to its release error
+        raise RuntimeError(f"media runtime legal/provenance gate failed: {exc}") from exc
+
+
 def prune_media_runtime_carrier(carrier_root: Path | str) -> int:
     """Delete carrier files outside the audited UV MLT/FFmpeg closure.
 
@@ -121,8 +157,11 @@ def prune_media_runtime_carrier(carrier_root: Path | str) -> int:
     entrypoints are retained at their unique carrier-relative location so staging
     does not accidentally couple the release contract to one archive directory
     layout.
-    """
 
+    In the exact product release layout this also verifies that every surviving
+    media PE belongs to exactly one reviewed component and stages that component
+    map plus its notice into ``legal/media-runtime`` before D-044 hashes payload.
+    """
     root = Path(carrier_root)
     if not root.is_dir() or root.is_symlink():
         raise RuntimeError("staged media carrier root is missing or invalid")
@@ -150,8 +189,22 @@ def prune_media_runtime_carrier(carrier_root: Path | str) -> int:
             directory.rmdir()
         except OSError:
             pass
+
+    _stage_product_legal_bundle(root)
     return removed
 
 
 def exact_closure_root_files() -> list[str]:
     return sorted(_REQUIRED_ROOT_FILES)
+
+
+def exact_closure_carrier_pe_files() -> list[str]:
+    """Reviewed PE paths relative to the Shotcut carrier root."""
+    files = [
+        name
+        for name in _REQUIRED_ROOT_FILES
+        if Path(name).suffix.casefold() in {".dll", ".exe"}
+    ]
+    files.extend(f"lib/mlt/{name}" for name in _REQUIRED_MLT_MODULES)
+    files.append("lib/qt6/platforms/qwindows.dll")
+    return sorted(files, key=str.casefold)
