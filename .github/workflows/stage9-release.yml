@@ -120,16 +120,16 @@ jobs:
           "UV_NODE_EXECUTABLE=$node" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_NODE_LICENSE=$nodeLicense" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Provision pinned Windows media runtime
+      - name: Provision and audit pinned Windows media runtime
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:RUNNER_TEMP "kdenlive-$env:UV_MEDIA_PACKAGE_VERSION-standalone.exe"
-          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-kdenlive-media-runtime'
+          $archive = Join-Path $env:RUNNER_TEMP 'uv-media-runtime.zip'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-media-runtime'
           Invoke-WebRequest -Uri $env:UV_MEDIA_URL -OutFile $archive
           $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actualSha256 -ne $env:UV_MEDIA_SHA256) {
-            throw "Kdenlive standalone SHA-256 mismatch: expected $env:UV_MEDIA_SHA256, got $actualSha256"
+            throw "media runtime SHA-256 mismatch: expected $env:UV_MEDIA_SHA256, got $actualSha256"
           }
           New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
           & 7z x $archive "-o$extractRoot" -y | Out-Null
@@ -144,11 +144,16 @@ jobs:
           $melt = Get-ChildItem -Path $extractRoot -Recurse -File -Filter melt.exe | Select-Object -First 1
           if (-not $melt) { throw 'pinned media runtime did not contain melt.exe' }
 
-          $mediaComponentVersion = "kdenlive-$env:UV_MEDIA_PACKAGE_VERSION"
+          $ffmpegAudit = Join-Path $env:RUNNER_TEMP 'ffmpeg-release-audit.json'
+          & python tools/audit_ffmpeg_release.py --ffmpeg $ffmpeg.FullName --evidence $ffmpegAudit
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg redistribution audit rejected media runtime' }
+
+          $mediaComponentVersion = "$env:UV_MEDIA_DISTRIBUTION-$env:UV_MEDIA_PACKAGE_VERSION"
           "UV_MEDIA_ROOT=$extractRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_FFMPEG_EXECUTABLE=$($ffmpeg.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_FFPROBE_EXECUTABLE=$ffprobe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_MLT_EXECUTABLE=$($melt.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_FFMPEG_AUDIT=$ffmpegAudit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_MEDIA_COMPONENT_VERSION=$mediaComponentVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Stage one immutable Windows payload
@@ -169,6 +174,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows release staging failed: $stageOutput" }
           $stage = $stageOutput | ConvertFrom-Json
           if (-not $stage.ok) { throw 'Windows release staging did not report ok=true' }
+
+          $auditTarget = Join-Path $release 'legal\ffmpeg-buildconf.json'
+          Copy-Item -LiteralPath $env:UV_FFMPEG_AUDIT -Destination $auditTarget
+          if (-not (Test-Path -LiteralPath $auditTarget -PathType Leaf)) {
+            throw 'FFmpeg release audit evidence was not staged into immutable payload'
+          }
 
           "UV_RELEASE_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "UV_BACKEND_ENTRYPOINT=$($stage.entrypoints.backend)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
