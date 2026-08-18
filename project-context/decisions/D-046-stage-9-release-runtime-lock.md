@@ -16,11 +16,13 @@ Stage 9 also cannot simply copy historical development runtime versions into the
 
 - **CPython 3.13.14** and the exact shipping constraints file;
 - **Node.js 24.19.0**, the existing npm lockfile, and the exact official Windows x64 release ZIP HTTPS source plus SHA-256;
-- **Kdenlive standalone 26.04.3** as the pinned Windows media distribution, with exact HTTPS source plus SHA-256;
+- an exact Windows media distribution URL/version/SHA-256 used as the FFmpeg/FFprobe/MLT carrier;
 - **PyInstaller 6.21.0** as build-only freezer provenance;
 - **NSIS 3.12** as the build-only Windows installer compiler, acquired as exact Chocolatey package `nsis.install` version `3.12.0` from the configured HTTPS community feed and verified again by the actual `makensis /VERSION` result before use.
 
 The Node release ZIP replaces the earlier bare `win-x64/node.exe` acquisition without changing the selected Node version. The workflow verifies the official ZIP SHA-256, extracts the exact `node.exe` and complete upstream `LICENSE` from the same verified distribution, checks the executable reports `v24.19.0`, and stages the license under `legal/node/LICENSE.txt`. This makes runtime and notice provenance one reviewed acquisition unit rather than reconstructing Node notices separately.
+
+The media profile originally pointed to Kdenlive standalone 26.04.3 because it had already passed the Windows MLT/FFmpeg engineering tests. Review of the actual executable build configuration later found `--enable-nonfree`; D-058 therefore rejects that carrier for public redistribution and changes the current profile to the official Shotcut portable `26.4.30` archive, SHA-256 `986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a`. D-046 owns the exact-input mechanism; D-058 owns acceptance of the replacement media carrier and remains Proposed until exact-head package evidence is green.
 
 The profile is parsed by `uv_studio.release_profile`, which rejects unknown fields, unsafe/non-canonical relative paths, non-HTTPS or credential-bearing download/source URLs, non-canonical SHA-256 values, line-break injection, unsupported acquisition providers, and unsafe package/version tokens before values may be exported into build automation.
 
@@ -48,11 +50,11 @@ The frontend already has a complete npm lock (`frontend/package-lock.json`) and 
 
 ### Media runtime ownership
 
-The first Windows package uses the already-proven Kdenlive standalone archive as one coherent media runtime rather than extracting `melt.exe` in isolation. MLT depends on adjacent DLLs, plugins and data files; the curated runtime closure is staged under the immutable release root and D-044 hashes every staged file.
+MLT depends on adjacent DLLs, plugins, data and FFmpeg libraries. Stage 9 therefore packages a coherent Windows media carrier rather than extracting `melt.exe` in isolation. D-044 hashes every staged file and D-047 requires packaged tool resolution to come only from manifest-owned paths.
 
-The manifest component version for FFmpeg, FFprobe and MLT is the pinned distribution identity (`kdenlive-26.04.3`). Parsing arbitrary third-party CLI version text is not a release trust boundary. Runtime diagnostics separately prove that each executable starts and resolves from the release manifest.
+Package identity alone is not enough to approve FFmpeg redistribution. `tools/audit_ffmpeg_release.py` executes the exact selected `ffmpeg.exe -buildconf` during packaging and rejects any build advertising `--enable-nonfree`. The bounded audit output is staged as `legal/ffmpeg-buildconf.json` before D-044 creates the manifest. D-058 defines the acceptance evidence for the current Shotcut replacement carrier.
 
-D-052 subsequently narrows the acquired Kdenlive tree only by evidence-backed exclusions. This changes the installed file set but not the acquisition identity recorded here; D-044 remains authoritative for the exact curated bytes that are actually shipped.
+The manifest component version for FFmpeg, FFprobe and MLT is the pinned distribution identity (`shotcut-portable-26.4.30`) rather than arbitrary host CLI discovery. Runtime diagnostics separately prove that each executable starts and resolves from the release manifest.
 
 ### Build-tool ownership
 
@@ -68,7 +70,7 @@ The Python 3.13.14 Windows compatibility job successfully installed the existing
 
 The Node 24.19.0 Windows compatibility job successfully installed the existing `package-lock.json` graph through `npm ci`, passed frontend lint and configured high-severity audit, and built the production Next frontend.
 
-The Kdenlive 26.04.3 standalone archive and its SHA-256 are already exercised by the permanent Windows real-media CI. Stage 9 reuses that exact proven payload for the package rather than selecting another FFmpeg/MLT distribution.
+The original Kdenlive media carrier provided strong runtime evidence but failed the later redistribution review because its exact FFmpeg self-report included `--enable-nonfree`. That evidence is intentionally retained as a reason the release input was replaced instead of silently editing provenance. The Shotcut carrier must earn equivalent or stronger runtime evidence under D-058 before it is accepted.
 
 The first direct NSIS SourceForge archive attempt failed closed because the bytes returned by the redirect did not match the pinned SHA-256. That failure is preserved as evidence for moving build-tool acquisition to the exact Chocolatey package coordinate instead of weakening or replacing the checksum with an unreviewed response hash.
 
