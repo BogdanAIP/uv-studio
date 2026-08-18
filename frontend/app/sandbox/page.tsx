@@ -1,10 +1,5 @@
-import { Suspense } from 'react';
-import Sandbox from '@/components/Sandbox/Sandbox';
+import { redirect } from 'next/navigation';
 
 export default function SandboxPage() {
-  return (
-    <Suspense fallback={<div className="p-8">加载中...</div>}>
-      <Sandbox />
-    </Suspense>
-  );
+  redirect('/projects');
 }

@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
         source: "/api/uv/:path*",
         destination: "http://127.0.0.1:8000/api/uv/:path*",
       },
+      {
+        source: "/api/config/:path*",
+        destination: "http://127.0.0.1:8000/api/config/:path*",
+      },
     ];
   },
 };
