@@ -35,6 +35,7 @@ _EXPECTED_FRONTEND_DIRECT_PACKAGES = 12
 _EXPECTED_FRONTEND_DIRECT_FALLBACKS = 2
 _EXPECTED_NEXT_COMPILED_PACKAGES = 53
 _EXPECTED_NEXT_COMPILED_OVERRIDES = 1
+_EXPECTED_NSIS_VERSION = "3.12"
 
 
 def _component(value: str) -> ReleaseComponent:
@@ -117,9 +118,52 @@ def _stage_frontend_legal_before_manifest(root: Path) -> dict[str, object] | Non
     return result
 
 
+def _stage_nsis_legal_before_manifest(root: Path) -> dict[str, object] | None:
+    """Stage exact NSIS source/COPYING evidence before D-044 hashes the tree."""
+    version = os.environ.get("UV_NSIS_VERSION")
+    source_url = os.environ.get("UV_NSIS_SOURCE_URL")
+    source_sha = os.environ.get("UV_NSIS_SOURCE_SHA256")
+    markers = (version, source_url, source_sha)
+    if not any(markers):
+        return None
+    if not all(markers):
+        raise ReleaseManifestError("NSIS legal gate requires version, source URL and source SHA-256 together")
+    assert version is not None and source_url is not None and source_sha is not None
+    if version != _EXPECTED_NSIS_VERSION:
+        raise ReleaseManifestError(
+            f"NSIS legal gate requires version {_EXPECTED_NSIS_VERSION}, got {version}"
+        )
+
+    legal_root = root / "legal" / "nsis"
+    try:
+        from tools.nsis_runtime_legal import NSISLegalError, stage_nsis_legal
+
+        result = stage_nsis_legal(
+            output_root=root,
+            version=version,
+            source_url=source_url,
+            expected_sha256=source_sha,
+        )
+    except (OSError, NSISLegalError) as exc:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError(f"NSIS legal/provenance gate failed: {exc}") from exc
+
+    if result.get("expected_sha256_enforced") is not True:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError("NSIS legal/provenance gate did not enforce the pinned source SHA-256")
+    if result.get("source_archive_sha256") != source_sha:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError("NSIS legal/provenance gate returned a different source SHA-256")
+    if result.get("version") != version:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError("NSIS legal/provenance gate returned a different version")
+    return result
+
+
 def _build(args: argparse.Namespace) -> int:
     try:
         frontend_legal = _stage_frontend_legal_before_manifest(args.root)
+        nsis_legal = _stage_nsis_legal_before_manifest(args.root)
         manifest = build_release_manifest(
             args.root,
             product_version=args.product_version,
@@ -138,6 +182,8 @@ def _build(args: argparse.Namespace) -> int:
     }
     if frontend_legal is not None:
         result["frontend_legal"] = frontend_legal
+    if nsis_legal is not None:
+        result["nsis_legal"] = nsis_legal
     _json(result)
     return 0
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "target": {"os": "windows", "arch": "x86_64"},
   "python": {
     "version": "3.13.14",
@@ -34,6 +34,10 @@
         "package": "nsis.install",
         "package_version": "3.12.0",
         "source": "https://community.chocolatey.org/api/v2/"
+      },
+      "corresponding_source": {
+        "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2",
+        "sha256": "f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186"
       }
     }
   }

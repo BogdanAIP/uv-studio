@@ -11,6 +11,10 @@ from uv_studio.release_profile import ReleaseProfileError, load_release_profile
 from tools.export_release_profile import DEFAULT_PROFILE, ROOT, profile_environment
 
 
+_NSIS_SOURCE_URL = "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2"
+_NSIS_SOURCE_SHA256 = "f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186"
+
+
 class ReleaseProfileTests(unittest.TestCase):
     def _write_profile(self, profile: dict[str, object], root: str) -> Path:
         path = Path(root) / "profile.json"
@@ -30,7 +34,7 @@ class ReleaseProfileTests(unittest.TestCase):
 
     def test_checked_in_profile_has_exact_release_inputs(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
-        self.assertEqual(profile["schema_version"], 5)
+        self.assertEqual(profile["schema_version"], 6)
         self.assertEqual(profile["target"], {"os": "windows", "arch": "x86_64"})
         self.assertEqual(profile["python"]["version"], "3.13.14")
         self.assertEqual(profile["node"]["version"], "24.19.0")
@@ -72,6 +76,10 @@ class ReleaseProfileTests(unittest.TestCase):
                 "source": "https://community.chocolatey.org/api/v2/",
             },
         )
+        self.assertEqual(
+            nsis["corresponding_source"],
+            {"url": _NSIS_SOURCE_URL, "sha256": _NSIS_SOURCE_SHA256},
+        )
 
     def test_export_uses_package_version_as_product_version(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
@@ -89,6 +97,8 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(values["UV_NSIS_PACKAGE"], "nsis.install")
         self.assertEqual(values["UV_NSIS_PACKAGE_VERSION"], "3.12.0")
         self.assertEqual(values["UV_NSIS_SOURCE"], "https://community.chocolatey.org/api/v2/")
+        self.assertEqual(values["UV_NSIS_SOURCE_URL"], _NSIS_SOURCE_URL)
+        self.assertEqual(values["UV_NSIS_SOURCE_SHA256"], _NSIS_SOURCE_SHA256)
         self.assertNotIn("UV_MEDIA_SOURCE_URL", values)
         self.assertNotIn("UV_MEDIA_SOURCE_SHA256", values)
         self.assertNotIn("UV_NSIS_URL", values)
@@ -132,6 +142,25 @@ class ReleaseProfileTests(unittest.TestCase):
             with self.subTest(key=key, value=value):
                 profile = load_release_profile(DEFAULT_PROFILE)
                 profile["build_tools"]["nsis"]["acquisition"][key] = value
+                with tempfile.TemporaryDirectory() as tmp:
+                    with self.assertRaises(ReleaseProfileError):
+                        load_release_profile(self._write_profile(profile, tmp))
+
+    def test_profile_requires_and_validates_nsis_corresponding_source(self) -> None:
+        profile = load_release_profile(DEFAULT_PROFILE)
+        del profile["build_tools"]["nsis"]["corresponding_source"]
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ReleaseProfileError):
+                load_release_profile(self._write_profile(profile, tmp))
+
+        mutations = (
+            ("url", "http://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2"),
+            ("sha256", "A" * 64),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                profile = load_release_profile(DEFAULT_PROFILE)
+                profile["build_tools"]["nsis"]["corresponding_source"][key] = value
                 with tempfile.TemporaryDirectory() as tmp:
                     with self.assertRaises(ReleaseProfileError):
                         load_release_profile(self._write_profile(profile, tmp))

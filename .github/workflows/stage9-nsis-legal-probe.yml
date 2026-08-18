@@ -5,14 +5,24 @@ on:
     branches: ["stage-9/**"]
     paths:
       - ".github/workflows/stage9-nsis-legal-probe.yml"
+      - "packaging/runtime-profile.windows-x86_64.json"
+      - "uv_studio/release_profile.py"
+      - "tools/export_release_profile.py"
       - "tools/nsis_runtime_legal.py"
+      - "tests/test_release_profile.py"
       - "tests/test_nsis_runtime_legal.py"
+      - "tests/test_uv_release_nsis_legal.py"
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/stage9-nsis-legal-probe.yml"
+      - "packaging/runtime-profile.windows-x86_64.json"
+      - "uv_studio/release_profile.py"
+      - "tools/export_release_profile.py"
       - "tools/nsis_runtime_legal.py"
+      - "tests/test_release_profile.py"
       - "tests/test_nsis_runtime_legal.py"
+      - "tests/test_uv_release_nsis_legal.py"
 
 jobs:
   nsis-runtime-legal:
@@ -26,11 +36,16 @@ jobs:
         with:
           python-version: "3.13.14"
 
+      - name: Export validated Stage 9 release profile
+        shell: pwsh
+        run: python tools/export_release_profile.py --github-env $env:GITHUB_ENV
+
       - name: Test NSIS source legal gate
         shell: pwsh
-        run: python -m unittest tests.test_nsis_runtime_legal -v
+        run: |
+          python -m unittest tests.test_nsis_runtime_legal tests.test_uv_release_nsis_legal tests.test_release_profile -v
 
-      - name: Probe official NSIS 3.12 source archive
+      - name: Verify pinned official NSIS source archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -38,17 +53,21 @@ jobs:
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           & python tools/nsis_runtime_legal.py `
             --output-root $root `
-            --version 3.12 `
-            --source-url 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2'
+            --version $env:UV_NSIS_VERSION `
+            --source-url $env:UV_NSIS_SOURCE_URL `
+            --expected-sha256 $env:UV_NSIS_SOURCE_SHA256
           if ($LASTEXITCODE -ne 0) { throw 'NSIS legal probe failed' }
           $evidence = Join-Path $root 'legal\nsis\source-evidence.json'
           if (-not (Test-Path -LiteralPath $evidence -PathType Leaf)) {
             throw 'NSIS probe did not create source evidence'
           }
           $data = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
-          if ($data.version -ne '3.12') { throw "unexpected NSIS version: $($data.version)" }
-          if ($data.source_archive_sha256 -notmatch '^[0-9a-f]{64}$') {
-            throw 'NSIS probe did not report canonical source SHA-256'
+          if ($data.version -ne $env:UV_NSIS_VERSION) { throw "unexpected NSIS version: $($data.version)" }
+          if ($data.source_archive_sha256 -ne $env:UV_NSIS_SOURCE_SHA256) {
+            throw "NSIS source SHA mismatch after probe: $($data.source_archive_sha256)"
+          }
+          if ($data.expected_sha256_enforced -ne $true) {
+            throw 'NSIS probe did not enforce the profile source SHA-256'
           }
           Write-Host "NSIS_SOURCE_SHA256=$($data.source_archive_sha256)"
           Write-Host "NSIS_COPYING_SHA256=$($data.copying_sha256)"
