@@ -17,6 +17,18 @@
 Unicode true
 Name "UV Studio"
 OutFile "${UV_OUTPUT_FILE}"
+
+; Public-release signing is opt-in and provider-neutral. Ordinary PR/release
+; evidence does not define these commands and therefore remains unsigned.
+; When a real public signer is supplied, NSIS passes the generated executable
+; path as the final argument and fails the build if the signer fails.
+!ifdef UV_SIGN_INSTALLER_COMMAND
+  !finalize '${UV_SIGN_INSTALLER_COMMAND} "%1"' = 0
+!endif
+!ifdef UV_SIGN_UNINSTALLER_COMMAND
+  !uninstfinalize '${UV_SIGN_UNINSTALLER_COMMAND} "%1"' = 0
+!endif
+
 InstallDir "$LOCALAPPDATA\Programs\UV Studio"
 RequestExecutionLevel user
 SetCompressor zlib
