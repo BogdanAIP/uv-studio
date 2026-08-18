@@ -1,7 +1,21 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "semantic-api-docs",
+    "kind": "chore",
+    "roadmap_stage": "cross-cutting",
+    "goal": "Document UV Semantic API as the curated integration-facing projection of existing UV-owned semantic contracts without introducing a second command system, backend, registry or provider runtime.",
+    "base_branch": "main",
+    "branch": "chore/semantic-api-docs",
+    "pull_request": null,
+    "write_scope": [
+      "ARCHITECTURE_PRINCIPLES.md",
+      "docs/architecture/SEMANTIC_API.md",
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md"
+    ]
+  },
   "last_completed": {
     "id": "stage-8-additional-recipes",
     "pull_request": 37,
