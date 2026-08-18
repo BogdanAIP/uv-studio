@@ -15,6 +15,11 @@ class WindowsReleaseStageError(RuntimeError):
     pass
 
 
+ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_UV_LICENSE = ROOT / "LICENSE"
+_DEFAULT_THIRD_PARTY_NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
+_DEFAULT_RELEASE_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
+
 # Kdenlive's standalone archive contains Qt's own test/build payload below
 # bin/Qt/test. Those objects are not runtime dependencies of FFmpeg, FFprobe or
 # MLT, and some paths are unsuitable for a normal per-user Windows install.
@@ -24,12 +29,12 @@ _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
 )
 _MEDIA_EXCLUSION_RULES = ("**/bin/Qt/test/**",)
-_LEGAL_TARGETS = {
+_MANDATORY_LEGAL_TARGETS = {
     "uv_license": "legal/UV-STUDIO-LICENSE.txt",
     "third_party_notices": "legal/THIRD-PARTY-NOTICES.md",
     "release_profile": "legal/release-inputs.windows-x86_64.json",
-    "node_license": "legal/node/LICENSE.txt",
 }
+_NODE_LICENSE_TARGET = "legal/node/LICENSE.txt"
 
 
 def _require_directory(path: Path | str, label: str) -> Path:
@@ -142,30 +147,37 @@ def _copy_media_runtime(source: Path, target: Path) -> int:
     return excluded_file_count
 
 
+def _copy_legal_file(source: Path, target: Path, relative: str) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
+        raise WindowsReleaseStageError(
+            f"staged legal/provenance file is missing or empty: {relative}"
+        )
+
+
 def _stage_legal_files(
     output: Path,
     *,
     uv_license: Path,
     third_party_notices: Path,
     release_profile: Path,
-    node_license: Path,
+    node_license: Path | None,
 ) -> list[str]:
     sources = {
         "uv_license": uv_license,
         "third_party_notices": third_party_notices,
         "release_profile": release_profile,
-        "node_license": node_license,
     }
     staged: list[str] = []
-    for key, relative in _LEGAL_TARGETS.items():
+    for key, relative in _MANDATORY_LEGAL_TARGETS.items():
         target = output.joinpath(*relative.split("/"))
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(sources[key], target)
-        if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
-            raise WindowsReleaseStageError(
-                f"staged legal/provenance file is missing or empty: {relative}"
-            )
+        _copy_legal_file(sources[key], target, relative)
         staged.append(relative)
+    if node_license is not None:
+        target = output.joinpath(*_NODE_LICENSE_TARGET.split("/"))
+        _copy_legal_file(node_license, target, _NODE_LICENSE_TARGET)
+        staged.append(_NODE_LICENSE_TARGET)
     return staged
 
 
@@ -174,20 +186,24 @@ def stage_windows_release(
     backend_root: Path | str,
     frontend_root: Path | str,
     node_executable: Path | str,
-    node_license_file: Path | str,
     media_root: Path | str,
     ffmpeg_executable: Path | str,
     ffprobe_executable: Path | str,
     mlt_executable: Path | str,
-    uv_license_file: Path | str,
-    third_party_notices_file: Path | str,
-    release_profile_file: Path | str,
     output_root: Path | str,
+    node_license_file: Path | str | None = None,
+    uv_license_file: Path | str = _DEFAULT_UV_LICENSE,
+    third_party_notices_file: Path | str = _DEFAULT_THIRD_PARTY_NOTICES,
+    release_profile_file: Path | str = _DEFAULT_RELEASE_PROFILE,
 ) -> dict[str, object]:
     backend = _require_directory(backend_root, "backend component")
     frontend = _require_directory(frontend_root, "frontend component")
     node = _require_file(node_executable, "Node executable")
-    node_license = _require_file(node_license_file, "Node license")
+    node_license = (
+        None
+        if node_license_file is None
+        else _require_file(node_license_file, "Node license")
+    )
     media = _require_directory(media_root, "media runtime")
     ffmpeg = _require_file(ffmpeg_executable, "FFmpeg executable")
     ffprobe = _require_file(ffprobe_executable, "FFprobe executable")
@@ -291,14 +307,20 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend-root", type=Path, required=True)
     parser.add_argument("--frontend-root", type=Path, required=True)
     parser.add_argument("--node-executable", type=Path, required=True)
-    parser.add_argument("--node-license", type=Path, required=True)
+    parser.add_argument("--node-license", type=Path)
     parser.add_argument("--media-root", type=Path, required=True)
     parser.add_argument("--ffmpeg-executable", type=Path, required=True)
     parser.add_argument("--ffprobe-executable", type=Path, required=True)
     parser.add_argument("--mlt-executable", type=Path, required=True)
-    parser.add_argument("--uv-license", type=Path, required=True)
-    parser.add_argument("--third-party-notices", type=Path, required=True)
-    parser.add_argument("--release-profile", type=Path, required=True)
+    parser.add_argument("--uv-license", type=Path, default=_DEFAULT_UV_LICENSE)
+    parser.add_argument(
+        "--third-party-notices",
+        type=Path,
+        default=_DEFAULT_THIRD_PARTY_NOTICES,
+    )
+    parser.add_argument(
+        "--release-profile", type=Path, default=_DEFAULT_RELEASE_PROFILE
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
