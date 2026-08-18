@@ -8,9 +8,10 @@ standalone frontend for the source service commands.
 
 from __future__ import annotations
 
+import io
 import os
-import subprocess
 import sys
+import unittest
 from pathlib import Path
 from typing import Any
 
@@ -75,18 +76,17 @@ def _enable_packaged_service_substitution() -> None:
     harness._start_process = packaged_start_process
 
 
-_enable_packaged_service_substitution()
+def _run_suite() -> tuple[int, str]:
+    if str(E2E) not in sys.path:
+        sys.path.insert(0, str(E2E))
+    _enable_packaged_service_substitution()
+    suite = unittest.defaultTestLoader.discover(str(E2E), pattern="test_*.py")
+    stream = io.StringIO()
+    result = unittest.TextTestRunner(stream=stream, verbosity=2).run(suite)
+    return (0 if result.wasSuccessful() else 1), stream.getvalue()
 
-completed = subprocess.run(
-    [sys.executable, "-m", "unittest", "discover", "-s", "e2e", "-p", "test_*.py", "-v"],
-    cwd=ROOT,
-    env=os.environ.copy(),
-    text=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    check=False,
-)
 
-sys.stdout.write(completed.stdout)
-(artifact_dir / "test-output.log").write_text(completed.stdout, encoding="utf-8", errors="replace")
-raise SystemExit(completed.returncode)
+exit_code, output = _run_suite()
+sys.stdout.write(output)
+(artifact_dir / "test-output.log").write_text(output, encoding="utf-8", errors="replace")
+raise SystemExit(exit_code)
