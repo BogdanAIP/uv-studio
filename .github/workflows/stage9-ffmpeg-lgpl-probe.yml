@@ -32,7 +32,6 @@ jobs:
           $distribution = $ffmpeg.Directory.Parent.FullName
           $license = Join-Path $distribution 'LICENSE.txt'
           if (-not (Test-Path -LiteralPath $license -PathType Leaf)) { throw 'LICENSE.txt missing from distribution' }
-          Write-Host "LICENSE.txt=$license"
           $buildconf = (& $ffmpeg.FullName -hide_banner -buildconf 2>&1 | Out-String)
           Write-Host $buildconf
           if ($buildconf -match '--enable-nonfree') { throw 'LGPL candidate unexpectedly enables nonfree' }
@@ -40,11 +39,15 @@ jobs:
           if ($buildconf -notmatch '--enable-shared') { throw 'candidate is not shared' }
           $encoders = (& $ffmpeg.FullName -hide_banner -encoders 2>&1 | Out-String)
           foreach ($encoder in @('h264_mf', 'libopenh264', 'libvpx-vp9', 'libopus', 'ffv1', 'flac', 'aac')) {
-            $present = $encoders -match "(?m)^ .*$encoder"
-            Write-Host "encoder-$encoder=$present"
+            if ($encoders -notmatch "(?m)^ .*$encoder") { throw "required encoder missing: $encoder" }
           }
+          $output = Join-Path $env:RUNNER_TEMP 'mf-smoke.mp4'
+          & $ffmpeg.FullName -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=640x360:rate=30:duration=2' -c:v h264_mf -rate_control quality -quality 75 -pix_fmt yuv420p -an $output
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'h264_mf encode failed' }
+          $codec = (& $ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 $output | Out-String).Trim()
+          Write-Host "h264-mf-smoke-codec=$codec"
+          if ($codec -ne 'h264') { throw "unexpected h264_mf smoke codec: $codec" }
           Write-Host 'bin-files:'
           Get-ChildItem -Path $ffmpeg.Directory.FullName -File | Sort-Object Name | ForEach-Object { $_.Name }
-          & $ffmpeg.FullName -h encoder=h264_mf | Select-Object -First 40
           & $ffmpeg.FullName -version | Select-Object -First 1
           & $ffprobe -version | Select-Object -First 1
