@@ -15,10 +15,12 @@ Stage 9 also cannot simply copy historical development runtime versions into the
 `packaging/runtime-profile.windows-x86_64.json` is the machine-readable source of truth for the first Windows x86_64 release build inputs. Schema version 4 records:
 
 - **CPython 3.13.14** and the exact shipping constraints file;
-- **Node.js 24.19.0**, the existing npm lockfile, and the exact official Windows `node.exe` HTTPS source plus SHA-256;
+- **Node.js 24.19.0**, the existing npm lockfile, and the exact official Windows x64 release ZIP HTTPS source plus SHA-256;
 - **Kdenlive standalone 26.04.3** as the pinned Windows media distribution, with exact HTTPS source plus SHA-256;
 - **PyInstaller 6.21.0** as build-only freezer provenance;
 - **NSIS 3.12** as the build-only Windows installer compiler, acquired as exact Chocolatey package `nsis.install` version `3.12.0` from the configured HTTPS community feed and verified again by the actual `makensis /VERSION` result before use.
+
+The Node release ZIP replaces the earlier bare `win-x64/node.exe` acquisition without changing the selected Node version. The workflow verifies the official ZIP SHA-256, extracts the exact `node.exe` and complete upstream `LICENSE` from the same verified distribution, checks the executable reports `v24.19.0`, and stages the license under `legal/node/LICENSE.txt`. This makes runtime and notice provenance one reviewed acquisition unit rather than reconstructing Node notices separately.
 
 The profile is parsed by `uv_studio.release_profile`, which rejects unknown fields, unsafe/non-canonical relative paths, non-HTTPS or credential-bearing download/source URLs, non-canonical SHA-256 values, line-break injection, unsupported acquisition providers, and unsafe package/version tokens before values may be exported into build automation.
 
@@ -42,13 +44,15 @@ The verifier is deliberately stricter than `pip check`: a dependency graph can b
 
 ### Frontend dependency ownership
 
-The frontend already has a complete npm lock (`frontend/package-lock.json`) and CI uses `npm ci`, so Stage 9 does not create a second duplicate frontend package lock. The release profile independently pins both the Node runtime version and the exact Windows runtime payload used in the package.
+The frontend already has a complete npm lock (`frontend/package-lock.json`) and CI uses `npm ci`, so Stage 9 does not create a second duplicate frontend package lock. The release profile independently pins both the Node runtime version and the exact official Windows release archive used in the package.
 
 ### Media runtime ownership
 
-The first Windows package uses the already-proven Kdenlive standalone archive as one coherent media runtime rather than extracting `melt.exe` in isolation. MLT depends on adjacent DLLs, plugins and data files; the whole extracted distribution is staged under the immutable release root and D-044 hashes every staged file.
+The first Windows package uses the already-proven Kdenlive standalone archive as one coherent media runtime rather than extracting `melt.exe` in isolation. MLT depends on adjacent DLLs, plugins and data files; the curated runtime closure is staged under the immutable release root and D-044 hashes every staged file.
 
 The manifest component version for FFmpeg, FFprobe and MLT is the pinned distribution identity (`kdenlive-26.04.3`). Parsing arbitrary third-party CLI version text is not a release trust boundary. Runtime diagnostics separately prove that each executable starts and resolves from the release manifest.
+
+D-052 subsequently narrows the acquired Kdenlive tree only by evidence-backed exclusions. This changes the installed file set but not the acquisition identity recorded here; D-044 remains authoritative for the exact curated bytes that are actually shipped.
 
 ### Build-tool ownership
 
@@ -70,6 +74,6 @@ The first direct NSIS SourceForge archive attempt failed closed because the byte
 
 ## Byte-level reproducibility
 
-Exact versions and source archive hashes are necessary but not sufficient for byte-for-byte product integrity. D-044 remains the final packaged trust boundary: the assembled Windows release manifest records exact relative paths, file sizes and SHA-256 for the actual staged backend, frontend, Node and complete media runtime payload.
+Exact versions and source archive hashes are necessary but not sufficient for byte-for-byte product integrity. D-044 remains the final packaged trust boundary: the assembled Windows release manifest records exact relative paths, file sizes and SHA-256 for the actual staged backend, frontend, Node, legal/provenance files and complete curated media runtime payload.
 
 A future Python, Node, media distribution or build-tool upgrade must update this profile only after the relevant compatibility/release evidence is repeated. It is a reviewed product-runtime/build-input change, not an automatic dependency refresh.
