@@ -31,7 +31,7 @@ _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
     ("share", "shotcut"),
 )
-_MEDIA_EXCLUDED_TOP_LEVEL_FILES = frozenset(
+_MEDIA_EXCLUDED_FILE_NAMES = frozenset(
     {
         "ffplay.exe",
         "glaxnimate.exe",
@@ -41,11 +41,11 @@ _MEDIA_EXCLUDED_TOP_LEVEL_FILES = frozenset(
 )
 _MEDIA_EXCLUSION_RULES = (
     "**/bin/Qt/test/**",
-    "share/shotcut/**",
-    "ffplay.exe",
-    "glaxnimate.exe",
-    "shotcut.exe",
-    "whisper-cli.exe",
+    "**/share/shotcut/**",
+    "**/ffplay.exe",
+    "**/glaxnimate.exe",
+    "**/shotcut.exe",
+    "**/whisper-cli.exe",
 )
 _MANDATORY_LEGAL_TARGETS = {
     "uv_license": "legal/UV-STUDIO-LICENSE.txt",
@@ -130,7 +130,7 @@ def _contains_segment_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]
 
 def _media_path_is_excluded(relative: Path) -> bool:
     parts = relative.parts
-    if len(parts) == 1 and parts[0].casefold() in _MEDIA_EXCLUDED_TOP_LEVEL_FILES:
+    if relative.name.casefold() in _MEDIA_EXCLUDED_FILE_NAMES:
         return True
     return any(
         _contains_segment_sequence(parts, sequence)
