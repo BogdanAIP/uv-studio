@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "platform": "windows-x86_64",
+  "overrides": [
+    {
+      "runtime_package_json": "node_modules/next/dist/compiled/busboy/package.json",
+      "runtime_package_json_sha256": "7ec808358d01f7e153eec8ace30496d69f066e589abd3b1deaaadaa24a2c9e78",
+      "name": "busboy",
+      "version": "1.6.0",
+      "license_expression": "MIT",
+      "license_file": "packaging/frontend-compiled-licenses/busboy-1.6.0-LICENSE.txt",
+      "license_file_sha256": "fbdf945d61a54c35bebf793cb89abd697662136d45d7c334b5f16a0418a1a810",
+      "next_recipe": {
+        "repository": "https://github.com/vercel/next.js",
+        "ref": "v16.3.0",
+        "taskfile_path": "packages/next/taskfile.js",
+        "package_path": "packages/next/package.json"
+      },
+      "upstream_license": {
+        "repository": "https://github.com/mscdex/busboy",
+        "ref": "v1.6.0",
+        "path": "LICENSE",
+        "git_blob_sha1": "290762e94f4e2f2b52cc13ae4f2b63ac0269bfd1",
+        "local_copy_normalized": true
+      }
+    }
+  ]
+}

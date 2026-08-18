@@ -10,10 +10,11 @@ import os
 import re
 import shutil
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Sequence
 
 _LICENSE_NAME_RE = re.compile(r"^(license|licence|copying|notice)(?:[._-].*)?$", re.IGNORECASE)
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MAX_LICENSE_FILE_BYTES = 2 * 1024 * 1024
 _MAX_TOTAL_LICENSE_BYTES = 16 * 1024 * 1024
 _NEXT_MONOREPO_FALLBACKS = frozenset({"@next/env", "client-only"})
@@ -48,6 +49,38 @@ def _safe_slug(name: str, version: str) -> str:
     if not slug or not re.fullmatch(r"[a-z0-9][a-z0-9.+_-]*", slug):
         raise FrontendRuntimeLegalError(f"unsafe frontend legal component id: {name}@{version}")
     return slug
+
+
+def _canonical_relative_path(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip() or "\\" in value:
+        raise FrontendRuntimeLegalError(f"{label} must be a canonical relative path")
+    path = PurePosixPath(value)
+    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+        raise FrontendRuntimeLegalError(f"{label} must be a canonical relative path")
+    if path.as_posix() != value:
+        raise FrontendRuntimeLegalError(f"{label} must be canonical")
+    return value
+
+
+def _required_string(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        raise FrontendRuntimeLegalError(f"{label} must be a non-empty canonical string")
+    if "\r" in value or "\n" in value:
+        raise FrontendRuntimeLegalError(f"{label} must not contain line breaks")
+    return value
+
+
+def _required_sha256(value: Any, label: str) -> str:
+    raw = _required_string(value, label)
+    if _SHA256_RE.fullmatch(raw) is None:
+        raise FrontendRuntimeLegalError(f"{label} must be 64 lowercase hexadecimal characters")
+    return raw
+
+
+def _exact_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != fields:
+        raise FrontendRuntimeLegalError(f"{label} has unexpected fields")
+    return value
 
 
 def _direct_package_roots(node_modules: Path) -> list[Path]:
@@ -133,6 +166,202 @@ def _next_monorepo_license_fallback(
     }
 
 
+def _load_compiled_overrides(
+    path: Path | str | None,
+    *,
+    repository_root: Path,
+) -> dict[str, dict[str, Any]]:
+    if path is None:
+        return {}
+    candidate = Path(path)
+    if candidate.is_symlink() or not candidate.is_file():
+        raise FrontendRuntimeLegalError("frontend compiled override manifest must be a regular file")
+    try:
+        raw = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise FrontendRuntimeLegalError("frontend compiled override manifest is invalid JSON") from exc
+    root = _exact_object(raw, "frontend compiled override manifest", {"schema_version", "platform", "overrides"})
+    if root["schema_version"] != 1 or isinstance(root["schema_version"], bool):
+        raise FrontendRuntimeLegalError("frontend compiled override schema_version must be integer 1")
+    if root["platform"] != "windows-x86_64":
+        raise FrontendRuntimeLegalError("frontend compiled override platform must be windows-x86_64")
+    if not isinstance(root["overrides"], list):
+        raise FrontendRuntimeLegalError("frontend compiled override list must be an array")
+
+    overrides: dict[str, dict[str, Any]] = {}
+    fields = {
+        "runtime_package_json",
+        "runtime_package_json_sha256",
+        "name",
+        "version",
+        "license_expression",
+        "license_file",
+        "license_file_sha256",
+        "next_recipe",
+        "upstream_license",
+    }
+    for index, raw_item in enumerate(root["overrides"]):
+        item = _exact_object(raw_item, f"frontend compiled override[{index}]", fields)
+        runtime_path = _canonical_relative_path(
+            item["runtime_package_json"], f"frontend compiled override[{index}].runtime_package_json"
+        )
+        prefix = "node_modules/next/dist/compiled/"
+        if not runtime_path.startswith(prefix) or not runtime_path.endswith("/package.json"):
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] must target next/dist/compiled package.json"
+            )
+        if runtime_path in overrides:
+            raise FrontendRuntimeLegalError(f"duplicate frontend compiled override: {runtime_path}")
+        item["runtime_package_json_sha256"] = _required_sha256(
+            item["runtime_package_json_sha256"],
+            f"frontend compiled override[{index}].runtime_package_json_sha256",
+        )
+        item["name"] = _required_string(item["name"], f"frontend compiled override[{index}].name")
+        item["version"] = _required_string(item["version"], f"frontend compiled override[{index}].version")
+        item["license_expression"] = _required_string(
+            item["license_expression"], f"frontend compiled override[{index}].license_expression"
+        )
+        license_relative = _canonical_relative_path(
+            item["license_file"], f"frontend compiled override[{index}].license_file"
+        )
+        item["license_file_sha256"] = _required_sha256(
+            item["license_file_sha256"], f"frontend compiled override[{index}].license_file_sha256"
+        )
+        license_path = repository_root.joinpath(*PurePosixPath(license_relative).parts)
+        try:
+            license_resolved = license_path.resolve(strict=True)
+            repository_resolved = repository_root.resolve(strict=True)
+        except OSError as exc:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] license file is missing"
+            ) from exc
+        if license_path.is_symlink() or not license_resolved.is_file():
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] license file must be regular"
+            )
+        try:
+            license_resolved.relative_to(repository_resolved)
+        except ValueError as exc:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] license file escapes repository root"
+            ) from exc
+        if license_resolved.stat().st_size <= 0 or license_resolved.stat().st_size > _MAX_LICENSE_FILE_BYTES:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] license file has invalid size"
+            )
+        if _sha256(license_resolved) != item["license_file_sha256"]:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] license SHA-256 mismatch"
+            )
+
+        recipe = _exact_object(
+            item["next_recipe"],
+            f"frontend compiled override[{index}].next_recipe",
+            {"repository", "ref", "taskfile_path", "package_path"},
+        )
+        if recipe["repository"] != "https://github.com/vercel/next.js":
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] next recipe repository is not pinned Next"
+            )
+        recipe["ref"] = _required_string(recipe["ref"], f"frontend compiled override[{index}].next_recipe.ref")
+        if recipe["taskfile_path"] != "packages/next/taskfile.js" or recipe["package_path"] != "packages/next/package.json":
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] next recipe paths are not canonical"
+            )
+
+        upstream = _exact_object(
+            item["upstream_license"],
+            f"frontend compiled override[{index}].upstream_license",
+            {"repository", "ref", "path", "git_blob_sha1", "local_copy_normalized"},
+        )
+        upstream["repository"] = _required_string(
+            upstream["repository"], f"frontend compiled override[{index}].upstream_license.repository"
+        )
+        upstream["ref"] = _required_string(
+            upstream["ref"], f"frontend compiled override[{index}].upstream_license.ref"
+        )
+        upstream["path"] = _canonical_relative_path(
+            upstream["path"], f"frontend compiled override[{index}].upstream_license.path"
+        )
+        blob = _required_string(
+            upstream["git_blob_sha1"], f"frontend compiled override[{index}].upstream_license.git_blob_sha1"
+        )
+        if re.fullmatch(r"[0-9a-f]{40}", blob) is None:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}].upstream_license.git_blob_sha1 must be lowercase SHA-1"
+            )
+        if upstream["local_copy_normalized"] is not True:
+            raise FrontendRuntimeLegalError(
+                f"frontend compiled override[{index}] must declare normalized local license copy"
+            )
+        overrides[runtime_path] = item
+    return overrides
+
+
+def _apply_compiled_override(
+    *,
+    override: dict[str, Any],
+    runtime_package_json: Path,
+    package_metadata: dict[str, Any],
+    runtime_relative: str,
+    source_modules: Path,
+    repository_root: Path,
+    licenses_root: Path,
+    release_root: Path,
+) -> tuple[str, str, dict[str, Any], int]:
+    if _sha256(runtime_package_json) != override["runtime_package_json_sha256"]:
+        raise FrontendRuntimeLegalError(
+            f"compiled override runtime package SHA-256 mismatch: {runtime_relative}"
+        )
+    if package_metadata.get("name") != override["name"]:
+        raise FrontendRuntimeLegalError(
+            f"compiled override package name mismatch: {runtime_relative}"
+        )
+    runtime_version = package_metadata.get("version")
+    if isinstance(runtime_version, str) and runtime_version and runtime_version != override["version"]:
+        raise FrontendRuntimeLegalError(
+            f"compiled override package version mismatch: {runtime_relative}"
+        )
+    runtime_license = package_metadata.get("license")
+    if isinstance(runtime_license, str) and runtime_license.strip() and runtime_license.strip() != override["license_expression"]:
+        raise FrontendRuntimeLegalError(
+            f"compiled override license expression mismatch: {runtime_relative}"
+        )
+
+    next_package = _read_package_json(source_modules / "next" / "package.json", "Next compiled override provider")
+    next_version = next_package.get("version")
+    if next_package.get("name") != "next" or not isinstance(next_version, str) or not next_version:
+        raise FrontendRuntimeLegalError("Next compiled override provider identity is invalid")
+    recipe = override["next_recipe"]
+    if recipe["ref"] != f"v{next_version}":
+        raise FrontendRuntimeLegalError(
+            f"compiled override Next recipe ref does not match installed next version: {recipe['ref']} != v{next_version}"
+        )
+    dev_dependencies = next_package.get("devDependencies")
+    if not isinstance(dev_dependencies, dict) or dev_dependencies.get(override["name"]) != override["version"]:
+        raise FrontendRuntimeLegalError(
+            f"compiled override is not pinned by next@{next_version} devDependencies: {override['name']}@{override['version']}"
+        )
+
+    license_path = repository_root.joinpath(*PurePosixPath(override["license_file"]).parts).resolve(strict=True)
+    component_dir = licenses_root / "compiled" / _safe_slug(override["name"], override["version"])
+    component_dir.mkdir(parents=True, exist_ok=False)
+    target = component_dir / license_path.name
+    shutil.copy2(license_path, target)
+    size = target.stat().st_size
+    evidence = {
+        "kind": "checked-in-compiled-override",
+        "next_recipe": override["next_recipe"],
+        "upstream_license": override["upstream_license"],
+        "license_file": {
+            "path": target.relative_to(release_root).as_posix(),
+            "bytes": size,
+            "sha256": _sha256(target),
+        },
+    }
+    return override["version"], override["license_expression"], evidence, size
+
+
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
@@ -154,6 +383,7 @@ def stage_frontend_runtime_legal_bundle(
     release_root: Path | str,
     staged_frontend_root: Path | str,
     source_frontend_root: Path | str,
+    compiled_overrides_file: Path | str | None = None,
     require_compiled_license_expressions: bool = False,
 ) -> dict[str, Any]:
     release = Path(release_root)
@@ -167,11 +397,16 @@ def stage_frontend_runtime_legal_bundle(
         if candidate.is_symlink() or not candidate.is_dir():
             raise FrontendRuntimeLegalError(f"{label} must be a real directory")
 
+    repository_root = source.resolve().parent
     staged_modules = staged / "node_modules"
     source_modules = source / "node_modules"
     package_roots = _direct_package_roots(staged_modules)
     if not package_roots:
         raise FrontendRuntimeLegalError("Next standalone runtime contains no direct packages")
+    overrides = _load_compiled_overrides(
+        compiled_overrides_file,
+        repository_root=repository_root,
+    )
 
     legal_root = release / "legal" / "frontend-runtime"
     if legal_root.exists() or legal_root.is_symlink():
@@ -180,6 +415,7 @@ def stage_frontend_runtime_legal_bundle(
     direct: list[dict[str, Any]] = []
     compiled: list[dict[str, Any]] = []
     fallback_packages: list[str] = []
+    applied_override_paths: list[str] = []
     total_bytes = 0
     try:
         licenses_root = legal_root / "licenses"
@@ -254,11 +490,31 @@ def stage_frontend_runtime_legal_bundle(
                     raise FrontendRuntimeLegalError("Next compiled inventory contains invalid package.json")
                 package = _read_package_json(package_json, "Next compiled")
                 relative = package_json.relative_to(staged).as_posix()
+                runtime_override_path = package_json.relative_to(staged).as_posix()
                 name = package.get("name")
                 version = package.get("version")
                 license_expression = package.get("license")
                 if not isinstance(name, str) or not name:
                     raise FrontendRuntimeLegalError(f"{relative}: compiled package name is missing")
+
+                override_source: dict[str, Any] | None = None
+                override = overrides.get(runtime_override_path)
+                if override is not None:
+                    version, license_expression, override_source, added_bytes = _apply_compiled_override(
+                        override=override,
+                        runtime_package_json=package_json,
+                        package_metadata=package,
+                        runtime_relative=runtime_override_path,
+                        source_modules=source_modules,
+                        repository_root=repository_root,
+                        licenses_root=licenses_root,
+                        release_root=release,
+                    )
+                    total_bytes += added_bytes
+                    if total_bytes > _MAX_TOTAL_LICENSE_BYTES:
+                        raise FrontendRuntimeLegalError("frontend runtime legal bundle exceeded size limit")
+                    applied_override_paths.append(runtime_override_path)
+
                 if not isinstance(license_expression, str) or not license_expression.strip():
                     missing_expressions.append(relative)
                 compiled.append(
@@ -272,20 +528,30 @@ def stage_frontend_runtime_legal_bundle(
                         ),
                         "package_json_path": "frontend/" + relative,
                         "package_json_sha256": _sha256(package_json),
+                        "license_source": override_source,
                     }
                 )
+
+        unused_overrides = sorted(set(overrides) - set(applied_override_paths), key=str.casefold)
+        if unused_overrides:
+            raise FrontendRuntimeLegalError(
+                "frontend compiled overrides were not matched by the exact runtime: "
+                + ", ".join(unused_overrides)
+            )
         if require_compiled_license_expressions and missing_expressions:
             raise FrontendRuntimeLegalError(
                 "Next compiled packages missing license expression: " + ", ".join(missing_expressions)
             )
 
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "platform": "windows-x86_64",
             "direct_package_count": len(direct),
             "direct_license_fallback_count": len(fallback_packages),
             "direct_license_fallback_packages": sorted(fallback_packages, key=str.casefold),
             "next_compiled_package_count": len(compiled),
+            "next_compiled_override_count": len(applied_override_paths),
+            "next_compiled_override_paths": sorted(applied_override_paths, key=str.casefold),
             "next_compiled_missing_license_expression_count": len(missing_expressions),
             "next_compiled_missing_license_expression_paths": missing_expressions,
             "direct_packages": sorted(direct, key=lambda item: item["name"].casefold()),
@@ -301,6 +567,7 @@ def stage_frontend_runtime_legal_bundle(
         "direct_package_count": len(direct),
         "direct_license_fallback_count": len(fallback_packages),
         "next_compiled_package_count": len(compiled),
+        "next_compiled_override_count": len(applied_override_paths),
         "next_compiled_missing_license_expression_count": len(missing_expressions),
         "license_bytes": total_bytes,
         "manifest": "legal/frontend-runtime/components.windows-x86_64.json",
@@ -312,6 +579,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--release-root", type=Path, required=True)
     parser.add_argument("--staged-frontend-root", type=Path, required=True)
     parser.add_argument("--source-frontend-root", type=Path, required=True)
+    parser.add_argument("--compiled-overrides", type=Path)
     parser.add_argument("--require-compiled-license-expressions", action="store_true")
     return parser
 
@@ -323,6 +591,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             release_root=args.release_root,
             staged_frontend_root=args.staged_frontend_root,
             source_frontend_root=args.source_frontend_root,
+            compiled_overrides_file=args.compiled_overrides,
             require_compiled_license_expressions=args.require_compiled_license_expressions,
         )
     except (OSError, UnicodeError, FrontendRuntimeLegalError) as exc:

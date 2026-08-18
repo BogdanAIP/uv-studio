@@ -6,15 +6,21 @@ on:
     paths:
       - ".github/workflows/stage9-frontend-legal-probe.yml"
       - "frontend/**"
+      - "packaging/frontend-compiled-licenses/**"
+      - "packaging/frontend-compiled-licenses.windows-x86_64.json"
       - "tools/frontend_runtime_legal.py"
       - "tests/test_frontend_runtime_legal.py"
+      - "tests/test_frontend_runtime_legal_overrides.py"
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/stage9-frontend-legal-probe.yml"
       - "frontend/**"
+      - "packaging/frontend-compiled-licenses/**"
+      - "packaging/frontend-compiled-licenses.windows-x86_64.json"
       - "tools/frontend_runtime_legal.py"
       - "tests/test_frontend_runtime_legal.py"
+      - "tests/test_frontend_runtime_legal_overrides.py"
 
 jobs:
   frontend-runtime-legal:
@@ -61,7 +67,9 @@ jobs:
           & python tools/frontend_runtime_legal.py `
             --release-root $release `
             --staged-frontend-root $env:UV_FRONTEND_LEGAL_STAGE `
-            --source-frontend-root frontend
+            --source-frontend-root frontend `
+            --compiled-overrides packaging/frontend-compiled-licenses.windows-x86_64.json `
+            --require-compiled-license-expressions
           if ($LASTEXITCODE -ne 0) { throw 'frontend runtime legal collector failed' }
           $manifest = Join-Path $release 'legal\frontend-runtime\components.windows-x86_64.json'
           if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
@@ -71,10 +79,19 @@ jobs:
           if ($data.direct_package_count -ne 12) {
             throw "unexpected direct standalone package count: $($data.direct_package_count)"
           }
-          if ($data.next_compiled_package_count -lt 1) {
-            throw 'Next compiled inventory is unexpectedly empty'
+          if ($data.direct_license_fallback_count -ne 2) {
+            throw "unexpected direct fallback count: $($data.direct_license_fallback_count)"
           }
-          Write-Host "direct=$($data.direct_package_count) compiled=$($data.next_compiled_package_count) missing_compiled_license_expression=$($data.next_compiled_missing_license_expression_count)"
+          if ($data.next_compiled_package_count -ne 53) {
+            throw "unexpected Next compiled package count: $($data.next_compiled_package_count)"
+          }
+          if ($data.next_compiled_override_count -ne 1) {
+            throw "unexpected Next compiled override count: $($data.next_compiled_override_count)"
+          }
+          if ($data.next_compiled_missing_license_expression_count -ne 0) {
+            throw "unresolved Next compiled license expressions: $($data.next_compiled_missing_license_expression_count)"
+          }
+          Write-Host "direct=$($data.direct_package_count) direct_fallbacks=$($data.direct_license_fallback_count) compiled=$($data.next_compiled_package_count) compiled_overrides=$($data.next_compiled_override_count) unresolved=0"
           "UV_FRONTEND_LEGAL_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload frontend legal inventory
