@@ -64,3 +64,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-055 — Installed clean-machine runtime independence proof](decisions/D-055-stage-9-installed-clean-machine-proof.md)
 - [D-056 — Cancellable local capability jobs](decisions/D-056-stage-9-cancellable-local-capability-jobs.md)
 - [D-057 — Stage 9 constrained-host and long-project evidence](decisions/D-057-stage-9-constrained-host-long-project.md)
+- [D-058 — Redistributable Windows media runtime boundary](decisions/D-058-redistributable-windows-media-runtime.md)
