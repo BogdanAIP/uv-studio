@@ -1,0 +1,62 @@
+name: Stage 9 NSIS Legal Probe
+
+on:
+  push:
+    branches: ["stage-9/**"]
+    paths:
+      - ".github/workflows/stage9-nsis-legal-probe.yml"
+      - "tools/nsis_runtime_legal.py"
+      - "tests/test_nsis_runtime_legal.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-nsis-legal-probe.yml"
+      - "tools/nsis_runtime_legal.py"
+      - "tests/test_nsis_runtime_legal.py"
+
+jobs:
+  nsis-runtime-legal:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Test NSIS source legal gate
+        shell: pwsh
+        run: python -m unittest tests.test_nsis_runtime_legal -v
+
+      - name: Probe official NSIS 3.12 source archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'uv-nsis-legal-probe'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          & python tools/nsis_runtime_legal.py `
+            --output-root $root `
+            --version 3.12 `
+            --source-url 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2'
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS legal probe failed' }
+          $evidence = Join-Path $root 'legal\nsis\source-evidence.json'
+          if (-not (Test-Path -LiteralPath $evidence -PathType Leaf)) {
+            throw 'NSIS probe did not create source evidence'
+          }
+          $data = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
+          if ($data.version -ne '3.12') { throw "unexpected NSIS version: $($data.version)" }
+          if ($data.source_archive_sha256 -notmatch '^[0-9a-f]{64}$') {
+            throw 'NSIS probe did not report canonical source SHA-256'
+          }
+          Write-Host "NSIS_SOURCE_SHA256=$($data.source_archive_sha256)"
+          Write-Host "NSIS_COPYING_SHA256=$($data.copying_sha256)"
+          "UV_NSIS_LEGAL_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload NSIS legal evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-stage9-nsis-legal-${{ github.sha }}
+          path: ${{ env.UV_NSIS_LEGAL_ROOT }}/legal/nsis
+          if-no-files-found: error
