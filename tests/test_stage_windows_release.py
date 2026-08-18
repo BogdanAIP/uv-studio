@@ -36,7 +36,7 @@ class StageWindowsReleaseTests(unittest.TestCase):
         self.third_party_notices = self.root / "THIRD_PARTY_NOTICES.md"
         self.third_party_notices.write_text("# Notices\n", encoding="utf-8")
         self.release_profile = self.root / "runtime-profile.json"
-        self.release_profile.write_text('{"schema_version": 4}\n', encoding="utf-8")
+        self.release_profile.write_text('{"schema_version": 5}\n', encoding="utf-8")
 
         self.media = self.root / "media-source"
         ffmpeg_dir = self.media / "bin"
@@ -45,13 +45,35 @@ class StageWindowsReleaseTests(unittest.TestCase):
         self.ffprobe = ffmpeg_dir / "ffprobe.exe"
         self.ffmpeg.write_bytes(b"ffmpeg")
         self.ffprobe.write_bytes(b"ffprobe")
-        mlt_dir = self.media / "mlt" / "bin"
-        mlt_dir.mkdir(parents=True)
-        self.melt = mlt_dir / "melt.exe"
-        self.melt.write_bytes(b"melt")
-        plugin_dir = self.media / "mlt" / "lib" / "mlt"
+
+        self.mlt_carrier = self.media / "mlt"
+        mlt_bin = self.mlt_carrier / "bin"
+        mlt_bin.mkdir(parents=True)
+        self.melt = mlt_bin / "melt.exe"
+        self.melt.write_bytes(b"melt-qtcrop")
+
+        plugin_dir = self.mlt_carrier / "lib" / "mlt"
         plugin_dir.mkdir(parents=True)
-        (plugin_dir / "filter.dll").write_bytes(b"plugin")
+        for filename in (
+            "libmltavformat.dll",
+            "libmltcore.dll",
+            "libmltqt6.dll",
+            "libmltxml.dll",
+        ):
+            (plugin_dir / filename).write_bytes(filename.encode("ascii"))
+        (plugin_dir / "libmltoldfilm.dll").write_bytes(b"unused-module")
+
+        required_data = {
+            "avformat/consumer_avformat.yml": "consumer\n",
+            "avformat/producer_avformat-novalidate.yml": "producer\n",
+            "core/loader.dict": "loader-dict\n",
+            "core/loader.ini": "loader-ini\n",
+            "qt6/filter_qtcrop.yml": "qtcrop\n",
+        }
+        for relative, content in required_data.items():
+            target = self.mlt_carrier / "share" / "mlt" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
 
         qt_runtime = (
             self.media
@@ -130,7 +152,26 @@ class StageWindowsReleaseTests(unittest.TestCase):
         )
         self.assertTrue((output / "runtime" / "node" / "node.exe").is_file())
         self.assertTrue(
-            (output / "runtime" / "media" / "mlt" / "lib" / "mlt" / "filter.dll").is_file()
+            (
+                output
+                / "runtime"
+                / "media"
+                / "mlt"
+                / "lib"
+                / "mlt"
+                / "libmltcore.dll"
+            ).is_file()
+        )
+        self.assertFalse(
+            (
+                output
+                / "runtime"
+                / "media"
+                / "mlt"
+                / "lib"
+                / "mlt"
+                / "libmltoldfilm.dll"
+            ).exists()
         )
         self.assertTrue(
             (
@@ -156,7 +197,7 @@ class StageWindowsReleaseTests(unittest.TestCase):
                 / "test"
             ).exists()
         )
-        self.assertEqual(result["excluded_media_file_count"], 2)
+        self.assertEqual(result["excluded_media_file_count"], 3)
         self.assertEqual(
             result["media_exclusion_rules"],
             [
@@ -166,9 +207,26 @@ class StageWindowsReleaseTests(unittest.TestCase):
                 "**/glaxnimate.exe",
                 "**/shotcut.exe",
                 "**/whisper-cli.exe",
+                "**/lib/frei0r-1/**",
+                "**/lib/ladspa/**",
+                "**/lib/qml/**",
+                "**/lib/mlt/libmlt*.dll except UV service-closure allowlist",
             ],
         )
-        self.assertGreaterEqual(result["media_file_count"], 5)
+        self.assertEqual(
+            result["mlt_required_modules"],
+            [
+                "libmltavformat.dll",
+                "libmltcore.dll",
+                "libmltqt6.dll",
+                "libmltxml.dll",
+            ],
+        )
+        self.assertIn(
+            "share/mlt/qt6/filter_qtcrop.yml",
+            result["mlt_service_closure_files"],
+        )
+        self.assertGreaterEqual(result["media_file_count"], 10)
         self.assertEqual(
             result["legal_files"],
             [
@@ -200,7 +258,7 @@ class StageWindowsReleaseTests(unittest.TestCase):
             (output / "legal" / "release-inputs.windows-x86_64.json").read_text(
                 encoding="utf-8"
             ),
-            '{"schema_version": 4}\n',
+            '{"schema_version": 5}\n',
         )
 
     def test_media_exclusion_is_case_insensitive_like_windows_paths(self) -> None:
@@ -211,7 +269,7 @@ class StageWindowsReleaseTests(unittest.TestCase):
         self.assertFalse(
             (output / "runtime" / "media" / "other" / "BIN" / "qt" / "TEST").exists()
         )
-        self.assertEqual(result["excluded_media_file_count"], 3)
+        self.assertEqual(result["excluded_media_file_count"], 4)
 
     def test_shotcut_application_surface_is_pruned_without_pruning_runtime(self) -> None:
         carrier = self.media / "Shotcut"
@@ -221,7 +279,7 @@ class StageWindowsReleaseTests(unittest.TestCase):
         shotcut_ui = carrier / "share" / "shotcut" / "qml"
         shotcut_ui.mkdir(parents=True)
         (shotcut_ui / "Main.qml").write_text("ui\n", encoding="utf-8")
-        runtime_share = carrier / "share" / "mlt-7"
+        runtime_share = carrier / "share" / "mlt"
         runtime_share.mkdir(parents=True)
         (runtime_share / "profiles.yml").write_text("runtime\n", encoding="utf-8")
         unrelated = carrier / "tools"
@@ -233,12 +291,49 @@ class StageWindowsReleaseTests(unittest.TestCase):
         for filename in ("shotcut.exe", "ffplay.exe", "glaxnimate.exe", "whisper-cli.exe"):
             self.assertFalse((media_output / filename).exists())
         self.assertFalse((media_output / "share" / "shotcut").exists())
-        self.assertTrue((media_output / "share" / "mlt-7" / "profiles.yml").is_file())
+        self.assertTrue((media_output / "share" / "mlt" / "profiles.yml").is_file())
         self.assertTrue((media_output / "tools" / "helper.exe").is_file())
         self.assertTrue(
-            (output / "runtime" / "media" / "mlt" / "lib" / "mlt" / "filter.dll").is_file()
+            (
+                output
+                / "runtime"
+                / "media"
+                / "mlt"
+                / "lib"
+                / "mlt"
+                / "libmltcore.dll"
+            ).is_file()
         )
-        self.assertEqual(result["excluded_media_file_count"], 7)
+        self.assertEqual(result["excluded_media_file_count"], 8)
+
+    def test_mlt_service_closure_prunes_unreachable_plugin_trees(self) -> None:
+        for directory, filename in (
+            ("frei0r-1", "effect.dll"),
+            ("ladspa", "effect.dll"),
+            ("qml", "Module.qml"),
+        ):
+            target = self.mlt_carrier / "lib" / directory
+            target.mkdir(parents=True)
+            (target / filename).write_bytes(b"unused")
+
+        output, result = self._stage()
+        carrier = output / "runtime" / "media" / "mlt"
+        for directory in ("frei0r-1", "ladspa", "qml"):
+            self.assertFalse((carrier / "lib" / directory).exists())
+        for module in result["mlt_required_modules"]:
+            self.assertTrue((carrier / "lib" / "mlt" / module).is_file())
+        self.assertFalse((carrier / "lib" / "mlt" / "libmltoldfilm.dll").exists())
+        self.assertEqual(result["excluded_media_file_count"], 6)
+
+    def test_missing_mlt_service_closure_file_fails_closed(self) -> None:
+        required = self.mlt_carrier / "share" / "mlt" / "qt6" / "filter_qtcrop.yml"
+        required.unlink()
+        output = self.root / "release"
+        with self.assertRaisesRegex(
+            WindowsReleaseStageError, "MLT UV service closure is incomplete"
+        ):
+            self._stage(output)
+        self.assertFalse(output.exists())
 
     def test_required_media_entrypoint_inside_exclusion_fails_closed(self) -> None:
         test_dir = self.media / "bundle" / "bin" / "Qt" / "test"

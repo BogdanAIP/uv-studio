@@ -20,16 +20,40 @@ _DEFAULT_UV_LICENSE = ROOT / "LICENSE"
 _DEFAULT_THIRD_PARTY_NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 _DEFAULT_RELEASE_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
 
+# The Stage 9 MLT boundary is derived from the XML that MLTTimelineAdapter emits:
+# XML loading, core playlist/tractor graph construction, avformat input/output and
+# melt's non-XML-consumer qtcrop preflight. Everything else remains excluded until
+# UV starts emitting a service that needs it and the release closure is reviewed.
+_MLT_REQUIRED_MODULE_NAMES = frozenset(
+    {
+        "libmltavformat.dll",
+        "libmltcore.dll",
+        "libmltqt6.dll",
+        "libmltxml.dll",
+    }
+)
+_MLT_REQUIRED_CARRIER_FILES = (
+    "lib/mlt/libmltavformat.dll",
+    "lib/mlt/libmltcore.dll",
+    "lib/mlt/libmltqt6.dll",
+    "lib/mlt/libmltxml.dll",
+    "share/mlt/avformat/consumer_avformat.yml",
+    "share/mlt/avformat/producer_avformat-novalidate.yml",
+    "share/mlt/core/loader.dict",
+    "share/mlt/core/loader.ini",
+    "share/mlt/qt6/filter_qtcrop.yml",
+)
+
 # Media acquisition archives are carriers, not the canonical UV Studio runtime.
-# Keep exclusions deliberately narrow and evidence-backed. The legacy Qt test
-# rule removes build/test objects that cannot be runtime dependencies. The
-# Shotcut rules remove only the upstream application executable, its dedicated
-# UI/data tree and standalone helper applications that UV Studio never invokes.
-# FFmpeg/FFprobe, melt, DLLs, MLT modules/data and Qt runtime/plugin trees remain
-# untouched until a separate dependency-closure proof justifies further pruning.
+# Exclusions are evidence-backed against the UV-owned MLT projection/render path.
+# Qt runtime DLL/plugins and top-level shared media libraries remain untouched in
+# this pass because some of them may be discovered dynamically at runtime.
 _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
     ("share", "shotcut"),
+    ("lib", "frei0r-1"),
+    ("lib", "ladspa"),
+    ("lib", "qml"),
 )
 _MEDIA_EXCLUDED_FILE_NAMES = frozenset(
     {
@@ -46,6 +70,10 @@ _MEDIA_EXCLUSION_RULES = (
     "**/glaxnimate.exe",
     "**/shotcut.exe",
     "**/whisper-cli.exe",
+    "**/lib/frei0r-1/**",
+    "**/lib/ladspa/**",
+    "**/lib/qml/**",
+    "**/lib/mlt/libmlt*.dll except UV service-closure allowlist",
 )
 _MANDATORY_LEGAL_TARGETS = {
     "uv_license": "legal/UV-STUDIO-LICENSE.txt",
@@ -128,10 +156,20 @@ def _contains_segment_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]
     )
 
 
+def _is_mlt_module_file(relative: Path) -> bool:
+    parts = relative.parts
+    if not relative.name.casefold().startswith("libmlt") or relative.suffix.casefold() != ".dll":
+        return False
+    folded = tuple(part.casefold() for part in parts)
+    return len(parts) >= 3 and folded[-3:-1] == ("lib", "mlt")
+
+
 def _media_path_is_excluded(relative: Path) -> bool:
     parts = relative.parts
     if relative.name.casefold() in _MEDIA_EXCLUDED_FILE_NAMES:
         return True
+    if _is_mlt_module_file(relative):
+        return relative.name.casefold() not in _MLT_REQUIRED_MODULE_NAMES
     return any(
         _contains_segment_sequence(parts, sequence)
         for sequence in _MEDIA_EXCLUDED_SEGMENT_SEQUENCES
@@ -165,6 +203,35 @@ def _copy_media_runtime(source: Path, target: Path) -> int:
 
     shutil.copytree(source, target, symlinks=False, ignore=ignore)
     return excluded_file_count
+
+
+def _find_mlt_carrier_root(media_root: Path, melt: Path) -> Path:
+    candidate = melt.parent
+    while True:
+        if (candidate / "lib" / "mlt").is_dir():
+            return candidate
+        if candidate == media_root:
+            break
+        if media_root not in candidate.parents:
+            break
+        candidate = candidate.parent
+    raise WindowsReleaseStageError(
+        "MLT executable is not inside a carrier containing lib/mlt"
+    )
+
+
+def _require_mlt_service_closure(media_root: Path, melt: Path) -> tuple[Path, list[str]]:
+    carrier_root = _find_mlt_carrier_root(media_root, melt)
+    missing: list[str] = []
+    for relative in _MLT_REQUIRED_CARRIER_FILES:
+        candidate = carrier_root.joinpath(*relative.split("/"))
+        if not candidate.is_file() or candidate.is_symlink():
+            missing.append(relative)
+    if missing:
+        raise WindowsReleaseStageError(
+            "MLT UV service closure is incomplete: " + ", ".join(missing)
+        )
+    return carrier_root, list(_MLT_REQUIRED_CARRIER_FILES)
 
 
 def _copy_legal_file(source: Path, target: Path, relative: str) -> None:
@@ -256,6 +323,9 @@ def stage_windows_release(
                 f"{label} is inside a non-runtime media exclusion: {relative}"
             )
 
+    mlt_carrier_root, mlt_service_files = _require_mlt_service_closure(media, melt)
+    mlt_carrier_relative = mlt_carrier_root.relative_to(media)
+
     output = Path(output_root).expanduser()
     if output.exists() or output.is_symlink():
         raise WindowsReleaseStageError(
@@ -276,9 +346,8 @@ def stage_windows_release(
         node_target = output / "runtime" / "node" / "node.exe"
         node_target.parent.mkdir(parents=True)
         shutil.copy2(node, node_target)
-        excluded_media_file_count = _copy_media_runtime(
-            media, output / "runtime" / "media"
-        )
+        media_target = output / "runtime" / "media"
+        excluded_media_file_count = _copy_media_runtime(media, media_target)
         legal_files = _stage_legal_files(
             output,
             uv_license=uv_license,
@@ -302,10 +371,18 @@ def stage_windows_release(
                     f"staged {component_id} entrypoint is missing or invalid: {relative}"
                 )
 
+        staged_carrier = media_target / mlt_carrier_relative
+        for relative in mlt_service_files:
+            candidate = staged_carrier.joinpath(*relative.split("/"))
+            if not candidate.is_file() or candidate.is_symlink():
+                raise WindowsReleaseStageError(
+                    f"staged MLT UV service closure is missing: {relative}"
+                )
+
         file_count = sum(1 for path in output.rglob("*") if path.is_file())
         media_file_count = sum(
             1
-            for path in (output / "runtime" / "media").rglob("*")
+            for path in media_target.rglob("*")
             if path.is_file()
         )
         return {
@@ -315,6 +392,8 @@ def stage_windows_release(
             "media_file_count": media_file_count,
             "excluded_media_file_count": excluded_media_file_count,
             "media_exclusion_rules": list(_MEDIA_EXCLUSION_RULES),
+            "mlt_required_modules": sorted(_MLT_REQUIRED_MODULE_NAMES),
+            "mlt_service_closure_files": mlt_service_files,
             "legal_files": legal_files,
         }
     except Exception:
