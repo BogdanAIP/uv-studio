@@ -1,0 +1,85 @@
+name: Stage 9 Frontend Legal Probe
+
+on:
+  push:
+    branches: ["stage-9/**"]
+    paths:
+      - ".github/workflows/stage9-frontend-legal-probe.yml"
+      - "frontend/**"
+      - "tools/frontend_runtime_legal.py"
+      - "tests/test_frontend_runtime_legal.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-frontend-legal-probe.yml"
+      - "frontend/**"
+      - "tools/frontend_runtime_legal.py"
+      - "tests/test_frontend_runtime_legal.py"
+
+jobs:
+  frontend-runtime-legal:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.19.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Build exact standalone frontend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Push-Location frontend
+          try {
+            npm ci
+            npm run lint
+            npm run audit:high
+            npm run build
+          } finally {
+            Pop-Location
+          }
+          $stage = Join-Path $env:RUNNER_TEMP 'uv-frontend-standalone-legal'
+          & python tools/stage_frontend_release.py --frontend-root frontend --output $stage
+          if ($LASTEXITCODE -ne 0) { throw 'frontend staging failed' }
+          "UV_FRONTEND_LEGAL_STAGE=$stage" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Collect exact frontend runtime legal inventory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = Join-Path $env:RUNNER_TEMP 'uv-frontend-legal-probe'
+          New-Item -ItemType Directory -Force -Path $release | Out-Null
+          & python tools/frontend_runtime_legal.py `
+            --release-root $release `
+            --staged-frontend-root $env:UV_FRONTEND_LEGAL_STAGE `
+            --source-frontend-root frontend
+          if ($LASTEXITCODE -ne 0) { throw 'frontend runtime legal collector failed' }
+          $manifest = Join-Path $release 'legal\frontend-runtime\components.windows-x86_64.json'
+          if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+            throw 'frontend runtime legal collector did not create manifest'
+          }
+          $data = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          if ($data.direct_package_count -ne 12) {
+            throw "unexpected direct standalone package count: $($data.direct_package_count)"
+          }
+          if ($data.next_compiled_package_count -lt 1) {
+            throw 'Next compiled inventory is unexpectedly empty'
+          }
+          Write-Host "direct=$($data.direct_package_count) compiled=$($data.next_compiled_package_count) missing_compiled_license_expression=$($data.next_compiled_missing_license_expression_count)"
+          "UV_FRONTEND_LEGAL_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload frontend legal inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-stage9-frontend-legal-${{ github.sha }}
+          path: ${{ env.UV_FRONTEND_LEGAL_ROOT }}/legal/frontend-runtime
+          if-no-files-found: error
