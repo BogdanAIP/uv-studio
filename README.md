@@ -21,6 +21,12 @@ UV Studio should support task-specific workflows instead of one mandatory pipeli
 
 Music, narration, story, characters, continuity and automatic review are optional capabilities, not requirements for every project.
 
+## Windows release
+
+The Stage 9 Windows product is a per-user, versioned installation with immutable application releases and separate mutable user data. Installation, update/rollback, data locations, recovery and uninstall behavior are documented in [`docs/WINDOWS_RELEASE.md`](docs/WINDOWS_RELEASE.md).
+
+A release candidate is not a public trusted release until the repository's signing, exact-payload audit, checksum and review gates are complete.
+
 ## Development source of truth
 
 Repository and GitHub state are the durable project memory. Coding agents and new development chats must start with `AGENTS.md`; it defines the required reading order, active-slice contract and multi-agent ownership rules. Do not rely on an old chat transcript to know the current implementation state.
