@@ -1,9 +1,9 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-8-additional-recipes -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: semantic-api-docs -->
 
-**Updated:** 2026-08-16
+**Updated:** 2026-08-18
 
 **Repository:** `BogdanAIP/uv-studio`
 
@@ -11,7 +11,7 @@
 
 Stage 8 Additional Recipes is merged through PR #37 / merge commit `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca` after Chat-first review on exact head `91dcf820b8df76730584f3c27457c782db00b213`. The final pre-merge review head passed all five permanent CI jobs in Actions run `31971331754`, including API integration, real HTTP, FFmpeg/MLT real-media evidence, frontend lint/audit/build and Playwright browser outcomes on Ubuntu and Windows.
 
-The repository is now intentionally returning to the canonical `idle` lifecycle. This closure commit advances `last_completed` to `stage-8-additional-recipes` and keeps `stage-9-desktop-productization-release-hardening` as the next handoff. Stage 9 remains blocked until this exact post-merge idle head itself passes all permanent required checks.
+The Stage 8 lifecycle was closed to canonical `idle` on `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3`. A narrow cross-cutting documentation slice, `semantic-api-docs`, is now active on `chore/semantic-api-docs`. It documents the existing UV-owned semantic integration boundary without changing product code, provider/runtime behavior, Project Store authority or the Stage 9 handoff.
 
 ## Stage 8 delivered product modes
 
@@ -43,10 +43,17 @@ Before merge, review and exact-head CI closed the following concrete defects and
 
 D-043 records the complete optional MuseTalk trust boundary. The accepted Stage 8 profile is deliberately fail-closed: future upstream/model revisions require an explicit reviewed profile/fingerprint update rather than silent compatibility.
 
+## Current cross-cutting documentation slice
+
+`semantic-api-docs` gives a stable name and explicit contract to the integration-facing semantic boundary that already exists across the Project Store, UV Command API, Capability Registry/execution path, Recipe Registry and execution planning surfaces.
+
+This slice must not introduce a second command implementation, a second project/capability registry, a raw canonical-state mutation path, a new provider/runtime abstraction, or a new remote-access trust boundary. The existing `uv_studio/editor`, `uv_studio/capabilities`, `uv_studio/projects`, `uv_studio/recipes`, `uv_studio/mcp` and `uv_studio/api` implementations remain authoritative.
+
 ## Architecture invariants
 
 - Project Store and UV-owned domain state are canonical; engines, model runtimes and compatibility surfaces are adapters rather than competing authorities.
 - GUI, scripts, AI and MCP converge on UV-owned semantic capabilities/commands/workflows.
+- UV Semantic API is an integration-facing projection of those existing contracts, not a second command system or blanket designation for every `/api/uv` route.
 - Paid/remote execution remains optional and behind D-017; provider/model identifiers remain outside canonical project state.
 - Stage 8 remains composition-first under D-042; it did not add a second universal media/project/timeline engine.
 - Performance/lip-sync remains `configuration_required`/partial unless the exact D-043 checkout, shadow-code, model-payload, runtime and CUDA preflight succeeds.
@@ -60,12 +67,12 @@ D-043 records the complete optional MuseTalk trust boundary. The accepted Stage 
 - Initial Stage 8 review transition: `18f46b504feffad7d67878408c15070244381af9`, green CI #1574 / Actions `31969673721`.
 - Final security-reviewed Stage 8 head: `91dcf820b8df76730584f3c27457c782db00b213`, all five permanent jobs green in Actions run `31971331754`.
 - Stage 8 merge commit: `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca`.
-- The exact idle closure head created by this document update is the final Stage 8 completion gate and must pass the same five permanent jobs before Stage 9 starts.
+- Stage 8 idle closure head: `d57bc315c27ed21f26c9050d661c792f95ab8aa3`.
 
 ## Cross-cutting backlog
 
-Non-blocking debt remains deliberately outside Stage 8: broader codec/device fixtures, reproducible Python dependency locking, schema migration/versioning for growing extension state, generated frontend contracts, a future common command envelope, reusable frontend primitives, CI job decomposition, deeper renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces.
+Non-blocking debt remains deliberately outside this documentation slice: broader codec/device fixtures, reproducible Python dependency locking, schema migration/versioning for growing extension state, generated frontend contracts, a future common command envelope, reusable frontend primitives, CI job decomposition, deeper renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces.
 
 ## Next handoff
 
-`stage-9-desktop-productization-release-hardening` remains the declared next slice. Its entry conditions are defined in `project-context/NEXT_TASK.md`; it must not begin until the exact post-merge idle head is green across all permanent checks.
+`stage-9-desktop-productization-release-hardening` remains the declared next slice. Its entry conditions are defined in `project-context/NEXT_TASK.md`; this documentation slice must be reviewed, merged and closed back to `idle` before that handoff starts.
