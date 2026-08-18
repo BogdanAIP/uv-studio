@@ -92,21 +92,33 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "frontend release staging failed with exit $LASTEXITCODE" }
           "UV_FRONTEND_STAGE=$frontendStage" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Provision pinned release Node executable
+      - name: Provision pinned release Node distribution
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $node = Join-Path $env:RUNNER_TEMP 'uv-node.exe'
-          Invoke-WebRequest -Uri $env:UV_NODE_URL -OutFile $node
-          $actualSha256 = (Get-FileHash -Algorithm SHA256 $node).Hash.ToLowerInvariant()
+          $archive = Join-Path $env:RUNNER_TEMP 'uv-node-release.zip'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'uv-node-release'
+          Invoke-WebRequest -Uri $env:UV_NODE_URL -OutFile $archive
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           if ($actualSha256 -ne $env:UV_NODE_SHA256) {
-            throw "Node SHA-256 mismatch: expected $env:UV_NODE_SHA256, got $actualSha256"
+            throw "Node archive SHA-256 mismatch: expected $env:UV_NODE_SHA256, got $actualSha256"
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+          $nodeRoot = Join-Path $extractRoot "node-v$env:UV_NODE_VERSION-win-x64"
+          $node = Join-Path $nodeRoot 'node.exe'
+          $nodeLicense = Join-Path $nodeRoot 'LICENSE'
+          if (-not (Test-Path -LiteralPath $node -PathType Leaf)) {
+            throw 'pinned Node distribution did not contain node.exe'
+          }
+          if (-not (Test-Path -LiteralPath $nodeLicense -PathType Leaf)) {
+            throw 'pinned Node distribution did not contain LICENSE'
           }
           $version = (& $node --version).Trim()
           if ($version -ne "v$env:UV_NODE_VERSION") {
             throw "unexpected Node version: $version"
           }
           "UV_NODE_EXECUTABLE=$node" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_NODE_LICENSE=$nodeLicense" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Provision pinned Windows media runtime
         shell: pwsh
@@ -148,6 +160,7 @@ jobs:
             --backend-root 'dist/uv-studio-backend' `
             --frontend-root $env:UV_FRONTEND_STAGE `
             --node-executable $env:UV_NODE_EXECUTABLE `
+            --node-license $env:UV_NODE_LICENSE `
             --media-root $env:UV_MEDIA_ROOT `
             --ffmpeg-executable $env:UV_FFMPEG_EXECUTABLE `
             --ffprobe-executable $env:UV_FFPROBE_EXECUTABLE `
@@ -166,6 +179,7 @@ jobs:
           "UV_MLT_ENTRYPOINT=$($stage.entrypoints.mlt)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "staged files=$($stage.file_count), media files=$($stage.media_file_count), excluded media files=$($stage.excluded_media_file_count)"
           Write-Host "media exclusion rules=$($stage.media_exclusion_rules -join ',')"
+          Write-Host "legal/provenance files=$($stage.legal_files -join ',')"
 
       - name: Build and deep-verify D-044 release manifest
         shell: pwsh
