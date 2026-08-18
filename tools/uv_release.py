@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -24,6 +25,16 @@ from uv_studio.release_manifest import (  # noqa: E402
     verify_release_tree,
     write_release_manifest,
 )
+
+_DEFAULT_FRONTEND_SOURCE_ROOT = ROOT / "frontend"
+_DEFAULT_FRONTEND_COMPILED_OVERRIDES = (
+    ROOT / "packaging" / "frontend-compiled-licenses.windows-x86_64.json"
+)
+_EXPECTED_FRONTEND_NODE_LOCK = "frontend/package-lock.json"
+_EXPECTED_FRONTEND_DIRECT_PACKAGES = 12
+_EXPECTED_FRONTEND_DIRECT_FALLBACKS = 2
+_EXPECTED_NEXT_COMPILED_PACKAGES = 53
+_EXPECTED_NEXT_COMPILED_OVERRIDES = 1
 
 
 def _component(value: str) -> ReleaseComponent:
@@ -50,8 +61,65 @@ def _json(data: object) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+def _stage_frontend_legal_before_manifest(root: Path) -> dict[str, object] | None:
+    """Stage exact Next standalone legal evidence before D-044 hashes the tree.
+
+    The normal release workflow exports UV_NODE_LOCK from the already validated
+    runtime profile. Ad-hoc manifest tooling keeps the historical contract when
+    that marker is absent.
+    """
+    node_lock = os.environ.get("UV_NODE_LOCK")
+    if not node_lock:
+        return None
+    if node_lock != _EXPECTED_FRONTEND_NODE_LOCK:
+        raise ReleaseManifestError(
+            "frontend legal gate requires validated node lock "
+            f"{_EXPECTED_FRONTEND_NODE_LOCK}, got {node_lock}"
+        )
+
+    legal_root = root / "legal" / "frontend-runtime"
+    try:
+        from tools.frontend_runtime_legal import (
+            FrontendRuntimeLegalError,
+            stage_frontend_runtime_legal_bundle,
+        )
+
+        result = stage_frontend_runtime_legal_bundle(
+            release_root=root,
+            staged_frontend_root=root / "frontend",
+            source_frontend_root=_DEFAULT_FRONTEND_SOURCE_ROOT,
+            compiled_overrides_file=_DEFAULT_FRONTEND_COMPILED_OVERRIDES,
+            require_compiled_license_expressions=True,
+        )
+    except (OSError, UnicodeError, FrontendRuntimeLegalError) as exc:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError(
+            f"frontend runtime legal/provenance gate failed: {exc}"
+        ) from exc
+
+    expected = {
+        "direct_package_count": _EXPECTED_FRONTEND_DIRECT_PACKAGES,
+        "direct_license_fallback_count": _EXPECTED_FRONTEND_DIRECT_FALLBACKS,
+        "next_compiled_package_count": _EXPECTED_NEXT_COMPILED_PACKAGES,
+        "next_compiled_override_count": _EXPECTED_NEXT_COMPILED_OVERRIDES,
+        "next_compiled_missing_license_expression_count": 0,
+    }
+    mismatches = [
+        f"{key}: expected {value}, got {result.get(key)!r}"
+        for key, value in expected.items()
+        if result.get(key) != value
+    ]
+    if mismatches:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError(
+            "frontend runtime legal/provenance counts drifted: " + "; ".join(mismatches)
+        )
+    return result
+
+
 def _build(args: argparse.Namespace) -> int:
     try:
+        frontend_legal = _stage_frontend_legal_before_manifest(args.root)
         manifest = build_release_manifest(
             args.root,
             product_version=args.product_version,
@@ -63,7 +131,14 @@ def _build(args: argparse.Namespace) -> int:
     except (OSError, ReleaseManifestError) as exc:
         _json({"ok": False, "error": str(exc)})
         return 2
-    _json({"ok": True, "manifest": path.name, "files": len(manifest.files)})
+    result: dict[str, object] = {
+        "ok": True,
+        "manifest": path.name,
+        "files": len(manifest.files),
+    }
+    if frontend_legal is not None:
+        result["frontend_legal"] = frontend_legal
+    _json(result)
     return 0
 
 
