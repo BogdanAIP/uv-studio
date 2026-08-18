@@ -14,10 +14,12 @@ components additionally pin the recipe repository commit/path so packaging
 patches are not lost.
 
 This is redistribution/provenance engineering documentation, not legal advice.
+The exact FFmpeg build enables both GPL and license version 3, so its combined
+FFmpeg binary/library license is recorded as GPL-3.0-or-later.
 
 | Component | Version | License expression | Retained PE files | Corresponding source |
 | --- | --- | --- | ---: | --- |
-| `ffmpeg` | n8.1-11-g75d37c499d | `GPL-2.0-or-later` | 9 | https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz (sha256 fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442) |
+| `ffmpeg` | n8.1-11-g75d37c499d | `GPL-3.0-or-later` | 9 | https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz (sha256 fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442) |
 | `mlt-framework` | 7.39.0-interim | `LGPL-2.1-or-later` | 6 | https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz (sha256 fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442) |
 | `mlt-melt` | 7.39.0-interim | `GPL-2.0-or-later` | 1 | https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz (sha256 fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442) |
 | `qt` | 6.8.3 | `LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only` | 7 | https://download.qt.io/archive/qt/6.8/6.8.3/single/qt-everywhere-src-6.8.3.tar.xz (sha256 cdd3a69967208276bb01af7ace7dba0ba53e679f886a4cbe624225c60fb73f2c) |
