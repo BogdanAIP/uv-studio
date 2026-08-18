@@ -17,6 +17,12 @@ This is redistribution/provenance engineering documentation, not legal advice.
 The exact FFmpeg build enables both GPL and license version 3, so its combined
 FFmpeg binary/library license is recorded as GPL-3.0-or-later.
 
+The exact license/notice assets are governed separately by
+`media-runtime-license-files.windows-x86_64.json`. Windows Release #140 proved
+all 27 bounded assets through D-044/install/rollback; the acceptance candidate
+pins every one of those exact asset SHA-256 values and rejects changed upstream
+bytes before D-044.
+
 | Component | Version | License expression | Retained PE files | Corresponding source |
 | --- | --- | --- | ---: | --- |
 | `ffmpeg` | n8.1-11-g75d37c499d | `GPL-3.0-or-later` | 9 | https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz (sha256 fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442) |
@@ -33,7 +39,7 @@ FFmpeg binary/library license is recorded as GPL-3.0-or-later.
 | `winpthreads` | 14.0.0.r14.g4761eabdd | `MIT AND BSD-3-Clause-Clear` | 1 | https://git.code.sf.net/p/mingw-w64/mingw-w64 @ 4761eabdda9764d14778a52a4a9dd1d5e720569e |
 | `dlfcn-win32` | 1.4.2 | `MIT` | 1 | https://github.com/dlfcn-win32/dlfcn-win32/archive/v1.4.2.tar.gz (sha256 f61a874bc9163ab488accb364fd681d109870c86e8071f4710cbcdcbaf9f2565) |
 | `libiconv` | 1.19 | `LGPL-2.1-or-later` | 1 | https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.19.tar.gz (sha256 88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6) |
-| `xz-liblzma` | 5.8.3 | `0BSD AND LGPL-2.1-or-later AND GPL-2.0-or-later` | 1 | https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz (sha256 fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbfb6) |
+| `xz-liblzma` | 5.8.3 | `0BSD` | 1 | https://github.com/tukaani-project/xz/releases/download/v5.8.3/xz-5.8.3.tar.xz (sha256 fff1ffcf2b0da84d308a14de513a1aa23d4e9aa3464d17e64b9714bfdd0bbfb6) |
 | `bzip2` | 1.0.8 | `bzip2-1.0.6` | 1 | https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz (sha256 ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269) |
 | `libogg` | 1.3.6 | `BSD-3-Clause` | 1 | https://downloads.xiph.org/releases/ogg/libogg-1.3.6.tar.gz (sha256 83e6704730683d004d20e21b8f7f55dcb3383cdf84c0daedf30bde175f774638) |
 | `libvorbis` | 1.3.7 | `BSD-3-Clause` | 2 | https://downloads.xiph.org/releases/vorbis/libvorbis-1.3.7.tar.gz (sha256 0e982409a9c3fc82ee06e08205b1355e5c6aa4c36bca58146ef399621b0ce5ab) |
