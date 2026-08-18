@@ -22,13 +22,12 @@ E2E = ROOT / "e2e"
 artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", "e2e-artifacts")).resolve()
 artifact_dir.mkdir(parents=True, exist_ok=True)
 
-# The old test_user_outcomes module remains the real-media/API harness. Its
-# former copy-specific BrowserUserOutcomes class is intentionally not loaded
-# directly; Stage 9 product UX is exercised by the subclass below instead.
+# The old test modules remain real-media/API harnesses. Product browser modules
+# inherit those fixtures but own the visible navigation/copy assertions.
 PERMANENT_MODULES = (
     "test_product_user_outcomes",
     "test_diagnostics_outcome",
-    "test_music_video_outcome",
+    "test_product_music_video_outcome",
     "test_stage8_composition_outcomes",
     "test_stage8_outcomes",
 )
@@ -61,8 +60,6 @@ def _enable_packaged_service_substitution() -> None:
     _prepare_import_paths()
     import e2e.test_user_outcomes as harness
 
-    # All permanent modules import the harness by the historic short name.
-    # Bind both spellings to one object before loading any suite module.
     sys.modules["test_user_outcomes"] = harness
     source_start_process = harness._start_process
 
