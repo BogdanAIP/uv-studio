@@ -318,7 +318,7 @@ jobs:
             }
 
             $config = Invoke-RestMethod -Uri 'http://127.0.0.1:3100/api/config' -TimeoutSec 10
-            if (-not $config.api_providers) {
+            if (-not $config.config.api_providers) {
               throw 'same-origin packaged settings proxy did not return runtime configuration'
             }
 
