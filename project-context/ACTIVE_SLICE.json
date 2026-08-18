@@ -8,7 +8,7 @@
     "goal": "Document UV Semantic API as the curated integration-facing projection of existing UV-owned semantic contracts without introducing a second command system, backend, registry or provider runtime.",
     "base_branch": "main",
     "branch": "chore/semantic-api-docs",
-    "pull_request": null,
+    "pull_request": 40,
     "write_scope": [
       "ARCHITECTURE_PRINCIPLES.md",
       "docs/architecture/SEMANTIC_API.md",
