@@ -16,6 +16,7 @@ from typing import Any, Sequence
 _LICENSE_NAME_RE = re.compile(r"^(license|licence|copying|notice)(?:[._-].*)?$", re.IGNORECASE)
 _MAX_LICENSE_FILE_BYTES = 2 * 1024 * 1024
 _MAX_TOTAL_LICENSE_BYTES = 16 * 1024 * 1024
+_NEXT_MONOREPO_FALLBACKS = frozenset({"@next/env", "client-only"})
 
 
 class FrontendRuntimeLegalError(RuntimeError):
@@ -81,6 +82,57 @@ def _license_files(package_root: Path) -> list[Path]:
     return result
 
 
+def _next_monorepo_license_fallback(
+    *,
+    package_name: str,
+    package_version: str,
+    package_metadata: dict[str, Any],
+    source_modules: Path,
+) -> tuple[list[Path], dict[str, Any]] | None:
+    if package_name not in _NEXT_MONOREPO_FALLBACKS:
+        return None
+
+    next_root = source_modules / "next"
+    next_package = _read_package_json(next_root / "package.json", "next fallback provider")
+    next_name = next_package.get("name")
+    next_version = next_package.get("version")
+    if next_name != "next" or not isinstance(next_version, str) or not next_version:
+        raise FrontendRuntimeLegalError("Next monorepo fallback provider identity is invalid")
+
+    if package_name == "@next/env":
+        repository = package_metadata.get("repository")
+        if not isinstance(repository, dict):
+            raise FrontendRuntimeLegalError("@next/env fallback requires repository metadata")
+        repository_url = repository.get("url")
+        directory = repository.get("directory")
+        if repository_url != "https://github.com/vercel/next.js" or directory != "packages/next-env":
+            raise FrontendRuntimeLegalError("@next/env fallback repository metadata is not the pinned Next monorepo")
+        if package_version != next_version:
+            raise FrontendRuntimeLegalError(
+                f"@next/env fallback requires matching next version: {package_version} != {next_version}"
+            )
+    else:
+        compiled_metadata = _read_package_json(
+            next_root / "dist" / "compiled" / "client-only" / "package.json",
+            "next compiled client-only fallback proof",
+        )
+        for key in ("name", "version", "license"):
+            if compiled_metadata.get(key) != package_metadata.get(key):
+                raise FrontendRuntimeLegalError(
+                    f"client-only fallback metadata mismatch for {key}"
+                )
+
+    licenses = _license_files(next_root)
+    if not licenses:
+        raise FrontendRuntimeLegalError("Next monorepo fallback provider has no LICENSE/NOTICE file")
+    return licenses, {
+        "kind": "next-monorepo-root-license",
+        "provider_name": "next",
+        "provider_version": next_version,
+        "provider_runtime_path": "frontend/node_modules/next",
+    }
+
+
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
@@ -127,6 +179,7 @@ def stage_frontend_runtime_legal_bundle(
 
     direct: list[dict[str, Any]] = []
     compiled: list[dict[str, Any]] = []
+    fallback_packages: list[str] = []
     total_bytes = 0
     try:
         licenses_root = legal_root / "licenses"
@@ -151,10 +204,21 @@ def stage_frontend_runtime_legal_bundle(
                     f"source/staged package identity mismatch for {name}@{version}"
                 )
             sources = _license_files(source_root)
+            license_source: dict[str, Any] = {"kind": "package-root"}
             if not sources:
-                raise FrontendRuntimeLegalError(
-                    f"standalone package has no source license/notice file: {name}@{version}"
+                fallback = _next_monorepo_license_fallback(
+                    package_name=name,
+                    package_version=version,
+                    package_metadata=source_package,
+                    source_modules=source_modules,
                 )
+                if fallback is None:
+                    raise FrontendRuntimeLegalError(
+                        f"standalone package has no source license/notice file: {name}@{version}"
+                    )
+                sources, license_source = fallback
+                fallback_packages.append(name)
+
             component_dir = licenses_root / _safe_slug(name, version)
             component_dir.mkdir()
             evidence: list[dict[str, Any]] = []
@@ -177,6 +241,7 @@ def stage_frontend_runtime_legal_bundle(
                     "version": version,
                     "license_expression": license_expression.strip(),
                     "runtime_path": "frontend/node_modules/" + relative.as_posix(),
+                    "license_source": license_source,
                     "license_files": evidence,
                 }
             )
@@ -218,6 +283,8 @@ def stage_frontend_runtime_legal_bundle(
             "schema_version": 1,
             "platform": "windows-x86_64",
             "direct_package_count": len(direct),
+            "direct_license_fallback_count": len(fallback_packages),
+            "direct_license_fallback_packages": sorted(fallback_packages, key=str.casefold),
             "next_compiled_package_count": len(compiled),
             "next_compiled_missing_license_expression_count": len(missing_expressions),
             "next_compiled_missing_license_expression_paths": missing_expressions,
@@ -232,6 +299,7 @@ def stage_frontend_runtime_legal_bundle(
     return {
         "ok": True,
         "direct_package_count": len(direct),
+        "direct_license_fallback_count": len(fallback_packages),
         "next_compiled_package_count": len(compiled),
         "next_compiled_missing_license_expression_count": len(missing_expressions),
         "license_bytes": total_bytes,
