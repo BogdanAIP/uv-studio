@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, CircleAlert, FileVideo2, ListChecks, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, FileVideo2, ListChecks, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   acceptReplacementReview,
@@ -47,11 +47,9 @@ function referenceName(reference: ProjectReference): string {
 }
 
 function requestedChange(brief: RangeContinuityBrief): string {
-  return (
-    brief.constraints.find(item => item.constraint_id === 'requested_change')?.requirement ??
+  return brief.constraints.find(item => item.constraint_id === 'requested_change')?.requirement ??
     brief.constraints[0]?.requirement ??
-    'Выполнить запрошенное изменение выбранного диапазона.'
-  );
+    'Выполнить запрошенное изменение выбранного фрагмента.';
 }
 
 export function ReplacementWorkflowPanel({
@@ -73,52 +71,22 @@ export function ReplacementWorkflowPanel({
     () => editorState.briefs.filter(brief => brief.source_path === sourcePath),
     [editorState.briefs, sourcePath],
   );
-  const fallbackBrief =
-    briefs.find(brief => brief.edit_id === preferredEditId) ??
-    briefs[briefs.length - 1] ??
-    null;
+  const fallbackBrief = briefs.find(brief => brief.edit_id === preferredEditId) ?? briefs[briefs.length - 1] ?? null;
   const brief = briefs.find(item => item.edit_id === selectedEditId) ?? fallbackBrief;
 
-  if (!brief) {
-    return (
-      <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-        <div className="flex items-center gap-2 text-sm text-slate-300">
-          <ListChecks size={17} className="text-slate-500" />
-          Plan → Candidate → Review → Accept
-        </div>
-        <p className="mt-3 text-xs leading-5 text-slate-500">
-          Сначала выделите диапазон на timeline и сохраните задачу изменения. После этого здесь продолжится тот же edit_id без ручных API-вызовов.
-        </p>
-      </section>
-    );
-  }
+  if (!brief) return null;
 
   const plan = editorState.replacement_plans.find(item => item.edit_id === brief.edit_id) ?? null;
-  const candidates = editorState.replacement_candidates.filter(
-    item => item.edit_id === brief.edit_id && item.stage === 'full',
-  );
-  const candidate =
-    candidates.find(item => item.candidate_id === selectedCandidateId) ??
-    candidates[candidates.length - 1] ??
-    null;
-  const reviews = candidate
-    ? editorState.replacement_reviews.filter(item => item.candidate_id === candidate.candidate_id)
-    : [];
-  const review =
-    reviews.find(item => item.review_id === selectedReviewId) ??
-    reviews[reviews.length - 1] ??
-    null;
+  const candidates = editorState.replacement_candidates.filter(item => item.edit_id === brief.edit_id && item.stage === 'full');
+  const candidate = candidates.find(item => item.candidate_id === selectedCandidateId) ?? candidates[candidates.length - 1] ?? null;
+  const reviews = candidate ? editorState.replacement_reviews.filter(item => item.candidate_id === candidate.candidate_id) : [];
+  const review = reviews.find(item => item.review_id === selectedReviewId) ?? reviews[reviews.length - 1] ?? null;
   const acceptedEdit = editorState.accepted_edits.find(item => item.edit_id === brief.edit_id) ?? null;
   const replacementOptions = editorState.sources.filter(item => item.path !== brief.source_path);
-  const replacementSource =
-    replacementOptions.find(item => item.id === replacementSourceId) ??
-    replacementOptions[0] ??
-    null;
+  const replacementSource = replacementOptions.find(item => item.id === replacementSourceId) ?? replacementOptions[0] ?? null;
   const change = requestedChange(brief);
 
-  const draftFor = (targetId: string): ReviewDraft =>
-    reviewDrafts[targetId] ?? DEFAULT_REVIEW_DRAFT;
-
+  const draftFor = (targetId: string): ReviewDraft => reviewDrafts[targetId] ?? DEFAULT_REVIEW_DRAFT;
   const setDraft = (targetId: string, patch: Partial<ReviewDraft>) => {
     setReviewDrafts(current => ({
       ...current,
@@ -154,32 +122,20 @@ export function ReplacementWorkflowPanel({
   });
 
   const prepareCandidate = () => withBusy('candidate', async () => {
-    if (!replacementSource) throw new Error('Импортируйте отдельный видеоклип для замены.');
-    const result = await prepareAssetReplacementCandidate(
-      projectId,
-      brief.edit_id,
-      replacementSource.path,
-    );
+    if (!replacementSource) throw new Error('Добавьте отдельный видеоклип, который будет использован для замены.');
+    const result = await prepareAssetReplacementCandidate(projectId, brief.edit_id, replacementSource.path);
     setSelectedCandidateId(result.candidate.candidate_id);
     setSelectedReviewId(null);
     await onStateChanged();
   });
 
-  const allReviewStatementsPresent = brief.review_targets.every(
-    target => draftFor(target.target_id).statement.trim().length > 0,
-  );
-  const hasFail = brief.review_targets.some(
-    target => draftFor(target.target_id).outcome === 'fail',
-  );
-  const hasUncertain = brief.review_targets.some(
-    target => draftFor(target.target_id).outcome === 'uncertain',
-  );
-  const requiredPass = brief.review_targets
-    .filter(target => target.required)
-    .every(target => draftFor(target.target_id).outcome === 'pass');
+  const allReviewStatementsPresent = brief.review_targets.every(target => draftFor(target.target_id).statement.trim().length > 0);
+  const hasFail = brief.review_targets.some(target => draftFor(target.target_id).outcome === 'fail');
+  const hasUncertain = brief.review_targets.some(target => draftFor(target.target_id).outcome === 'uncertain');
+  const requiredPass = brief.review_targets.filter(target => target.required).every(target => draftFor(target.target_id).outcome === 'pass');
 
   const submitReview = (verdict: ReviewVerdict) => withBusy(`review-${verdict}`, async () => {
-    if (!candidate) throw new Error('Сначала подготовьте full candidate.');
+    if (!candidate) throw new Error('Сначала создайте предпросмотр.');
     const observations = brief.review_targets.map((target, index) => {
       const draft = draftFor(target.target_id);
       return {
@@ -214,11 +170,15 @@ export function ReplacementWorkflowPanel({
   });
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-violet-400">Replacement workflow</p>
-          <h3 className="mt-1 text-lg font-medium text-slate-100">Brief → Plan → Candidate → Review → Accept</h3>
+    <section className="rounded-xl border border-[var(--uv-border)] bg-[var(--uv-surface-1)] p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--uv-border)] pb-4">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><ListChecks size={17} /></span>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-600">Текущее изменение</p>
+            <h3 className="mt-1 text-sm font-medium text-zinc-200">Предпросмотр → проверка → применение</h3>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-600">{change}</p>
+          </div>
         </div>
         {briefs.length > 1 && (
           <select
@@ -229,143 +189,104 @@ export function ReplacementWorkflowPanel({
               setSelectedCandidateId(null);
               setSelectedReviewId(null);
             }}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-300"
+            className="rounded-lg border border-[var(--uv-border)] bg-black/20 px-3 py-2 text-xs text-zinc-400"
           >
-            {briefs.map(item => (
+            {briefs.map((item, index) => (
               <option key={item.edit_id} value={item.edit_id}>
-                {formatTimelineTime(item.start_us)} — {formatTimelineTime(item.end_us)} · {item.edit_id}
+                Изменение {index + 1}: {formatTimelineTime(item.start_us)} — {formatTimelineTime(item.end_us)}
               </option>
             ))}
           </select>
         )}
       </div>
 
-      {error && (
-        <div className="mt-4 rounded-xl border border-red-900/70 bg-red-950/40 px-4 py-3 text-xs leading-5 text-red-200">
-          {error}
-        </div>
-      )}
+      {error && <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-xs leading-5 text-rose-200">{error}</div>}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <WorkflowCard
-          step="01"
-          title="Plan"
-          done={Boolean(plan)}
-          description="Метод и границы изменения утверждаются до подготовки replacement."
-        >
-          <p className="rounded-lg bg-slate-900/70 p-3 text-xs leading-5 text-slate-400">{change}</p>
-          {plan ? (
-            <div className="mt-3 text-xs leading-5 text-slate-400">
-              <p><span className="text-slate-600">Метод:</span> {plan.method_class}</p>
-              <p><span className="text-slate-600">Аудио:</span> {plan.audio_strategy}</p>
-              <p className="mt-2 text-emerald-400">План привязан к текущей ревизии Brief.</p>
-            </div>
+      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+        <WorkflowCard step="1" title="Источник замены" done={Boolean(plan)} description="Выберите уже добавленный клип. Исходное видео за пределами выделения останется без изменений.">
+          {replacementOptions.length > 0 ? (
+            <label className="block text-[11px] text-zinc-600">
+              Клип для замены
+              <select
+                value={replacementSource?.id ?? ''}
+                onChange={event => setReplacementSourceId(event.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-[var(--uv-border)] bg-black/20 px-3 py-2 text-xs text-zinc-300"
+              >
+                {replacementOptions.map(source => <option key={source.id} value={source.id}>{referenceName(source)}</option>)}
+              </select>
+            </label>
           ) : (
-            <p className="mt-3 text-[11px] leading-5 text-slate-500">
-              Полностью рабочий локальный маршрут использует уже импортированный клип-замену. Генеративные методы остаются за Capability/D-017 boundary и не подменяются скрытым API.
-            </p>
+            <div className="rounded-lg border border-amber-400/15 bg-amber-400/[0.06] p-3 text-[11px] leading-5 text-amber-100/80">
+              Добавьте второе видео в медиатеку — оно станет доступно здесь как клип замены.
+            </div>
           )}
           <button
             type="button"
             onClick={() => void approvePreparedPlan()}
-            disabled={busy !== null}
-            className="mt-4 w-full rounded-lg border border-violet-700/70 bg-violet-950/40 px-3 py-2 text-xs font-medium text-violet-200 hover:border-violet-500 disabled:opacity-40"
+            disabled={busy !== null || !replacementSource}
+            className="mt-3 w-full rounded-lg border border-violet-400/25 bg-violet-400/10 px-3 py-2.5 text-xs font-medium text-violet-200 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:border-[var(--uv-border)] disabled:bg-black/10 disabled:text-zinc-700"
           >
-            {busy === 'plan' ? 'Фиксация…' : plan?.method_class === 'prepared_asset' ? 'Переутвердить prepared-asset план' : 'Утвердить план по готовому клипу'}
+            {busy === 'plan' ? 'Сохраняем…' : plan?.method_class === 'prepared_asset' ? 'Готовый клип выбран' : 'Использовать готовый клип'}
           </button>
         </WorkflowCard>
 
-        <WorkflowCard
-          step="02"
-          title="Candidate"
-          done={Boolean(candidate)}
-          description="Candidate создаётся только из project-owned media и остаётся отдельным артефактом до Review."
-        >
-          {replacementOptions.length > 0 ? (
-            <label className="block text-[11px] text-slate-500">
-              Клип-замена
-              <select
-                value={replacementSource?.id ?? ''}
-                onChange={event => setReplacementSourceId(event.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"
-              >
-                {replacementOptions.map(source => (
-                  <option key={source.id} value={source.id}>{referenceName(source)}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <div className="rounded-lg border border-amber-900/70 bg-amber-950/30 p-3 text-[11px] leading-5 text-amber-200">
-              Импортируйте второе видео в медиатеку — оно станет клипом-заменой. Исходник не предлагается сам себе как replacement.
-            </div>
-          )}
+        <WorkflowCard step="2" title="Предпросмотр" done={Boolean(candidate)} description="Подготовьте вариант и посмотрите его до применения к монтажу.">
           <button
             type="button"
             onClick={() => void prepareCandidate()}
             disabled={busy !== null || plan?.method_class !== 'prepared_asset' || !replacementSource}
-            className="mt-3 w-full rounded-lg border border-sky-700/70 bg-sky-950/40 px-3 py-2 text-xs font-medium text-sky-200 hover:border-sky-500 disabled:opacity-40"
+            className="w-full rounded-lg bg-violet-400 px-3 py-2.5 text-xs font-semibold text-zinc-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
           >
-            {busy === 'candidate' ? 'Подготовка…' : 'Подготовить full candidate'}
+            {busy === 'candidate' ? 'Создаём…' : 'Создать предпросмотр'}
           </button>
+          {plan?.method_class !== 'prepared_asset' && <p className="mt-2 text-[10px] leading-4 text-zinc-700">Сначала выберите клип замены.</p>}
           {candidates.length > 1 && (
             <select
-              aria-label="Выбрать candidate"
+              aria-label="Выбрать предпросмотр"
               value={candidate?.candidate_id ?? ''}
               onChange={event => {
                 setSelectedCandidateId(event.target.value);
                 setSelectedReviewId(null);
               }}
-              className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-[10px] text-slate-400"
+              className="mt-3 w-full rounded-lg border border-[var(--uv-border)] bg-black/20 px-3 py-2 text-[10px] text-zinc-500"
             >
-              {candidates.map(item => (
-                <option key={item.candidate_id} value={item.candidate_id}>{item.candidate_id}</option>
-              ))}
+              {candidates.map((item, index) => <option key={item.candidate_id} value={item.candidate_id}>Предпросмотр {index + 1}</option>)}
             </select>
           )}
-          {candidate && (
-            <CandidatePreview projectId={projectId} candidate={candidate} />
-          )}
+          {candidate && <CandidatePreview projectId={projectId} candidate={candidate} />}
         </WorkflowCard>
 
-        <WorkflowCard
-          step="03"
-          title="Review + Accept"
-          done={Boolean(acceptedEdit)}
-          description="Каждый ReviewTarget должен быть оценён по точному candidate artifact. Accept остаётся отдельным D-032 действием."
-        >
+        <WorkflowCard step="3" title="Проверка и применение" done={Boolean(acceptedEdit)} description="Подтвердите критерии результата. Применение остаётся отдельным явным действием.">
           {!candidate ? (
-            <p className="text-xs leading-5 text-slate-600">Подготовьте full candidate, чтобы открыть evidence-based Review.</p>
+            <p className="text-xs leading-5 text-zinc-700">После создания предпросмотра здесь появится проверка результата.</p>
           ) : (
             <>
               <div className="space-y-3">
                 {brief.review_targets.map(target => {
                   const draft = draftFor(target.target_id);
                   return (
-                    <div key={target.target_id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs leading-5 text-slate-300">{target.criterion}</p>
-                        {target.required && <span className="shrink-0 text-[9px] uppercase text-violet-400">required</span>}
-                      </div>
+                    <div key={target.target_id} className="rounded-xl border border-[var(--uv-border)] bg-black/15 p-3">
+                      <p className="text-xs leading-5 text-zinc-300">{target.criterion}</p>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <select
                           aria-label={`Результат ${target.target_id}`}
                           value={draft.outcome}
                           onChange={event => setDraft(target.target_id, { outcome: event.target.value as ReviewOutcome })}
-                          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-[10px] text-slate-300"
+                          className="rounded-md border border-[var(--uv-border)] bg-[var(--uv-surface-0)] px-2 py-1.5 text-[10px] text-zinc-300"
                         >
-                          <option value="pass">pass</option>
-                          <option value="uncertain">uncertain</option>
-                          <option value="fail">fail</option>
+                          <option value="pass">Соответствует</option>
+                          <option value="uncertain">Не уверен</option>
+                          <option value="fail">Не соответствует</option>
                         </select>
                         <select
                           aria-label={`Уверенность ${target.target_id}`}
                           value={draft.confidence}
                           onChange={event => setDraft(target.target_id, { confidence: event.target.value as ReviewConfidence })}
-                          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-[10px] text-slate-300"
+                          className="rounded-md border border-[var(--uv-border)] bg-[var(--uv-surface-0)] px-2 py-1.5 text-[10px] text-zinc-300"
                         >
-                          <option value="high">high confidence</option>
-                          <option value="medium">medium confidence</option>
-                          <option value="low">low confidence</option>
+                          <option value="high">Высокая уверенность</option>
+                          <option value="medium">Средняя уверенность</option>
+                          <option value="low">Низкая уверенность</option>
                         </select>
                       </div>
                       <textarea
@@ -373,8 +294,8 @@ export function ReplacementWorkflowPanel({
                         onChange={event => setDraft(target.target_id, { statement: event.target.value })}
                         rows={2}
                         maxLength={4000}
-                        placeholder="Что именно видно в candidate и почему это подтверждает оценку…"
-                        className="mt-2 w-full resize-y rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-[11px] leading-4 text-slate-300 outline-none focus:border-violet-600"
+                        placeholder="Что видно в предпросмотре?"
+                        className="mt-2 w-full resize-y rounded-md border border-[var(--uv-border)] bg-[var(--uv-surface-0)] px-2 py-2 text-[11px] leading-4 text-zinc-300 placeholder:text-zinc-700 focus:border-violet-400/40"
                       />
                     </div>
                   );
@@ -382,51 +303,22 @@ export function ReplacementWorkflowPanel({
               </div>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  disabled={busy !== null || !allReviewStatementsPresent || !requiredPass || hasFail}
-                  onClick={() => void submitReview('approved')}
-                  className="rounded-lg bg-emerald-500 px-2 py-2 text-[10px] font-semibold text-slate-950 disabled:opacity-30"
-                >Одобрить</button>
-                <button
-                  type="button"
-                  disabled={busy !== null || !allReviewStatementsPresent || !(hasFail || hasUncertain)}
-                  onClick={() => void submitReview('needs_revision')}
-                  className="rounded-lg border border-amber-700 px-2 py-2 text-[10px] text-amber-300 disabled:opacity-30"
-                >На доработку</button>
-                <button
-                  type="button"
-                  disabled={busy !== null || !allReviewStatementsPresent || !hasFail}
-                  onClick={() => void submitReview('rejected')}
-                  className="rounded-lg border border-red-900 px-2 py-2 text-[10px] text-red-300 disabled:opacity-30"
-                >Отклонить</button>
+                <button type="button" disabled={busy !== null || !allReviewStatementsPresent || !requiredPass || hasFail} onClick={() => void submitReview('approved')} className="rounded-lg bg-emerald-400 px-2 py-2 text-[10px] font-semibold text-zinc-950 disabled:bg-zinc-800 disabled:text-zinc-600">Одобрить</button>
+                <button type="button" disabled={busy !== null || !allReviewStatementsPresent || !(hasFail || hasUncertain)} onClick={() => void submitReview('needs_revision')} className="rounded-lg border border-amber-400/20 px-2 py-2 text-[10px] text-amber-200 disabled:opacity-30">На доработку</button>
+                <button type="button" disabled={busy !== null || !allReviewStatementsPresent || !hasFail} onClick={() => void submitReview('rejected')} className="rounded-lg border border-rose-400/20 px-2 py-2 text-[10px] text-rose-200 disabled:opacity-30">Отклонить</button>
               </div>
             </>
           )}
 
           {reviews.length > 1 && candidate && (
-            <select
-              aria-label="Выбрать review"
-              value={review?.review_id ?? ''}
-              onChange={event => setSelectedReviewId(event.target.value)}
-              className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-[10px] text-slate-400"
-            >
-              {reviews.map(item => (
-                <option key={item.review_id} value={item.review_id}>{item.verdict} · {item.review_id}</option>
-              ))}
+            <select aria-label="Выбрать проверку" value={review?.review_id ?? ''} onChange={event => setSelectedReviewId(event.target.value)} className="mt-3 w-full rounded-lg border border-[var(--uv-border)] bg-black/20 px-3 py-2 text-[10px] text-zinc-500">
+              {reviews.map((item, index) => <option key={item.review_id} value={item.review_id}>Проверка {index + 1} · {item.verdict === 'approved' ? 'одобрено' : item.verdict === 'needs_revision' ? 'доработка' : 'отклонено'}</option>)}
             </select>
           )}
 
           {review && (
-            <div className={`mt-3 rounded-xl border p-3 text-xs ${
-              review.verdict === 'approved'
-                ? 'border-emerald-900/70 bg-emerald-950/30 text-emerald-200'
-                : review.verdict === 'needs_revision'
-                  ? 'border-amber-900/70 bg-amber-950/30 text-amber-200'
-                  : 'border-red-900/70 bg-red-950/30 text-red-200'
-            }`}>
-              <p>Review: <strong>{review.verdict}</strong></p>
-              <p className="mt-1 font-mono text-[9px] opacity-60">{review.review_id}</p>
+            <div className={`mt-3 rounded-xl border p-3 text-xs ${review.verdict === 'approved' ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' : review.verdict === 'needs_revision' ? 'border-amber-400/20 bg-amber-400/[0.06] text-amber-200' : 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'}`}>
+              Проверка: <strong>{review.verdict === 'approved' ? 'одобрено' : review.verdict === 'needs_revision' ? 'нужна доработка' : 'отклонено'}</strong>
             </div>
           )}
 
@@ -435,17 +327,17 @@ export function ReplacementWorkflowPanel({
               type="button"
               onClick={() => void acceptReview(review)}
               disabled={busy !== null}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-400 px-3 py-2.5 text-xs font-semibold text-slate-950 disabled:opacity-40"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-400 px-3 py-2.5 text-xs font-semibold text-zinc-950 disabled:opacity-40"
             >
               <ShieldCheck size={15} />
-              {busy === 'accept' ? 'Проверка и принятие…' : 'Принять в timeline'}
+              {busy === 'accept' ? 'Применяем…' : 'Применить изменение'}
             </button>
           )}
 
           {acceptedEdit && (
-            <div className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-800/70 bg-emerald-950/40 p-3 text-xs leading-5 text-emerald-200">
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3 text-xs leading-5 text-emerald-200">
               <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-              <span>Замена принята через D-032 и уже отображается зелёным диапазоном на timeline.</span>
+              <span>Изменение применено и отмечено на таймлайне.</span>
             </div>
           )}
         </WorkflowCard>
@@ -454,28 +346,16 @@ export function ReplacementWorkflowPanel({
   );
 }
 
-function WorkflowCard({
-  step,
-  title,
-  description,
-  done,
-  children,
-}: {
-  step: string;
-  title: string;
-  description: string;
-  done: boolean;
-  children: React.ReactNode;
-}) {
+function WorkflowCard({ step, title, description, done, children }: { step: string; title: string; description: string; done: boolean; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+    <div className="rounded-xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)] p-4">
       <div className="flex items-start gap-3">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-[10px] ${done ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-900 text-slate-500'}`}>
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] ${done ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.035] text-zinc-600'}`}>
           {done ? <CheckCircle2 size={15} /> : step}
         </span>
         <div>
-          <h4 className="text-sm font-medium text-slate-200">{title}</h4>
-          <p className="mt-1 text-[11px] leading-5 text-slate-500">{description}</p>
+          <h4 className="text-sm font-medium text-zinc-200">{title}</h4>
+          <p className="mt-1 text-[11px] leading-5 text-zinc-600">{description}</p>
         </div>
       </div>
       <div className="mt-4">{children}</div>
@@ -483,25 +363,13 @@ function WorkflowCard({
   );
 }
 
-function CandidatePreview({
-  projectId,
-  candidate,
-}: {
-  projectId: string;
-  candidate: ReplacementCandidate;
-}) {
+function CandidatePreview({ projectId, candidate }: { projectId: string; candidate: ReplacementCandidate }) {
   return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-black">
-      <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2">
-        <FileVideo2 size={13} className="text-sky-400" />
-        <span className="truncate font-mono text-[9px] text-slate-500">{candidate.candidate_id}</span>
+    <div className="mt-3 overflow-hidden rounded-xl border border-[var(--uv-border)] bg-black">
+      <div className="flex items-center gap-2 border-b border-[var(--uv-border)] px-3 py-2 text-[10px] text-zinc-600">
+        <FileVideo2 size={13} className="text-violet-300" /> Предпросмотр изменения
       </div>
-      <video
-        controls
-        preload="metadata"
-        src={projectArtifactMediaUrl(projectId, candidate.artifact_id)}
-        className="aspect-video w-full object-contain"
-      />
+      <video controls preload="metadata" src={projectArtifactMediaUrl(projectId, candidate.artifact_id)} className="aspect-video w-full object-contain" />
     </div>
   );
 }

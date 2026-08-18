@@ -1,143 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CheckCircle, Loader2, Save, Settings, XCircle } from 'lucide-react';
-import BrandHeader from '@/components/BrandHeader';
-import { fetchModelGroupsByType, fetchVideoModelGroupsByAbility } from '@/lib/modelRegistry';
 import {
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  Save,
+  Server,
+  SlidersHorizontal,
+  Video,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  STYLES,
+  VIDEO_GENERATION_MODES,
   VIDEO_RATIOS,
   VIDEO_RESOLUTIONS,
-  VIDEO_GENERATION_MODES,
-  STYLES,
-  type ProviderGroup,
 } from '@/config/models';
 
 type ConfigTree = Record<string, unknown>;
 type SecretStatus = Record<string, boolean>;
 
-type Field = {
-  path: string;
-  label: string;
-  type?: 'text' | 'number' | 'boolean' | 'password' | 'select';
-  options?: Array<{ id: string; label: string }> | ProviderGroup[];
+type ProviderDefinition = {
+  id: string;
+  title: string;
+  description: string;
 };
 
-type ModelSelectKey = 'llm' | 'vlm' | 'image_it2i' | 'image_t2i' | 'video_first_frame' | 'video_start_end' | 'video_reference';
-
-const EMPTY_MODEL_SELECTS: Record<ModelSelectKey, ProviderGroup[]> = {
-  llm: [],
-  vlm: [],
-  image_it2i: [],
-  image_t2i: [],
-  video_first_frame: [],
-  video_start_end: [],
-  video_reference: [],
-};
-
-const LOG_LEVEL_OPTIONS = [
-  { id: 'DEBUG', label: 'DEBUG - 最详细' },
-  { id: 'INFO', label: 'INFO - 常规' },
-  { id: 'WARNING', label: 'WARNING - 仅警告及错误' },
-  { id: 'ERROR', label: 'ERROR - 仅错误' },
-  { id: 'CRITICAL', label: 'CRITICAL - 严重错误' },
+const PROVIDERS: ProviderDefinition[] = [
+  { id: 'openai', title: 'OpenAI / совместимый API', description: 'Текстовые, визуальные и совместимые OpenAI endpoints.' },
+  { id: 'gemini', title: 'Gemini', description: 'Модели Google Gemini и совместимые endpoints.' },
+  { id: 'deepseek', title: 'DeepSeek', description: 'Текстовые модели DeepSeek.' },
+  { id: 'dashscope', title: 'DashScope', description: 'Qwen и другие сервисы Alibaba Cloud.' },
+  { id: 'ark', title: 'Volcengine Ark', description: 'Seedream / Seedance и совместимые модели.' },
+  { id: 'kling', title: 'Kling', description: 'Генерация видео Kling.' },
 ];
 
-const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
-  {
-    title: 'API Server',
-    description: '服务启动与日志配置。安全边界要求服务保持在本机 loopback 地址。',
-    fields: [
-      { path: 'server.host', label: 'host 主机地址' },
-      { path: 'server.port', label: 'port 端口', type: 'number' },
-      { path: 'server.log_level', label: 'log_level 日志层级', type: 'select', options: LOG_LEVEL_OPTIONS },
-      { path: 'server.access_log', label: 'access_log 请求访问日志', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Common Provider Settings',
-    description: '模型调用公共配置和代理设置。',
-    fields: [
-      { path: 'api_providers.common.print_model_input', label: 'print_model_input 打印模型输入', type: 'boolean' },
-      { path: 'api_providers.common.proxy', label: 'proxy 代理地址' },
-    ],
-  },
-  {
-    title: 'OpenAI',
-    description: 'OpenAI / 兼容 OpenAI 接口配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.openai.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.openai.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.openai.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Gemini',
-    description: 'Gemini 及兼容接口配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.gemini.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.gemini.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.gemini.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'DeepSeek',
-    description: 'DeepSeek 接口配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.deepseek.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.deepseek.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.deepseek.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'DashScope',
-    description: '通义千问、通义万相等 DashScope 服务配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.dashscope.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.dashscope.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.dashscope.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'ARK',
-    description: 'Seedream / Seedance 使用的火山方舟配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.ark.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.ark.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.ark.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Kling',
-    description: '可灵视频生成接口配置。密钥为只写字段。',
-    fields: [
-      { path: 'api_providers.kling.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.kling.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.kling.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Default Models',
-    description: '主流程和未来经过授权的 Provider Adapter 使用的默认模型。',
-    fields: [
-      { path: 'models.llm', label: 'llm 文本模型', type: 'select', options: [] },
-      { path: 'models.vlm', label: 'vlm 视觉语言模型', type: 'select', options: [] },
-      { path: 'models.image_it2i', label: 'image_it2i 图生图模型', type: 'select', options: [] },
-      { path: 'models.image_t2i', label: 'image_t2i 文生图模型', type: 'select', options: [] },
-      { path: 'models.video_first_frame', label: 'video_first_frame 首帧生视频模型', type: 'select', options: [] },
-      { path: 'models.video_start_end', label: 'video_start_end 首尾帧生视频模型', type: 'select', options: [] },
-      { path: 'models.video_reference', label: 'video_reference 参考图生视频模型', type: 'select', options: [] },
-    ],
-  },
-  {
-    title: '视频生成配置',
-    description: '默认生成方式、风格、画幅比例和视频分辨率。',
-    fields: [
-      { path: 'generation.video_generation_mode', label: 'video_generation_mode 视频生成方式', type: 'select', options: VIDEO_GENERATION_MODES },
-      { path: 'generation.style', label: 'style 风格', type: 'select', options: STYLES },
-      { path: 'generation.video_ratio', label: 'video_ratio 视频长宽比', type: 'select', options: VIDEO_RATIOS },
-      { path: 'generation.video_resolution', label: 'video_resolution 视频分辨率', type: 'select', options: VIDEO_RESOLUTIONS },
-    ],
-  },
+const MODEL_FIELDS = [
+  { path: 'models.llm', label: 'Текстовая модель', placeholder: 'например, gpt-5' },
+  { path: 'models.vlm', label: 'Модель анализа изображений и видео', placeholder: 'ID модели' },
+  { path: 'models.image_it2i', label: 'Редактирование изображений', placeholder: 'ID модели' },
+  { path: 'models.image_t2i', label: 'Генерация изображений', placeholder: 'ID модели' },
+  { path: 'models.video_first_frame', label: 'Видео по первому кадру', placeholder: 'ID модели' },
+  { path: 'models.video_start_end', label: 'Видео по первому и последнему кадру', placeholder: 'ID модели' },
+  { path: 'models.video_reference', label: 'Видео по референсу', placeholder: 'ID модели' },
 ];
 
 function isConfigTree(value: unknown): value is ConfigTree {
@@ -151,6 +56,16 @@ function getValue(config: ConfigTree, path: string): unknown {
     current = current[key];
   }
   return current;
+}
+
+function textValue(config: ConfigTree, path: string): string {
+  const value = getValue(config, path);
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function booleanValue(config: ConfigTree, path: string): boolean {
+  return Boolean(getValue(config, path));
 }
 
 function setValue(config: ConfigTree, path: string, value: unknown): ConfigTree {
@@ -170,111 +85,61 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function formatConfigPath(path: string) {
-  return (path || 'data/config/runtime.json').replace(/\\/g, '/');
-}
-
-function isProviderOptions(options: Field['options']): options is ProviderGroup[] {
-  return Array.isArray(options) && options.some(option => 'models' in option);
-}
-
 export default function SettingsPage() {
   const [config, setConfig] = useState<ConfigTree>({});
-  const [path, setPath] = useState('data/config/runtime.json');
+  const [secretStatus, setSecretStatus] = useState<SecretStatus>({});
+  const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
+  const [secretClears, setSecretClears] = useState<Record<string, boolean>>({});
+  const [path, setPath] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [secretStatus, setSecretStatus] = useState<SecretStatus>({});
-  const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
-  const [secretClears, setSecretClears] = useState<Record<string, boolean>>({});
-  const [modelSelects, setModelSelects] = useState<Record<ModelSelectKey, ProviderGroup[]>>(EMPTY_MODEL_SELECTS);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const resp = await fetch('/api/config');
-        if (!resp.ok) throw new Error('读取配置失败');
-        const data = await resp.json();
+    let active = true;
+    fetch('/api/config', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Не удалось прочитать настройки');
+        return response.json();
+      })
+      .then(data => {
+        if (!active) return;
         setConfig(data.config || {});
         setSecretStatus(data.secrets || {});
-        setPath(data.path || 'data/config/runtime.json');
-        setSecretDrafts({});
-        setSecretClears({});
-      } catch (error: unknown) {
-        setError(errorMessage(error, '读取配置失败'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchModelGroupsByType('llm'),
-      fetchModelGroupsByType('vlm'),
-      fetchModelGroupsByType('i2i'),
-      fetchModelGroupsByType('t2i'),
-      fetchVideoModelGroupsByAbility('first_frame_i2v'),
-      fetchVideoModelGroupsByAbility('start_end_frame_i2v'),
-      fetchVideoModelGroupsByAbility('reference_to_video'),
-    ])
-      .then(([llm, vlm, imageIt2i, imageT2i, firstFrameVideo, startEndVideo, referenceVideo]) => {
-        if (cancelled) return;
-        setModelSelects({
-          llm,
-          vlm,
-          image_it2i: imageIt2i,
-          image_t2i: imageT2i,
-          video_first_frame: firstFrameVideo,
-          video_start_end: startEndVideo,
-          video_reference: referenceVideo,
-        });
+        setPath(data.path || '');
       })
-      .catch(() => {
-        // Legacy /api/models is intentionally unavailable while provider routes
-        // are being migrated behind the UV Studio capability/authorization layer.
+      .catch(err => {
+        if (active) setError(errorMessage(err, 'Не удалось прочитать настройки'));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const groups = GROUPS.map(group => {
-    if (group.title !== 'Default Models') return group;
-    return {
-      ...group,
-      fields: group.fields.map(field => {
-        if (field.path === 'models.llm') return { ...field, options: modelSelects.llm };
-        if (field.path === 'models.vlm') return { ...field, options: modelSelects.vlm };
-        if (field.path === 'models.image_it2i') return { ...field, options: modelSelects.image_it2i };
-        if (field.path === 'models.image_t2i') return { ...field, options: modelSelects.image_t2i };
-        if (field.path === 'models.video_first_frame') return { ...field, options: modelSelects.video_first_frame };
-        if (field.path === 'models.video_start_end') return { ...field, options: modelSelects.video_start_end };
-        if (field.path === 'models.video_reference') return { ...field, options: modelSelects.video_reference };
-        return field;
-      }),
-    };
-  });
+  const configuredConnections = useMemo(
+    () => PROVIDERS.filter(provider => secretStatus[`api_providers.${provider.id}.api_key`]).length,
+    [secretStatus],
+  );
 
-  const updateField = (field: Field, raw: string | boolean) => {
-    const value = field.type === 'number' ? Number(raw) || 0 : raw;
-    setConfig(current => setValue(current, field.path, value));
+  const update = (fieldPath: string, value: unknown) => {
+    setConfig(current => setValue(current, fieldPath, value));
+    setMessage('');
   };
 
-  const updateSecretField = (field: Field, raw: string) => {
-    setSecretDrafts(current => ({ ...current, [field.path]: raw }));
-    setSecretClears(current => ({ ...current, [field.path]: false }));
+  const updateSecret = (fieldPath: string, value: string) => {
+    setSecretDrafts(current => ({ ...current, [fieldPath]: value }));
+    setSecretClears(current => ({ ...current, [fieldPath]: false }));
+    setMessage('');
   };
 
-  const toggleSecretClear = (field: Field) => {
-    setSecretClears(current => {
-      const next = !current[field.path];
-      return { ...current, [field.path]: next };
-    });
-    setSecretDrafts(current => ({ ...current, [field.path]: '' }));
+  const toggleClearSecret = (fieldPath: string) => {
+    setSecretClears(current => ({ ...current, [fieldPath]: !current[fieldPath] }));
+    setSecretDrafts(current => ({ ...current, [fieldPath]: '' }));
+    setMessage('');
   };
 
   const save = async () => {
@@ -291,170 +156,280 @@ export default function SettingsPage() {
         if (clear) secretUpdates[secretPath] = null;
       }
 
-      const resp = await fetch('/api/config', {
+      const response = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: config, secret_updates: secretUpdates }),
       });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || '保存配置失败');
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Не удалось сохранить настройки');
       }
-      const data = await resp.json();
+      const data = await response.json();
       setConfig(data.config || {});
       setSecretStatus(data.secrets || {});
-      setPath(data.path || 'data/config/runtime.json');
+      setPath(data.path || '');
       setSecretDrafts({});
       setSecretClears({});
-      setMessage('配置已保存');
-    } catch (error: unknown) {
-      setError(errorMessage(error, '保存配置失败'));
+      setMessage('Настройки сохранены');
+    } catch (err) {
+      setError(errorMessage(err, 'Не удалось сохранить настройки'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <BrandHeader />
-      <main className="w-full max-w-6xl mx-auto px-6 pt-10 pb-12">
-        <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <Settings className="w-7 h-7 text-blue-500" />
-            <h1 className="text-2xl font-bold text-gray-800">设置</h1>
+    <main className="min-h-screen px-5 py-8 sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-6xl">
+        <header className="flex flex-col gap-5 border-b border-[var(--uv-border)] pb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-violet-300">UV Studio</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-zinc-50">Настройки</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
+              Подключения к внешним сервисам и значения по умолчанию. Проекты не хранят API-ключи и не привязываются к конкретному поставщику.
+            </p>
           </div>
-          <p className="text-sm text-gray-500">
-            公开配置保存到 <span className="font-mono">{formatConfigPath(path)}</span>；API 密钥单独存储且不会从后端读回浏览器。
-          </p>
-        </div>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || loading}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-400 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {saving ? 'Сохраняем…' : 'Сохранить'}
+          </button>
+        </header>
+
+        {error && <div className="mt-6 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
+        {message && <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200"><CheckCircle2 size={16} /> {message}</div>}
 
         {loading ? (
-          <div className="h-56 rounded-2xl border border-gray-200 bg-white flex items-center justify-center text-sm text-gray-400">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            正在读取配置
-          </div>
+          <div className="mt-8 h-72 animate-pulse rounded-2xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)]" />
         ) : (
-          <div className="space-y-5">
-            {groups.map(group => (
-              <section key={group.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-sm font-semibold text-gray-800">{group.title}</h2>
-                  <p className="mt-1 text-xs text-gray-500">{group.description}</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {group.fields.map(field => {
-                    const value = getValue(config, field.path);
-                    const configuredSecret = Boolean(secretStatus[field.path]);
-                    const clearPending = Boolean(secretClears[field.path]);
-                    const secretDraft = secretDrafts[field.path] ?? '';
-                    return (
-                      <label key={field.path} className="flex flex-col gap-1.5 min-w-0">
-                        <span className="text-xs font-medium text-gray-500">{field.label}</span>
-                        {field.type === 'boolean' ? (
-                          <select
-                            value={String(Boolean(value))}
-                            onChange={event => updateField(field, event.target.value === 'true')}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          >
-                            <option value="true">true</option>
-                            <option value="false">false</option>
-                          </select>
-                        ) : field.type === 'select' ? (
-                          <select
-                            value={String(value ?? '')}
-                            onChange={event => updateField(field, event.target.value)}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          >
-                            {isProviderOptions(field.options) ? (
-                              field.options.map(providerGroup => (
-                                <optgroup key={providerGroup.provider} label={providerGroup.label}>
-                                  {providerGroup.models.map(model => (
-                                    <option key={model.id} value={model.id}>{model.label}</option>
-                                  ))}
-                                </optgroup>
-                              ))
-                            ) : (
-                              (field.options || []).map(option => (
-                                <option key={option.id} value={option.id}>{option.label}</option>
-                              ))
-                            )}
-                          </select>
-                        ) : field.type === 'password' ? (
-                          <div className="flex gap-2">
-                            <input
-                              type="password"
-                              autoComplete="new-password"
-                              value={secretDraft}
-                              onChange={event => updateSecretField(field, event.target.value)}
-                              placeholder={
-                                clearPending
-                                  ? '保存后将清除密钥'
-                                  : configuredSecret
-                                    ? '已配置 — 输入新密钥即可覆盖'
-                                    : '输入新密钥'
-                              }
-                              className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
-                            />
-                            {(configuredSecret || clearPending) && (
-                              <button
-                                type="button"
-                                onClick={() => toggleSecretClear(field)}
-                                className={`h-10 shrink-0 rounded-lg border px-3 text-xs transition ${
-                                  clearPending
-                                    ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                    : 'border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                                }`}
-                              >
-                                {clearPending ? '取消清除' : '清除'}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <input
-                            type={field.type === 'number' ? 'number' : 'text'}
-                            value={String(value ?? '')}
-                            onChange={event => updateField(field, event.target.value)}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          />
-                        )}
-                        {field.type === 'password' && configuredSecret && !clearPending && !secretDraft && (
-                          <span className="text-[11px] text-green-600">密钥已配置；后端不会返回原值。</span>
-                        )}
-                        {field.type === 'password' && clearPending && (
-                          <span className="text-[11px] text-amber-600">清除将在保存配置后生效。</span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+          <div className="mt-8 space-y-6">
+            <SettingsSection
+              icon={KeyRound}
+              title="Подключения"
+              description={`${configuredConnections} из ${PROVIDERS.length} подключений содержат сохранённый ключ. Ключи остаются локальными и отображаются только как статус.`}
+            >
+              <div className="grid gap-3 lg:grid-cols-2">
+                {PROVIDERS.map(provider => (
+                  <ProviderCard
+                    key={provider.id}
+                    provider={provider}
+                    config={config}
+                    secretStatus={secretStatus}
+                    secretDrafts={secretDrafts}
+                    secretClears={secretClears}
+                    onUpdate={update}
+                    onSecretUpdate={updateSecret}
+                    onSecretClear={toggleClearSecret}
+                  />
+                ))}
+              </div>
+            </SettingsSection>
 
-            <div className="sticky bottom-4 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-              {message && (
-                <span className="flex items-center gap-1.5 text-sm text-green-600">
-                  <CheckCircle className="w-4 h-4" />
-                  {message}
-                </span>
-              )}
-              {error && (
-                <span className="flex items-center gap-1.5 text-sm text-red-600">
-                  <XCircle className="w-4 h-4" />
-                  {error}
-                </span>
-              )}
-              <button
-                onClick={save}
-                disabled={saving}
-                className="ml-auto flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-200"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                保存配置
-              </button>
-            </div>
+            <SettingsSection
+              icon={SlidersHorizontal}
+              title="Модели по умолчанию"
+              description="Укажите ID моделей, которые должны предлагаться по умолчанию. Список не зависит от старого каталога моделей и не блокирует сохранение настроек."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                {MODEL_FIELDS.map(field => (
+                  <Field key={field.path} label={field.label}>
+                    <input
+                      value={textValue(config, field.path)}
+                      onChange={event => update(field.path, event.target.value)}
+                      placeholder={field.placeholder}
+                      className="uv-input"
+                    />
+                  </Field>
+                ))}
+              </div>
+            </SettingsSection>
+
+            <SettingsSection
+              icon={Video}
+              title="Видео по умолчанию"
+              description="Базовые параметры для новых генеративных задач. Конкретный проект может использовать свои значения."
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Способ генерации видео">
+                  <select value={textValue(config, 'generation.video_generation_mode')} onChange={event => update('generation.video_generation_mode', event.target.value)} className="uv-input">
+                    {VIDEO_GENERATION_MODES.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Визуальный стиль">
+                  <select value={textValue(config, 'generation.style')} onChange={event => update('generation.style', event.target.value)} className="uv-input">
+                    {STYLES.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Соотношение сторон">
+                  <select value={textValue(config, 'generation.video_ratio')} onChange={event => update('generation.video_ratio', event.target.value)} className="uv-input">
+                    {VIDEO_RATIOS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Разрешение">
+                  <select value={textValue(config, 'generation.video_resolution')} onChange={event => update('generation.video_resolution', event.target.value)} className="uv-input">
+                    {VIDEO_RESOLUTIONS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </SettingsSection>
+
+            <details className="group rounded-2xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)]">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-sm text-zinc-400 transition hover:text-zinc-200">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.035] text-zinc-600"><Server size={16} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">Расширенные настройки приложения</p>
+                  <p className="mt-0.5 text-xs text-zinc-700">Сеть, журналирование и общий прокси. Обычно менять не требуется.</p>
+                </div>
+                <span className="text-xs text-zinc-700 group-open:hidden">Показать</span>
+              </summary>
+              <div className="grid gap-4 border-t border-[var(--uv-border)] px-5 py-5 md:grid-cols-2">
+                <Field label="Адрес локального сервера">
+                  <input value={textValue(config, 'server.host')} onChange={event => update('server.host', event.target.value)} className="uv-input" />
+                </Field>
+                <Field label="Порт">
+                  <input type="number" value={textValue(config, 'server.port')} onChange={event => update('server.port', Number(event.target.value) || 0)} className="uv-input" />
+                </Field>
+                <Field label="Уровень журнала">
+                  <select value={textValue(config, 'server.log_level')} onChange={event => update('server.log_level', event.target.value)} className="uv-input">
+                    <option value="DEBUG">Подробный (DEBUG)</option>
+                    <option value="INFO">Обычный (INFO)</option>
+                    <option value="WARNING">Предупреждения (WARNING)</option>
+                    <option value="ERROR">Только ошибки (ERROR)</option>
+                    <option value="CRITICAL">Критические ошибки (CRITICAL)</option>
+                  </select>
+                </Field>
+                <Field label="Общий прокси">
+                  <input value={textValue(config, 'api_providers.common.proxy')} onChange={event => update('api_providers.common.proxy', event.target.value)} placeholder="http://127.0.0.1:..." className="uv-input" />
+                </Field>
+                <Toggle checked={booleanValue(config, 'server.access_log')} onChange={value => update('server.access_log', value)} label="Журнал HTTP-запросов" />
+                <Toggle checked={booleanValue(config, 'api_providers.common.print_model_input')} onChange={value => update('api_providers.common.print_model_input', value)} label="Печатать входные данные моделей в журнал" />
+              </div>
+            </details>
+
+            {path && <p className="px-1 text-[10px] text-zinc-800">Локальная конфигурация: {path.replace(/\\/g, '/')}</p>}
           </div>
         )}
-      </main>
+      </div>
+
+      <style jsx global>{`
+        .uv-input {
+          width: 100%;
+          border: 1px solid var(--uv-border);
+          border-radius: 10px;
+          background: rgba(0, 0, 0, 0.18);
+          padding: 10px 12px;
+          color: #e4e4e7;
+          font-size: 13px;
+          transition: border-color 120ms ease, background 120ms ease;
+        }
+        .uv-input:focus { border-color: rgba(139, 124, 246, 0.58); background: rgba(0, 0, 0, 0.24); }
+        .uv-input::placeholder { color: #3f3f46; }
+      `}</style>
+    </main>
+  );
+}
+
+function SettingsSection({ icon: Icon, title, description, children }: { icon: typeof KeyRound; title: string; description: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)] p-5 sm:p-6">
+      <div className="mb-5 flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><Icon size={17} /></span>
+        <div>
+          <h2 className="text-base font-medium text-zinc-100">{title}</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-600">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ProviderCard({
+  provider,
+  config,
+  secretStatus,
+  secretDrafts,
+  secretClears,
+  onUpdate,
+  onSecretUpdate,
+  onSecretClear,
+}: {
+  provider: ProviderDefinition;
+  config: ConfigTree;
+  secretStatus: SecretStatus;
+  secretDrafts: Record<string, string>;
+  secretClears: Record<string, boolean>;
+  onUpdate: (path: string, value: unknown) => void;
+  onSecretUpdate: (path: string, value: string) => void;
+  onSecretClear: (path: string) => void;
+}) {
+  const prefix = `api_providers.${provider.id}`;
+  const secretPath = `${prefix}.api_key`;
+  const configured = Boolean(secretStatus[secretPath]) && !secretClears[secretPath];
+  return (
+    <div className="rounded-xl border border-[var(--uv-border)] bg-[var(--uv-surface-1)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-200">{provider.title}</h3>
+          <p className="mt-1 text-xs leading-5 text-zinc-700">{provider.description}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] ${configured ? 'bg-emerald-400/10 text-emerald-300' : 'bg-black/20 text-zinc-700'}`}>
+          {configured ? 'Ключ сохранён' : 'Не подключено'}
+        </span>
+      </div>
+      <div className="mt-4 space-y-3">
+        <Field label="API-ключ">
+          <input
+            type="password"
+            autoComplete="off"
+            value={secretDrafts[secretPath] ?? ''}
+            onChange={event => onSecretUpdate(secretPath, event.target.value)}
+            placeholder={configured ? 'Сохранён · введите новый для замены' : 'Введите ключ'}
+            className="uv-input"
+          />
+        </Field>
+        {configured && (
+          <label className="flex items-center gap-2 text-[11px] text-zinc-700">
+            <input type="checkbox" checked={Boolean(secretClears[secretPath])} onChange={() => onSecretClear(secretPath)} />
+            Удалить сохранённый ключ при сохранении
+          </label>
+        )}
+        <details className="rounded-lg border border-[var(--uv-border)] bg-black/10 px-3 py-2">
+          <summary className="cursor-pointer text-xs text-zinc-600">Дополнительно</summary>
+          <div className="mt-3 space-y-3">
+            <Field label="Base URL">
+              <input value={textValue(config, `${prefix}.base_url`)} onChange={event => onUpdate(`${prefix}.base_url`, event.target.value)} placeholder="Оставьте пустым для стандартного адреса" className="uv-input" />
+            </Field>
+            <Toggle checked={booleanValue(config, `${prefix}.enable_proxy`)} onChange={value => onUpdate(`${prefix}.enable_proxy`, value)} label="Использовать общий прокси" />
+          </div>
+        </details>
+      </div>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block text-xs text-zinc-500"><span className="mb-2 block">{label}</span>{children}</label>;
+}
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-[var(--uv-border)] bg-black/10 px-3 py-2.5 text-xs text-zinc-500">
+      <span>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative h-5 w-9 rounded-full transition ${checked ? 'bg-violet-400' : 'bg-zinc-800'}`}
+      >
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${checked ? 'left-[18px]' : 'left-0.5'}`} />
+      </button>
+    </label>
   );
 }
