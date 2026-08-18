@@ -10,6 +10,8 @@ import shutil
 from pathlib import Path
 from typing import Sequence
 
+from media_runtime_closure import exact_closure_root_files, prune_media_runtime_carrier
+
 
 class WindowsReleaseStageError(RuntimeError):
     pass
@@ -45,9 +47,9 @@ _MLT_REQUIRED_CARRIER_FILES = (
 )
 
 # Media acquisition archives are carriers, not the canonical UV Studio runtime.
-# Exclusions are evidence-backed against the UV-owned MLT projection/render path.
-# Qt runtime DLL/plugins and top-level shared media libraries remain untouched in
-# this pass because some of them may be discovered dynamically at runtime.
+# These broad exclusions run while copying. A second exact allowlist pass then
+# reduces the staged MLT carrier to the audited PE/data closure before D-044 hashes
+# it. The source acquisition tree itself is never mutated.
 _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
     ("share", "shotcut"),
@@ -348,6 +350,12 @@ def stage_windows_release(
         shutil.copy2(node, node_target)
         media_target = output / "runtime" / "media"
         excluded_media_file_count = _copy_media_runtime(media, media_target)
+        staged_carrier = media_target / mlt_carrier_relative
+        try:
+            exact_closure_pruned_file_count = prune_media_runtime_carrier(staged_carrier)
+        except RuntimeError as exc:
+            raise WindowsReleaseStageError(str(exc)) from exc
+        excluded_media_file_count += exact_closure_pruned_file_count
         legal_files = _stage_legal_files(
             output,
             uv_license=uv_license,
@@ -371,7 +379,6 @@ def stage_windows_release(
                     f"staged {component_id} entrypoint is missing or invalid: {relative}"
                 )
 
-        staged_carrier = media_target / mlt_carrier_relative
         for relative in mlt_service_files:
             candidate = staged_carrier.joinpath(*relative.split("/"))
             if not candidate.is_file() or candidate.is_symlink():
@@ -392,6 +399,8 @@ def stage_windows_release(
             "media_file_count": media_file_count,
             "excluded_media_file_count": excluded_media_file_count,
             "media_exclusion_rules": list(_MEDIA_EXCLUSION_RULES),
+            "media_exact_closure_pruned_file_count": exact_closure_pruned_file_count,
+            "media_exact_closure_root_files": exact_closure_root_files(),
             "mlt_required_modules": sorted(_MLT_REQUIRED_MODULE_NAMES),
             "mlt_service_closure_files": mlt_service_files,
             "legal_files": legal_files,
