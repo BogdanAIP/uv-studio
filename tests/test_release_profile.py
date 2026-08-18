@@ -42,11 +42,15 @@ class ReleaseProfileTests(unittest.TestCase):
             profile["node"]["download"]["sha256"],
             "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
         )
-        self.assertEqual(profile["media"]["distribution"], "kdenlive-standalone")
-        self.assertEqual(profile["media"]["version"], "26.04.3")
+        self.assertEqual(profile["media"]["distribution"], "shotcut-portable")
+        self.assertEqual(profile["media"]["version"], "26.4.30")
+        self.assertEqual(
+            profile["media"]["download"]["url"],
+            "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-win64-26.4.30.zip",
+        )
         self.assertEqual(
             profile["media"]["download"]["sha256"],
-            "f2dc616c9c29cae261a4e4fc56293f5e88362b8024dc0b8f662c480c97e18df9",
+            "986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a",
         )
         self.assertEqual(profile["build_tools"]["pyinstaller"], "6.21.0")
         nsis = profile["build_tools"]["nsis"]
@@ -69,7 +73,8 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(values["UV_PRODUCT_VERSION"], __version__)
         self.assertEqual(values["UV_PYTHON_VERSION"], "3.13.14")
         self.assertEqual(values["UV_NODE_VERSION"], "24.19.0")
-        self.assertEqual(values["UV_MEDIA_PACKAGE_VERSION"], "26.04.3")
+        self.assertEqual(values["UV_MEDIA_DISTRIBUTION"], "shotcut-portable")
+        self.assertEqual(values["UV_MEDIA_PACKAGE_VERSION"], "26.4.30")
         self.assertEqual(values["UV_PYINSTALLER_VERSION"], "6.21.0")
         self.assertEqual(values["UV_NSIS_VERSION"], "3.12")
         self.assertEqual(values["UV_NSIS_PROVIDER"], "chocolatey")
