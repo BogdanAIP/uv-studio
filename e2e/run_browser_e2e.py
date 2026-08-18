@@ -22,6 +22,15 @@ artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", "e2e-artifacts")).reso
 artifact_dir.mkdir(parents=True, exist_ok=True)
 
 
+def _prepare_import_paths() -> None:
+    # The historic browser tests intentionally use both `test_user_outcomes` and
+    # `e2e.test_user_outcomes` imports. The old subprocess runner inherited the
+    # repository root from cwd, so preserve both import roots in-process as well.
+    for path in (str(ROOT), str(E2E)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+
 def _enable_packaged_service_substitution() -> None:
     backend = os.environ.get("UV_E2E_PACKAGED_BACKEND", "").strip()
     node = os.environ.get("UV_E2E_PACKAGED_NODE", "").strip()
@@ -40,10 +49,12 @@ def _enable_packaged_service_substitution() -> None:
     if not backend_path.is_file() or not node_path.is_file() or not frontend_path.is_dir():
         raise RuntimeError("packaged browser E2E service paths are invalid")
 
-    if str(E2E) not in sys.path:
-        sys.path.insert(0, str(E2E))
-    import test_user_outcomes as harness
+    _prepare_import_paths()
+    import e2e.test_user_outcomes as harness
 
+    # Keep the two import spellings used by the permanent E2E modules bound to
+    # one module object so the packaged process substitution cannot be bypassed.
+    sys.modules["test_user_outcomes"] = harness
     source_start_process = harness._start_process
 
     def packaged_start_process(
@@ -77,8 +88,7 @@ def _enable_packaged_service_substitution() -> None:
 
 
 def _run_suite() -> tuple[int, str]:
-    if str(E2E) not in sys.path:
-        sys.path.insert(0, str(E2E))
+    _prepare_import_paths()
     _enable_packaged_service_substitution()
     suite = unittest.defaultTestLoader.discover(str(E2E), pattern="test_*.py")
     stream = io.StringIO()
