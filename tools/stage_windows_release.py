@@ -24,6 +24,12 @@ _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
 )
 _MEDIA_EXCLUSION_RULES = ("**/bin/Qt/test/**",)
+_LEGAL_TARGETS = {
+    "uv_license": "legal/UV-STUDIO-LICENSE.txt",
+    "third_party_notices": "legal/THIRD-PARTY-NOTICES.md",
+    "release_profile": "legal/release-inputs.windows-x86_64.json",
+    "node_license": "legal/node/LICENSE.txt",
+}
 
 
 def _require_directory(path: Path | str, label: str) -> Path:
@@ -93,7 +99,10 @@ def _copy_tree(source: Path, target: Path, label: str) -> None:
 def _contains_segment_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]) -> bool:
     folded = tuple(part.casefold() for part in parts)
     width = len(sequence)
-    return any(folded[index : index + width] == sequence for index in range(len(folded) - width + 1))
+    return any(
+        folded[index : index + width] == sequence
+        for index in range(len(folded) - width + 1)
+    )
 
 
 def _media_path_is_excluded(relative: Path) -> bool:
@@ -108,7 +117,8 @@ def _excluded_media_file_count(media_root: Path) -> int:
     return sum(
         1
         for candidate in media_root.rglob("*")
-        if candidate.is_file() and _media_path_is_excluded(candidate.relative_to(media_root))
+        if candidate.is_file()
+        and _media_path_is_excluded(candidate.relative_to(media_root))
     )
 
 
@@ -132,24 +142,61 @@ def _copy_media_runtime(source: Path, target: Path) -> int:
     return excluded_file_count
 
 
+def _stage_legal_files(
+    output: Path,
+    *,
+    uv_license: Path,
+    third_party_notices: Path,
+    release_profile: Path,
+    node_license: Path,
+) -> list[str]:
+    sources = {
+        "uv_license": uv_license,
+        "third_party_notices": third_party_notices,
+        "release_profile": release_profile,
+        "node_license": node_license,
+    }
+    staged: list[str] = []
+    for key, relative in _LEGAL_TARGETS.items():
+        target = output.joinpath(*relative.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(sources[key], target)
+        if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
+            raise WindowsReleaseStageError(
+                f"staged legal/provenance file is missing or empty: {relative}"
+            )
+        staged.append(relative)
+    return staged
+
+
 def stage_windows_release(
     *,
     backend_root: Path | str,
     frontend_root: Path | str,
     node_executable: Path | str,
+    node_license_file: Path | str,
     media_root: Path | str,
     ffmpeg_executable: Path | str,
     ffprobe_executable: Path | str,
     mlt_executable: Path | str,
+    uv_license_file: Path | str,
+    third_party_notices_file: Path | str,
+    release_profile_file: Path | str,
     output_root: Path | str,
 ) -> dict[str, object]:
     backend = _require_directory(backend_root, "backend component")
     frontend = _require_directory(frontend_root, "frontend component")
     node = _require_file(node_executable, "Node executable")
+    node_license = _require_file(node_license_file, "Node license")
     media = _require_directory(media_root, "media runtime")
     ffmpeg = _require_file(ffmpeg_executable, "FFmpeg executable")
     ffprobe = _require_file(ffprobe_executable, "FFprobe executable")
     melt = _require_file(mlt_executable, "MLT executable")
+    uv_license = _require_file(uv_license_file, "UV Studio license")
+    third_party_notices = _require_file(
+        third_party_notices_file, "third-party notices"
+    )
+    release_profile = _require_file(release_profile_file, "release input profile")
 
     backend_entry = backend / "uv-studio-backend.exe"
     if not backend_entry.is_file() or backend_entry.is_symlink():
@@ -175,7 +222,9 @@ def stage_windows_release(
 
     output = Path(output_root).expanduser()
     if output.exists() or output.is_symlink():
-        raise WindowsReleaseStageError("Windows release staging output must not already exist")
+        raise WindowsReleaseStageError(
+            "Windows release staging output must not already exist"
+        )
 
     # Validate all source trees before creating the destination so a rejected source
     # cannot leave a plausible-looking partial release behind.
@@ -191,7 +240,16 @@ def stage_windows_release(
         node_target = output / "runtime" / "node" / "node.exe"
         node_target.parent.mkdir(parents=True)
         shutil.copy2(node, node_target)
-        excluded_media_file_count = _copy_media_runtime(media, output / "runtime" / "media")
+        excluded_media_file_count = _copy_media_runtime(
+            media, output / "runtime" / "media"
+        )
+        legal_files = _stage_legal_files(
+            output,
+            uv_license=uv_license,
+            third_party_notices=third_party_notices,
+            release_profile=release_profile,
+            node_license=node_license,
+        )
 
         entrypoints = {
             "backend": "backend/uv-studio-backend.exe",
@@ -210,7 +268,9 @@ def stage_windows_release(
 
         file_count = sum(1 for path in output.rglob("*") if path.is_file())
         media_file_count = sum(
-            1 for path in (output / "runtime" / "media").rglob("*") if path.is_file()
+            1
+            for path in (output / "runtime" / "media").rglob("*")
+            if path.is_file()
         )
         return {
             "ok": True,
@@ -219,6 +279,7 @@ def stage_windows_release(
             "media_file_count": media_file_count,
             "excluded_media_file_count": excluded_media_file_count,
             "media_exclusion_rules": list(_MEDIA_EXCLUSION_RULES),
+            "legal_files": legal_files,
         }
     except Exception:
         shutil.rmtree(output, ignore_errors=True)
@@ -230,10 +291,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend-root", type=Path, required=True)
     parser.add_argument("--frontend-root", type=Path, required=True)
     parser.add_argument("--node-executable", type=Path, required=True)
+    parser.add_argument("--node-license", type=Path, required=True)
     parser.add_argument("--media-root", type=Path, required=True)
     parser.add_argument("--ffmpeg-executable", type=Path, required=True)
     parser.add_argument("--ffprobe-executable", type=Path, required=True)
     parser.add_argument("--mlt-executable", type=Path, required=True)
+    parser.add_argument("--uv-license", type=Path, required=True)
+    parser.add_argument("--third-party-notices", type=Path, required=True)
+    parser.add_argument("--release-profile", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
 
@@ -245,10 +310,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             backend_root=args.backend_root,
             frontend_root=args.frontend_root,
             node_executable=args.node_executable,
+            node_license_file=args.node_license,
             media_root=args.media_root,
             ffmpeg_executable=args.ffmpeg_executable,
             ffprobe_executable=args.ffprobe_executable,
             mlt_executable=args.mlt_executable,
+            uv_license_file=args.uv_license,
+            third_party_notices_file=args.third_party_notices,
+            release_profile_file=args.release_profile,
             output_root=args.output,
         )
     except (OSError, WindowsReleaseStageError) as exc:

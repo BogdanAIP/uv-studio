@@ -28,6 +28,15 @@ class StageWindowsReleaseTests(unittest.TestCase):
 
         self.node = self.root / "node.exe"
         self.node.write_bytes(b"node")
+        self.node_license = self.root / "node-LICENSE.txt"
+        self.node_license.write_text("Node license\n", encoding="utf-8")
+
+        self.uv_license = self.root / "UV-LICENSE.txt"
+        self.uv_license.write_text("UV Studio license\n", encoding="utf-8")
+        self.third_party_notices = self.root / "THIRD_PARTY_NOTICES.md"
+        self.third_party_notices.write_text("# Notices\n", encoding="utf-8")
+        self.release_profile = self.root / "runtime-profile.json"
+        self.release_profile.write_text('{"schema_version": 4}\n', encoding="utf-8")
 
         self.media = self.root / "media-source"
         ffmpeg_dir = self.media / "bin"
@@ -44,7 +53,14 @@ class StageWindowsReleaseTests(unittest.TestCase):
         plugin_dir.mkdir(parents=True)
         (plugin_dir / "filter.dll").write_bytes(b"plugin")
 
-        qt_runtime = self.media / "distribution" / "bin" / "Qt" / "plugins" / "platforms"
+        qt_runtime = (
+            self.media
+            / "distribution"
+            / "bin"
+            / "Qt"
+            / "plugins"
+            / "platforms"
+        )
         qt_runtime.mkdir(parents=True)
         (qt_runtime / "qwindows.dll").write_bytes(b"qt-runtime")
         qt_test = (
@@ -60,7 +76,9 @@ class StageWindowsReleaseTests(unittest.TestCase):
             / "rcc"
         )
         qt_test.mkdir(parents=True)
-        (qt_test / "qrc_qmake_Qt_test_controls_init.cpp.obj").write_bytes(b"qt-test-object")
+        (qt_test / "qrc_qmake_Qt_test_controls_init.cpp.obj").write_bytes(
+            b"qt-test-object"
+        )
         (qt_test / "fixture.txt").write_bytes(b"qt-test-fixture")
 
     def tearDown(self) -> None:
@@ -72,15 +90,19 @@ class StageWindowsReleaseTests(unittest.TestCase):
             backend_root=self.backend,
             frontend_root=self.frontend,
             node_executable=self.node,
+            node_license_file=self.node_license,
             media_root=self.media,
             ffmpeg_executable=self.ffmpeg,
             ffprobe_executable=self.ffprobe,
             mlt_executable=self.melt,
+            uv_license_file=self.uv_license,
+            third_party_notices_file=self.third_party_notices,
+            release_profile_file=self.release_profile,
             output_root=target,
         )
         return target, result
 
-    def test_stage_preserves_runtime_components_but_excludes_qt_test_build_tree(self) -> None:
+    def test_stage_preserves_runtime_components_notices_and_provenance(self) -> None:
         output, result = self._stage()
         self.assertTrue(result["ok"])
         self.assertEqual(
@@ -94,10 +116,22 @@ class StageWindowsReleaseTests(unittest.TestCase):
                 "mlt": "runtime/media/mlt/bin/melt.exe",
             },
         )
-        self.assertTrue((output / "backend" / "_internal" / "python313.dll").is_file())
-        self.assertTrue((output / "frontend" / "node_modules" / "next" / "package.json").is_file())
+        self.assertTrue(
+            (output / "backend" / "_internal" / "python313.dll").is_file()
+        )
+        self.assertTrue(
+            (
+                output
+                / "frontend"
+                / "node_modules"
+                / "next"
+                / "package.json"
+            ).is_file()
+        )
         self.assertTrue((output / "runtime" / "node" / "node.exe").is_file())
-        self.assertTrue((output / "runtime" / "media" / "mlt" / "lib" / "mlt" / "filter.dll").is_file())
+        self.assertTrue(
+            (output / "runtime" / "media" / "mlt" / "lib" / "mlt" / "filter.dll").is_file()
+        )
         self.assertTrue(
             (
                 output
@@ -112,18 +146,61 @@ class StageWindowsReleaseTests(unittest.TestCase):
             ).is_file()
         )
         self.assertFalse(
-            (output / "runtime" / "media" / "distribution" / "bin" / "Qt" / "test").exists()
+            (
+                output
+                / "runtime"
+                / "media"
+                / "distribution"
+                / "bin"
+                / "Qt"
+                / "test"
+            ).exists()
         )
         self.assertEqual(result["excluded_media_file_count"], 2)
         self.assertEqual(result["media_exclusion_rules"], ["**/bin/Qt/test/**"])
         self.assertGreaterEqual(result["media_file_count"], 5)
+        self.assertEqual(
+            result["legal_files"],
+            [
+                "legal/UV-STUDIO-LICENSE.txt",
+                "legal/THIRD-PARTY-NOTICES.md",
+                "legal/release-inputs.windows-x86_64.json",
+                "legal/node/LICENSE.txt",
+            ],
+        )
+        self.assertEqual(
+            (output / "legal" / "UV-STUDIO-LICENSE.txt").read_text(
+                encoding="utf-8"
+            ),
+            "UV Studio license\n",
+        )
+        self.assertEqual(
+            (output / "legal" / "THIRD-PARTY-NOTICES.md").read_text(
+                encoding="utf-8"
+            ),
+            "# Notices\n",
+        )
+        self.assertEqual(
+            (output / "legal" / "node" / "LICENSE.txt").read_text(
+                encoding="utf-8"
+            ),
+            "Node license\n",
+        )
+        self.assertEqual(
+            (output / "legal" / "release-inputs.windows-x86_64.json").read_text(
+                encoding="utf-8"
+            ),
+            '{"schema_version": 4}\n',
+        )
 
     def test_media_exclusion_is_case_insensitive_like_windows_paths(self) -> None:
         alternate = self.media / "other" / "BIN" / "qt" / "TEST" / "nested"
         alternate.mkdir(parents=True)
         (alternate / "artifact.obj").write_bytes(b"object")
         output, result = self._stage()
-        self.assertFalse((output / "runtime" / "media" / "other" / "BIN" / "qt" / "TEST").exists())
+        self.assertFalse(
+            (output / "runtime" / "media" / "other" / "BIN" / "qt" / "TEST").exists()
+        )
         self.assertEqual(result["excluded_media_file_count"], 3)
 
     def test_required_media_entrypoint_inside_exclusion_fails_closed(self) -> None:
@@ -132,15 +209,21 @@ class StageWindowsReleaseTests(unittest.TestCase):
         excluded_melt = test_dir / "melt.exe"
         excluded_melt.write_bytes(b"melt")
         output = self.root / "release"
-        with self.assertRaisesRegex(WindowsReleaseStageError, "non-runtime media exclusion"):
+        with self.assertRaisesRegex(
+            WindowsReleaseStageError, "non-runtime media exclusion"
+        ):
             stage_windows_release(
                 backend_root=self.backend,
                 frontend_root=self.frontend,
                 node_executable=self.node,
+                node_license_file=self.node_license,
                 media_root=self.media,
                 ffmpeg_executable=self.ffmpeg,
                 ffprobe_executable=self.ffprobe,
                 mlt_executable=excluded_melt,
+                uv_license_file=self.uv_license,
+                third_party_notices_file=self.third_party_notices,
+                release_profile_file=self.release_profile,
                 output_root=output,
             )
         self.assertFalse(output.exists())
@@ -163,10 +246,14 @@ class StageWindowsReleaseTests(unittest.TestCase):
                 backend_root=self.backend,
                 frontend_root=self.frontend,
                 node_executable=self.node,
+                node_license_file=self.node_license,
                 media_root=self.media,
                 ffmpeg_executable=foreign,
                 ffprobe_executable=self.ffprobe,
                 mlt_executable=self.melt,
+                uv_license_file=self.uv_license,
+                third_party_notices_file=self.third_party_notices,
+                release_profile_file=self.release_profile,
                 output_root=output,
             )
         self.assertFalse(output.exists())
@@ -178,10 +265,25 @@ class StageWindowsReleaseTests(unittest.TestCase):
             self._stage(output)
         self.assertFalse(output.exists())
 
+    def test_missing_legal_input_fails_closed_before_output_creation(self) -> None:
+        self.node_license.unlink()
+        output = self.root / "release"
+        with self.assertRaisesRegex(WindowsReleaseStageError, "Node license is missing"):
+            self._stage(output)
+        self.assertFalse(output.exists())
+
     def test_symlink_in_source_tree_is_rejected_even_under_excluded_subtree_when_supported(self) -> None:
         test_dir = self.media / "distribution" / "bin" / "Qt" / "test"
         link = test_dir / "shadow.obj"
-        target = test_dir / "controls" / "objects-RelWithDebInfo" / "QuickControlsTestUtilsPrivate_resources_1" / ".qt" / "rcc" / "fixture.txt"
+        target = (
+            test_dir
+            / "controls"
+            / "objects-RelWithDebInfo"
+            / "QuickControlsTestUtilsPrivate_resources_1"
+            / ".qt"
+            / "rcc"
+            / "fixture.txt"
+        )
         try:
             link.symlink_to(target)
         except (OSError, NotImplementedError):
