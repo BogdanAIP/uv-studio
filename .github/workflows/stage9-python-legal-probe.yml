@@ -1,0 +1,71 @@
+name: Stage 9 Python Legal Probe
+
+on:
+  push:
+    branches: ["stage-9/**"]
+    paths:
+      - ".github/workflows/stage9-python-legal-probe.yml"
+      - "requirements-uv*.txt"
+      - "tools/python_runtime_legal.py"
+      - "tests/test_python_runtime_legal.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-python-legal-probe.yml"
+      - "requirements-uv*.txt"
+      - "tools/python_runtime_legal.py"
+      - "tests/test_python_runtime_legal.py"
+
+jobs:
+  python-runtime-legal:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact shipping Python graph
+        run: python -m pip install -r requirements-uv-release.txt
+
+      - name: Verify exact shipping graph
+        run: |
+          python -m pip check
+          python tools/verify_release_python_lock.py
+
+      - name: Install exact Stage 9 freezer
+        run: python -m pip install "pyinstaller==6.21.0"
+
+      - name: Collect exact Python runtime legal evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = Join-Path $env:RUNNER_TEMP 'uv-python-legal-probe'
+          New-Item -ItemType Directory -Force -Path $release | Out-Null
+          & python tools/python_runtime_legal.py `
+            --release-root $release `
+            --lock requirements-uv-release-win-x86_64.txt `
+            --pyinstaller-version 6.21.0
+          if ($LASTEXITCODE -ne 0) { throw 'Python runtime legal collector failed' }
+          $manifest = Join-Path $release 'legal\python-runtime\components.windows-x86_64.json'
+          if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+            throw 'Python runtime legal collector did not create manifest'
+          }
+          $data = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          if ($data.shipping_distribution_count -ne 32) {
+            throw "unexpected shipping distribution count: $($data.shipping_distribution_count)"
+          }
+          if (@($data.components).Count -ne 34) {
+            throw "unexpected Python legal component count: $(@($data.components).Count)"
+          }
+          "UV_PYTHON_LEGAL_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload Python legal evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-stage9-python-legal-${{ github.sha }}
+          path: ${{ env.UV_PYTHON_LEGAL_ROOT }}/legal/python-runtime
+          if-no-files-found: error
