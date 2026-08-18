@@ -10,6 +10,9 @@ _DEFAULT_MEDIA_COMPONENT_MANIFEST = (
     ROOT / "packaging" / "media-runtime-components.windows-x86_64.json"
 )
 _DEFAULT_MEDIA_NOTICE = ROOT / "packaging" / "media-runtime-NOTICE.md"
+_DEFAULT_MEDIA_LICENSE_MANIFEST = (
+    ROOT / "packaging" / "media-runtime-license-files.windows-x86_64.json"
+)
 
 # Exact root PE dependency closure measured from Stage 9 artifact #120 using the
 # retained UV entrypoints (ffmpeg/ffprobe/melt), MLT framework/modules and the
@@ -135,14 +138,24 @@ def _stage_product_legal_bundle(root: Path) -> None:
     try:
         if __package__:
             from tools.media_runtime_legal import stage_media_runtime_legal_bundle
+            from tools.media_runtime_license_files import stage_media_runtime_license_bundle
         else:
             from media_runtime_legal import stage_media_runtime_legal_bundle
+            from media_runtime_license_files import stage_media_runtime_license_bundle
 
+        release_root = root.parents[2]
+        media_root = root.parent
         stage_media_runtime_legal_bundle(
-            release_root=root.parents[2],
-            media_root=root.parent,
+            release_root=release_root,
+            media_root=media_root,
             manifest_file=_DEFAULT_MEDIA_COMPONENT_MANIFEST,
             notice_file=_DEFAULT_MEDIA_NOTICE,
+        )
+        stage_media_runtime_license_bundle(
+            release_root=release_root,
+            media_root=media_root,
+            component_manifest_file=_DEFAULT_MEDIA_COMPONENT_MANIFEST,
+            license_manifest_file=_DEFAULT_MEDIA_LICENSE_MANIFEST,
         )
     except Exception as exc:  # stage_windows_release converts RuntimeError to its release error
         raise RuntimeError(f"media runtime legal/provenance gate failed: {exc}") from exc
@@ -160,7 +173,8 @@ def prune_media_runtime_carrier(carrier_root: Path | str) -> int:
 
     In the exact product release layout this also verifies that every surviving
     media PE belongs to exactly one reviewed component and stages that component
-    map plus its notice into ``legal/media-runtime`` before D-044 hashes payload.
+    map, notice, and bounded per-component license/notice assets into
+    ``legal/media-runtime`` before D-044 hashes the payload.
     """
     root = Path(carrier_root)
     if not root.is_dir() or root.is_symlink():
