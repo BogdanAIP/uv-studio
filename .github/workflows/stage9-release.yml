@@ -60,20 +60,33 @@ jobs:
           python -m pip check
           python tools/verify_release_python_lock.py
 
-      - name: Install exact build-only release tools
+      - name: Install exact build-only freezer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & python -m pip install "pyinstaller==$env:UV_PYINSTALLER_VERSION" "pip-audit==2.10.1"
-          if ($LASTEXITCODE -ne 0) { throw 'build-only release tool installation failed' }
+          & python -m pip install "pyinstaller==$env:UV_PYINSTALLER_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'build-only freezer installation failed' }
 
-      - name: Audit exact shipping Python dependencies
+      - name: Audit exact shipping Python dependencies in isolated environment
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $report = Join-Path $env:RUNNER_TEMP 'python-pip-audit.json'
-          & python -m pip_audit --no-deps --disable-pip -r requirements-uv-release-win-x86_64.txt -f json -o $report
+          $auditVenv = Join-Path $env:RUNNER_TEMP 'uv-pip-audit-venv'
+          $before = @(& python -m pip freeze)
+          if ($LASTEXITCODE -ne 0) { throw 'could not snapshot freezer environment before security audit' }
+          & python -m venv $auditVenv
+          if ($LASTEXITCODE -ne 0) { throw 'could not create isolated pip-audit environment' }
+          $auditPython = Join-Path $auditVenv 'Scripts\python.exe'
+          & $auditPython -m pip install "pip-audit==2.10.1"
+          if ($LASTEXITCODE -ne 0) { throw 'isolated pip-audit installation failed' }
+          & $auditPython -m pip_audit --no-deps --disable-pip -r requirements-uv-release-win-x86_64.txt -f json -o $report
           if ($LASTEXITCODE -ne 0) { throw 'pip-audit found a known vulnerability in the exact Windows shipping lock' }
+          $after = @(& python -m pip freeze)
+          if ($LASTEXITCODE -ne 0) { throw 'could not snapshot freezer environment after security audit' }
+          if (Compare-Object -ReferenceObject $before -DifferenceObject $after) {
+            throw 'isolated security audit mutated the release freezer environment'
+          }
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw 'pip-audit did not create JSON evidence' }
           "UV_PYTHON_SECURITY_AUDIT=$report" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
