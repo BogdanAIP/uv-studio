@@ -34,6 +34,8 @@ The command layer owns:
 
 An AI assistant may inspect project state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
 
+The curated integration-facing projection of these existing product-owned contracts is the **UV Semantic API**, documented in `docs/architecture/SEMANTIC_API.md`. UV Semantic API does not introduce a second command system, backend or registry; the UV Command API remains its semantic mutation subset.
+
 ## Hybrid foundations are allowed
 
 UV Studio does not require one upstream editor to own the entire product. A license-compatible editor UI donor, a separate media/timeline engine, UV Studio Project Store and UV Studio Command API may be composed when this reduces custom code and preserves clean ownership boundaries.
