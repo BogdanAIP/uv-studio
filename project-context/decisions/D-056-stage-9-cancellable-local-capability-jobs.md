@@ -1,16 +1,16 @@
 # D-056 — Cancellable local capability jobs
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-17
 - **Stage:** Stage 9 Desktop Productization & Release Hardening
 
 ## Context
 
-The canonical capability execution endpoint is synchronous. Local FFmpeg work is dispatched to a thread pool, but the adapter ultimately blocks in `subprocess.run`. Closing the browser request therefore does not stop a live FFmpeg process. For long renders this is a product-hardening gap: an apparent cancellation must stop actual work and must not publish a partial artifact.
+The canonical capability execution endpoint is synchronous. Local FFmpeg work is dispatched to a thread pool, but the adapter ultimately blocked in `subprocess.run`. Closing the browser request therefore did not stop a live FFmpeg process. For long renders this was a product-hardening gap: an apparent cancellation must stop actual work and must not publish a partial artifact.
 
 Cancellation cannot be advertised generically. Some adapters are in-process Python runtimes, some are remote, and some FFmpeg compositions currently have multi-artifact side effects. A single universal "cancel" flag would overstate guarantees.
 
-## Proposed decision
+## Decision
 
 Add an explicit, process-local capability job contract beside the existing synchronous `/execute` compatibility endpoint.
 
@@ -66,6 +66,18 @@ A cancelled job must not publish a partial Project Store artifact. The initial a
 
 An operation with unproven rollback semantics stays outside the allowlist even if its underlying FFmpeg process can technically be terminated.
 
+## Product UX
+
+The authoritative editor master-render path now starts `video.render_edits` through the job API, polls the terminal state, exposes an explicit **Отменить рендер** action while work is active and preserves the existing successful render/browser-preview user outcome. Leaving the render surface requests cancellation for its active job; closing the backend is covered by the shutdown cancellation boundary above.
+
+## Acceptance evidence
+
+Accepted on exact branch head `b98d6f441214844e947ab9f714c4935ba0a9de58`.
+
+- CI #1699 / Actions run `32064429265`: `success` on the exact head. This includes Linux and Windows unit/API integration, shipping Python 3.13.14 compatibility, real-media FFmpeg evidence, production Next build and Chromium user outcomes. The pre-existing real browser master-render outcome passed unchanged while the product UI used the new `job -> polling -> result` execution path.
+- Stage 9 Windows Release #66 / Actions run `32064429227`: `success` on the exact head. The frozen portable bundle, deep D-044 manifest verification, same-size tamper rejection, desktop supervision, pinned NSIS installer, silent install/installed launch/uninstall and versioned A -> B -> A update/rollback all passed.
+- The preceding core-cancellation head `1ae4e7bcde01fc7e78fa0f4f2ea21b4144106389` independently passed CI #1697 and Windows Release #64, including a provisioned real FFmpeg process that was cancelled before its nominal 30-second input completed.
+
 ## Acceptance criteria
 
 1. a real long-running child process is terminated after cancellation and cannot perform a delayed write;
@@ -80,8 +92,11 @@ An operation with unproven rollback semantics stays outside the allowlist even i
 10. unsupported local/remote/in-process operations are not falsely advertised as cancellable;
 11. backend shutdown requests cancellation for all active jobs and waits for their workers to exit;
 12. the ordinary synchronous `/execute` API remains backward-compatible;
-13. unit, API integration and real-media suites pass on Linux and Windows, including the shipping Python runtime.
+13. unit, API integration and real-media suites pass on Linux and Windows, including the shipping Python runtime;
+14. the real editor master-render user outcome remains green through the job API and the installed Windows product retains its complete install/update/rollback proof.
+
+All acceptance criteria are satisfied by the evidence above.
 
 ## Follow-up boundary
 
-After this first contract is green, extend transactional cancellation to excluded long operations (`timeline.assemble`, `video.render_dubbing`) before product UI exposes cancellation for them. Resource/weak-hardware evidence remains a separate Stage 9 hardening concern.
+Transactional cancellation for excluded long operations (`timeline.assemble`, `video.render_dubbing`) remains fail-closed until their rollback semantics are strengthened and tested. Resource/weak-hardware and long-project evidence is handled separately by D-057 rather than broadening this decision.
