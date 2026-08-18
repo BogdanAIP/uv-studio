@@ -60,9 +60,22 @@ jobs:
           python -m pip check
           python tools/verify_release_python_lock.py
 
-      - name: Install exact build-only freezer
+      - name: Install exact build-only release tools
         shell: pwsh
-        run: python -m pip install "pyinstaller==$env:UV_PYINSTALLER_VERSION"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & python -m pip install "pyinstaller==$env:UV_PYINSTALLER_VERSION" "pip-audit==2.10.1"
+          if ($LASTEXITCODE -ne 0) { throw 'build-only release tool installation failed' }
+
+      - name: Audit exact shipping Python dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $report = Join-Path $env:RUNNER_TEMP 'python-pip-audit.json'
+          & python -m pip_audit --no-deps --disable-pip -r requirements-uv-release-win-x86_64.txt -f json -o $report
+          if ($LASTEXITCODE -ne 0) { throw 'pip-audit found a known vulnerability in the exact Windows shipping lock' }
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw 'pip-audit did not create JSON evidence' }
+          "UV_PYTHON_SECURITY_AUDIT=$report" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build Windows one-folder backend component
         run: >-
@@ -79,19 +92,27 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $frontendAudit = Join-Path $env:RUNNER_TEMP 'frontend-npm-audit.json'
           Push-Location frontend
           try {
             npm ci
+            if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
             npm run lint
-            npm run audit:high
+            if ($LASTEXITCODE -ne 0) { throw 'frontend lint failed' }
+            & npm audit --audit-level=high --json | Out-File -LiteralPath $frontendAudit -Encoding utf8
+            $auditCode = $LASTEXITCODE
+            if ($auditCode -ne 0) { throw 'npm audit found a high or critical vulnerability in the exact frontend lock' }
             npm run build
+            if ($LASTEXITCODE -ne 0) { throw 'frontend build failed' }
           } finally {
             Pop-Location
           }
+          if (-not (Test-Path -LiteralPath $frontendAudit -PathType Leaf)) { throw 'npm audit did not create JSON evidence' }
           $frontendStage = Join-Path $env:RUNNER_TEMP 'uv-frontend-standalone'
           python tools/stage_frontend_release.py --frontend-root frontend --output $frontendStage
           if ($LASTEXITCODE -ne 0) { throw "frontend release staging failed with exit $LASTEXITCODE" }
           "UV_FRONTEND_STAGE=$frontendStage" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "UV_FRONTEND_SECURITY_AUDIT=$frontendAudit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Provision pinned release Node distribution
         shell: pwsh
@@ -180,6 +201,16 @@ jobs:
           Copy-Item -LiteralPath $env:UV_FFMPEG_AUDIT -Destination $auditTarget
           if (-not (Test-Path -LiteralPath $auditTarget -PathType Leaf)) {
             throw 'FFmpeg release audit evidence was not staged into immutable payload'
+          }
+
+          $securityDir = Join-Path $release 'legal\security'
+          New-Item -ItemType Directory -Force -Path $securityDir | Out-Null
+          Copy-Item -LiteralPath $env:UV_PYTHON_SECURITY_AUDIT -Destination (Join-Path $securityDir 'python-pip-audit.json')
+          Copy-Item -LiteralPath $env:UV_FRONTEND_SECURITY_AUDIT -Destination (Join-Path $securityDir 'frontend-npm-audit.json')
+          foreach ($securityEvidence in @('python-pip-audit.json', 'frontend-npm-audit.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $securityDir $securityEvidence) -PathType Leaf)) {
+              throw "release security evidence was not staged: $securityEvidence"
+            }
           }
 
           "UV_RELEASE_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
