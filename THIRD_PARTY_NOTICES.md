@@ -2,7 +2,7 @@
 
 UV Studio includes, adapts or interoperates with third-party software. This file distinguishes code actually vendored/adapted, binaries carried in the current Stage 9 Windows payload, optional runtime integrations and development-only tools. Source-code licenses do not automatically cover model weights, datasets, hosted-service terms or generated assets.
 
-The immutable Windows release also contains a copy of this notice, the UV Studio license and the exact reviewed Windows runtime input profile under `legal/`. Component-specific notices that must accompany a shipped binary are kept with that release evidence rather than being treated as covered by this summary alone.
+The immutable Windows release also contains a copy of this notice, the UV Studio license, the exact reviewed Windows runtime input profile and machine-captured FFmpeg build configuration under `legal/`. Component-specific notices that must accompany a shipped binary are kept with that release evidence rather than being treated as covered by this summary alone.
 
 ## VideoClaw
 
@@ -31,29 +31,38 @@ The release profile pins the official Windows x64 archive by SHA-256. Stage 9 ex
 
 Node.js is bundled only to run the current official Next.js standalone frontend. Users do not need a separately installed Node/npm runtime, and Node/provider identity does not enter canonical UV project state.
 
+## Shotcut portable media carrier
+
+Project: `mltframework/shotcut`  
+Source license: GPLv3  
+Stage 9 candidate carrier: official Windows portable `26.4.30`  
+Pinned archive SHA-256: `986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a`
+
+D-058 replaces the former Kdenlive acquisition with the official Shotcut portable archive so MLT and its FFmpeg runtime are obtained as one upstream-built Windows closure. The carrier is not accepted merely by name: the Stage 9 release workflow verifies the archive hash, locates the exact FFmpeg/FFprobe/`melt` executables, audits the selected FFmpeg build configuration, and runs the complete packaged product/installer proof before D-058 can be accepted.
+
+The original Kdenlive `26.04.3` carrier remains historical evidence only. Its exact FFmpeg self-report included `--enable-nonfree`, so it is rejected from the public release path even though it had passed runtime tests.
+
 ## MLT Multimedia Framework and `melt`
 
 Project: `mltframework/mlt`
 
 MLT upstream distinguishes licensing by component. The framework libraries and `libmvcp` are LGPL-family components, while the `melt`/`melted` applications are identified by upstream as GPL applications; individual modules/plugins can carry additional or different compatible terms.
 
-UV Studio uses MLT behind a UV-owned editor adapter and currently stages `melt.exe` plus its required Windows runtime/plugin closure from the exact SHA-256-pinned Kdenlive `26.04.3` standalone carrier. Therefore the Stage 9 redistribution audit must cover the actual `melt` application and every shipped module/plugin/library in the curated media payload; describing the whole payload merely as "LGPL MLT" would be inaccurate.
-
-The Kdenlive standalone archive is an acquisition/provenance carrier, not the canonical UV Studio file set. D-052 removes only specifically proven non-runtime Qt test/build material before D-044 inventories and hashes the resulting immutable payload.
+UV Studio uses MLT behind a UV-owned editor adapter and stages `melt.exe` only as part of the exact reviewed media closure. The final Stage 9 redistribution audit must cover the actual `melt` application and every shipped module/plugin/library; describing the whole media payload merely as "LGPL MLT" would be inaccurate.
 
 ## FFmpeg / FFprobe
 
 Project: FFmpeg
 
-FFmpeg is LGPL-family by default, but enabled GPL-covered parts can make a particular build GPL and `--enable-nonfree` creates a build that upstream states is not redistributable. Consequently UV Studio does not infer redistribution terms from the executable name alone.
+FFmpeg is LGPL-family by default, but enabled GPL-covered parts can make a particular build GPL and `--enable-nonfree` creates a build that upstream states is not redistributable. UV Studio therefore does not infer redistribution terms from the executable name or carrier package.
 
-The current Stage 9 Windows payload obtains FFmpeg/FFprobe as part of the pinned Kdenlive `26.04.3` standalone carrier. Before a public release is declared complete, the exact staged build configuration and the licenses/source obligations of enabled components/codecs must be captured and reviewed. D-044 integrity proves which bytes are shipped; it does not by itself prove license compliance.
+`tools/audit_ffmpeg_release.py` executes the exact staged `ffmpeg.exe -buildconf` during packaging and rejects `--enable-nonfree` fail-closed. The bounded result is copied into the immutable payload as `legal/ffmpeg-buildconf.json` before D-044 hashes the release. GPL/shared/static flags are evidence for the release audit rather than being silently interpreted as permission.
 
-A separate closed research PR tested a pinned shared FFmpeg candidate built without `--enable-gpl` or `--enable-nonfree`, but that probe is research evidence only and is not silently substituted for the current Stage 9 media payload.
+A separate closed research PR #39 tested another shared FFmpeg candidate without GPL/nonfree flags. That probe remains research evidence; the current D-058 implementation instead evaluates the coherent Shotcut MLT/FFmpeg closure through the permanent product release workflow.
 
 ## Next.js and production frontend dependencies
 
-The production frontend is built from the exact committed `frontend/package-lock.json` and shipped using the official Next.js standalone output. The frontend release gate runs `npm ci`, lint, a high-severity dependency audit and production build before staging. The final release audit must retain notices required by the exact transitive packages that are present in the standalone output.
+The production frontend is built from the exact committed `frontend/package-lock.json` and shipped using the official Next.js standalone output. The frontend release gate runs `npm ci`, lint, a high-severity dependency audit and production build before staging. The final release audit must retain notices required by the exact transitive packages present in the standalone output.
 
 ## PyInstaller and NSIS build tooling
 
