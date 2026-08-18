@@ -1,13 +1,14 @@
-"""Run browser E2E while preserving output and optionally target a packaged release.
+"""Run permanent browser E2E and optionally target a packaged release.
 
-Normal CI uses the source checkout services started by the test suite. Stage 9
-release validation can set UV_E2E_PACKAGED_* variables; the runner then reuses the
-same permanent browser scenarios while substituting the frozen backend and bundled
+Normal CI uses source checkout services started by the test suites. Stage 9
+release validation can set UV_E2E_PACKAGED_* variables; the runner then reuses
+the same product outcomes while substituting the frozen backend and bundled
 standalone frontend for the source service commands.
 """
 
 from __future__ import annotations
 
+import importlib
 import io
 import os
 import sys
@@ -21,11 +22,19 @@ E2E = ROOT / "e2e"
 artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", "e2e-artifacts")).resolve()
 artifact_dir.mkdir(parents=True, exist_ok=True)
 
+# The old test_user_outcomes module remains the real-media/API harness. Its
+# former copy-specific BrowserUserOutcomes class is intentionally not loaded
+# directly; Stage 9 product UX is exercised by the subclass below instead.
+PERMANENT_MODULES = (
+    "test_product_user_outcomes",
+    "test_diagnostics_outcome",
+    "test_music_video_outcome",
+    "test_stage8_composition_outcomes",
+    "test_stage8_outcomes",
+)
+
 
 def _prepare_import_paths() -> None:
-    # The historic browser tests intentionally use both `test_user_outcomes` and
-    # `e2e.test_user_outcomes` imports. The old subprocess runner inherited the
-    # repository root from cwd, so preserve both import roots in-process as well.
     for path in (str(ROOT), str(E2E)):
         if path not in sys.path:
             sys.path.insert(0, path)
@@ -52,8 +61,8 @@ def _enable_packaged_service_substitution() -> None:
     _prepare_import_paths()
     import e2e.test_user_outcomes as harness
 
-    # Keep the two import spellings used by the permanent E2E modules bound to
-    # one module object so the packaged process substitution cannot be bypassed.
+    # All permanent modules import the harness by the historic short name.
+    # Bind both spellings to one object before loading any suite module.
     sys.modules["test_user_outcomes"] = harness
     source_start_process = harness._start_process
 
@@ -90,7 +99,13 @@ def _enable_packaged_service_substitution() -> None:
 def _run_suite() -> tuple[int, str]:
     _prepare_import_paths()
     _enable_packaged_service_substitution()
-    suite = unittest.defaultTestLoader.discover(str(E2E), pattern="test_*.py")
+
+    suite = unittest.TestSuite()
+    loader = unittest.defaultTestLoader
+    for module_name in PERMANENT_MODULES:
+        module = importlib.import_module(module_name)
+        suite.addTests(loader.loadTestsFromModule(module))
+
     stream = io.StringIO()
     result = unittest.TextTestRunner(stream=stream, verbosity=2).run(suite)
     return (0 if result.wasSuccessful() else 1), stream.getvalue()
