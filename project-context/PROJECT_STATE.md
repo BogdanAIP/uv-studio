@@ -5,72 +5,82 @@
 
 ## Current lifecycle
 
-Stage 9 Desktop Productization & Release Hardening is active in draft on `stage-9/desktop-productization-release-hardening`, based on exact green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 Additional Recipes merged as PR #37 (`5eb8f6c2256b9b67dd1e896fc929682eb19b16ca`).
+Stage 9 Desktop Productization & Release Hardening is the single active draft slice in PR #38 on `stage-9/desktop-productization-release-hardening`, based on exact green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 merged as PR #37.
 
-The Stage 8 post-merge idle CI #1614 / Actions run `31971649798` passed all five permanent required jobs on that exact base, including cross-platform bootstrap, API/HTTP, real-media, frontend build and Playwright user outcomes.
+The branch remains **Draft**. Productization is substantially implemented, but Stage 9 is not allowed to move to review until the final media-redistribution boundary, signing/release audit and exact-head permanent checks are complete.
 
-Stage 9 draft PR #38 is the single active implementation slice. Internal productization phases remain commits/evidence inside this PR rather than separate lifecycle PRs.
+## Product goal
 
-## Stage 9 product goal
+Ship a native Windows product that requires no separately prepared Python, Node/npm, FFmpeg or MLT while preserving canonical projects, archives, capability authorization, user data and all permanent user-facing workflows through packaged execution.
 
-Produce a native Windows release that a user can install and run without separately preparing Python, Node/npm or FFmpeg, while preserving the canonical Project Store, portable archives, semantic capability boundaries and all permanent user-facing regression scenarios.
+## Implemented and previously proven
 
-Stage 9 must cover the complete release surface rather than only a development launcher:
+The following Stage 9 architecture is already implemented and has exact-head evidence on earlier accepted decision heads:
 
-- reproducible product-owned Python and frontend dependency resolution;
-- a versioned self-contained release layout and runtime manifest;
-- bundled/provisioned required media binaries with provenance and diagnostics;
-- launcher/process supervision and clean shutdown/cancellation behavior;
-- installer/uninstaller plus versioned update and project migration behavior;
-- backup/recovery and user-readable diagnostics;
-- capability self-checks for required and optional dependencies;
-- clean-machine Windows evidence plus representative weak-hardware/long-project evidence;
-- final license/security/dependency audit and signed release artifacts;
-- packaged-app proof for the permanent browser/user outcomes.
+- **D-044 immutable release manifest** — complete sorted payload inventory with size/SHA-256, path/symlink rejection and deep same-size tamper detection;
+- **D-045 packaged mutable-state boundary** — immutable application payload separated from `%LOCALAPPDATA%/UV Studio` projects/config/logs;
+- **D-046 exact release input profile** — CPython 3.13.14, exact 32-package shipping graph, Node.js 24.19.0, pinned media input and build-tool identities;
+- **D-047 packaged toolchain resolution** — FFmpeg/FFprobe/MLT resolve only from the verified release manifest, never system PATH fallback;
+- **D-048 official Next standalone frontend** with dynamic project routes and a bundled Node runtime;
+- **D-049 desktop launcher supervision** for frozen backend + standalone frontend lifecycle;
+- **D-050 per-user versioned NSIS installation** with deep verification before activation;
+- **D-051 fail-closed project migration preparation/recovery**;
+- **D-052 evidence-based media-payload curation rule** introduced for the original carrier;
+- **D-053 installer-carried A -> B -> A update/rollback** while preserving user data;
+- **D-054 secret-safe diagnostics/recovery health**;
+- **D-055 installed clean-machine proof** with host Python/Node/FFmpeg/FFprobe/MLT removed from PATH;
+- **D-056 cancellable local FFmpeg jobs** with process termination/reaping and no partial Project Store artifact publication.
 
-## Release architecture fixed so far
+The Windows Release workflow has already proven, on earlier accepted heads, the frozen backend, standalone frontend, bundled language/media runtimes, D-044 deep verification, same-size tamper rejection, native desktop supervision, NSIS build, silent install, installed launch, safe uninstall and versioned A -> B -> A rollback.
 
-D-044 defines the immutable product-owned release payload. `release-manifest.json` schema v1 records product/build/target identity, the exact baseline component set and a complete sorted file inventory with byte sizes and SHA-256. Manifest parsing rejects non-canonical/traversing paths, duplicate/missing components, missing entrypoints and unsupported targets. Release verification rejects symlinks, missing payloads, unlisted extra files and size mismatches; deep verification detects same-size SHA-256 substitution.
+## D-057 constrained-host and long-project work
 
-Secret-safe diagnostics distinguish development from packaged mode, report manifest/component/integrity state and required media-tool availability without dumping environment variables, provider credentials or arbitrary absolute developer tool paths. The same diagnostics/manifest code is exposed through the product API and `tools/uv_release.py`.
+D-057 remains **Proposed** pending final exact-head evidence. Its implementation is present:
 
-D-045 separates mutable installed state from the immutable release payload. Development keeps repository-local `data/projects` and `data/config`; packaged mode defaults to `%LOCALAPPDATA%/UV Studio/projects` and `%LOCALAPPDATA%/UV Studio/config`, with explicit user/admin overrides retained. Project/config roots cannot overlap vendor, the release payload or one another. `RuntimeConfigStore` applies the same boundary even to explicit constructor paths.
+- coarse secret-safe logical CPU / total+available RAM diagnostics with fail-soft OS probes;
+- no hostname/user/process/environment/path inventory in resource diagnostics;
+- 2,000 source + 2,000 artifact Project Store round-trip/load/JSON evidence under a bounded traced Python allocation envelope;
+- real ten-minute CPU-only media with extraction near 598–600 seconds through `LocalFFmpegAdapter`;
+- D-056 cancellation remains the bounded escape path for expensive local work.
 
-D-046 pins the first Windows x86_64 shipping language runtimes only after dedicated compatibility proof: CPython 3.13.14 passed the complete unit contract and Node.js 24.19.0 passed locked frontend install/lint/audit/build. `requirements-uv-release-win-x86_64.txt` contains the exact 32-package Python shipping graph; `packaging/runtime-profile.windows-x86_64.json` records exact Python/Node versions. The release Python CI installs through the lock and rejects wrong Python versions, package drift or unmanaged runtime packages.
+A prior exact implementation head completed the Windows release workflow and all Windows product gates; the corresponding Ubuntu app-baseline was cancelled by the job timeout while `apt-get update` was stalled on the hosted runner mirror after API/HTTP tests had already passed. D-057 is not Accepted until one current exact head completes the complete required set.
 
-D-047 makes release-manifest executable identity authoritative in packaged mode. The local FFmpeg facade receives manifest-verified `ffmpeg`/`ffprobe` paths, and packaged capability availability is projected from the same verified release toolchain rather than development PATH. A system PATH shadow must not become an execution fallback; release corruption must make the local capability unavailable. Deep release verification is cached per immutable running payload, with update/recovery expected to activate a new payload through process restart rather than mutate the active installation.
+## Release legal/provenance hardening now in progress
 
-The current frontend remains Next.js with dynamic `/projects/[projectId]`; Stage 9 therefore uses the official standalone-server path rather than assuming static export. The user-facing contract is no separately prepared Node/npm: a versioned Node runtime may be bundled until equivalent routing is proven without it.
+Review of the original Kdenlive 26.04.3 carrier found that its actual FFmpeg 8.1.1 self-report included `--enable-nonfree`. Runtime success therefore does not make that carrier acceptable for a public UV Studio release.
 
-## Current evidence
+**D-058 is now the active release-hardening boundary inside Stage 9 and remains Proposed.** The current implementation:
 
-The runtime-lock head `beda2a39bd9cf3400a4ffbd93a46c424576d56c4` has green `development-context`, both bootstrap jobs, the exact Python 3.13.14 release-runtime gate and exact Node 24.19.0 release-frontend gate. Both Ubuntu and Windows real-media steps also passed while the remaining permanent browser tails continued.
+- replaces the release-profile media acquisition with official Shotcut portable `26.4.30`, pinned by SHA-256;
+- keeps MLT + FFmpeg as one upstream-built Windows runtime closure rather than mixing unproven DLL sets;
+- adds `tools/audit_ffmpeg_release.py`, which executes the exact selected `ffmpeg.exe -buildconf` and rejects `--enable-nonfree` fail-closed;
+- stages bounded `legal/ffmpeg-buildconf.json` before D-044 manifests the payload;
+- switches Node acquisition from a bare executable to the official Node 24.19.0 Windows ZIP, verifies its SHA-256 and stages the complete upstream `LICENSE` from the same archive;
+- stages the UV Studio license, current third-party notices and exact runtime profile under manifest-owned `legal/` paths;
+- updates third-party notices so the shipped MLT `melt` GPL boundary and FFmpeg build-specific obligations are explicit instead of describing the media stack generically as LGPL.
 
-Python 3.13.14 Windows evidence includes successful server import, `pip check`, all 379 unit tests and the captured 32-package graph used by the release lock. Node 24.19.0 Windows evidence includes `npm ci`, lint, high-severity audit and production Next build.
+D-058 is accepted only after the exact Shotcut carrier passes archive hash validation, executable buildconf audit, `melt`/FFmpeg/FFprobe execution, D-044 integrity, packaged browser/diagnostics behavior, installer/update/rollback and all permanent CI checks.
 
-## Next implementation layers
+## Remaining release blockers
 
-1. Complete packaged toolchain execution/availability evidence on the current head.
-2. Enable/stage official Next standalone output and prove arbitrary project routes with the bundled Node 24 runtime.
-3. Build a Windows one-folder backend bundle on CPython 3.13.14 with build tooling kept outside the installed runtime graph.
-4. Stage the pinned FFmpeg/FFprobe/MLT dependency closure and assemble one complete Windows release folder under D-044.
-5. Launch backend + frontend from that folder with no repository/system Python/Node/npm/FFmpeg dependency and run packaged HTTP/browser outcomes.
-6. Add launcher/process supervision, logs, cancellation/shutdown, backup/recovery and version/migration state.
-7. Build installer/uninstaller and staged update/recovery on top of the verified release folder.
-8. Finish clean-machine/weak-hardware evidence, license/security audit, checksums/signing and final packaged regressions.
+1. **D-058 exact-head proof and final redistribution evidence.** The replacement carrier must pass the complete product/release workflow and required source/license/notice obligations for the actual shipped payload must be recorded.
+2. **D-057 exact-head acceptance.** Constrained-host/long-project implementation must be backed by a complete current permanent CI run.
+3. **Windows artifact signing.** The roadmap requires signed release artifacts. No signing credential/service is assumed or fabricated; Stage 9 remains Draft until a real signing path and evidence exist.
+4. **Final release/security/dependency audit and checksums.** This must describe the exact review payload, not an earlier candidate.
+5. **Context/review transition.** PR body, decisions and project state must identify the final exact review head and its green evidence before `draft -> review`.
 
 ## Preserved invariants
 
-- Project Store remains canonical; generated/runtime/provider state does not replace project truth.
-- External model/provider IDs remain adapter/runtime concerns, not canonical project semantics.
-- Paid/remote execution remains optional and explicit under D-017.
-- Existing FFmpeg/MLT and Stage 8 execution boundaries remain bounded to project-owned verified media.
-- MuseTalk remains optional and fail-closed under D-043; its large runtime/model pack is not a baseline desktop dependency.
-- Chat-first review plus permanent CI remain readiness authority under D-040.
-- Stage 9 is one active development slice/PR; internal productization phases are commits/evidence within that slice, not parallel lifecycle slices.
+- Project Store remains canonical; runtime/provider state never replaces project truth.
+- Provider/model IDs remain adapter/runtime concerns rather than canonical semantics.
+- Paid/remote execution stays optional and explicit under D-017.
+- FFmpeg/MLT execution remains bounded to project-owned verified media and packaged executables are manifest-owned.
+- MuseTalk remains optional/fail-closed under D-043 and is not a baseline desktop dependency.
+- Chat-first review plus ordinary GitHub CI remain readiness authority under D-040.
+- Stage 9 remains one PR/slice; internal release research and hardening are evidence within this lifecycle, not competing active slices.
 
 ## Completion gate
 
-Stage 9 may move to review only after the packaged product is proven through required Windows release/installer flows, existing permanent user outcomes remain green, project backup/upgrade/recovery behavior is demonstrated, release diagnostics and security/license evidence are present, and the exact review head passes all permanent required checks.
+Stage 9 may move to review only after D-057/D-058 are accepted on exact evidence, signing and final redistribution/security audit are present, the packaged Windows installer/update/recovery flows remain green, and the exact review head passes all five permanent required checks plus the Stage 9 Windows Release workflow.
 
-After Stage 9 is merged and atomically closed to a green idle `main`, roadmap-driven development hands off to `post-roadmap-release-maintenance` for release feedback, security/compatibility maintenance and explicitly scoped future enhancements.
+After merge, the repository must atomically return to green `idle` on `main` before `post-roadmap-release-maintenance` begins.
