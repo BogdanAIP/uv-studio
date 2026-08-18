@@ -1,0 +1,88 @@
+name: Stage 9 Backend Native Legal Probe
+
+on:
+  push:
+    branches: ["stage-9/**"]
+    paths:
+      - ".github/workflows/stage9-backend-native-legal-probe.yml"
+      - "packaging/backend-native-components.windows-x86_64.json"
+      - "packaging/backend_entry.py"
+      - "requirements-uv*.txt"
+      - "tools/backend_native_legal.py"
+      - "tools/python_runtime_legal.py"
+      - "tools/verify_release_python_lock.py"
+      - "tests/test_backend_native_legal.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-backend-native-legal-probe.yml"
+      - "packaging/backend-native-components.windows-x86_64.json"
+      - "packaging/backend_entry.py"
+      - "requirements-uv*.txt"
+      - "tools/backend_native_legal.py"
+      - "tools/python_runtime_legal.py"
+      - "tools/verify_release_python_lock.py"
+      - "tests/test_backend_native_legal.py"
+
+jobs:
+  backend-native-legal:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.14"
+
+      - name: Install exact shipping Python graph
+        run: python -m pip install -r requirements-uv-release.txt
+
+      - name: Verify exact shipping graph
+        run: |
+          python -m pip check
+          python tools/verify_release_python_lock.py
+
+      - name: Install exact Stage 9 freezer
+        run: python -m pip install "pyinstaller==6.21.0"
+
+      - name: Build exact frozen backend
+        run: >-
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --onedir
+          --noupx
+          --paths .
+          --name uv-studio-backend
+          packaging/backend_entry.py
+
+      - name: Stage Python and backend-native legal evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = Join-Path $env:RUNNER_TEMP 'uv-backend-native-legal-probe'
+          New-Item -ItemType Directory -Force -Path (Join-Path $release 'backend') | Out-Null
+          Copy-Item -Path 'dist\uv-studio-backend\*' -Destination (Join-Path $release 'backend') -Recurse -Force
+
+          & python tools/python_runtime_legal.py `
+            --release-root $release `
+            --lock requirements-uv-release-win-x86_64.txt `
+            --pyinstaller-version 6.21.0
+          if ($LASTEXITCODE -ne 0) { throw 'Python runtime legal collector failed' }
+
+          $output = & python tools/backend_native_legal.py --release-root $release
+          if ($LASTEXITCODE -ne 0) { throw "backend native legal collector failed: $output" }
+          $data = $output | ConvertFrom-Json
+          if (-not $data.ok -or $data.pe_count -ne 78 -or $data.group_count -ne 14) {
+            throw "unexpected backend native closure: $output"
+          }
+          "UV_BACKEND_NATIVE_LEGAL_ROOT=$release" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload backend-native legal evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-stage9-backend-native-legal-${{ github.sha }}
+          path: ${{ env.UV_BACKEND_NATIVE_LEGAL_ROOT }}/legal/backend-native
+          if-no-files-found: error
