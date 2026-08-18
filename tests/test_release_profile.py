@@ -35,8 +35,12 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(profile["python"]["version"], "3.13.14")
         self.assertEqual(profile["node"]["version"], "24.19.0")
         self.assertEqual(
+            profile["node"]["download"]["url"],
+            "https://nodejs.org/download/release/v24.19.0/node-v24.19.0-win-x64.zip",
+        )
+        self.assertEqual(
             profile["node"]["download"]["sha256"],
-            "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+            "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
         )
         self.assertEqual(profile["media"]["distribution"], "kdenlive-standalone")
         self.assertEqual(profile["media"]["version"], "26.04.3")
