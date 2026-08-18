@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_UV_LICENSE = ROOT / "LICENSE"
 _DEFAULT_THIRD_PARTY_NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 _DEFAULT_RELEASE_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
+_DEFAULT_PYTHON_RELEASE_LOCK = ROOT / "requirements-uv-release-win-x86_64.txt"
 
 # The Stage 9 MLT boundary is derived from the XML that MLTTimelineAdapter emits:
 # XML loading, core playlist/tractor graph construction, avformat input/output and
@@ -279,6 +280,39 @@ def _stage_legal_files(
     return staged
 
 
+def _stage_python_runtime_legal_from_release_environment(output: Path) -> list[str]:
+    """Stage Python/freezer legal evidence only for a validated release-profile build.
+
+    Ordinary unit tests and ad-hoc component staging do not export
+    UV_PYINSTALLER_VERSION and therefore keep the historical staging contract.
+    Stage 9 release automation exports it from the validated runtime profile after
+    installing the exact 32-package shipping graph and exact PyInstaller version.
+    """
+    pyinstaller_version = os.environ.get("UV_PYINSTALLER_VERSION")
+    if not pyinstaller_version:
+        return []
+    try:
+        if __package__:
+            from tools.python_runtime_legal import stage_python_runtime_legal_bundle
+        else:
+            from python_runtime_legal import stage_python_runtime_legal_bundle
+
+        stage_python_runtime_legal_bundle(
+            release_root=output,
+            lock_file=_DEFAULT_PYTHON_RELEASE_LOCK,
+            pyinstaller_version=pyinstaller_version,
+        )
+    except Exception as exc:
+        raise WindowsReleaseStageError(
+            f"Python runtime legal/provenance gate failed: {exc}"
+        ) from exc
+    legal_root = output / "legal" / "python-runtime"
+    return sorted(
+        (path.relative_to(output).as_posix() for path in legal_root.rglob("*") if path.is_file()),
+        key=str.casefold,
+    )
+
+
 def stage_windows_release(
     *,
     backend_root: Path | str,
@@ -372,6 +406,7 @@ def stage_windows_release(
             release_profile=release_profile,
             node_license=node_license,
         )
+        legal_files.extend(_stage_python_runtime_legal_from_release_environment(output))
 
         entrypoints = {
             "backend": "backend/uv-studio-backend.exe",
