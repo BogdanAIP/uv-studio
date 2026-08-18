@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "id": "videoclaw",
+      "source_root": "vendor/videoclaw-app",
+      "repository": "HITsz-TMG/VideoClaw",
+      "revision": "5a16ae23a4f1cb6886c44c0205f7b7e52a34c276",
+      "license_expression": "MIT",
+      "license_file": "vendor/videoclaw-app/UPSTREAM_LICENSE",
+      "license_git_blob_sha1": "f3efce12c9c1c2e0310880ceba69cf9d29347aa7",
+      "provenance_file": "vendor/videoclaw-app/.uv-upstream.json",
+      "provenance_git_blob_sha1": "f080dfde95b869a870d7bb229729a16a3a3e507d"
+    },
+    {
+      "id": "opencut-classic",
+      "source_root": "third_party/opencut-classic",
+      "repository": "OpenCut-app/opencut-classic",
+      "revision": "cf5e79e919144200294fb9fed22a222592a0aeea",
+      "license_expression": "MIT",
+      "license_file": "third_party/opencut-classic/LICENSE",
+      "license_git_blob_sha1": "12a05c30d098af2b280120dab2d707670de9b3f4",
+      "provenance_file": null,
+      "provenance_git_blob_sha1": null
+    }
+  ]
+}

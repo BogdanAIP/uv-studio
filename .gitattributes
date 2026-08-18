@@ -1,1 +1,4 @@
 packaging/frontend-compiled-licenses/*.txt text eol=lf
+vendor/videoclaw-app/UPSTREAM_LICENSE text eol=lf
+vendor/videoclaw-app/.uv-upstream.json text eol=lf
+third_party/opencut-classic/LICENSE text eol=lf

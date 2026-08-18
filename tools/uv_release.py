@@ -36,6 +36,7 @@ _EXPECTED_FRONTEND_DIRECT_FALLBACKS = 2
 _EXPECTED_NEXT_COMPILED_PACKAGES = 53
 _EXPECTED_NEXT_COMPILED_OVERRIDES = 1
 _EXPECTED_NSIS_VERSION = "3.12"
+_EXPECTED_SOURCE_CODE_COMPONENTS = 2
 
 
 def _component(value: str) -> ReleaseComponent:
@@ -62,6 +63,10 @@ def _json(data: object) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+def _release_profile_marker() -> str | None:
+    return os.environ.get("UV_NODE_LOCK")
+
+
 def _stage_frontend_legal_before_manifest(root: Path) -> dict[str, object] | None:
     """Stage exact Next standalone legal evidence before D-044 hashes the tree.
 
@@ -69,7 +74,7 @@ def _stage_frontend_legal_before_manifest(root: Path) -> dict[str, object] | Non
     runtime profile. Ad-hoc manifest tooling keeps the historical contract when
     that marker is absent.
     """
-    node_lock = os.environ.get("UV_NODE_LOCK")
+    node_lock = _release_profile_marker()
     if not node_lock:
         return None
     if node_lock != _EXPECTED_FRONTEND_NODE_LOCK:
@@ -160,10 +165,40 @@ def _stage_nsis_legal_before_manifest(root: Path) -> dict[str, object] | None:
     return result
 
 
+def _stage_source_code_legal_before_manifest(root: Path) -> dict[str, object] | None:
+    """Stage notices for every audited vendored/adapted donor before D-044."""
+    node_lock = _release_profile_marker()
+    if not node_lock:
+        return None
+    if node_lock != _EXPECTED_FRONTEND_NODE_LOCK:
+        raise ReleaseManifestError(
+            "source-code legal gate requires validated node lock "
+            f"{_EXPECTED_FRONTEND_NODE_LOCK}, got {node_lock}"
+        )
+
+    legal_root = root / "legal" / "source-code"
+    try:
+        from tools.source_code_legal import SourceCodeLegalError, stage_source_code_legal
+
+        result = stage_source_code_legal(output_root=root)
+    except (OSError, UnicodeError, SourceCodeLegalError) as exc:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError(f"source-code legal/provenance gate failed: {exc}") from exc
+
+    if result.get("component_count") != _EXPECTED_SOURCE_CODE_COMPONENTS:
+        shutil.rmtree(legal_root, ignore_errors=True)
+        raise ReleaseManifestError(
+            "source-code legal/provenance component count drifted: "
+            f"expected {_EXPECTED_SOURCE_CODE_COMPONENTS}, got {result.get('component_count')!r}"
+        )
+    return result
+
+
 def _build(args: argparse.Namespace) -> int:
     try:
         frontend_legal = _stage_frontend_legal_before_manifest(args.root)
         nsis_legal = _stage_nsis_legal_before_manifest(args.root)
+        source_code_legal = _stage_source_code_legal_before_manifest(args.root)
         manifest = build_release_manifest(
             args.root,
             product_version=args.product_version,
@@ -184,6 +219,8 @@ def _build(args: argparse.Namespace) -> int:
         result["frontend_legal"] = frontend_legal
     if nsis_legal is not None:
         result["nsis_legal"] = nsis_legal
+    if source_code_legal is not None:
+        result["source_code_legal"] = source_code_legal
     _json(result)
     return 0
 
