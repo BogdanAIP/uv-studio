@@ -7,7 +7,12 @@
 
 Stage 9 Desktop Productization & Release Hardening is the single active draft slice in PR #38 on `stage-9/desktop-productization-release-hardening`, based on exact green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 merged as PR #37.
 
-The branch remains **Draft**. Productization is substantially implemented. D-057 is accepted; D-058 now has a proven exact runtime closure, but its component-level license/source manifest, final exact-payload release/security audit and real Windows signing remain before review.
+The branch remains **Draft**. Productization is substantially implemented and both Stage 9 evidence decisions are now accepted:
+
+- D-057 constrained-host/long-project evidence — **Accepted**;
+- D-058 redistributable Windows media runtime boundary — **Accepted** on exact head `6060f620fe6f0751496e98ba85e5405ece3613a7`.
+
+The remaining blockers before `draft -> review` are real Windows artifact signing and the final whole-payload release/security/dependency/license audit, followed by post-signing checksums and one exact review-head proof.
 
 ## Product goal
 
@@ -28,8 +33,8 @@ Ship a native Windows product that requires no separately prepared Python, Node/
 - **D-054 secret-safe diagnostics/recovery health**;
 - **D-055 installed clean-machine proof** with host Python/Node/FFmpeg/FFprobe/MLT removed from PATH;
 - **D-056 cancellable local FFmpeg jobs** with process termination/reaping and no partial Project Store artifact publication;
-- **D-057 constrained-host/long-project evidence**, accepted on exact head `e1fba386f5fefd46806317a844023169e7ecacc7` using CI product evidence, fresh development-context validation and Windows Release #112;
-- **exact UV media closure** — service-driven MLT boundary plus recursive PE/data allowlist proven on exact head `4f0cd32ecd98332f03a430706129d0f23f51c0ce` by CI #1772 and Windows Release #126;
+- **D-057 constrained-host/long-project evidence**, accepted with 2,000+2,000 Project Store scale evidence and real ten-minute media work;
+- **D-058 redistributable Windows media boundary**, accepted with exact Shotcut/FFmpeg/MLT runtime closure, component provenance and hash-pinned license/notice payload;
 - **release checksum generator** — deterministic fail-closed `SHA256SUMS` writer/verifier committed and tested, intentionally reserved for the post-signing publication step.
 
 ## D-057 acceptance evidence
@@ -41,36 +46,53 @@ D-057 is **Accepted**. Exact head `e1fba386f5fefd46806317a844023169e7ecacc7` pro
 - 2,000 source + 2,000 artifact Project Store round-trip/load/JSON evidence under a bounded traced Python allocation envelope;
 - real ten-minute CPU-only media with extraction near 598–600 seconds through `LocalFFmpegAdapter`;
 - Linux and Windows application baselines, both bootstraps, shipping-Python/runtime compatibility and frontend compatibility;
-- Stage 9 Windows Release #112 / Actions run `32107133982` including packaged execution, clean-machine install/uninstall and A -> B -> A rollback;
-- fresh CI #1758 / Actions run `32109010491` passing `development-context` after the PR journal was restored to the required six-section contract.
+- Stage 9 Windows Release #112 / run `32107133982` including packaged execution, clean-machine install/uninstall and A -> B -> A rollback;
+- fresh CI #1758 / run `32109010491` passing `development-context` after the PR journal was restored to the required six-section contract.
 
 D-056 cancellation remains the bounded escape path for work that is too expensive on a constrained host; D-057 does not invent a universal RAM/CPU minimum.
 
-## D-058 media redistribution and source provenance
+## D-058 acceptance evidence
 
-Review of the original Kdenlive 26.04.3 carrier found actual FFmpeg 8.1.1 self-report with `--enable-nonfree`; that carrier is rejected for public release.
+D-058 is **Accepted** on exact head `6060f620fe6f0751496e98ba85e5405ece3613a7`.
 
-**D-058 remains Proposed, but runtime-closure uncertainty is resolved.** Current implementation and evidence:
+The accepted media boundary contains:
 
-- official Shotcut portable `26.4.30` binary carrier pinned at SHA-256 `986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a`;
-- release-profile schema v5 also pins official `shotcut-src-26.4.30.txz` corresponding-source SHA-256 `fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442`;
-- `tools/audit_ffmpeg_release.py` executes exact selected `ffmpeg.exe -buildconf` and rejects `--enable-nonfree` fail-closed;
-- bounded `legal/ffmpeg-buildconf.json` is staged before D-044 manifests the payload;
-- the UV MLT graph uses only XML/core playlist+tractor, `avformat-novalidate` producers, `avformat` output and the carried `melt` qtcrop preflight;
-- exactly four MLT modules remain: `libmltavformat.dll`, `libmltcore.dll`, `libmltqt6.dll`, `libmltxml.dll`;
-- recursive PE inspection plus required MLT/Qt data is represented by `tools/media_runtime_closure.py`; duplicate FFmpeg/FFprobe/melt entrypoints fail closed;
-- exact head `4f0cd32ecd98332f03a430706129d0f23f51c0ce` passed CI #1772 / run `32119127628` and Windows Release #126 / run `32119127633` with real MLT execution, D-044 verification/tamper rejection, packaged product smoke, native supervision, silent install/launch/uninstall and A -> B -> A rollback;
-- artifact #126 contains **446 media files / 128,695,917 bytes (122.73 MiB)** versus #114's **2,530 files / 454.35 MiB**: 2,084 files (82.37%) and 331.62 MiB (72.99%) were removed without losing permanent product/release evidence;
-- `tools/write_release_checksums.py` is committed and tested but deliberately not wired before real code signing because signing changes artifact bytes.
+- official Shotcut portable `26.4.30` carrier SHA-256 `986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a`;
+- official `shotcut-src-26.4.30.txz` corresponding-source SHA-256 `fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442`;
+- exact FFmpeg `n8.1-11-g75d37c499d`, with machine-audited `nonfree_enabled=false` and `legal/ffmpeg-buildconf.json` included before D-044;
+- exactly four MLT runtime modules: `libmltavformat.dll`, `libmltcore.dll`, `libmltqt6.dll`, `libmltxml.dll`;
+- exact media closure of **446 files / 128,695,917 bytes (122.73 MiB)**;
+- **52 retained PE binaries** mapped exactly once into **28 component groups** by `packaging/media-runtime-components.windows-x86_64.json`;
+- **27 exact license/notice assets** covering all 28 component groups by `packaging/media-runtime-license-files.windows-x86_64.json`;
+- mandatory SHA-256 pinning for all 27 license assets;
+- corrected `liblzma-5.dll` licensing scope of `0BSD` based on the upstream XZ 5.8.3 liblzma boundary;
+- fail-closed unknown/duplicate PE, incomplete provenance, changed license bytes, unsafe paths and partial legal staging.
 
-The remaining D-058 blocker is now bounded to component-level redistribution provenance. The Shotcut source bundle does not by itself prove source/notice sufficiency for every externally provisioned Qt/MSYS2/runtime DLL retained in the Windows carrier. UV Studio must stage an exact media-runtime component/source/license manifest plus any required additional license/source evidence before D-058 can be Accepted.
+Acceptance evidence:
+
+- CI #1788 / run `32139063217`: **completed / success** across every permanent job;
+- Stage 9 Windows Release #142 / run `32139063188`: **completed / success** through exact acquisition, pinned license staging, D-044 build/deep verification, tamper rejection, packaged media/frontend/backend execution, desktop supervision, installer, silent install/uninstall and A -> B -> A rollback;
+- Windows Release #142 artifact id `9325376444`, digest `sha256:e676ab832c7f5c536d6f1783051c895505a9b8bf932d98f9831f6cf95e901446`;
+- direct artifact inspection confirmed **27/27** expected license files, **27/27** pinned SHA matches and **27/27** corresponding D-044 file/hash entries.
+
+The former Kdenlive carrier remains rejected historical evidence because its exact FFmpeg self-report contained `--enable-nonfree`.
 
 ## Remaining release blockers
 
-1. **D-058 component-level license/source closure.** Map the 52 retained PE binaries into upstream groups, pin any source coordinates not covered by the Shotcut source asset, stage required notices/source evidence into D-044 and prove that exact payload through permanent CI + Windows Release.
-2. **Windows artifact signing.** No signing credential/service is assumed or fabricated; Stage 9 remains Draft until a real public code-signing path and evidence exist.
-3. **Final release/security/dependency audit and checksums.** `SHA256SUMS` generation is ready but final artifact checksums must be produced after signing and against the exact review payload.
-4. **Context/review transition.** PR body, decisions and project state must identify the final exact review head and its green evidence before `draft -> review`.
+1. **Real Windows artifact signing.** No signing identity/service is fabricated. UV-owned executable/installer signing needs a real public trust path and exact verification evidence.
+2. **Final whole-payload release/security/dependency/license audit.** D-058 closes the media-runtime redistribution boundary, not every dependency or release obligation in the complete product.
+3. **Post-signing release checksums.** `tools/write_release_checksums.py` is ready, but `SHA256SUMS` must be generated only after signing because signing modifies executable bytes.
+4. **Exact review-head evidence and context transition.** PR body, decisions and state must identify the final signed/audited head and green permanent checks before PR #38 changes from Draft to Review.
+
+## Signing/publication boundary
+
+The required publication order remains:
+
+`build -> final immutable runtime -> sign UV-owned binaries -> build/sign installer as applicable -> verify Authenticode -> SHA256SUMS -> publish`
+
+Third-party FFmpeg/MLT/Qt/runtime DLLs are not to be silently re-signed with a UV identity merely because they are carried in the installer.
+
+Self-signed certificates are not accepted as public-release evidence.
 
 ## Preserved invariants
 
@@ -83,8 +105,12 @@ The remaining D-058 blocker is now bounded to component-level redistribution pro
 - Chat-first review plus ordinary GitHub CI remain readiness authority under D-040.
 - Stage 9 remains one PR/slice; release research and hardening are evidence within this lifecycle, not competing active slices.
 
+## Preserved post-Stage-9 direction
+
+The provider-neutral UV Character Asset design for image **and video** continuity remains recorded in `docs/uv-character-asset-design.md` and `project-context/NEXT_TASK.md`. It is intentionally not mixed into Stage 9 product code.
+
 ## Completion gate
 
-Stage 9 may move to review only after D-058 is accepted on exact evidence, real Windows signing and final redistribution/security audit are present, the packaged installer/update/recovery flows remain green, and the exact review head passes all permanent required checks plus Stage 9 Windows Release.
+Stage 9 may move to review only after real Windows signing and the final whole-payload audit are present, post-signing checksums are produced from the exact signed bytes, the packaged installer/update/recovery flows remain green, and the exact review head passes all permanent required checks plus Stage 9 Windows Release.
 
 After merge, the repository must atomically return to green `idle` on `main` before `post-roadmap-release-maintenance` begins.
