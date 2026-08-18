@@ -20,15 +20,33 @@ _DEFAULT_UV_LICENSE = ROOT / "LICENSE"
 _DEFAULT_THIRD_PARTY_NOTICES = ROOT / "THIRD_PARTY_NOTICES.md"
 _DEFAULT_RELEASE_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
 
-# Kdenlive's standalone archive contains Qt's own test/build payload below
-# bin/Qt/test. Those objects are not runtime dependencies of FFmpeg, FFprobe or
-# MLT, and some paths are unsuitable for a normal per-user Windows install.
-# Keep this list deliberately narrow: expanding it requires an explicit runtime
-# proof, not a generic "delete tests" heuristic.
+# Media acquisition archives are carriers, not the canonical UV Studio runtime.
+# Keep exclusions deliberately narrow and evidence-backed. The legacy Qt test
+# rule removes build/test objects that cannot be runtime dependencies. The
+# Shotcut rules remove only the upstream application executable, its dedicated
+# UI/data tree and standalone helper applications that UV Studio never invokes.
+# FFmpeg/FFprobe, melt, DLLs, MLT modules/data and Qt runtime/plugin trees remain
+# untouched until a separate dependency-closure proof justifies further pruning.
 _MEDIA_EXCLUDED_SEGMENT_SEQUENCES: tuple[tuple[str, ...], ...] = (
     ("bin", "qt", "test"),
+    ("share", "shotcut"),
 )
-_MEDIA_EXCLUSION_RULES = ("**/bin/Qt/test/**",)
+_MEDIA_EXCLUDED_TOP_LEVEL_FILES = frozenset(
+    {
+        "ffplay.exe",
+        "glaxnimate.exe",
+        "shotcut.exe",
+        "whisper-cli.exe",
+    }
+)
+_MEDIA_EXCLUSION_RULES = (
+    "**/bin/Qt/test/**",
+    "share/shotcut/**",
+    "ffplay.exe",
+    "glaxnimate.exe",
+    "shotcut.exe",
+    "whisper-cli.exe",
+)
 _MANDATORY_LEGAL_TARGETS = {
     "uv_license": "legal/UV-STUDIO-LICENSE.txt",
     "third_party_notices": "legal/THIRD-PARTY-NOTICES.md",
@@ -112,6 +130,8 @@ def _contains_segment_sequence(parts: tuple[str, ...], sequence: tuple[str, ...]
 
 def _media_path_is_excluded(relative: Path) -> bool:
     parts = relative.parts
+    if len(parts) == 1 and parts[0].casefold() in _MEDIA_EXCLUDED_TOP_LEVEL_FILES:
+        return True
     return any(
         _contains_segment_sequence(parts, sequence)
         for sequence in _MEDIA_EXCLUDED_SEGMENT_SEQUENCES
