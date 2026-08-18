@@ -16,23 +16,23 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-09-13-03/ffmpeg-n8.1.2-34-g9b6c8969e0-win64-lgpl-shared-8.1.zip'
+          $expected = '2936e5449886641b4279ca3fc554b678c8e9a2d20dd0c0a34fe7208b254a0905'
           $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg-lgpl-shared.zip'
           $extract = Join-Path $env:RUNNER_TEMP 'ffmpeg-lgpl-shared'
           Invoke-WebRequest -Uri $url -OutFile $archive
           $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
           Write-Host "asset-url=$url"
           Write-Host "asset-sha256=$actual"
+          if ($actual -ne $expected) { throw "asset SHA mismatch: expected $expected got $actual" }
           Expand-Archive -LiteralPath $archive -DestinationPath $extract
           $ffmpeg = Get-ChildItem -Path $extract -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
           if (-not $ffmpeg) { throw 'ffmpeg.exe missing' }
           $ffprobe = Join-Path $ffmpeg.Directory.FullName 'ffprobe.exe'
           if (-not (Test-Path -LiteralPath $ffprobe -PathType Leaf)) { throw 'ffprobe.exe missing beside ffmpeg.exe' }
           $distribution = $ffmpeg.Directory.Parent.FullName
-          foreach ($name in @('LICENSE.txt', 'BUILDINFO.txt')) {
-            $candidate = Join-Path $distribution $name
-            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "$name missing from distribution" }
-            Write-Host "$name=$candidate"
-          }
+          $license = Join-Path $distribution 'LICENSE.txt'
+          if (-not (Test-Path -LiteralPath $license -PathType Leaf)) { throw 'LICENSE.txt missing from distribution' }
+          Write-Host "LICENSE.txt=$license"
           $buildconf = (& $ffmpeg.FullName -hide_banner -buildconf 2>&1 | Out-String)
           Write-Host $buildconf
           if ($buildconf -match '--enable-nonfree') { throw 'LGPL candidate unexpectedly enables nonfree' }
@@ -43,9 +43,8 @@ jobs:
             $present = $encoders -match "(?m)^ .*$encoder"
             Write-Host "encoder-$encoder=$present"
           }
-          Write-Host "distribution-files:"
-          Get-ChildItem -Path $distribution -File -Recurse | ForEach-Object {
-            $_.FullName.Substring($distribution.Length + 1)
-          }
+          Write-Host 'bin-files:'
+          Get-ChildItem -Path $ffmpeg.Directory.FullName -File | Sort-Object Name | ForEach-Object { $_.Name }
+          & $ffmpeg.FullName -h encoder=h264_mf | Select-Object -First 40
           & $ffmpeg.FullName -version | Select-Object -First 1
           & $ffprobe -version | Select-Object -First 1
