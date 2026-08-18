@@ -157,7 +157,17 @@ class StageWindowsReleaseTests(unittest.TestCase):
             ).exists()
         )
         self.assertEqual(result["excluded_media_file_count"], 2)
-        self.assertEqual(result["media_exclusion_rules"], ["**/bin/Qt/test/**"])
+        self.assertEqual(
+            result["media_exclusion_rules"],
+            [
+                "**/bin/Qt/test/**",
+                "share/shotcut/**",
+                "ffplay.exe",
+                "glaxnimate.exe",
+                "shotcut.exe",
+                "whisper-cli.exe",
+            ],
+        )
         self.assertGreaterEqual(result["media_file_count"], 5)
         self.assertEqual(
             result["legal_files"],
@@ -202,6 +212,29 @@ class StageWindowsReleaseTests(unittest.TestCase):
             (output / "runtime" / "media" / "other" / "BIN" / "qt" / "TEST").exists()
         )
         self.assertEqual(result["excluded_media_file_count"], 3)
+
+    def test_shotcut_application_surface_is_pruned_without_pruning_runtime(self) -> None:
+        for filename in ("shotcut.exe", "ffplay.exe", "glaxnimate.exe", "whisper-cli.exe"):
+            (self.media / filename).write_bytes(filename.encode("ascii"))
+        shotcut_ui = self.media / "share" / "shotcut" / "qml"
+        shotcut_ui.mkdir(parents=True)
+        (shotcut_ui / "Main.qml").write_text("ui\n", encoding="utf-8")
+        runtime_share = self.media / "share" / "mlt-7"
+        runtime_share.mkdir(parents=True)
+        (runtime_share / "profiles.yml").write_text("runtime\n", encoding="utf-8")
+        nested_helper = self.media / "tools"
+        nested_helper.mkdir()
+        (nested_helper / "shotcut.exe").write_bytes(b"not-top-level")
+
+        output, result = self._stage()
+        media_output = output / "runtime" / "media"
+        for filename in ("shotcut.exe", "ffplay.exe", "glaxnimate.exe", "whisper-cli.exe"):
+            self.assertFalse((media_output / filename).exists())
+        self.assertFalse((media_output / "share" / "shotcut").exists())
+        self.assertTrue((media_output / "share" / "mlt-7" / "profiles.yml").is_file())
+        self.assertTrue((media_output / "tools" / "shotcut.exe").is_file())
+        self.assertTrue((media_output / "mlt" / "lib" / "mlt" / "filter.dll").is_file())
+        self.assertEqual(result["excluded_media_file_count"], 7)
 
     def test_required_media_entrypoint_inside_exclusion_fails_closed(self) -> None:
         test_dir = self.media / "bundle" / "bin" / "Qt" / "test"
