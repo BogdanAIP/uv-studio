@@ -4,6 +4,7 @@ on:
   push:
     branches: ["stage-9/**"]
     paths:
+      - ".gitattributes"
       - ".github/workflows/stage9-frontend-legal-probe.yml"
       - "frontend/**"
       - "packaging/frontend-compiled-licenses/**"
@@ -14,6 +15,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - ".gitattributes"
       - ".github/workflows/stage9-frontend-legal-probe.yml"
       - "frontend/**"
       - "packaging/frontend-compiled-licenses/**"
