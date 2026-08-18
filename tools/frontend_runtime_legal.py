@@ -15,9 +15,24 @@ from typing import Any, Sequence
 
 _LICENSE_NAME_RE = re.compile(r"^(license|licence|copying|notice)(?:[._-].*)?$", re.IGNORECASE)
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_GIT_SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 _MAX_LICENSE_FILE_BYTES = 2 * 1024 * 1024
 _MAX_TOTAL_LICENSE_BYTES = 16 * 1024 * 1024
 _NEXT_MONOREPO_FALLBACKS = frozenset({"@next/env", "client-only"})
+
+# These are source-repository object identities, not guesses from the npm tarball.
+# Next's published npm package intentionally omits devDependencies, so the exact
+# v16.3.0 source blobs are the stable evidence for both the busboy version pin and
+# the ncc vendoring recipe used to create next/dist/compiled/busboy.
+_KNOWN_NEXT_COMPILED_RECIPES: dict[tuple[str, str, str], dict[str, str]] = {
+    ("v16.3.0", "busboy", "1.6.0"): {
+        "repository": "https://github.com/vercel/next.js",
+        "taskfile_path": "packages/next/taskfile.js",
+        "taskfile_git_blob_sha1": "5087c404ab47ee00d6b6da6ac96928e1927f5d00",
+        "package_path": "packages/next/package.json",
+        "package_git_blob_sha1": "034dfa8bad6783f96066927c60fb32397392625e",
+    }
+}
 
 
 class FrontendRuntimeLegalError(RuntimeError):
@@ -74,6 +89,13 @@ def _required_sha256(value: Any, label: str) -> str:
     raw = _required_string(value, label)
     if _SHA256_RE.fullmatch(raw) is None:
         raise FrontendRuntimeLegalError(f"{label} must be 64 lowercase hexadecimal characters")
+    return raw
+
+
+def _required_git_sha1(value: Any, label: str) -> str:
+    raw = _required_string(value, label)
+    if _GIT_SHA1_RE.fullmatch(raw) is None:
+        raise FrontendRuntimeLegalError(f"{label} must be 40 lowercase hexadecimal characters")
     return raw
 
 
@@ -166,6 +188,44 @@ def _next_monorepo_license_fallback(
     }
 
 
+def _validate_next_recipe(recipe: dict[str, Any], *, label: str) -> None:
+    recipe["repository"] = _required_string(recipe["repository"], f"{label}.repository")
+    recipe["ref"] = _required_string(recipe["ref"], f"{label}.ref")
+    recipe["taskfile_path"] = _canonical_relative_path(
+        recipe["taskfile_path"], f"{label}.taskfile_path"
+    )
+    recipe["taskfile_git_blob_sha1"] = _required_git_sha1(
+        recipe["taskfile_git_blob_sha1"], f"{label}.taskfile_git_blob_sha1"
+    )
+    recipe["package_path"] = _canonical_relative_path(
+        recipe["package_path"], f"{label}.package_path"
+    )
+    recipe["package_git_blob_sha1"] = _required_git_sha1(
+        recipe["package_git_blob_sha1"], f"{label}.package_git_blob_sha1"
+    )
+    recipe["dependency_name"] = _required_string(
+        recipe["dependency_name"], f"{label}.dependency_name"
+    )
+    recipe["dependency_version"] = _required_string(
+        recipe["dependency_version"], f"{label}.dependency_version"
+    )
+    key = (recipe["ref"], recipe["dependency_name"], recipe["dependency_version"])
+    known = _KNOWN_NEXT_COMPILED_RECIPES.get(key)
+    if known is None:
+        raise FrontendRuntimeLegalError(
+            f"{label} is not an audited Next compiled recipe: {key[0]} {key[1]}@{key[2]}"
+        )
+    actual = {
+        "repository": recipe["repository"],
+        "taskfile_path": recipe["taskfile_path"],
+        "taskfile_git_blob_sha1": recipe["taskfile_git_blob_sha1"],
+        "package_path": recipe["package_path"],
+        "package_git_blob_sha1": recipe["package_git_blob_sha1"],
+    }
+    if actual != known:
+        raise FrontendRuntimeLegalError(f"{label} source Git object identities drifted")
+
+
 def _load_compiled_overrides(
     path: Path | str | None,
     *,
@@ -199,6 +259,16 @@ def _load_compiled_overrides(
         "license_file_sha256",
         "next_recipe",
         "upstream_license",
+    }
+    recipe_fields = {
+        "repository",
+        "ref",
+        "taskfile_path",
+        "taskfile_git_blob_sha1",
+        "package_path",
+        "package_git_blob_sha1",
+        "dependency_name",
+        "dependency_version",
     }
     for index, raw_item in enumerate(root["overrides"]):
         item = _exact_object(raw_item, f"frontend compiled override[{index}]", fields)
@@ -257,16 +327,15 @@ def _load_compiled_overrides(
         recipe = _exact_object(
             item["next_recipe"],
             f"frontend compiled override[{index}].next_recipe",
-            {"repository", "ref", "taskfile_path", "package_path"},
+            recipe_fields,
         )
-        if recipe["repository"] != "https://github.com/vercel/next.js":
+        _validate_next_recipe(
+            recipe,
+            label=f"frontend compiled override[{index}].next_recipe",
+        )
+        if recipe["dependency_name"] != item["name"] or recipe["dependency_version"] != item["version"]:
             raise FrontendRuntimeLegalError(
-                f"frontend compiled override[{index}] next recipe repository is not pinned Next"
-            )
-        recipe["ref"] = _required_string(recipe["ref"], f"frontend compiled override[{index}].next_recipe.ref")
-        if recipe["taskfile_path"] != "packages/next/taskfile.js" or recipe["package_path"] != "packages/next/package.json":
-            raise FrontendRuntimeLegalError(
-                f"frontend compiled override[{index}] next recipe paths are not canonical"
+                f"frontend compiled override[{index}] recipe dependency identity does not match override"
             )
 
         upstream = _exact_object(
@@ -283,13 +352,9 @@ def _load_compiled_overrides(
         upstream["path"] = _canonical_relative_path(
             upstream["path"], f"frontend compiled override[{index}].upstream_license.path"
         )
-        blob = _required_string(
+        upstream["git_blob_sha1"] = _required_git_sha1(
             upstream["git_blob_sha1"], f"frontend compiled override[{index}].upstream_license.git_blob_sha1"
         )
-        if re.fullmatch(r"[0-9a-f]{40}", blob) is None:
-            raise FrontendRuntimeLegalError(
-                f"frontend compiled override[{index}].upstream_license.git_blob_sha1 must be lowercase SHA-1"
-            )
         if upstream["local_copy_normalized"] is not True:
             raise FrontendRuntimeLegalError(
                 f"frontend compiled override[{index}] must declare normalized local license copy"
@@ -337,11 +402,11 @@ def _apply_compiled_override(
         raise FrontendRuntimeLegalError(
             f"compiled override Next recipe ref does not match installed next version: {recipe['ref']} != v{next_version}"
         )
-    dev_dependencies = next_package.get("devDependencies")
-    if not isinstance(dev_dependencies, dict) or dev_dependencies.get(override["name"]) != override["version"]:
-        raise FrontendRuntimeLegalError(
-            f"compiled override is not pinned by next@{next_version} devDependencies: {override['name']}@{override['version']}"
-        )
+    # The published Next npm tarball omits source-only devDependencies. Their exact
+    # version and the ncc recipe are therefore anchored by the audited source Git
+    # object identities validated in _validate_next_recipe(), not inferred here.
+    if recipe["dependency_name"] != override["name"] or recipe["dependency_version"] != override["version"]:
+        raise FrontendRuntimeLegalError("compiled override recipe dependency identity drifted")
 
     license_path = repository_root.joinpath(*PurePosixPath(override["license_file"]).parts).resolve(strict=True)
     component_dir = licenses_root / "compiled" / _safe_slug(override["name"], override["version"])

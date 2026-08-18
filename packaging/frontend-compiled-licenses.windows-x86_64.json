@@ -14,7 +14,11 @@
         "repository": "https://github.com/vercel/next.js",
         "ref": "v16.3.0",
         "taskfile_path": "packages/next/taskfile.js",
-        "package_path": "packages/next/package.json"
+        "taskfile_git_blob_sha1": "5087c404ab47ee00d6b6da6ac96928e1927f5d00",
+        "package_path": "packages/next/package.json",
+        "package_git_blob_sha1": "034dfa8bad6783f96066927c60fb32397392625e",
+        "dependency_name": "busboy",
+        "dependency_version": "1.6.0"
       },
       "upstream_license": {
         "repository": "https://github.com/mscdex/busboy",
