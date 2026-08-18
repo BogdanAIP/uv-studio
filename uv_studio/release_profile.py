@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-RELEASE_PROFILE_SCHEMA_VERSION = 4
+RELEASE_PROFILE_SCHEMA_VERSION = 5
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -104,10 +104,17 @@ def load_release_profile(path: Path | str) -> dict[str, Any]:
     node["lock"] = _relative_path(node["lock"], "node.lock")
     node["download"] = _download(node["download"], "node.download")
 
-    media = _object(root["media"], "media", {"distribution", "version", "download"})
+    media = _object(
+        root["media"],
+        "media",
+        {"distribution", "version", "download", "corresponding_source"},
+    )
     media["distribution"] = _string(media["distribution"], "media.distribution")
     media["version"] = _string(media["version"], "media.version")
     media["download"] = _download(media["download"], "media.download")
+    media["corresponding_source"] = _download(
+        media["corresponding_source"], "media.corresponding_source"
+    )
 
     build_tools = _object(root["build_tools"], "build_tools", {"pyinstaller", "nsis"})
     build_tools["pyinstaller"] = _string(build_tools["pyinstaller"], "build_tools.pyinstaller")

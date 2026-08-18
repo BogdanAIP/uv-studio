@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "target": {"os": "windows", "arch": "x86_64"},
   "python": {
     "version": "3.13.14",
@@ -19,6 +19,10 @@
     "download": {
       "url": "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-win64-26.4.30.zip",
       "sha256": "986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a"
+    },
+    "corresponding_source": {
+      "url": "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz",
+      "sha256": "fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442"
     }
   },
   "build_tools": {

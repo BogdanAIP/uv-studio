@@ -30,7 +30,7 @@ class ReleaseProfileTests(unittest.TestCase):
 
     def test_checked_in_profile_has_exact_release_inputs(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
-        self.assertEqual(profile["schema_version"], 4)
+        self.assertEqual(profile["schema_version"], 5)
         self.assertEqual(profile["target"], {"os": "windows", "arch": "x86_64"})
         self.assertEqual(profile["python"]["version"], "3.13.14")
         self.assertEqual(profile["node"]["version"], "24.19.0")
@@ -51,6 +51,14 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(
             profile["media"]["download"]["sha256"],
             "986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a",
+        )
+        self.assertEqual(
+            profile["media"]["corresponding_source"]["url"],
+            "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz",
+        )
+        self.assertEqual(
+            profile["media"]["corresponding_source"]["sha256"],
+            "fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442",
         )
         self.assertEqual(profile["build_tools"]["pyinstaller"], "6.21.0")
         nsis = profile["build_tools"]["nsis"]
@@ -81,12 +89,34 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(values["UV_NSIS_PACKAGE"], "nsis.install")
         self.assertEqual(values["UV_NSIS_PACKAGE_VERSION"], "3.12.0")
         self.assertEqual(values["UV_NSIS_SOURCE"], "https://community.chocolatey.org/api/v2/")
+        self.assertNotIn("UV_MEDIA_SOURCE_URL", values)
+        self.assertNotIn("UV_MEDIA_SOURCE_SHA256", values)
         self.assertNotIn("UV_NSIS_URL", values)
         self.assertNotIn("UV_NSIS_SHA256", values)
 
     def test_profile_rejects_download_hash_drift(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
         profile["node"]["download"]["sha256"] = "A" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ReleaseProfileError):
+                load_release_profile(self._write_profile(profile, tmp))
+
+    def test_profile_rejects_corresponding_source_drift(self) -> None:
+        mutations = (
+            ("url", "http://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz"),
+            ("sha256", "A" * 64),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                profile = load_release_profile(DEFAULT_PROFILE)
+                profile["media"]["corresponding_source"][key] = value
+                with tempfile.TemporaryDirectory() as tmp:
+                    with self.assertRaises(ReleaseProfileError):
+                        load_release_profile(self._write_profile(profile, tmp))
+
+    def test_profile_requires_corresponding_source(self) -> None:
+        profile = load_release_profile(DEFAULT_PROFILE)
+        del profile["media"]["corresponding_source"]
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ReleaseProfileError):
                 load_release_profile(self._write_profile(profile, tmp))
