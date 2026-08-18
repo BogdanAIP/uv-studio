@@ -10,7 +10,16 @@ import shutil
 from pathlib import Path
 from typing import Sequence
 
-from media_runtime_closure import exact_closure_root_files, prune_media_runtime_carrier
+if __package__:
+    from tools.media_runtime_closure import (
+        exact_closure_root_files,
+        prune_media_runtime_carrier,
+    )
+else:
+    from media_runtime_closure import (
+        exact_closure_root_files,
+        prune_media_runtime_carrier,
+    )
 
 
 class WindowsReleaseStageError(RuntimeError):
