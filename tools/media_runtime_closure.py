@@ -72,6 +72,7 @@ _REQUIRED_MLT_MODULES = frozenset(
         "libmltxml.dll",
     )
 )
+_RUNTIME_ENTRYPOINT_NAMES = frozenset({"ffmpeg.exe", "ffprobe.exe", "melt.exe"})
 
 
 def carrier_path_is_required(relative: Path | str) -> bool:
@@ -86,25 +87,56 @@ def carrier_path_is_required(relative: Path | str) -> bool:
     return len(parts) >= 2 and parts[:2] == ("share", "mlt")
 
 
+def _unique_runtime_entrypoints(root: Path) -> set[tuple[str, ...]]:
+    matches: dict[str, list[Path]] = {name: [] for name in _RUNTIME_ENTRYPOINT_NAMES}
+    for candidate in root.rglob("*"):
+        if not candidate.is_file():
+            continue
+        name = candidate.name.casefold()
+        if name in matches:
+            matches[name].append(candidate)
+
+    required: set[tuple[str, ...]] = set()
+    for name, paths in matches.items():
+        if len(paths) > 1:
+            locations = ", ".join(
+                sorted(path.relative_to(root).as_posix() for path in paths)
+            )
+            raise RuntimeError(
+                f"staged media carrier contains duplicate {name} entrypoints: {locations}"
+            )
+        if paths:
+            required.add(
+                tuple(part.casefold() for part in paths[0].relative_to(root).parts)
+            )
+    return required
+
+
 def prune_media_runtime_carrier(carrier_root: Path | str) -> int:
     """Delete carrier files outside the audited UV MLT/FFmpeg closure.
 
     The acquisition tree has already passed symlink/non-regular validation in
     stage_windows_release before this runs. This function only narrows a staged
-    copy, so a failure can never mutate the downloaded source carrier.
+    copy, so a failure can never mutate the downloaded source carrier. Runtime
+    entrypoints are retained at their unique carrier-relative location so staging
+    does not accidentally couple the release contract to one archive directory
+    layout.
     """
 
     root = Path(carrier_root)
     if not root.is_dir() or root.is_symlink():
         raise RuntimeError("staged media carrier root is missing or invalid")
 
+    runtime_entrypoints = _unique_runtime_entrypoints(root)
     removed = 0
     for candidate in sorted(
         (path for path in root.rglob("*") if path.is_file()),
         key=lambda path: len(path.parts),
         reverse=True,
     ):
-        if not carrier_path_is_required(candidate.relative_to(root)):
+        relative = candidate.relative_to(root)
+        folded = tuple(part.casefold() for part in relative.parts)
+        if folded not in runtime_entrypoints and not carrier_path_is_required(relative):
             candidate.unlink()
             removed += 1
 

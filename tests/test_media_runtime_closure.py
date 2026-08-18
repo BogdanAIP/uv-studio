@@ -28,6 +28,7 @@ class MediaRuntimeClosureTests(unittest.TestCase):
             root = Path(tmp)
             keep = (
                 root / "ffmpeg.exe",
+                root / "bin" / "melt.exe",
                 root / "Qt6Core.dll",
                 root / "lib" / "mlt" / "libmltcore.dll",
                 root / "lib" / "qt6" / "platforms" / "qwindows.dll",
@@ -51,6 +52,16 @@ class MediaRuntimeClosureTests(unittest.TestCase):
             for path in remove:
                 self.assertFalse(path.exists())
             self.assertFalse((root / "share" / "translations").exists())
+
+    def test_duplicate_runtime_entrypoint_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "melt.exe").write_bytes(b"one")
+            nested = root / "bin" / "melt.exe"
+            nested.parent.mkdir()
+            nested.write_bytes(b"two")
+            with self.assertRaisesRegex(RuntimeError, "duplicate melt.exe entrypoints"):
+                prune_media_runtime_carrier(root)
 
     def test_exact_root_closure_contains_entrypoints_and_framework(self) -> None:
         names = exact_closure_root_files()
