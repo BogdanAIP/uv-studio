@@ -22,6 +22,14 @@ type Diagnostics = {
     architecture: string;
     frozen: boolean;
   };
+  resources: {
+    logical_cpu_count: number | null;
+    memory: {
+      total_bytes: number | null;
+      available_bytes: number | null;
+      source: string;
+    };
+  };
   release: {
     configured: boolean;
     manifest_valid: boolean | null;
@@ -164,7 +172,7 @@ export default function DiagnosticsPage() {
             <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-sky-400">UV Studio</p>
             <h1 className="text-4xl font-semibold tracking-tight">Диагностика и восстановление</h1>
             <p className="mt-3 max-w-3xl text-slate-400">
-              Проверка выпуска, встроенных медиасредств, пользовательского хранилища и снимков восстановления. Пути, ключи и другие секретные данные здесь не отображаются.
+              Проверка выпуска, ресурсов компьютера, встроенных медиасредств, пользовательского хранилища и снимков восстановления. Пути, ключи и другие секретные данные здесь не отображаются.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -237,6 +245,27 @@ export default function DiagnosticsPage() {
                     : 'Сейчас показана быстрая проверка без полного хэширования и без пробной записи. Полная проверка запускается только кнопкой выше.'}
                 </p>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+              <h2 className="text-lg font-semibold">Ресурсы компьютера</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Это справочная ёмкость для диагностики, а не искусственный минимальный порог. Конкретная нагрузка зависит от кодека, разрешения и длительности проекта.
+              </p>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-slate-950/70 p-4">
+                  <dt className="text-xs text-slate-500">Логические CPU</dt>
+                  <dd className="mt-1 text-lg font-semibold">{diagnostics.resources.logical_cpu_count ?? 'не определено'}</dd>
+                </div>
+                <div className="rounded-xl bg-slate-950/70 p-4">
+                  <dt className="text-xs text-slate-500">Физическая память</dt>
+                  <dd className="mt-1 text-lg font-semibold">{formatBytes(diagnostics.resources.memory.total_bytes)}</dd>
+                </div>
+                <div className="rounded-xl bg-slate-950/70 p-4">
+                  <dt className="text-xs text-slate-500">Сейчас доступно RAM</dt>
+                  <dd className="mt-1 text-lg font-semibold">{formatBytes(diagnostics.resources.memory.available_bytes)}</dd>
+                </div>
+              </dl>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">

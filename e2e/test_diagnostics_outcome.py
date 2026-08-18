@@ -101,6 +101,10 @@ class DiagnosticsBrowserOutcome(unittest.TestCase):
         page.goto("/diagnostics")
         expect(page.get_by_role("heading", name="Диагностика и восстановление", exact=True)).to_be_visible()
         expect(page.get_by_text("Сейчас показана быстрая проверка", exact=False)).to_be_visible()
+        expect(page.get_by_role("heading", name="Ресурсы компьютера", exact=True)).to_be_visible()
+        expect(page.get_by_text("Логические CPU", exact=True)).to_be_visible()
+        expect(page.get_by_text("Физическая память", exact=True)).to_be_visible()
+        expect(page.get_by_text("Сейчас доступно RAM", exact=True)).to_be_visible()
         expect(page.get_by_text("Project Store", exact=True)).to_be_visible()
 
         page.get_by_role("button", name="Запустить полную проверку", exact=True).click()
@@ -112,6 +116,7 @@ class DiagnosticsBrowserOutcome(unittest.TestCase):
         self.assertNotIn(str(self.temp_root), body)
         self.assertNotIn("UV_STUDIO_USER_DATA_DIR", body)
         self.assertNotIn("PYTHONPATH", body)
+        self.assertNotIn("hostname", body.lower())
 
 
 if __name__ == "__main__":

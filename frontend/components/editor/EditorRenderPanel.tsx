@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorState } from '@/lib/editorApi';
 import { projectArtifactMediaUrl } from '@/lib/editorApi';
 import type { ProjectReference } from '@/lib/projectsApi';
-import type { CapabilityJobStatus } from '@/lib/capabilityJobsApi';
+import type { CapabilityJob, CapabilityJobStatus } from '@/lib/capabilityJobsApi';
 import {
   cancelCapabilityJob,
   startCapabilityJob,
@@ -25,6 +25,8 @@ interface EditorRenderPanelProps {
   onStateChanged: () => Promise<EditorState>;
   onProjectChanged?: () => void | Promise<void>;
 }
+
+type RenderJob = CapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>;
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string') ? value : [];
@@ -134,16 +136,73 @@ export function EditorRenderPanel({
     setLatestPreviewId(preview.result.artifact.id);
   };
 
+  const acceptTerminalRenderJob = async (terminal: RenderJob) => {
+    if (terminal.status === 'cancelled') {
+      activeJobRef.current = null;
+      setRenderJobStatus('cancelled');
+      setRenderNotice('Рендер отменён. Частичный мастер не опубликован в проекте.');
+      setBusy(null);
+      return null;
+    }
+    if (terminal.status === 'failed') {
+      activeJobRef.current = null;
+      setRenderJobStatus('failed');
+      setBusy(null);
+      throw new Error(terminal.error?.message ?? 'Не удалось собрать мастер-рендер');
+    }
+    if (terminal.status !== 'succeeded' || !terminal.result) {
+      throw new Error(`Неожиданное состояние рендера: ${terminal.status}`);
+    }
+    activeJobRef.current = null;
+    setRenderJobStatus('succeeded');
+    const envelope = terminal.result;
+    if (!envelope.result.artifact?.id) {
+      setBusy(null);
+      throw new Error('Рендер завершился без зарегистрированного artifact ID.');
+    }
+    setLatestArtifactId(envelope.result.artifact.id);
+    setLatestPreviewId(null);
+    return envelope.result.artifact.id;
+  };
+
   const handleCancelRender = async () => {
     const jobId = activeJobRef.current;
     if (!jobId) return;
     setError(null);
+    setRenderNotice('Запрошена отмена. UV Studio ждёт фактической остановки FFmpeg и очистки частичного результата.');
     try {
-      const job = await cancelCapabilityJob(projectId, jobId);
-      setRenderJobStatus(job.status);
-      setRenderNotice('Запрошена отмена. UV Studio ждёт фактической остановки FFmpeg и очистки частичного результата.');
+      const requested = await cancelCapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
+        projectId,
+        jobId,
+      );
+      setRenderJobStatus(requested.status);
+      let terminal = requested;
+      if (!['cancelled', 'failed', 'succeeded'].includes(requested.status)) {
+        const polling = new AbortController();
+        pollingRef.current?.abort();
+        pollingRef.current = polling;
+        terminal = await waitForCapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
+          projectId,
+          jobId,
+          {
+            signal: polling.signal,
+            onUpdate: job => setRenderJobStatus(job.status),
+          },
+        );
+        if (pollingRef.current === polling) pollingRef.current = null;
+      }
+      const masterId = await acceptTerminalRenderJob(terminal);
+      if (masterId) {
+        setRenderNotice('Рендер успел завершиться до обработки отмены. Мастер сохранён в проекте.');
+        await refreshEverything();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось запросить отмену рендера');
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : 'Не удалось подтвердить отмену рендера');
+      if (activeJobRef.current === jobId) {
+        setRenderNotice('Не удалось подтвердить состояние задачи. Кнопка отмены остаётся доступной; UV Studio не считает рендер завершённым без terminal state от backend.');
+        setBusy('render');
+      }
     }
   };
 
@@ -159,12 +218,15 @@ export function EditorRenderPanel({
     setRenderJobId(null);
     setRenderJobStatus('queued');
     let masterCreated = false;
+    let keepJobControls = false;
+    let startedJobId: string | null = null;
     try {
       const started = await startCapabilityJob<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
         projectId,
         'video.render_edits',
         { source_path: source.path },
       );
+      startedJobId = started.job_id;
       activeJobRef.current = started.job_id;
       setRenderJobId(started.job_id);
       setRenderJobStatus(started.status);
@@ -175,28 +237,13 @@ export function EditorRenderPanel({
         {
           signal: polling.signal,
           onUpdate: job => setRenderJobStatus(job.status),
+          onPollError: (_, failures) => {
+            setRenderNotice(`Временно потеряна связь со статусом рендера. Повтор проверки ${failures}/8; сам FFmpeg job не считается завершённым.`);
+          },
         },
       );
-      activeJobRef.current = null;
-
-      if (terminal.status === 'cancelled') {
-        setRenderNotice('Рендер отменён. Частичный мастер не опубликован в проекте.');
-        return;
-      }
-      if (terminal.status === 'failed') {
-        throw new Error(terminal.error?.message ?? 'Не удалось собрать мастер-рендер');
-      }
-      if (terminal.status !== 'succeeded' || !terminal.result) {
-        throw new Error(`Неожиданное состояние рендера: ${terminal.status}`);
-      }
-
-      const envelope = terminal.result;
-      if (!envelope.result.artifact?.id) {
-        throw new Error('Рендер завершился без зарегистрированного artifact ID.');
-      }
-      const masterId = envelope.result.artifact.id;
-      setLatestArtifactId(masterId);
-      setLatestPreviewId(null);
+      const masterId = await acceptTerminalRenderJob(terminal);
+      if (!masterId) return;
       setRenderNotice('Мастер собран. Создаём browser preview.');
       masterCreated = true;
       try {
@@ -210,12 +257,18 @@ export function EditorRenderPanel({
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      activeJobRef.current = null;
-      setError(err instanceof Error ? err.message : 'Не удалось собрать мастер-рендер');
+      if (startedJobId && activeJobRef.current === startedJobId) {
+        keepJobControls = true;
+        setRenderNotice('Не удалось подтвердить состояние задачи после повторных попыток. UV Studio сохраняет job ID и кнопку отмены, пока backend не вернёт terminal state.');
+        setError(err instanceof Error ? err.message : 'Потеряна связь со статусом рендера');
+      } else {
+        activeJobRef.current = null;
+        setError(err instanceof Error ? err.message : 'Не удалось собрать мастер-рендер');
+      }
     } finally {
       if (masterCreated) await refreshEverything();
       if (pollingRef.current === polling) pollingRef.current = null;
-      setBusy(null);
+      if (!keepJobControls) setBusy(null);
     }
   };
 

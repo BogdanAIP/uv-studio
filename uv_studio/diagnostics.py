@@ -22,8 +22,9 @@ from uv_studio.release_manifest import (
     load_release_manifest,
     verify_release_tree,
 )
+from uv_studio.system_resources import build_system_resource_snapshot
 
-DIAGNOSTICS_SCHEMA_VERSION = 2
+DIAGNOSTICS_SCHEMA_VERSION = 3
 _RELEASE_ROOT_ENV = "UV_STUDIO_RELEASE_ROOT"
 _MEDIA_COMPONENTS = {
     "ffmpeg": "ffmpeg",
@@ -323,6 +324,7 @@ def build_diagnostics(
             "architecture": platform.machine().lower(),
             "frozen": bool(getattr(sys, "frozen", False)),
         },
+        "resources": build_system_resource_snapshot(),
         "release": release,
         "required_release_components": expected_components,
         "media_tools": media_tools,

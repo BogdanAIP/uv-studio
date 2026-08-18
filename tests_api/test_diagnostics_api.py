@@ -31,8 +31,20 @@ class DiagnosticsApiTests(unittest.TestCase):
         self.assertFalse(payload["release"]["configured"])
         self.assertFalse(payload["storage"]["probe_performed"])
         self.assertFalse(payload["recovery"]["checked"])
+        self.assertIn("logical_cpu_count", payload["resources"])
+        self.assertIn("total_bytes", payload["resources"]["memory"])
+        self.assertIn("available_bytes", payload["resources"]["memory"])
         encoded = json.dumps(payload, sort_keys=True).lower()
-        for forbidden in ("api_key", "bearer ", "secret_status", "secret_updates"):
+        for forbidden in (
+            "api_key",
+            "bearer ",
+            "secret_status",
+            "secret_updates",
+            "hostname",
+            "username",
+            "processes",
+            "environment",
+        ):
             self.assertNotIn(forbidden, encoded)
 
     def test_deep_release_query_is_safe_in_development_mode(self) -> None:

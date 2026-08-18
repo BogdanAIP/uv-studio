@@ -111,13 +111,30 @@ export async function waitForCapabilityJob<T = Record<string, unknown>>(
   options: {
     signal?: AbortSignal;
     pollIntervalMs?: number;
+    maxConsecutivePollErrors?: number;
     onUpdate?: (job: CapabilityJob<T>) => void;
+    onPollError?: (error: Error, consecutiveFailures: number) => void;
   } = {},
 ): Promise<CapabilityJob<T>> {
   const pollIntervalMs = options.pollIntervalMs ?? 250;
+  const maxConsecutivePollErrors = options.maxConsecutivePollErrors ?? 8;
+  let consecutiveFailures = 0;
+
   for (;;) {
     if (options.signal?.aborted) throw new DOMException('Polling cancelled', 'AbortError');
-    const job = await getCapabilityJob<T>(projectId, jobId);
+    let job: CapabilityJob<T>;
+    try {
+      job = await getCapabilityJob<T>(projectId, jobId);
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      const normalized = error instanceof Error ? error : new Error('Не удалось получить состояние локальной задачи');
+      options.onPollError?.(normalized, consecutiveFailures);
+      if (consecutiveFailures >= maxConsecutivePollErrors) throw normalized;
+      const retryDelay = Math.min(pollIntervalMs * 2 ** Math.min(consecutiveFailures - 1, 3), 2_000);
+      await sleepWithSignal(retryDelay, options.signal);
+      continue;
+    }
     options.onUpdate?.(job);
     if (isTerminalCapabilityJob(job.status)) return job;
     await sleepWithSignal(pollIntervalMs, options.signal);
