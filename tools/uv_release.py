@@ -37,6 +37,7 @@ _EXPECTED_NEXT_COMPILED_PACKAGES = 53
 _EXPECTED_NEXT_COMPILED_OVERRIDES = 1
 _EXPECTED_NSIS_VERSION = "3.12"
 _EXPECTED_SOURCE_CODE_COMPONENTS = 2
+_DESKTOP_ENTRYPOINT = "desktop/uv-studio-desktop.exe"
 
 
 def _component(value: str) -> ReleaseComponent:
@@ -194,17 +195,45 @@ def _stage_source_code_legal_before_manifest(root: Path) -> dict[str, object] | 
     return result
 
 
+def _components_with_staged_desktop(
+    root: Path,
+    components: Sequence[ReleaseComponent],
+    *,
+    product_version: str,
+) -> tuple[ReleaseComponent, ...]:
+    normalized = list(components)
+    ids = {component.component_id for component in normalized}
+    if "desktop" in ids:
+        return tuple(normalized)
+    desktop = root.joinpath(*_DESKTOP_ENTRYPOINT.split("/"))
+    if not desktop.is_file() or desktop.is_symlink():
+        return tuple(normalized)
+    normalized.append(
+        ReleaseComponent(
+            "desktop",
+            product_version,
+            _DESKTOP_ENTRYPOINT,
+        )
+    )
+    return tuple(normalized)
+
+
 def _build(args: argparse.Namespace) -> int:
     try:
         frontend_legal = _stage_frontend_legal_before_manifest(args.root)
         nsis_legal = _stage_nsis_legal_before_manifest(args.root)
         source_code_legal = _stage_source_code_legal_before_manifest(args.root)
+        components = _components_with_staged_desktop(
+            args.root,
+            args.component,
+            product_version=args.product_version,
+        )
         manifest = build_release_manifest(
             args.root,
             product_version=args.product_version,
             build_id=args.build_id,
             target_arch=args.arch,
-            components=args.component,
+            components=components,
         )
         path = write_release_manifest(manifest, args.root)
     except (OSError, ReleaseManifestError) as exc:
@@ -275,8 +304,8 @@ def _parser() -> argparse.ArgumentParser:
         type=_component,
         required=True,
         help=(
-            "repeat exactly once for each required component "
-            f"({', '.join(REQUIRED_RELEASE_COMPONENT_IDS)})"
+            "repeat for each explicit component; the staged UV desktop component is attached automatically "
+            f"from {_DESKTOP_ENTRYPOINT} when present (required set: {', '.join(REQUIRED_RELEASE_COMPONENT_IDS)})"
         ),
     )
     build.set_defaults(func=_build)
