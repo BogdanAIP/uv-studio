@@ -21,6 +21,7 @@ class InstalledReleaseVerificationTests(unittest.TestCase):
             "backend/uv-studio-backend.exe": b"backend-exe",
             "frontend/server.js": b"frontend-server",
             "runtime/node/node.exe": b"node-exe",
+            "desktop/uv-studio-desktop.exe": b"desktop-exe",
             "runtime/media/bin/ffmpeg.exe": b"ffmpeg-exe",
             "runtime/media/bin/ffprobe.exe": b"ffprobe-exe",
             "runtime/media/bin/melt.exe": b"melt-exe",
@@ -33,6 +34,7 @@ class InstalledReleaseVerificationTests(unittest.TestCase):
             ReleaseComponent("backend", "0.1.0-dev", "backend/uv-studio-backend.exe"),
             ReleaseComponent("frontend", "0.1.0-dev", "frontend/server.js"),
             ReleaseComponent("node", "24.19.0", "runtime/node/node.exe"),
+            ReleaseComponent("desktop", "0.1.0-dev", "desktop/uv-studio-desktop.exe"),
             ReleaseComponent("ffmpeg", "kdenlive-26.04.3", "runtime/media/bin/ffmpeg.exe"),
             ReleaseComponent("ffprobe", "kdenlive-26.04.3", "runtime/media/bin/ffprobe.exe"),
             ReleaseComponent("mlt", "kdenlive-26.04.3", "runtime/media/bin/melt.exe"),
@@ -57,7 +59,7 @@ class InstalledReleaseVerificationTests(unittest.TestCase):
             )
             self.assertTrue(result["ok"])
             self.assertTrue(result["verify_hashes"])
-            self.assertEqual(result["checked_files"], 6)
+            self.assertEqual(result["checked_files"], 7)
             self.assertEqual(result["problems"], [])
 
     def test_deep_install_verification_rejects_same_size_substitution(self) -> None:
