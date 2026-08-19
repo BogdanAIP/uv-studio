@@ -1,0 +1,70 @@
+name: Stage 9 Rust Desktop Host Probe
+
+on:
+  push:
+    branches: ["stage-9/**"]
+    paths:
+      - ".github/workflows/stage9-desktop-rust-probe.yml"
+      - "desktop-host/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/stage9-desktop-rust-probe.yml"
+      - "desktop-host/**"
+
+jobs:
+  windows-rust-host:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install exact Rust toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.97.1 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Rust 1.97.1 installation failed' }
+          $actual = (& rustc +1.97.1 --version).Trim()
+          if ($actual -notmatch '^rustc 1\.97\.1 ') { throw "unexpected Rust compiler: $actual" }
+
+      - name: Generate exact dependency lock
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & cargo +1.97.1 generate-lockfile --manifest-path desktop-host/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo.lock generation failed' }
+          if (-not (Test-Path -LiteralPath desktop-host/Cargo.lock -PathType Leaf)) { throw 'Cargo.lock was not generated' }
+
+      - name: Test Rust desktop host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & cargo +1.97.1 test --locked --manifest-path desktop-host/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host tests failed' }
+
+      - name: Build Rust desktop host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & cargo +1.97.1 build --release --locked --manifest-path desktop-host/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host build failed' }
+          $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'desktop host executable is missing' }
+
+      - name: Probe WebView2 runtime presence
+        shell: pwsh
+        run: |
+          $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
+          & $exe --runtime-check
+          Write-Host "WEBVIEW2_RUNTIME_CHECK_EXIT=$LASTEXITCODE"
+
+      - name: Upload Rust lock and executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: stage9-rust-desktop-host-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            desktop-host/Cargo.lock
+            desktop-host/target/release/uv-studio-desktop.exe
