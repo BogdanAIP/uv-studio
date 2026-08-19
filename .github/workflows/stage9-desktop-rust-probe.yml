@@ -73,9 +73,19 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
-          & $exe --runtime-check
-          $runtimePresent = $LASTEXITCODE -eq 0
+          $exe = (Resolve-Path 'desktop-host/target/release/uv-studio-desktop.exe').Path
+
+          function Invoke-WebView2RuntimeCheck {
+            # uv-studio-desktop.exe uses the Windows GUI subsystem. PowerShell's
+            # call operator does not reliably populate $LASTEXITCODE for GUI apps,
+            # so wait on the process object and read its real process exit code.
+            $probe = Start-Process -FilePath $exe -ArgumentList '--runtime-check' -Wait -PassThru
+            return $probe.ExitCode
+          }
+
+          $runtimeExit = Invoke-WebView2RuntimeCheck
+          $runtimePresent = $runtimeExit -eq 0
+          Write-Host "Initial WebView2 runtime-check exit=$runtimeExit"
           if (-not $runtimePresent) {
             $bootstrapper = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
             Invoke-WebRequest -UseBasicParsing -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
@@ -99,8 +109,7 @@ jobs:
 
           $runtimeReady = $false
           for ($attempt = 1; $attempt -le 12; $attempt++) {
-            & $exe --runtime-check
-            $runtimeExit = $LASTEXITCODE
+            $runtimeExit = Invoke-WebView2RuntimeCheck
             Write-Host "WebView2 runtime-check attempt $attempt/12 exit=$runtimeExit"
             if ($runtimeExit -eq 0) {
               $runtimeReady = $true
