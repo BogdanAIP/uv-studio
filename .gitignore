@@ -9,6 +9,9 @@ code/data/
 results/
 logs/
 
+# Rust desktop host build output; Cargo.lock is committed for reproducible release builds.
+desktop-host/target/
+
 # Transitional legacy VideoClaw config may contain provider credentials.
 # UV Studio runtime configuration belongs under ignored data/config instead.
 vendor/videoclaw-app/backend/config.yaml
