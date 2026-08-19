@@ -34,7 +34,7 @@ class ReleaseProfileTests(unittest.TestCase):
 
     def test_checked_in_profile_has_exact_release_inputs(self) -> None:
         profile = load_release_profile(DEFAULT_PROFILE)
-        self.assertEqual(profile["schema_version"], 6)
+        self.assertEqual(profile["schema_version"], 7)
         self.assertEqual(profile["target"], {"os": "windows", "arch": "x86_64"})
         self.assertEqual(profile["python"]["version"], "3.13.14")
         self.assertEqual(profile["node"]["version"], "24.19.0")
@@ -45,6 +45,14 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(
             profile["node"]["download"]["sha256"],
             "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73",
+        )
+        self.assertEqual(
+            profile["desktop"],
+            {
+                "rust_version": "1.97.1",
+                "cargo_lock": "desktop-host/Cargo.lock",
+                "webview2_com_version": "0.39.1",
+            },
         )
         self.assertEqual(profile["media"]["distribution"], "shotcut-portable")
         self.assertEqual(profile["media"]["version"], "26.4.30")
@@ -89,6 +97,9 @@ class ReleaseProfileTests(unittest.TestCase):
         self.assertEqual(values["UV_PRODUCT_VERSION"], __version__)
         self.assertEqual(values["UV_PYTHON_VERSION"], "3.13.14")
         self.assertEqual(values["UV_NODE_VERSION"], "24.19.0")
+        self.assertEqual(values["UV_RUST_VERSION"], "1.97.1")
+        self.assertEqual(values["UV_DESKTOP_CARGO_LOCK"], "desktop-host/Cargo.lock")
+        self.assertEqual(values["UV_WEBVIEW2_COM_VERSION"], "0.39.1")
         self.assertEqual(values["UV_MEDIA_DISTRIBUTION"], "shotcut-portable")
         self.assertEqual(values["UV_MEDIA_PACKAGE_VERSION"], "26.4.30")
         self.assertEqual(values["UV_PYINSTALLER_VERSION"], "6.21.0")
@@ -110,6 +121,20 @@ class ReleaseProfileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ReleaseProfileError):
                 load_release_profile(self._write_profile(profile, tmp))
+
+    def test_profile_rejects_unsafe_desktop_inputs(self) -> None:
+        mutations = (
+            ("rust_version", "1.97.1 --default"),
+            ("cargo_lock", "../Cargo.lock"),
+            ("webview2_com_version", "0.39.1\nnext"),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                profile = load_release_profile(DEFAULT_PROFILE)
+                profile["desktop"][key] = value
+                with tempfile.TemporaryDirectory() as tmp:
+                    with self.assertRaises(ReleaseProfileError):
+                        load_release_profile(self._write_profile(profile, tmp))
 
     def test_profile_rejects_corresponding_source_drift(self) -> None:
         mutations = (
