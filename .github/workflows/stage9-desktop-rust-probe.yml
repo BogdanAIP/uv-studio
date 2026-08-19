@@ -58,13 +58,31 @@ jobs:
           git diff --exit-code -- desktop-host/Cargo.lock
           if ($LASTEXITCODE -ne 0) { throw 'Cargo build mutated the committed lock' }
 
-      - name: Probe WebView2 runtime presence
+      - name: Provision and prove Microsoft Evergreen WebView2 Runtime
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
           & $exe --runtime-check
-          if ($LASTEXITCODE -ne 0) { throw 'WebView2 Runtime is unavailable on the Windows product runner' }
+          $runtimePresent = $LASTEXITCODE -eq 0
+          if (-not $runtimePresent) {
+            $bootstrapper = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+            Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
+            $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapper
+            if ($signature.Status -ne 'Valid') {
+              throw "WebView2 bootstrapper Authenticode status is $($signature.Status)"
+            }
+            $subject = [string]$signature.SignerCertificate.Subject
+            if ($subject -notmatch '^CN=Microsoft Corporation(?:,|$)') {
+              throw "unexpected WebView2 bootstrapper signer: $subject"
+            }
+            $install = Start-Process -FilePath $bootstrapper -ArgumentList '/silent','/install' -PassThru -Wait
+            if ($install.ExitCode -ne 0) {
+              throw "WebView2 bootstrapper failed with exit $($install.ExitCode)"
+            }
+          }
+          & $exe --runtime-check
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 Runtime is unavailable after prerequisite provisioning' }
 
       - name: Upload Rust desktop executable
         uses: actions/upload-artifact@v6
