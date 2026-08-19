@@ -22,10 +22,12 @@ DEFAULT_PROFILE = ROOT / "packaging" / "runtime-profile.windows-x86_64.json"
 def profile_environment(profile: Mapping[str, object]) -> dict[str, str]:
     python = profile["python"]
     node = profile["node"]
+    desktop = profile["desktop"]
     media = profile["media"]
     build_tools = profile["build_tools"]
     assert isinstance(python, dict)
     assert isinstance(node, dict)
+    assert isinstance(desktop, dict)
     assert isinstance(media, dict)
     assert isinstance(build_tools, dict)
     node_download = node["download"]
@@ -46,6 +48,9 @@ def profile_environment(profile: Mapping[str, object]) -> dict[str, str]:
         "UV_NODE_LOCK": str(node["lock"]),
         "UV_NODE_URL": str(node_download["url"]),
         "UV_NODE_SHA256": str(node_download["sha256"]),
+        "UV_RUST_VERSION": str(desktop["rust_version"]),
+        "UV_DESKTOP_CARGO_LOCK": str(desktop["cargo_lock"]),
+        "UV_WEBVIEW2_COM_VERSION": str(desktop["webview2_com_version"]),
         "UV_MEDIA_DISTRIBUTION": str(media["distribution"]),
         "UV_MEDIA_PACKAGE_VERSION": str(media["version"]),
         "UV_MEDIA_URL": str(media_download["url"]),
