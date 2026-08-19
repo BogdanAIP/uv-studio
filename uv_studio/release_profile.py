@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-RELEASE_PROFILE_SCHEMA_VERSION = 6
+RELEASE_PROFILE_SCHEMA_VERSION = 7
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -87,7 +87,11 @@ def load_release_profile(path: Path | str) -> dict[str, Any]:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ReleaseProfileError("release profile is not readable valid JSON") from exc
-    root = _object(raw, "release profile", {"schema_version", "target", "python", "node", "media", "build_tools"})
+    root = _object(
+        raw,
+        "release profile",
+        {"schema_version", "target", "python", "node", "desktop", "media", "build_tools"},
+    )
     if root["schema_version"] != RELEASE_PROFILE_SCHEMA_VERSION or isinstance(root["schema_version"], bool):
         raise ReleaseProfileError(f"release profile schema_version must be integer {RELEASE_PROFILE_SCHEMA_VERSION}")
 
@@ -103,6 +107,17 @@ def load_release_profile(path: Path | str) -> dict[str, Any]:
     node["version"] = _string(node["version"], "node.version")
     node["lock"] = _relative_path(node["lock"], "node.lock")
     node["download"] = _download(node["download"], "node.download")
+
+    desktop = _object(
+        root["desktop"],
+        "desktop",
+        {"rust_version", "cargo_lock", "webview2_com_version"},
+    )
+    desktop["rust_version"] = _token(desktop["rust_version"], "desktop.rust_version")
+    desktop["cargo_lock"] = _relative_path(desktop["cargo_lock"], "desktop.cargo_lock")
+    desktop["webview2_com_version"] = _token(
+        desktop["webview2_com_version"], "desktop.webview2_com_version"
+    )
 
     media = _object(
         root["media"],
