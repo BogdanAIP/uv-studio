@@ -18,6 +18,7 @@ class WindowsInstallPathBudgetTests(unittest.TestCase):
             "backend/uv-studio-backend.exe": b"backend",
             "frontend/server.js": b"frontend",
             "runtime/node/node.exe": b"node",
+            "desktop/uv-studio-desktop.exe": b"desktop",
             extra_path: b"ffmpeg",
             "runtime/media/bin/ffprobe.exe": b"ffprobe",
             "runtime/media/bin/melt.exe": b"melt",
@@ -35,6 +36,7 @@ class WindowsInstallPathBudgetTests(unittest.TestCase):
                 ReleaseComponent("backend", "0.1.0-dev", "backend/uv-studio-backend.exe"),
                 ReleaseComponent("frontend", "0.1.0-dev", "frontend/server.js"),
                 ReleaseComponent("node", "24.19.0", "runtime/node/node.exe"),
+                ReleaseComponent("desktop", "0.1.0-dev", "desktop/uv-studio-desktop.exe"),
                 ReleaseComponent("ffmpeg", "media", extra_path),
                 ReleaseComponent("ffprobe", "media", "runtime/media/bin/ffprobe.exe"),
                 ReleaseComponent("mlt", "media", "runtime/media/bin/melt.exe"),
@@ -52,7 +54,7 @@ class WindowsInstallPathBudgetTests(unittest.TestCase):
             )
             self.assertTrue(report["ok"])
             self.assertEqual(report["violation_count"], 0)
-            self.assertEqual(report["checked_paths"], 7)
+            self.assertEqual(report["checked_paths"], 8)
 
     def test_deep_release_reports_exact_offending_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
