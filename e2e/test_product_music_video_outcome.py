@@ -65,7 +65,9 @@ class ProductMusicVideoBrowserOutcome(legacy.MusicVideoBrowserOutcome):
                 planning.get_by_role("button", name="Сохранить разметку музыки", exact=True).click()
                 expect(planning.get_by_text("Разметка музыки сохранена.", exact=True)).to_be_visible(timeout=30_000)
 
-                music_map = base._api_json("GET", base._project_path(project_id, "/music-video/map"))
+                music_map_response = base._api_json("GET", base._project_path(project_id, "/music-map"))
+                music_map = music_map_response["music_map"]
+                self.assertIsNotNone(music_map)
                 self.assertEqual(music_map["excerpt"], {"start_us": 1_000_000, "end_us": 5_000_000})
                 self.assertEqual(len(music_map["sections"]), 1)
                 self.assertEqual(music_map["markers"][0]["kind"], "cut_point")
@@ -76,7 +78,10 @@ class ProductMusicVideoBrowserOutcome(legacy.MusicVideoBrowserOutcome):
                 intents.nth(0).fill("Кадр A на первую половину куплета")
                 intents.nth(1).fill("Кадр B после музыкального акцента")
                 planning.get_by_role("button", name="Сохранить режиссёрский план", exact=True).click()
-                direction = base._api_json("GET", base._project_path(project_id, "/music-video/direction"))
+                expect(planning.get_by_text("Режиссёрский план сохранён.", exact=True)).to_be_visible(timeout=30_000)
+                direction_response = base._api_json("GET", base._project_path(project_id, "/music-direction"))
+                direction = direction_response["music_direction"]
+                self.assertIsNotNone(direction)
                 self.assertEqual(len(direction["shots"]), 2)
                 self.assertEqual(direction["shots"][0]["start_us"], 1_000_000)
                 self.assertEqual(direction["shots"][0]["end_us"], 3_000_000)
@@ -95,7 +100,9 @@ class ProductMusicVideoBrowserOutcome(legacy.MusicVideoBrowserOutcome):
                 assembly.get_by_label("Начало источника музыкального кадра 2", exact=True).fill("0")
                 assembly.get_by_role("button", name="Сохранить визуалы", exact=True).click()
                 expect(assembly.get_by_text("Визуалы привязаны к кадрам.", exact=True)).to_be_visible(timeout=30_000)
-                assembly_state = base._api_json("GET", base._project_path(project_id, "/music-video/assembly"))
+                assembly_response = base._api_json("GET", base._project_path(project_id, "/music-assembly"))
+                assembly_state = assembly_response["music_assembly"]
+                self.assertIsNotNone(assembly_state)
                 self.assertEqual(len(assembly_state["bindings"]), 2)
 
                 assembly.get_by_role("button", name="Собрать клип", exact=True).click()
@@ -109,7 +116,9 @@ class ProductMusicVideoBrowserOutcome(legacy.MusicVideoBrowserOutcome):
                 review.get_by_label("Заметка финальной Music Video проверки", exact=True).fill("Browser E2E проверил итоговую версию и переходы.")
                 review.get_by_role("button", name="Сохранить проверку", exact=True).click()
                 expect(review.get_by_text("Текущая версия отправлена на доработку", exact=True)).to_be_visible(timeout=30_000)
-                review_state = base._api_json("GET", base._project_path(project_id, "/music-video/review"))
+                review_response = base._api_json("GET", base._project_path(project_id, "/music-video-review"))
+                review_state = review_response["music_video_review"]
+                self.assertIsNotNone(review_state)
                 self.assertEqual(review_state["verdict"], "needs_revision")
                 self.assertEqual(review_state["transition_outcome"], "pass")
             finally:
