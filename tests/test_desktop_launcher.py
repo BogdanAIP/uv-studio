@@ -289,7 +289,8 @@ class DesktopLauncherTests(unittest.TestCase):
 
     def test_normal_desktop_exit_zero_shuts_down_local_services(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary) / "release"
+            root.mkdir()
             executable = self._release(root)
             backend = Mock()
             frontend = Mock()
