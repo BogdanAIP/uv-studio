@@ -198,6 +198,7 @@ class ProductBrowserUserOutcomes(harness.BrowserUserOutcomes):
         second_apply = sequence.get_by_role("button", name="Применить вариант", exact=True)
         expect(second_apply).to_be_enabled(timeout=30_000)
         second_apply.click()
+        expect(sequence.get_by_text("Вариант применён. Он может стать опорой", exact=False)).to_be_visible(timeout=30_000)
 
         final_pre_anchor = harness._api_json("GET", harness._project_path(project_id, "/sequence/state"))["sequences"][0]
         second_take = next(take for take in final_pre_anchor["takes"] if take["shot_id"] == "shot_02" and take["status"] == "accepted")
