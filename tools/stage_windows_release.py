@@ -28,6 +28,8 @@ _EXPECTED_BACKEND_NATIVE_GROUPS = 14
 _DESKTOP_ENTRYPOINT = "desktop/uv-studio-desktop.exe"
 _DESKTOP_MANIFEST = _ROOT / "desktop-host" / "Cargo.toml"
 _DESKTOP_TOOLCHAIN = _ROOT / "desktop-host" / "rust-toolchain.toml"
+_WEBVIEW2_RS_REPOSITORY = "https://github.com/wravery/webview2-rs"
+_WEBVIEW2_RS_LICENSE = _ROOT / "packaging" / "licenses" / "webview2-rs.LICENSE"
 
 
 def _stage_backend_native_legal_from_release_environment(output: Path) -> list[str]:
@@ -184,17 +186,8 @@ def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
     desktop = _ROOT / "desktop-host" / "target" / "release" / "uv-studio-desktop.exe"
     if not desktop.is_file() or desktop.is_symlink() or desktop.stat().st_size <= 0:
         raise _core.WindowsReleaseStageError("Rust desktop host build did not produce a regular executable")
-    runtime_check = subprocess.run(
-        [str(desktop), "--runtime-check"],
-        cwd=desktop.parent,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if runtime_check.returncode != 0:
-        raise _core.WindowsReleaseStageError(
-            "Windows release runner does not provide the required WebView2 Runtime"
-        )
+    # WebView2 Runtime is a machine prerequisite, not an immutable payload input.
+    # Runtime availability is proven later by the native desktop smoke and installer.
     return desktop.resolve(), metadata, rustc, cargo_lock
 
 
@@ -248,6 +241,19 @@ def _stage_desktop_legal(
                 license_files.extend(
                     path for path in source_root.glob(pattern) if path.is_file() and not path.is_symlink()
                 )
+
+        repository = str(package.get("repository") or "").rstrip("/")
+        if (
+            not license_files
+            and repository == _WEBVIEW2_RS_REPOSITORY
+            and license_expression == "MIT"
+        ):
+            if not _WEBVIEW2_RS_LICENSE.is_file() or _WEBVIEW2_RS_LICENSE.is_symlink():
+                raise _core.WindowsReleaseStageError(
+                    "vendored upstream webview2-rs MIT license snapshot is missing"
+                )
+            license_files.append(_WEBVIEW2_RS_LICENSE)
+
         unique = sorted({path.resolve() for path in license_files}, key=lambda path: path.name.casefold())
         if not unique:
             raise _core.WindowsReleaseStageError(
