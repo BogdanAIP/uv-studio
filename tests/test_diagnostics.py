@@ -26,6 +26,7 @@ class DiagnosticsTests(unittest.TestCase):
             "backend/uv-studio-server.exe": b"backend-runtime",
             "frontend/server.js": b"frontend-runtime",
             "runtime/node/node.exe": b"node-runtime",
+            "desktop/uv-studio-desktop.exe": b"desktop-runtime",
             "media/ffmpeg.exe": b"ffmpeg-runtime",
             "media/ffprobe.exe": b"ffprobe-runtime",
             "media/melt.exe": b"mlt-runtime",
@@ -38,6 +39,7 @@ class DiagnosticsTests(unittest.TestCase):
             ReleaseComponent("backend", "0.1.0", "backend/uv-studio-server.exe"),
             ReleaseComponent("frontend", "16.2.12", "frontend/server.js"),
             ReleaseComponent("node", "20.0.0", "runtime/node/node.exe"),
+            ReleaseComponent("desktop", "0.1.0", "desktop/uv-studio-desktop.exe"),
             ReleaseComponent("ffmpeg", "test", "media/ffmpeg.exe"),
             ReleaseComponent("ffprobe", "test", "media/ffprobe.exe"),
             ReleaseComponent("mlt", "test", "media/melt.exe"),
@@ -130,6 +132,7 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertTrue(snapshot["release"]["integrity"]["ok"])
         self.assertTrue(snapshot["release"]["integrity"]["verify_hashes"])
         self.assertEqual(snapshot["release"]["build_id"], "diagnostics-test")
+        self.assertEqual(snapshot["release"]["components"]["desktop"]["entrypoint"], "desktop/uv-studio-desktop.exe")
         self.assertEqual(snapshot["release"]["components"]["ffmpeg"]["entrypoint"], "media/ffmpeg.exe")
         self.assertTrue(snapshot["media_tools"]["ffmpeg"]["available"])
         self.assertEqual(snapshot["media_tools"]["ffmpeg"]["source"], "release_manifest")
