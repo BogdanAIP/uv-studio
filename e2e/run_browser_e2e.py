@@ -22,9 +22,10 @@ E2E = ROOT / "e2e"
 artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", "e2e-artifacts")).resolve()
 artifact_dir.mkdir(parents=True, exist_ok=True)
 
-# Historical suites remain real-media/API harnesses. The product workspace
-# module adapts their browser-facing expectations to the current D-060 surface.
+# Product acceptance starts with the literal first-run surface. The heavier
+# permanent workspaces then prove editing/media outcomes on the same build.
 PERMANENT_MODULES = (
+    "test_first_run_ux_outcome",
     "test_product_workspace_outcomes",
     "test_diagnostics_outcome",
 )

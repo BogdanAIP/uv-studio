@@ -10,6 +10,7 @@ import {
   Mic2,
   Music2,
   Plus,
+  RefreshCw,
   Sparkles,
   Upload,
   UserRound,
@@ -50,16 +51,22 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function ProjectsPage() {
   const router = useRouter();
   const [projects, setProjects] = useState<UVProject[]>([]);
   const [recipes, setRecipes] = useState<UVRecipe[]>([]);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [title, setTitle] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [recipesLoading, setRecipesLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recipeError, setRecipeError] = useState<string | null>(null);
 
   const selectedRecipe = useMemo(
     () => recipes.find(recipe => recipe.recipe_id === selectedRecipeId) ?? null,
@@ -76,45 +83,56 @@ export default function ProjectsPage() {
     [recipes],
   );
 
-  async function refresh() {
-    setLoading(true);
-    setError(null);
+  async function refreshProjects() {
+    setProjectsLoading(true);
     try {
-      const [projectList, recipeList] = await Promise.all([listUVProjects(), listUVRecipes()]);
-      setProjects(projectList);
+      setProjects(await listUVProjects());
+    } catch (err) {
+      setError(errorMessage(err, 'Не удалось загрузить проекты'));
+    } finally {
+      setProjectsLoading(false);
+    }
+  }
+
+  async function refreshRecipes() {
+    setRecipesLoading(true);
+    setRecipeError(null);
+    try {
+      const recipeList = await listUVRecipes();
       setRecipes(recipeList);
       setSelectedRecipeId(current => {
         if (current && recipeList.some(recipe => recipe.recipe_id === current)) return current;
         return recipeList.find(recipe => recipe.ui.featured)?.recipe_id ?? recipeList[0]?.recipe_id ?? '';
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить проекты');
+      setRecipes([]);
+      setSelectedRecipeId('');
+      setRecipeError(errorMessage(err, 'Не удалось загрузить типы проектов'));
     } finally {
-      setLoading(false);
+      setRecipesLoading(false);
     }
   }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void refresh();
+      void Promise.all([refreshProjects(), refreshRecipes()]);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
 
   async function createProject(event: FormEvent) {
     event.preventDefault();
-    const normalized = title.trim();
-    if (!normalized || !selectedRecipe || creating) return;
+    if (creating) return;
     setCreating(true);
     setError(null);
     try {
       const project = await createUVProject({
-        title: normalized,
-        recipe_id: selectedRecipe.recipe_id,
+        title: title.trim() || 'Новый проект',
+        ...(selectedRecipe ? { recipe_id: selectedRecipe.recipe_id } : {}),
       });
       router.push(`/projects/${encodeURIComponent(project.project_id)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать проект');
+      setError(errorMessage(err, 'Не удалось создать проект'));
       setCreating(false);
     }
   }
@@ -129,7 +147,7 @@ export default function ProjectsPage() {
       const project = await importUVProjectArchive(file);
       router.push(`/projects/${encodeURIComponent(project.project_id)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось импортировать проект');
+      setError(errorMessage(err, 'Не удалось импортировать проект'));
       setImporting(false);
     }
   }
@@ -142,7 +160,7 @@ export default function ProjectsPage() {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-violet-300">Рабочее пространство</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-zinc-50 sm:text-4xl">Проекты</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-              Создайте новый ролик, продолжите недавнюю работу или откройте переносимый проект.
+              Создайте проект сразу, выберите режим при необходимости или откройте переносимый архив.
             </p>
           </div>
           <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-[var(--uv-border-strong)] bg-[var(--uv-surface-1)] px-4 text-sm text-zinc-300 transition hover:border-zinc-500 hover:bg-[var(--uv-surface-2)]">
@@ -159,8 +177,9 @@ export default function ProjectsPage() {
         </header>
 
         {error && (
-          <div className="mt-6 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-            {error}
+          <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+            <span>{error}</span>
+            <button type="button" onClick={() => void refreshProjects()} className="shrink-0 rounded-lg border border-rose-300/20 px-3 py-1.5 text-xs text-rose-100 hover:bg-rose-300/10">Повторить</button>
           </div>
         )}
 
@@ -169,14 +188,16 @@ export default function ProjectsPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-medium text-zinc-100">Новый проект</h2>
-                <p className="mt-1 text-sm text-zinc-600">Выберите тип задачи. Нужные инструменты появятся внутри проекта автоматически.</p>
+                <p className="mt-1 text-sm text-zinc-600">Название необязательно. Если тип задачи не выбран, откроется обычный монтажный проект.</p>
               </div>
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300">
                 <Plus size={18} />
               </span>
             </div>
 
-            {orderedRecipes.length > 0 ? (
+            {recipesLoading ? (
+              <div className="mt-5 h-28 animate-pulse rounded-xl bg-white/[0.025]" />
+            ) : orderedRecipes.length > 0 ? (
               <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {orderedRecipes.map(recipe => {
                   const selected = recipe.recipe_id === selectedRecipeId;
@@ -207,49 +228,48 @@ export default function ProjectsPage() {
                   );
                 })}
               </div>
-            ) : !loading ? (
-              <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-200">
-                Типы проектов сейчас недоступны. Проверьте состояние приложения в разделе «Система».
-              </div>
             ) : (
-              <div className="mt-5 h-28 animate-pulse rounded-xl bg-white/[0.025]" />
+              <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
+                <div>
+                  <p className="font-medium">Типы задач не загрузились.</p>
+                  <p className="mt-1 text-xs leading-5 text-amber-100/70">Создание проекта всё равно доступно: будет использован базовый режим. {recipeError ?? ''}</p>
+                </div>
+                <button type="button" onClick={() => void refreshRecipes()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200/20 px-3 py-1.5 text-xs hover:bg-amber-200/10"><RefreshCw size={13} /> Повторить</button>
+              </div>
             )}
 
             <form onSubmit={createProject} className="mt-5 flex flex-col gap-3 sm:flex-row">
               <input
                 value={title}
                 onChange={event => setTitle(event.target.value)}
-                placeholder="Название нового проекта"
+                placeholder="Название проекта (необязательно)"
                 maxLength={500}
-                className="min-w-0 flex-1 rounded-xl border border-[var(--uv-border)] bg-black/20 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-700 transition focus:border-violet-400/60"
+                className="uv-input min-w-0 flex-1"
               />
               <button
                 type="submit"
-                disabled={!title.trim() || !selectedRecipe || creating}
-                className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl bg-violet-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                data-testid="create-project"
+                disabled={creating}
+                className="inline-flex min-w-40 items-center justify-center gap-2 rounded-xl bg-violet-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-violet-300 disabled:cursor-wait disabled:bg-violet-400/60"
               >
                 {creating ? 'Создание…' : 'Создать проект'}
                 {!creating && <ArrowRight size={16} />}
               </button>
             </form>
-            {!title.trim() && (
-              <p className="mt-2 text-xs text-zinc-700">Введите название — после создания проект откроется сразу.</p>
-            )}
+            <p className="mt-2 text-xs text-zinc-600">Можно сразу нажать «Создать проект». Пустое название станет «Новый проект».</p>
           </div>
 
           <div className="rounded-2xl border border-[var(--uv-border)] bg-gradient-to-b from-[var(--uv-surface-1)] to-[var(--uv-surface-0)] p-6">
             <Sparkles size={20} className="text-violet-300" />
             <h2 className="mt-4 text-lg font-medium text-zinc-100">Один проект — одно рабочее место</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-500">
-              Монтаж, материалы, AI-инструменты и результат остаются внутри проекта. Специализированные возможности показываются только там, где они нужны.
+              Материалы, монтаж, инструменты и результат остаются внутри проекта. Недоступные действия должны объяснять, чего им не хватает, а не выглядеть сломанными.
             </p>
-            {selectedRecipe && (
-              <div className="mt-5 rounded-xl border border-[var(--uv-border)] bg-black/15 p-4">
-                <p className="text-xs text-zinc-600">Выбрано</p>
-                <p className="mt-1 text-sm font-medium text-zinc-200">{selectedRecipe.title}</p>
-                <p className="mt-2 text-xs leading-5 text-zinc-600">{selectedRecipe.description}</p>
-              </div>
-            )}
+            <div className="mt-5 rounded-xl border border-[var(--uv-border)] bg-black/15 p-4">
+              <p className="text-xs text-zinc-600">Режим нового проекта</p>
+              <p className="mt-1 text-sm font-medium text-zinc-200">{selectedRecipe?.title ?? 'Базовый монтаж'}</p>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">{selectedRecipe?.description ?? 'Можно создать проект без ожидания каталога режимов и начать с материалов и монтажа.'}</p>
+            </div>
           </div>
         </section>
 
@@ -259,9 +279,10 @@ export default function ProjectsPage() {
               <h2 className="text-lg font-medium text-zinc-100">Недавние</h2>
               <p className="mt-1 text-sm text-zinc-600">Проекты хранятся локально на этом компьютере.</p>
             </div>
+            <button type="button" onClick={() => void refreshProjects()} disabled={projectsLoading} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-500 transition hover:bg-white/[0.035] hover:text-zinc-200 disabled:opacity-40"><RefreshCw size={13} className={projectsLoading ? 'animate-spin' : ''} /> Обновить</button>
           </div>
 
-          {loading ? (
+          {projectsLoading ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map(item => <div key={item} className="h-32 animate-pulse rounded-2xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)]" />)}
             </div>
@@ -269,7 +290,7 @@ export default function ProjectsPage() {
             <div className="rounded-2xl border border-dashed border-[var(--uv-border-strong)] bg-[var(--uv-surface-0)] px-6 py-12 text-center">
               <FolderOpen className="mx-auto text-zinc-700" size={28} />
               <h3 className="mt-4 text-sm font-medium text-zinc-300">Здесь появятся ваши проекты</h3>
-              <p className="mt-1 text-sm text-zinc-600">Создайте первый проект выше или откройте архив.</p>
+              <p className="mt-1 text-sm text-zinc-600">Нажмите «Создать проект» выше или откройте архив.</p>
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

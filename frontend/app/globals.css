@@ -67,6 +67,55 @@ select {
   font: inherit;
 }
 
+input,
+textarea,
+select {
+  color: var(--uv-text);
+}
+
+option {
+  background: var(--uv-surface-1);
+  color: var(--uv-text);
+}
+
+.uv-input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--uv-border);
+  border-radius: 12px;
+  background: var(--uv-surface-1);
+  padding: 10px 12px;
+  color: var(--uv-text);
+  caret-color: var(--uv-text);
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.uv-input::placeholder {
+  color: var(--uv-text-muted);
+  opacity: 0.82;
+}
+
+.uv-input:hover {
+  border-color: var(--uv-border-strong);
+  background: var(--uv-surface-2);
+}
+
+.uv-input:focus {
+  border-color: rgba(139, 124, 246, 0.72);
+  background: var(--uv-surface-1);
+  box-shadow: 0 0 0 3px var(--uv-focus);
+}
+
+.uv-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--uv-accent);
+}
+
 button,
 a,
 input,
