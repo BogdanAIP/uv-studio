@@ -76,7 +76,8 @@ def _stage_backend_native_legal_from_release_environment(output: Path) -> list[s
     )
 
 
-def _run_checked(command: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_checked(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a release command without polluting the staging JSON stdout channel."""
     try:
         result = subprocess.run(
             command,
@@ -85,18 +86,15 @@ def _run_checked(command: list[str], *, capture: bool = False) -> subprocess.Com
             text=True,
             encoding="utf-8",
             errors="replace",
-            capture_output=capture,
+            capture_output=True,
         )
     except OSError as exc:
         raise _core.WindowsReleaseStageError(
             f"desktop release command could not start: {command[0]}"
         ) from exc
     if result.returncode != 0:
-        detail = ""
-        if capture:
-            combined = "\n".join(item for item in (result.stdout, result.stderr) if item).strip()
-            if combined:
-                detail = ": " + combined[-1200:]
+        combined = "\n".join(item for item in (result.stdout, result.stderr) if item).strip()
+        detail = ": " + combined[-1600:] if combined else ""
         raise _core.WindowsReleaseStageError(
             f"desktop release command failed with exit {result.returncode}: {' '.join(command)}{detail}"
         )
@@ -126,11 +124,8 @@ def _desktop_release_markers() -> tuple[str, Path, str] | None:
     return rust_version, cargo_lock, webview_version
 
 
-def _cargo(rust_version: str, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    return _run_checked(
-        ["rustup", "run", rust_version, "cargo", *args],
-        capture=capture,
-    )
+def _cargo(rust_version: str, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run_checked(["rustup", "run", rust_version, "cargo", *args])
 
 
 def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
@@ -152,8 +147,7 @@ def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
         ]
     )
     rustc = _run_checked(
-        ["rustup", "run", rust_version, "rustc", "--version"],
-        capture=True,
+        ["rustup", "run", rust_version, "rustc", "--version"]
     ).stdout.strip()
     if not rustc.startswith(f"rustc {rust_version} "):
         raise _core.WindowsReleaseStageError(
@@ -169,7 +163,6 @@ def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
         *common,
         "--format-version",
         "1",
-        capture=True,
     )
     try:
         metadata = json.loads(metadata_result.stdout)
@@ -195,6 +188,8 @@ def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
         [str(desktop), "--runtime-check"],
         cwd=desktop.parent,
         check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     if runtime_check.returncode != 0:
         raise _core.WindowsReleaseStageError(
@@ -272,44 +267,13 @@ def _stage_desktop_legal(
     )
 
 
-def _stage_desktop_host(
-    output: Path,
-    source: Path | str | None,
-) -> tuple[str | None, list[str]]:
-    metadata: dict[str, object] | None = None
-    rustc_version = ""
-    cargo_lock: Path | None = None
-    if _desktop_release_markers() is not None:
-        desktop, metadata, rustc_version, cargo_lock = _build_exact_desktop_host()
-    elif source is not None:
-        desktop = _core._require_file(source, "Rust desktop host executable")
-    else:
-        return None, []
-
-    target = output.joinpath(*_DESKTOP_ENTRYPOINT.split("/"))
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(desktop, target)
-    if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
-        raise _core.WindowsReleaseStageError("staged Rust desktop host is missing or invalid")
-
-    legal_files: list[str] = []
-    if metadata is not None and cargo_lock is not None:
-        legal_files = _stage_desktop_legal(
-            output,
-            metadata=metadata,
-            rustc_version=rustc_version,
-            cargo_lock=cargo_lock,
-        )
-    return _DESKTOP_ENTRYPOINT, legal_files
-
-
 def stage_windows_release(**kwargs):
     output = Path(kwargs["output_root"]).expanduser()
     desktop_executable = kwargs.pop("desktop_executable", None)
-    # Build/validate the desktop binary before touching the release output so a
-    # rejected Rust graph cannot leave a plausible-looking partial payload.
     prepared_desktop: Path | str | None = desktop_executable
     prepared_metadata: tuple[dict[str, object], str, Path] | None = None
+
+    # Build and validate the exact Rust graph before creating the release output.
     if _desktop_release_markers() is not None:
         desktop, metadata, rustc_version, cargo_lock = _build_exact_desktop_host()
         prepared_desktop = desktop
@@ -317,28 +281,27 @@ def stage_windows_release(**kwargs):
 
     result = _core.stage_windows_release(**kwargs)
     try:
-        desktop_entrypoint: str | None = None
-        desktop_legal: list[str] = []
         if prepared_desktop is not None:
             target = output.joinpath(*_DESKTOP_ENTRYPOINT.split("/"))
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(_core._require_file(prepared_desktop, "Rust desktop host executable"), target)
             if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
                 raise _core.WindowsReleaseStageError("staged Rust desktop host is missing or invalid")
-            desktop_entrypoint = _DESKTOP_ENTRYPOINT
+            result["entrypoints"]["desktop"] = _DESKTOP_ENTRYPOINT
             if prepared_metadata is not None:
                 metadata, rustc_version, cargo_lock = prepared_metadata
-                desktop_legal = _stage_desktop_legal(
-                    output,
-                    metadata=metadata,
-                    rustc_version=rustc_version,
-                    cargo_lock=cargo_lock,
+                result["legal_files"].extend(
+                    _stage_desktop_legal(
+                        output,
+                        metadata=metadata,
+                        rustc_version=rustc_version,
+                        cargo_lock=cargo_lock,
+                    )
                 )
-        if desktop_entrypoint is not None:
-            result["entrypoints"]["desktop"] = desktop_entrypoint
-        result["legal_files"].extend(desktop_legal)
-        native_files = _stage_backend_native_legal_from_release_environment(output)
-        result["legal_files"].extend(native_files)
+        elif _desktop_release_markers() is not None:
+            raise _core.WindowsReleaseStageError("validated release omitted the Rust desktop host")
+
+        result["legal_files"].extend(_stage_backend_native_legal_from_release_environment(output))
         result["file_count"] = sum(1 for path in output.rglob("*") if path.is_file())
         return result
     except Exception:
