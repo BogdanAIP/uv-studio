@@ -2,11 +2,13 @@
 """Stage the immutable Windows payload and attach exact native/legal evidence."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 from typing import Sequence
 
@@ -30,6 +32,8 @@ _DESKTOP_MANIFEST = _ROOT / "desktop-host" / "Cargo.toml"
 _DESKTOP_TOOLCHAIN = _ROOT / "desktop-host" / "rust-toolchain.toml"
 _WEBVIEW2_RS_REPOSITORY = "https://github.com/wravery/webview2-rs"
 _WEBVIEW2_RS_LICENSE = _ROOT / "packaging" / "licenses" / "webview2-rs.LICENSE"
+_WEBVIEW2_BOOTSTRAPPER_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+_WEBVIEW2_BOOTSTRAPPER_ENTRYPOINT = "prerequisites/MicrosoftEdgeWebview2Setup.exe"
 
 
 def _stage_backend_native_legal_from_release_environment(output: Path) -> list[str]:
@@ -186,8 +190,6 @@ def _build_exact_desktop_host() -> tuple[Path, dict[str, object], str, Path]:
     desktop = _ROOT / "desktop-host" / "target" / "release" / "uv-studio-desktop.exe"
     if not desktop.is_file() or desktop.is_symlink() or desktop.stat().st_size <= 0:
         raise _core.WindowsReleaseStageError("Rust desktop host build did not produce a regular executable")
-    # WebView2 Runtime is a machine prerequisite, not an immutable payload input.
-    # Runtime availability is proven later by the native desktop smoke and installer.
     return desktop.resolve(), metadata, rustc, cargo_lock
 
 
@@ -273,6 +275,102 @@ def _stage_desktop_legal(
     )
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stage_and_provision_webview2_bootstrapper(output: Path, desktop: Path) -> list[str]:
+    target = output.joinpath(*_WEBVIEW2_BOOTSTRAPPER_ENTRYPOINT.split("/"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(
+        _WEBVIEW2_BOOTSTRAPPER_URL,
+        headers={"User-Agent": "UV-Studio-Release/1"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response, target.open("wb") as handle:
+            shutil.copyfileobj(response, handle)
+    except (OSError, urllib.error.URLError) as exc:
+        raise _core.WindowsReleaseStageError("could not download Microsoft WebView2 bootstrapper") from exc
+    if target.is_symlink() or not target.is_file() or target.stat().st_size <= 0:
+        raise _core.WindowsReleaseStageError("downloaded WebView2 bootstrapper is missing or empty")
+
+    powershell = shutil.which("pwsh.exe") or shutil.which("powershell.exe") or shutil.which("pwsh")
+    if not powershell:
+        raise _core.WindowsReleaseStageError("PowerShell is required to validate WebView2 Authenticode")
+    script = (
+        "$ErrorActionPreference='Stop';"
+        "$s=Get-AuthenticodeSignature -LiteralPath $args[0];"
+        "[ordered]@{status=[string]$s.Status;"
+        "subject=if($s.SignerCertificate){[string]$s.SignerCertificate.Subject}else{$null};"
+        "thumbprint=if($s.SignerCertificate){[string]$s.SignerCertificate.Thumbprint}else{$null}}"
+        "| ConvertTo-Json -Compress"
+    )
+    signature_result = _run_checked(
+        [powershell, "-NoProfile", "-NonInteractive", "-Command", script, str(target)]
+    )
+    try:
+        signature = json.loads(signature_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise _core.WindowsReleaseStageError("WebView2 Authenticode evidence was not JSON") from exc
+    subject = str(signature.get("subject") or "") if isinstance(signature, dict) else ""
+    if not isinstance(signature, dict) or str(signature.get("status")) != "Valid":
+        raise _core.WindowsReleaseStageError("WebView2 bootstrapper Authenticode status is not Valid")
+    if re.match(r"^CN=Microsoft Corporation(?:,|$)", subject) is None:
+        raise _core.WindowsReleaseStageError(
+            f"unexpected WebView2 bootstrapper signer: {subject or '<missing>'}"
+        )
+
+    legal_root = output / "legal" / "prerequisites"
+    legal_root.mkdir(parents=True, exist_ok=True)
+    evidence = {
+        "schema_version": 1,
+        "name": "Microsoft Edge WebView2 Evergreen Bootstrapper",
+        "source_url": _WEBVIEW2_BOOTSTRAPPER_URL,
+        "sha256": _sha256_file(target),
+        "authenticode_status": "Valid",
+        "signer_subject": subject,
+        "signer_thumbprint": str(signature.get("thumbprint") or ""),
+        "release_path": _WEBVIEW2_BOOTSTRAPPER_ENTRYPOINT,
+    }
+    evidence_path = legal_root / "webview2-bootstrapper.json"
+    evidence_path.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    # Provision the hosted runner from the exact authenticated bytes that are now
+    # staged for the installer. This is machine setup, not a release component.
+    install = subprocess.run(
+        [str(target), "/silent", "/install"],
+        cwd=target.parent,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=300,
+    )
+    if install.returncode != 0:
+        raise _core.WindowsReleaseStageError(
+            f"WebView2 bootstrapper failed on release runner with exit {install.returncode}"
+        )
+    runtime = subprocess.run(
+        [str(desktop), "--runtime-check"],
+        cwd=desktop.parent,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=60,
+    )
+    if runtime.returncode != 0:
+        raise _core.WindowsReleaseStageError(
+            "WebView2 Runtime is unavailable after authenticated prerequisite provisioning"
+        )
+    return [evidence_path.relative_to(output).as_posix()]
+
+
 def stage_windows_release(**kwargs):
     output = Path(kwargs["output_root"]).expanduser()
     desktop_executable = kwargs.pop("desktop_executable", None)
@@ -287,12 +385,14 @@ def stage_windows_release(**kwargs):
 
     result = _core.stage_windows_release(**kwargs)
     try:
+        staged_desktop: Path | None = None
         if prepared_desktop is not None:
             target = output.joinpath(*_DESKTOP_ENTRYPOINT.split("/"))
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(_core._require_file(prepared_desktop, "Rust desktop host executable"), target)
             if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
                 raise _core.WindowsReleaseStageError("staged Rust desktop host is missing or invalid")
+            staged_desktop = target
             result["entrypoints"]["desktop"] = _DESKTOP_ENTRYPOINT
             if prepared_metadata is not None:
                 metadata, rustc_version, cargo_lock = prepared_metadata
@@ -306,6 +406,11 @@ def stage_windows_release(**kwargs):
                 )
         elif _desktop_release_markers() is not None:
             raise _core.WindowsReleaseStageError("validated release omitted the Rust desktop host")
+
+        if staged_desktop is not None and _desktop_release_markers() is not None:
+            result["legal_files"].extend(
+                _stage_and_provision_webview2_bootstrapper(output, staged_desktop)
+            )
 
         result["legal_files"].extend(_stage_backend_native_legal_from_release_environment(output))
         result["file_count"] = sum(1 for path in output.rglob("*") if path.is_file())
