@@ -99,9 +99,12 @@ activate_release:
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
+  ; Shortcuts deliberately target the frozen supervisor, not the WebView2 host.
+  ; The supervisor owns backend/frontend startup and the lifetime of the native window.
   CreateDirectory "$SMPROGRAMS\UV Studio"
   CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
   CreateShortcut "$SMPROGRAMS\UV Studio\Uninstall UV Studio.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
 
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayName" "UV Studio"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayVersion" "${UV_PRODUCT_VERSION}"
@@ -116,6 +119,7 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
 
+  Delete "$DESKTOP\UV Studio.lnk"
   Delete "$SMPROGRAMS\UV Studio\UV Studio.lnk"
   Delete "$SMPROGRAMS\UV Studio\Uninstall UV Studio.lnk"
   RMDir "$SMPROGRAMS\UV Studio"
