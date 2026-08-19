@@ -27,6 +27,7 @@ class ReleaseManifestTests(unittest.TestCase):
             "backend/uv-studio-server.exe": b"backend-runtime",
             "frontend/server.js": b"frontend-runtime",
             "runtime/node/node.exe": b"node-runtime",
+            "desktop/uv-studio-desktop.exe": b"desktop-runtime",
             "media/ffmpeg.exe": b"ffmpeg-runtime",
             "media/ffprobe.exe": b"ffprobe-runtime",
             "media/melt.exe": b"mlt-runtime",
@@ -39,6 +40,7 @@ class ReleaseManifestTests(unittest.TestCase):
             ReleaseComponent("backend", "0.1.0", "backend/uv-studio-server.exe"),
             ReleaseComponent("frontend", "16.2.12", "frontend/server.js"),
             ReleaseComponent("node", "20.0.0", "runtime/node/node.exe"),
+            ReleaseComponent("desktop", "0.1.0", "desktop/uv-studio-desktop.exe"),
             ReleaseComponent("ffmpeg", "test", "media/ffmpeg.exe"),
             ReleaseComponent("ffprobe", "test", "media/ffprobe.exe"),
             ReleaseComponent("mlt", "test", "media/melt.exe"),
@@ -66,6 +68,14 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertTrue(verification["ok"], verification)
         self.assertEqual(verification["checked_files"], len(self.payloads))
         self.assertTrue(verification["verify_hashes"])
+
+    def test_manifest_requires_desktop_component(self) -> None:
+        data = self._manifest().to_dict()
+        data["components"] = [
+            component for component in data["components"] if component["component_id"] != "desktop"
+        ]
+        with self.assertRaisesRegex(ReleaseManifestError, "exact required release component set"):
+            ReleaseManifest.from_dict(data)
 
     def test_deep_verify_rejects_same_size_payload_substitution(self) -> None:
         manifest = self._manifest()
