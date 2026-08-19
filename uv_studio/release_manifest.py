@@ -16,6 +16,7 @@ REQUIRED_RELEASE_COMPONENT_IDS = (
     "backend",
     "frontend",
     "node",
+    "desktop",
     "ffmpeg",
     "ffprobe",
     "mlt",
