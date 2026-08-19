@@ -105,7 +105,20 @@ def _run_suite() -> tuple[int, str]:
     return (0 if result.wasSuccessful() else 1), stream.getvalue()
 
 
+def _write_console(text: str) -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+    try:
+        sys.stdout.write(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        sys.stdout.write(safe_text)
+
+
 exit_code, output = _run_suite()
-sys.stdout.write(output)
 (artifact_dir / "test-output.log").write_text(output, encoding="utf-8", errors="replace")
+_write_console(output)
 raise SystemExit(exit_code)
