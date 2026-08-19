@@ -43,8 +43,10 @@ class WindowsSigningBoundaryTests(unittest.TestCase):
     def test_production_policy_has_exact_uv_owned_targets(self) -> None:
         policy = load_and_validate_policy(POLICY)
         targets = {item["id"]: item for item in policy["targets"]}
-        self.assertEqual(set(targets), {"backend", "installer", "uninstaller"})
+        self.assertEqual(set(targets), {"backend", "desktop", "installer", "uninstaller"})
         self.assertEqual(targets["backend"]["path"], "backend/uv-studio-backend.exe")
+        self.assertEqual(targets["desktop"]["path"], "desktop/uv-studio-desktop.exe")
+        self.assertEqual(targets["desktop"]["phase"], "before-d044-manifest")
         self.assertEqual(
             targets["installer"]["basename"],
             "uv-studio-windows-x86_64-setup.exe",
@@ -73,6 +75,23 @@ class WindowsSigningBoundaryTests(unittest.TestCase):
             )
             with self.assertRaises(WindowsSigningBoundaryError):
                 resolve_target_file(policy, "backend", ffmpeg, release_root=root)
+
+    def test_desktop_target_is_bounded_to_uv_owned_release_path(self) -> None:
+        policy = load_and_validate_policy(POLICY)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "release"
+            desktop = root / "desktop" / "uv-studio-desktop.exe"
+            shadow = root / "runtime" / "uv-studio-desktop.exe"
+            desktop.parent.mkdir(parents=True)
+            shadow.parent.mkdir(parents=True)
+            desktop.write_bytes(b"desktop")
+            shadow.write_bytes(b"shadow")
+            self.assertEqual(
+                resolve_target_file(policy, "desktop", desktop, release_root=root),
+                desktop.resolve(),
+            )
+            with self.assertRaises(WindowsSigningBoundaryError):
+                resolve_target_file(policy, "desktop", shadow, release_root=root)
 
     def test_snapshot_and_signed_verification_bind_pre_and_post_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
