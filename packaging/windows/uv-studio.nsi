@@ -161,12 +161,13 @@ activate_release:
 
   ; Shortcuts deliberately target the frozen supervisor, not the WebView2 host.
   ; The supervisor owns backend/frontend startup and the lifetime of the native window.
-  ; SW_HIDE suppresses the console-owned supervisor window; the Rust host shows its
-  ; own independent native WebView2 window after the local services become ready.
+  ; Its PyInstaller console bootloader is built with hide-console=hide-early for
+  ; standalone user launches; private modes keep console behavior when invoked from
+  ; an existing console. The Rust host owns the visible application window.
   CreateDirectory "$SMPROGRAMS\UV Studio"
-  CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE
+  CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
   CreateShortcut "$SMPROGRAMS\UV Studio\Uninstall UV Studio.lnk" "$INSTDIR\Uninstall.exe"
-  CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE
+  CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
 
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayName" "UV Studio"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayVersion" "${UV_PRODUCT_VERSION}"

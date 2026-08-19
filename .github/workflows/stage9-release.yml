@@ -96,6 +96,7 @@ jobs:
           --noconfirm
           --clean
           --onedir
+          --hide-console hide-early
           --noupx
           --paths .
           --name uv-studio-backend
@@ -491,8 +492,8 @@ jobs:
           $nsiScript = 'packaging/windows/uv-studio.nsi'
           $nsi = Get-Content -LiteralPath $nsiScript -Raw
           $requiredShortcutContracts = @(
-            'CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE',
-            'CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE',
+            'CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"',
+            'CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"',
             'Delete "$DESKTOP\UV Studio.lnk"'
           )
           foreach ($contract in $requiredShortcutContracts) {
