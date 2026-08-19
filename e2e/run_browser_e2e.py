@@ -22,14 +22,11 @@ E2E = ROOT / "e2e"
 artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", "e2e-artifacts")).resolve()
 artifact_dir.mkdir(parents=True, exist_ok=True)
 
-# The old test modules remain real-media/API harnesses. Product browser modules
-# inherit those fixtures but own the visible navigation/copy assertions.
+# Historical suites remain real-media/API harnesses. The product workspace
+# module adapts their browser-facing expectations to the current D-060 surface.
 PERMANENT_MODULES = (
-    "test_product_user_outcomes",
+    "test_product_workspace_outcomes",
     "test_diagnostics_outcome",
-    "test_product_music_video_outcome",
-    "test_stage8_composition_outcomes",
-    "test_stage8_outcomes",
 )
 
 
