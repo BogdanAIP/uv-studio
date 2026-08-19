@@ -17,9 +17,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
-import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
-import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
-import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
+import { MusicAssemblyProductPanel } from '@/components/editor/MusicAssemblyProductPanel';
+import { MusicVideoProductPanel } from '@/components/editor/MusicVideoProductPanel';
+import { MusicVideoReviewProductPanel } from '@/components/editor/MusicVideoReviewProductPanel';
 import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { ProjectExportWorkspace } from '@/components/editor/ProjectExportWorkspace';
@@ -176,9 +176,9 @@ function TaskWorkspace({ project, workflowRefresh, refreshProject, refreshMusicP
   if (project.recipe_id === 'music_video') {
     return <WorkspaceFrame eyebrow="Музыкальный проект" title="Музыкальный клип" description="Сначала разметьте музыку и режиссуру, затем соберите визуалы и проверьте готовый клип.">
       <div className="flex gap-1 rounded-xl border border-[var(--uv-border)] bg-[var(--uv-surface-0)] p-1.5">{([['plan', 'Музыка и план'], ['assembly', 'Сборка'], ['review', 'Проверка']] as const).map(([id, label]) => <button key={id} type="button" onClick={() => setMusicSection(id)} className={`rounded-lg px-3 py-2 text-xs transition ${musicSection === id ? 'bg-violet-400/12 text-violet-200' : 'text-zinc-600 hover:text-zinc-300'}`}>{label}</button>)}</div>
-      {musicSection === 'plan' && <MusicVideoPanel projectId={project.project_id} onProjectChanged={refreshMusicPrerequisites} />}
-      {musicSection === 'assembly' && <MusicAssemblyPanel key={workflowRefresh} projectId={project.project_id} onProjectChanged={refreshProject} />}
-      {musicSection === 'review' && <MusicVideoReviewPanel key={`review-${project.artifacts.length}`} projectId={project.project_id} refreshRevision={project.artifacts.length} onProjectChanged={refreshProject} />}
+      {musicSection === 'plan' && <MusicVideoProductPanel projectId={project.project_id} onProjectChanged={refreshMusicPrerequisites} />}
+      {musicSection === 'assembly' && <MusicAssemblyProductPanel key={workflowRefresh} projectId={project.project_id} onProjectChanged={refreshProject} />}
+      {musicSection === 'review' && <MusicVideoReviewProductPanel key={`review-${project.artifacts.length}`} projectId={project.project_id} refreshRevision={project.artifacts.length} onProjectChanged={refreshProject} />}
     </WorkspaceFrame>;
   }
 
