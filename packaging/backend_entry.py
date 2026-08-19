@@ -2,14 +2,41 @@
 
 from __future__ import annotations
 
+import ctypes
 import multiprocessing
+import os
 import sys
 from typing import Sequence
+
+
+def _hide_desktop_supervisor_console(arguments: Sequence[str]) -> None:
+    """Hide only the user-facing frozen supervisor console on Windows.
+
+    Private machine-facing modes intentionally keep their console/stdout behavior
+    for installer and CI diagnostics. Normal desktop startup has no arguments and
+    immediately hands visible UI ownership to the Rust/WebView2 host.
+    """
+
+    if arguments or os.name != "nt" or not getattr(sys, "frozen", False):
+        return
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        get_console_window = kernel32.GetConsoleWindow
+        get_console_window.restype = ctypes.c_void_p
+        hwnd = get_console_window()
+        if hwnd:
+            user32.ShowWindow(ctypes.c_void_p(hwnd), 0)  # SW_HIDE
+    except (AttributeError, OSError):
+        # The installed shortcuts also request SW_HIDE. Failing to hide an
+        # already-created console must never block UV Studio startup.
+        return
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     multiprocessing.freeze_support()
     arguments = list(sys.argv[1:] if argv is None else argv)
+    _hide_desktop_supervisor_console(arguments)
 
     if arguments == ["--backend-child"]:
         from uv_studio.server import main as server_main
