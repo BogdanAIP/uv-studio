@@ -32,6 +32,7 @@ class PackagedToolchainTests(unittest.TestCase):
             "backend": "backend/uv-studio-backend.exe",
             "frontend": "frontend/server.js",
             "node": "runtime/node/node.exe",
+            "desktop": "desktop/uv-studio-desktop.exe",
             "ffmpeg": "media/ffmpeg.exe",
             "ffprobe": "media/ffprobe.exe",
             "mlt": "media/melt.exe",
