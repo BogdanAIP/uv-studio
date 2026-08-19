@@ -92,6 +92,11 @@ fn is_local_url(url: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#'))
 }
 
+fn is_allowed_external_url(url: &str) -> bool {
+    let normalized = url.to_ascii_lowercase();
+    normalized.starts_with("https://") || normalized.starts_with("http://")
+}
+
 fn webview2_runtime_available() -> bool {
     let mut version = PWSTR::null();
     let result = unsafe { GetAvailableCoreWebView2BrowserVersionString(PCWSTR::null(), &mut version) };
@@ -115,6 +120,9 @@ fn show_error(message: &str) {
 }
 
 fn open_external(uri: &str) {
+    if !is_allowed_external_url(uri) {
+        return;
+    }
     let target = CoTaskMemPWSTR::from(uri);
     unsafe {
         let _ = ShellExecuteW(
@@ -496,6 +504,26 @@ mod tests {
             "https://example.com/",
         ] {
             assert!(!is_local_url(rejected), "expected rejection: {rejected}");
+        }
+    }
+
+    #[test]
+    fn allows_only_web_schemes_for_external_navigation() {
+        for accepted in [
+            "https://example.com/",
+            "http://example.com/path",
+            "HTTPS://EXAMPLE.COM/",
+        ] {
+            assert!(is_allowed_external_url(accepted), "expected external URL: {accepted}");
+        }
+        for rejected in [
+            "file:///C:/Windows/System32/calc.exe",
+            "javascript:alert(1)",
+            "ms-settings:privacy",
+            "mailto:user@example.com",
+            "httpsx://example.com/",
+        ] {
+            assert!(!is_allowed_external_url(rejected), "expected external URL rejection: {rejected}");
         }
     }
 

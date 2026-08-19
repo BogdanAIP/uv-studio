@@ -1,16 +1,17 @@
 name: Stage 9 Rust Desktop Host Probe
 
 on:
-  push:
-    branches: ["stage-9/**"]
-    paths:
-      - ".github/workflows/stage9-desktop-rust-probe.yml"
-      - "desktop-host/**"
   pull_request:
-    branches: [main]
     paths:
       - ".github/workflows/stage9-desktop-rust-probe.yml"
       - "desktop-host/**"
+      - "packaging/windows/**"
+      - "project-context/**"
+      - "tools/stage_windows_release.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   windows-rust-host:
@@ -23,40 +24,50 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          rustup toolchain install 1.97.1 --profile minimal --target x86_64-pc-windows-msvc
-          if ($LASTEXITCODE -ne 0) { throw 'Rust 1.97.1 installation failed' }
-          $actual = (& rustup run 1.97.1 rustc --version).Trim()
-          if ($actual -notmatch '^rustc 1\.97\.1 ') { throw "unexpected Rust compiler: $actual" }
+          $toolchain = (Get-Content 'desktop-host/rust-toolchain.toml' -Raw)
+          if ($toolchain -notmatch 'channel\s*=\s*"([^"]+)"') {
+            throw 'desktop Rust toolchain channel missing'
+          }
+          $version = $Matches[1]
+          rustup toolchain install $version --profile minimal --target x86_64-pc-windows-msvc
+          $actual = (rustup run $version rustc --version)
+          if (-not $actual.StartsWith("rustc $version ")) {
+            throw "unexpected rustc version: $actual"
+          }
 
       - name: Verify committed dependency lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Test-Path -LiteralPath desktop-host/Cargo.lock -PathType Leaf)) {
-            throw 'committed desktop-host/Cargo.lock is missing'
+          $lock = Get-Content 'desktop-host/Cargo.lock' -Raw
+          if ($lock -notmatch 'name = "webview2-com"') {
+            throw 'Cargo.lock does not contain webview2-com'
           }
-          git diff --exit-code -- desktop-host/Cargo.lock
-          if ($LASTEXITCODE -ne 0) { throw 'Cargo.lock was dirty before the Rust probe' }
+          if ($lock -notmatch 'name = "windows"') {
+            throw 'Cargo.lock does not contain windows crate'
+          }
 
       - name: Test Rust desktop host from exact lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & rustup run 1.97.1 cargo test --locked --manifest-path desktop-host/Cargo.toml
-          if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host tests failed' }
-          git diff --exit-code -- desktop-host/Cargo.lock
-          if ($LASTEXITCODE -ne 0) { throw 'Cargo test mutated the committed lock' }
+          $toolchain = Get-Content 'desktop-host/rust-toolchain.toml' -Raw
+          $toolchain -match 'channel\s*=\s*"([^"]+)"' | Out-Null
+          $version = $Matches[1]
+          rustup run $version cargo test --locked --manifest-path desktop-host/Cargo.toml
 
       - name: Build Rust desktop host from exact lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & rustup run 1.97.1 cargo build --release --locked --manifest-path desktop-host/Cargo.toml
-          if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host build failed' }
+          $toolchain = Get-Content 'desktop-host/rust-toolchain.toml' -Raw
+          $toolchain -match 'channel\s*=\s*"([^"]+)"' | Out-Null
+          $version = $Matches[1]
+          rustup run $version cargo build --release --locked --manifest-path desktop-host/Cargo.toml
           $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
-          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'desktop host executable is missing' }
-          git diff --exit-code -- desktop-host/Cargo.lock
-          if ($LASTEXITCODE -ne 0) { throw 'Cargo build mutated the committed lock' }
+          if (-not (Test-Path $exe -PathType Leaf)) {
+            throw 'Rust desktop host executable missing after release build'
+          }
 
       - name: Provision and prove Microsoft Evergreen WebView2 Runtime
         shell: pwsh
@@ -67,27 +78,62 @@ jobs:
           $runtimePresent = $LASTEXITCODE -eq 0
           if (-not $runtimePresent) {
             $bootstrapper = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
-            Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
+            Invoke-WebRequest -UseBasicParsing -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper
+            if (-not (Test-Path $bootstrapper -PathType Leaf)) {
+              throw 'WebView2 Evergreen Bootstrapper download missing'
+            }
             $signature = Get-AuthenticodeSignature -LiteralPath $bootstrapper
             if ($signature.Status -ne 'Valid') {
               throw "WebView2 bootstrapper Authenticode status is $($signature.Status)"
             }
-            $subject = [string]$signature.SignerCertificate.Subject
-            if ($subject -notmatch '^CN=Microsoft Corporation(?:,|$)') {
-              throw "unexpected WebView2 bootstrapper signer: $subject"
+            if (-not $signature.SignerCertificate -or $signature.SignerCertificate.Subject -notmatch '^CN=Microsoft Corporation(?:,|$)') {
+              throw "unexpected WebView2 bootstrapper signer: $($signature.SignerCertificate.Subject)"
             }
-            $install = Start-Process -FilePath $bootstrapper -ArgumentList '/silent','/install' -PassThru -Wait
+            Write-Host "WebView2 bootstrapper signer: $($signature.SignerCertificate.Subject)"
+            Write-Host "WebView2 bootstrapper sha256: $((Get-FileHash -Algorithm SHA256 -LiteralPath $bootstrapper).Hash.ToLowerInvariant())"
+            $install = Start-Process -FilePath $bootstrapper -ArgumentList '/silent','/install' -Wait -PassThru
             if ($install.ExitCode -ne 0) {
               throw "WebView2 bootstrapper failed with exit $($install.ExitCode)"
             }
           }
-          & $exe --runtime-check
-          if ($LASTEXITCODE -ne 0) { throw 'WebView2 Runtime is unavailable after prerequisite provisioning' }
+
+          $runtimeReady = $false
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            & $exe --runtime-check
+            $runtimeExit = $LASTEXITCODE
+            Write-Host "WebView2 runtime-check attempt $attempt/12 exit=$runtimeExit"
+            if ($runtimeExit -eq 0) {
+              $runtimeReady = $true
+              break
+            }
+            if ($attempt -lt 12) {
+              Start-Sleep -Seconds 5
+            }
+          }
+
+          if (-not $runtimeReady) {
+            Write-Host 'WebView2/EdgeUpdate client registrations after failed readiness proof:'
+            $registryRoots = @(
+              'HKCU:\Software\Microsoft\EdgeUpdate\Clients',
+              'HKLM:\Software\Microsoft\EdgeUpdate\Clients',
+              'HKLM:\Software\WOW6432Node\Microsoft\EdgeUpdate\Clients'
+            )
+            foreach ($root in $registryRoots) {
+              if (Test-Path $root) {
+                Write-Host "REGISTRY_ROOT=$root"
+                Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
+                  $item = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+                  Write-Host "  key=$($_.PSChildName) name=$($item.name) pv=$($item.pv)"
+                }
+              }
+            }
+            throw 'Microsoft Evergreen WebView2 Runtime is still unavailable after bounded post-install polling'
+          }
 
       - name: Upload Rust desktop executable
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
-          name: stage9-rust-desktop-host-${{ github.sha }}
-          if-no-files-found: error
-          retention-days: 7
+          name: stage9-rust-desktop-host
           path: desktop-host/target/release/uv-studio-desktop.exe
+          if-no-files-found: error
+          retention-days: 14

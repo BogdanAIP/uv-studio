@@ -40,6 +40,7 @@ Var VerifyExit
 Var VerifyOutput
 Var WebView2Exit
 Var WebView2Output
+Var WebView2Attempt
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
@@ -73,6 +74,7 @@ Function RecordWebView2Failure
   FileOpen $1 "$LOCALAPPDATA\UV Studio\logs\webview2-prerequisite-error.txt" w
   FileWrite $1 "release=${UV_RELEASE_ID}$\r$\n"
   FileWrite $1 "webview2_exit=$WebView2Exit$\r$\n"
+  FileWrite $1 "webview2_attempt=$WebView2Attempt$\r$\n"
   FileWrite $1 "$WebView2Output$\r$\n"
   FileClose $1
 FunctionEnd
@@ -92,10 +94,21 @@ Function EnsureWebView2Runtime
   StrCmp $WebView2Exit "0" webview2_recheck webview2_failed
 
 webview2_recheck:
+  ; Evergreen setup can return before registration is observable to a fresh host
+  ; process. Keep activation fail-closed, but allow a bounded readiness window.
+  StrCpy $WebView2Attempt 0
+
+webview2_retry:
+  IntOp $WebView2Attempt $WebView2Attempt + 1
   nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\versions\${UV_RELEASE_ID}\desktop\uv-studio-desktop.exe" --runtime-check'
   Pop $WebView2Exit
   Pop $WebView2Output
-  StrCmp $WebView2Exit "0" webview2_ready webview2_failed
+  StrCmp $WebView2Exit "0" webview2_ready
+  IntCmp $WebView2Attempt 12 webview2_failed webview2_wait webview2_failed
+
+webview2_wait:
+  Sleep 5000
+  Goto webview2_retry
 
 webview2_failed:
   Call RecordWebView2Failure

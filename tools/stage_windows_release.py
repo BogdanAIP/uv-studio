@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.request
 from pathlib import Path
 from typing import Sequence
@@ -34,6 +35,8 @@ _WEBVIEW2_RS_REPOSITORY = "https://github.com/wravery/webview2-rs"
 _WEBVIEW2_RS_LICENSE = _ROOT / "packaging" / "licenses" / "webview2-rs.LICENSE"
 _WEBVIEW2_BOOTSTRAPPER_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 _WEBVIEW2_BOOTSTRAPPER_ENTRYPOINT = "prerequisites/MicrosoftEdgeWebview2Setup.exe"
+_WEBVIEW2_RUNTIME_CHECK_ATTEMPTS = 12
+_WEBVIEW2_RUNTIME_CHECK_DELAY_SECONDS = 5.0
 
 
 def _stage_backend_native_legal_from_release_environment(output: Path) -> list[str]:
@@ -301,17 +304,32 @@ def _stage_and_provision_webview2_bootstrapper(output: Path, desktop: Path) -> l
     powershell = shutil.which("pwsh.exe") or shutil.which("powershell.exe") or shutil.which("pwsh")
     if not powershell:
         raise _core.WindowsReleaseStageError("PowerShell is required to validate WebView2 Authenticode")
-    script = (
-        "$ErrorActionPreference='Stop';"
-        "$s=Get-AuthenticodeSignature -LiteralPath $args[0];"
-        "[ordered]@{status=[string]$s.Status;"
-        "subject=if($s.SignerCertificate){[string]$s.SignerCertificate.Subject}else{$null};"
-        "thumbprint=if($s.SignerCertificate){[string]$s.SignerCertificate.Thumbprint}else{$null}}"
-        "| ConvertTo-Json -Compress"
+    signature_script = target.parent / ".verify-webview2-authenticode.ps1"
+    signature_script.write_text(
+        "param([Parameter(Mandatory=$true)][string]$Path)\n"
+        "$ErrorActionPreference='Stop'\n"
+        "$s=Get-AuthenticodeSignature -LiteralPath $Path\n"
+        "[ordered]@{\n"
+        "  status=[string]$s.Status\n"
+        "  subject=if($s.SignerCertificate){[string]$s.SignerCertificate.Subject}else{$null}\n"
+        "  thumbprint=if($s.SignerCertificate){[string]$s.SignerCertificate.Thumbprint}else{$null}\n"
+        "} | ConvertTo-Json -Compress\n",
+        encoding="utf-8",
     )
-    signature_result = _run_checked(
-        [powershell, "-NoProfile", "-NonInteractive", "-Command", script, str(target)]
-    )
+    try:
+        signature_result = _run_checked(
+            [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(signature_script),
+                "-Path",
+                str(target),
+            ]
+        )
+    finally:
+        signature_script.unlink(missing_ok=True)
     try:
         signature = json.loads(signature_result.stdout)
     except json.JSONDecodeError as exc:
@@ -337,10 +355,6 @@ def _stage_and_provision_webview2_bootstrapper(output: Path, desktop: Path) -> l
         "release_path": _WEBVIEW2_BOOTSTRAPPER_ENTRYPOINT,
     }
     evidence_path = legal_root / "webview2-bootstrapper.json"
-    evidence_path.write_text(
-        json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
 
     # Provision the hosted runner from the exact authenticated bytes that are now
     # staged for the installer. This is machine setup, not a release component.
@@ -356,18 +370,35 @@ def _stage_and_provision_webview2_bootstrapper(output: Path, desktop: Path) -> l
         raise _core.WindowsReleaseStageError(
             f"WebView2 bootstrapper failed on release runner with exit {install.returncode}"
         )
-    runtime = subprocess.run(
-        [str(desktop), "--runtime-check"],
-        cwd=desktop.parent,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=60,
-    )
-    if runtime.returncode != 0:
-        raise _core.WindowsReleaseStageError(
-            "WebView2 Runtime is unavailable after authenticated prerequisite provisioning"
+
+    runtime_probe_attempts: list[int] = []
+    runtime_ready = False
+    for attempt in range(1, _WEBVIEW2_RUNTIME_CHECK_ATTEMPTS + 1):
+        runtime = subprocess.run(
+            [str(desktop), "--runtime-check"],
+            cwd=desktop.parent,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=60,
         )
+        runtime_probe_attempts.append(runtime.returncode)
+        if runtime.returncode == 0:
+            runtime_ready = True
+            break
+        if attempt < _WEBVIEW2_RUNTIME_CHECK_ATTEMPTS:
+            time.sleep(_WEBVIEW2_RUNTIME_CHECK_DELAY_SECONDS)
+    if not runtime_ready:
+        raise _core.WindowsReleaseStageError(
+            "WebView2 Runtime is unavailable after authenticated prerequisite provisioning; "
+            f"runtime-check exits={runtime_probe_attempts}"
+        )
+
+    evidence["runtime_probe_attempts"] = runtime_probe_attempts
+    evidence_path.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     return [evidence_path.relative_to(output).as_posix()]
 
 
