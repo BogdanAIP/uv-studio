@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the immutable Windows payload and attach exact backend-native legal evidence."""
+"""Stage the immutable Windows payload and attach exact native/legal evidence."""
 from __future__ import annotations
 
 import json
@@ -22,6 +22,7 @@ for _name in dir(_core):
 
 _EXPECTED_BACKEND_NATIVE_PE = 78
 _EXPECTED_BACKEND_NATIVE_GROUPS = 14
+_DESKTOP_ENTRYPOINT = "desktop/uv-studio-desktop.exe"
 
 
 def _stage_backend_native_legal_from_release_environment(output: Path) -> list[str]:
@@ -70,10 +71,30 @@ def _stage_backend_native_legal_from_release_environment(output: Path) -> list[s
     )
 
 
+def _stage_desktop_host(output: Path, source: Path | str | None) -> str | None:
+    if source is None:
+        if os.environ.get("UV_RUST_VERSION"):
+            raise _core.WindowsReleaseStageError(
+                "validated release profile requires the Rust desktop host executable"
+            )
+        return None
+    desktop = _core._require_file(source, "Rust desktop host executable")
+    target = output.joinpath(*_DESKTOP_ENTRYPOINT.split("/"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(desktop, target)
+    if not target.is_file() or target.is_symlink() or target.stat().st_size <= 0:
+        raise _core.WindowsReleaseStageError("staged Rust desktop host is missing or invalid")
+    return _DESKTOP_ENTRYPOINT
+
+
 def stage_windows_release(**kwargs):
     output = Path(kwargs["output_root"]).expanduser()
+    desktop_executable = kwargs.pop("desktop_executable", None)
     result = _core.stage_windows_release(**kwargs)
     try:
+        desktop_entrypoint = _stage_desktop_host(output, desktop_executable)
+        if desktop_entrypoint is not None:
+            result["entrypoints"]["desktop"] = desktop_entrypoint
         native_files = _stage_backend_native_legal_from_release_environment(output)
         result["legal_files"].extend(native_files)
         result["file_count"] = sum(1 for path in output.rglob("*") if path.is_file())
@@ -84,13 +105,16 @@ def stage_windows_release(**kwargs):
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _core._parser().parse_args(argv)
+    parser = _core._parser()
+    parser.add_argument("--desktop-executable", type=Path, required=True)
+    args = parser.parse_args(argv)
     try:
         result = stage_windows_release(
             backend_root=args.backend_root,
             frontend_root=args.frontend_root,
             node_executable=args.node_executable,
             node_license_file=args.node_license,
+            desktop_executable=args.desktop_executable,
             media_root=args.media_root,
             ffmpeg_executable=args.ffmpeg_executable,
             ffprobe_executable=args.ffprobe_executable,
