@@ -488,6 +488,18 @@ jobs:
           if ($releaseId -notmatch '^[A-Za-z0-9._-]+$') {
             throw "release id is not Windows-path-safe: $releaseId"
           }
+          $nsiScript = 'packaging/windows/uv-studio.nsi'
+          $nsi = Get-Content -LiteralPath $nsiScript -Raw
+          $requiredShortcutContracts = @(
+            'CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE',
+            'CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" "" "" 0 SW_HIDE',
+            'Delete "$DESKTOP\UV Studio.lnk"'
+          )
+          foreach ($contract in $requiredShortcutContracts) {
+            if (-not $nsi.Contains($contract)) {
+              throw "NSIS user-launch contract is missing: $contract"
+            }
+          }
           $installer = Join-Path $env:RUNNER_TEMP 'uv-studio-windows-x86_64-setup.exe'
           & $env:UV_MAKENSIS `
             /V3 `
@@ -495,7 +507,7 @@ jobs:
             "/DUV_RELEASE_ID=$releaseId" `
             "/DUV_PRODUCT_VERSION=$env:UV_PRODUCT_VERSION" `
             "/DUV_OUTPUT_FILE=$installer" `
-            'packaging/windows/uv-studio.nsi'
+            $nsiScript
           if ($LASTEXITCODE -ne 0) { throw "NSIS installer compilation failed with exit $LASTEXITCODE" }
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'NSIS installer output is missing' }
           "UV_RELEASE_ID=$releaseId" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -508,8 +520,11 @@ jobs:
           $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\UV Studio'
           $userDataRoot = Join-Path $env:LOCALAPPDATA 'UV Studio'
           $startMenuRoot = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\UV Studio'
+          $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'UV Studio.lnk'
           if (Test-Path -LiteralPath $installRoot) { Remove-Item -LiteralPath $installRoot -Recurse -Force }
           if (Test-Path -LiteralPath $userDataRoot) { Remove-Item -LiteralPath $userDataRoot -Recurse -Force }
+          if (Test-Path -LiteralPath $startMenuRoot) { Remove-Item -LiteralPath $startMenuRoot -Recurse -Force }
+          if (Test-Path -LiteralPath $desktopShortcut) { Remove-Item -LiteralPath $desktopShortcut -Force }
 
           $install = Start-Process -FilePath $env:UV_INSTALLER_PATH -ArgumentList '/S' -PassThru -Wait
           if ($install.ExitCode -ne 0) {
@@ -533,6 +548,9 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $startMenuRoot 'UV Studio.lnk') -PathType Leaf)) {
             throw 'Start Menu launcher shortcut is missing'
           }
+          if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
+            throw 'Desktop launcher shortcut is missing'
+          }
 
           & $installedBackend --verify-release
           if ($LASTEXITCODE -ne 0) { throw 'installed release failed product-owned deep verification' }
@@ -555,6 +573,7 @@ jobs:
           }
           if (Test-Path -LiteralPath $installRoot) { throw 'uninstaller left the immutable application root behind' }
           if (Test-Path -LiteralPath $startMenuRoot) { throw 'uninstaller left the Start Menu group behind' }
+          if (Test-Path -LiteralPath $desktopShortcut) { throw 'uninstaller left the Desktop launcher shortcut behind' }
           if (-not (Test-Path -LiteralPath $sentinel -PathType Leaf)) {
             throw 'uninstaller deleted D-045 user data'
           }
