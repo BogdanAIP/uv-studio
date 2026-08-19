@@ -155,8 +155,10 @@ def load_and_validate_policy(policy_file: Path | str) -> dict[str, Any]:
         elif kind == "artifact":
             _basename(target.get("basename"), f"{target_id}: basename")
 
-    if ids != {"backend", "installer", "uninstaller"}:
-        raise WindowsSigningBoundaryError("public signing policy must contain exactly backend, installer and uninstaller")
+    if ids != {"backend", "desktop", "installer", "uninstaller"}:
+        raise WindowsSigningBoundaryError(
+            "public signing policy must contain exactly backend, desktop, installer and uninstaller"
+        )
     if kinds != {"release_file", "artifact", "generated_executable"}:
         raise WindowsSigningBoundaryError("public signing policy target kinds are incomplete")
     return raw
