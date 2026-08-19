@@ -140,14 +140,18 @@ class ProductBrowserUserOutcomes(harness.BrowserUserOutcomes):
         sequence.get_by_label("Решение по связанному кадру", exact=True).select_option("approved")
         sequence.get_by_role("button", name="Сохранить проверку", exact=True).click()
         expect(sequence.get_by_text("Вариант одобрен", exact=True)).to_be_visible(timeout=30_000)
-        sequence.get_by_role("button", name="Применить вариант", exact=True).click()
+        first_apply = sequence.get_by_role("button", name="Применить вариант", exact=True)
+        expect(first_apply).to_be_enabled(timeout=30_000)
+        first_apply.click()
         expect(sequence.get_by_text("Вариант применён. Он может стать опорой", exact=False)).to_be_visible(timeout=30_000)
 
         state_after_accept = harness._api_json("GET", harness._project_path(project_id, "/sequence/state"))
         first_sequence = state_after_accept["sequences"][0]
         first_take = next(take for take in first_sequence["takes"] if take["shot_id"] == "shot_01" and take["status"] == "accepted")
         first_anchor_id = first_take["take_id"]
-        sequence.get_by_role("button", name="Сделать опорой", exact=True).click()
+        first_anchor = sequence.get_by_role("button", name="Сделать опорой", exact=True)
+        expect(first_anchor).to_be_enabled(timeout=30_000)
+        first_anchor.click()
         expect(sequence.get_by_text("Опорный кадр обновлён.", exact=True)).to_be_visible(timeout=30_000)
 
         state_after_anchor = harness._api_json("GET", harness._project_path(project_id, "/sequence/state"))
@@ -193,12 +197,16 @@ class ProductBrowserUserOutcomes(harness.BrowserUserOutcomes):
         sequence.get_by_label("Решение по связанному кадру", exact=True).select_option("approved")
         sequence.get_by_role("button", name="Сохранить проверку", exact=True).click()
         expect(sequence.get_by_text("Вариант одобрен", exact=True)).to_be_visible(timeout=30_000)
-        sequence.get_by_role("button", name="Применить вариант", exact=True).click()
+        second_apply = sequence.get_by_role("button", name="Применить вариант", exact=True)
+        expect(second_apply).to_be_enabled(timeout=30_000)
+        second_apply.click()
 
         final_pre_anchor = harness._api_json("GET", harness._project_path(project_id, "/sequence/state"))["sequences"][0]
         second_take = next(take for take in final_pre_anchor["takes"] if take["shot_id"] == "shot_02" and take["status"] == "accepted")
         second_anchor_id = second_take["take_id"]
-        sequence.get_by_role("button", name="Сделать опорой", exact=True).click()
+        second_anchor = sequence.get_by_role("button", name="Сделать опорой", exact=True)
+        expect(second_anchor).to_be_enabled(timeout=30_000)
+        second_anchor.click()
         expect(sequence.get_by_text("Опорный кадр обновлён.", exact=True)).to_be_visible(timeout=30_000)
 
         final_state = harness._api_json("GET", harness._project_path(project_id, "/sequence/state"))["sequences"][0]
