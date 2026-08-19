@@ -25,46 +25,51 @@ jobs:
           $ErrorActionPreference = 'Stop'
           rustup toolchain install 1.97.1 --profile minimal --target x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { throw 'Rust 1.97.1 installation failed' }
-          $actual = (& rustc +1.97.1 --version).Trim()
+          $actual = (& rustup run 1.97.1 rustc --version).Trim()
           if ($actual -notmatch '^rustc 1\.97\.1 ') { throw "unexpected Rust compiler: $actual" }
 
-      - name: Generate exact dependency lock
+      - name: Verify committed dependency lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & cargo +1.97.1 generate-lockfile --manifest-path desktop-host/Cargo.toml
-          if ($LASTEXITCODE -ne 0) { throw 'Cargo.lock generation failed' }
-          if (-not (Test-Path -LiteralPath desktop-host/Cargo.lock -PathType Leaf)) { throw 'Cargo.lock was not generated' }
+          if (-not (Test-Path -LiteralPath desktop-host/Cargo.lock -PathType Leaf)) {
+            throw 'committed desktop-host/Cargo.lock is missing'
+          }
+          git diff --exit-code -- desktop-host/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo.lock was dirty before the Rust probe' }
 
-      - name: Test Rust desktop host
+      - name: Test Rust desktop host from exact lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & cargo +1.97.1 test --locked --manifest-path desktop-host/Cargo.toml
+          & rustup run 1.97.1 cargo test --locked --manifest-path desktop-host/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host tests failed' }
+          git diff --exit-code -- desktop-host/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo test mutated the committed lock' }
 
-      - name: Build Rust desktop host
+      - name: Build Rust desktop host from exact lock
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & cargo +1.97.1 build --release --locked --manifest-path desktop-host/Cargo.toml
+          & rustup run 1.97.1 cargo build --release --locked --manifest-path desktop-host/Cargo.toml
           if ($LASTEXITCODE -ne 0) { throw 'Rust desktop host build failed' }
           $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
           if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'desktop host executable is missing' }
+          git diff --exit-code -- desktop-host/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo build mutated the committed lock' }
 
       - name: Probe WebView2 runtime presence
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $exe = 'desktop-host/target/release/uv-studio-desktop.exe'
           & $exe --runtime-check
-          Write-Host "WEBVIEW2_RUNTIME_CHECK_EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw 'WebView2 Runtime is unavailable on the Windows product runner' }
 
-      - name: Upload Rust lock and executable
+      - name: Upload Rust desktop executable
         uses: actions/upload-artifact@v6
         with:
           name: stage9-rust-desktop-host-${{ github.sha }}
           if-no-files-found: error
           retention-days: 7
-          path: |
-            desktop-host/Cargo.lock
-            desktop-host/target/release/uv-studio-desktop.exe
+          path: desktop-host/target/release/uv-studio-desktop.exe
