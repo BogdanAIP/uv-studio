@@ -38,6 +38,8 @@ BrandingText "UV Studio"
 
 Var VerifyExit
 Var VerifyOutput
+Var WebView2Exit
+Var WebView2Output
 
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
@@ -65,17 +67,57 @@ Function RecordVerificationFailure
   FileClose $1
 FunctionEnd
 
+Function RecordWebView2Failure
+  CreateDirectory "$LOCALAPPDATA\UV Studio"
+  CreateDirectory "$LOCALAPPDATA\UV Studio\logs"
+  FileOpen $1 "$LOCALAPPDATA\UV Studio\logs\webview2-prerequisite-error.txt" w
+  FileWrite $1 "release=${UV_RELEASE_ID}$\r$\n"
+  FileWrite $1 "webview2_exit=$WebView2Exit$\r$\n"
+  FileWrite $1 "$WebView2Output$\r$\n"
+  FileClose $1
+FunctionEnd
+
+Function EnsureWebView2Runtime
+  ; The Rust host is the source of truth for whether Evergreen WebView2 is usable.
+  nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\versions\${UV_RELEASE_ID}\desktop\uv-studio-desktop.exe" --runtime-check'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_ready
+
+  ; The bootstrapper bytes were fetched from Microsoft's official Evergreen fwlink,
+  ; Authenticode-validated during release staging, and then covered by D-044.
+  nsExec::ExecToStack /TIMEOUT=300000 '"$INSTDIR\versions\${UV_RELEASE_ID}\prerequisites\MicrosoftEdgeWebview2Setup.exe" /silent /install'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_recheck webview2_failed
+
+webview2_recheck:
+  nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\versions\${UV_RELEASE_ID}\desktop\uv-studio-desktop.exe" --runtime-check'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_ready webview2_failed
+
+webview2_failed:
+  Call RecordWebView2Failure
+  MessageBox MB_ICONSTOP|MB_OK "UV Studio could not install or verify the Microsoft Edge WebView2 Runtime required for its desktop window. No shortcut was activated. See the UV Studio logs directory for diagnostics." /SD IDOK
+  SetErrorLevel 3
+  Quit
+
+webview2_ready:
+FunctionEnd
+
 Section "UV Studio" SEC_MAIN
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   CreateDirectory "$INSTDIR\versions"
-  ; A diagnostic belongs only to the current installation attempt.
+  ; Diagnostics belong only to the current installation attempt.
   Delete "$LOCALAPPDATA\UV Studio\logs\installer-verification-error.txt"
+  Delete "$LOCALAPPDATA\UV Studio\logs\webview2-prerequisite-error.txt"
 
   ; Exact reinstall: reuse only an already deep-verified identical release.
   IfFileExists "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" 0 install_release
   Call VerifyInstalledRelease
-  StrCmp $VerifyExit "0" activate_release
+  StrCmp $VerifyExit "0" ensure_prerequisites
   RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
 
 install_release:
@@ -84,13 +126,18 @@ install_release:
 
   ; The copied payload is not activated until its own D-044 deep verifier accepts it.
   Call VerifyInstalledRelease
-  StrCmp $VerifyExit "0" activate_release
+  StrCmp $VerifyExit "0" ensure_prerequisites
   Call RecordVerificationFailure
   RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
   ; /SD keeps /S installations fail-closed instead of waiting on an invisible dialog.
   MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated. See the UV Studio logs directory for diagnostics." /SD IDOK
   SetErrorLevel 2
   Quit
+
+ensure_prerequisites:
+  ; Machine prerequisites are checked only after immutable release verification and
+  ; before current-release/shortcut activation.
+  Call EnsureWebView2Runtime
 
 activate_release:
   FileOpen $0 "$INSTDIR\current-release.txt" w
