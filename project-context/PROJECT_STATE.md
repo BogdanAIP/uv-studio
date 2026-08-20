@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-20
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-orchestrator-foundation` is the active draft slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Exact-head review found two bounded contract gaps—selection-aware readiness and access to current provider settings—which are being repaired before the slice returns to review.
+`product-recovery-orchestrator-foundation` is the active review slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Exact-head review found and the current head repairs two bounded contract gaps: readiness now shares the executor's strict selection policy, and the UV shell retains access to current provider settings without restoring legacy workflow navigation.
 
 This slice adds a read projection and one semantic action for `photo_to_video`, makes the project UI consume readiness/prerequisites/relevant-workspace truth, and removes the legacy pipeline/session/task/sandbox model from normal AppShell navigation without remounting its backend.
 
