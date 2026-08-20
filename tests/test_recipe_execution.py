@@ -158,7 +158,11 @@ class RecipeExecutionPlanTests(unittest.TestCase):
         self.assertIn("no one-click", plan.reason)
 
     def test_any_advertised_execution_target_is_mounted(self) -> None:
-        mounted_paths = {route.path for route in app.routes}
+        mounted_paths = {
+            route.path
+            for route in app.routes
+            if isinstance(getattr(route, "path", None), str)
+        }
         for recipe_id in self.registry.ids():
             plan = resolve_project_execution(self.registry, recipe_id)
             if plan.target is not None:
