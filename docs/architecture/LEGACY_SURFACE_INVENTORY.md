@@ -2,62 +2,110 @@
 
 ## Purpose
 
-Stage 3.5 intentionally stopped mounting the complete VideoClaw FastAPI application. This inventory distinguishes current UV Studio product authority from donor/compatibility code before any deletion or reintroduction of legacy routes.
+Stage 3.5 intentionally stopped mounting the complete VideoClaw FastAPI application. This inventory distinguishes the current UV-owned product architecture from legacy VideoClaw surfaces that still remain **inside the live frontend**, not only under `vendor/`.
 
 ## Classification rules
 
-- `current_product` — reachable from current UV-owned product flow and backed by mounted UV-owned routes;
-- `compatibility_only` — retained for an explicit adapter/migration/test boundary but not a user-facing execution path;
-- `donor_unreachable` — historical frontend/donor code not reachable from current product navigation;
-- `stale_contract` — current metadata/client code still implies a route is executable even though it is not mounted;
-- `unknown` — requires call-site evidence before classification.
+- `current_product` — current UV-owned surface backed by mounted UV-owned routes;
+- `live_legacy_broken` — compiled/routable live frontend surface that calls backend routes the UV server no longer mounts;
+- `compatibility_only` — explicitly retained adapter/migration/test boundary;
+- `vendor_donor` — pinned upstream provenance under `vendor/`;
+- `stale_contract` — metadata says an execution target is available although it is not mounted;
+- `unknown` — requires more reachability/dependency evidence.
 
-## Current frontend finding
+## Corrected live-frontend finding
 
-The live UV-owned `frontend/lib` on the Stage 8 `main` baseline contains current modules such as `projectsApi.ts`, `editorApi.ts`, `dubbingApi.ts`, `musicVideoApi.ts`, `stage8MediaApi.ts` and capability/job/render clients. It does **not** contain `workflowApi.ts`; repository-tree checks also found no live `frontend` files named `HomePage` or `WorkflowPanel`.
+The Stage 8 `main` frontend contains **both architectures at once**.
 
-The historical `workflowApi.ts` does exist at `vendor/videoclaw-app/frontend/lib/workflowApi.ts` inside the pinned donor tree. That vendored frontend is provenance/compatibility material, not current UV-owned product authority.
+### UV-owned product layer
 
-Therefore the confirmed active stale contract in this slice is **recipe execution/readiness metadata plus tests**, not an imported live React `workflowApi` client. The vendor route families below remain useful historical inventory and must stay isolated unless a reviewed UV-owned adapter explicitly reuses them.
+Examples:
+
+- `frontend/app/projects/**`;
+- `projectsApi.ts`, `recipesApi.ts`;
+- `editorApi.ts`, `renderApi.ts`;
+- dubbing, sequence, music and Stage 8 API modules;
+- Project Store-backed project/editor/task surfaces.
+
+### Live legacy VideoClaw layer
+
+Also present and compiled in the same `frontend/` tree:
+
+- `frontend/lib/workflowApi.ts`;
+- `frontend/components/HomePage.tsx`;
+- `frontend/components/WorkflowPanel.tsx`;
+- `frontend/components/pipelines/PipelinePage.tsx`;
+- `/pipelines/standard`;
+- `/pipelines/action-transfer`;
+- `/pipelines/digital-human`;
+- old sandbox/model/session/task UI helpers.
+
+The root layout wraps the application in `AppShell`, and the Stage 8 `AppShell` itself imports `workflowApi` task/session helpers and places the three legacy pipeline routes plus `/sandbox` in the **main sidebar**. Therefore these are not merely orphan source files: the old workflow architecture is part of the normal live shell.
+
+The three pipeline pages render `PipelinePage`, which calls the legacy API client. Their UI also carries separate Video-Claw branding and light `bg-white` controls inside the otherwise UV Studio product, producing a visible second design system.
+
+A pinned donor copy also remains under `vendor/videoclaw-app`, but the problem is not limited to that donor tree.
 
 ## Confirmed legacy route families
 
-| Route family | Current server mounted? | Current product evidence | Classification | Action |
+| Route family | Mounted by current UV server? | Live frontend evidence | Classification | Recovery action |
 |---|---:|---|---|---|
-| `/api/pipelines/standard/tasks` | No | Stage 8 `RecipeExecutionPlan` and tests falsely advertised it for `narrated_video` | `stale_contract` | recovery branch fails closed; do not remount |
-| `/api/pipelines/action_transfer/tasks` | No | Stage 8 `RecipeExecutionPlan` and tests falsely advertised it for `action_transfer` | `stale_contract` | recovery branch fails closed; later bind a current capability workflow or remain unavailable |
-| `/api/pipelines/digital_human/tasks` | No | historical vendor product-promo route; current recipe already has no executable target | `donor_unreachable` / compatibility research | keep isolated pending explicit reuse decision |
-| `/api/tasks` | No | present in donor-era workflow model, not current UV frontend authority | `donor_unreachable` | no current replacement needed merely for donor parity |
-| `/api/sessions` | No | donor-era session state; Project Store is current canonical identity/state | `donor_unreachable` | do not restore as canonical state |
-| `/api/models` | No | donor-era provider/model catalog; current capability/runtime layer owns readiness | `donor_unreachable` | do not restore as product authority |
-| `/api/upload_media` | No | donor-era upload path; current project media APIs own registered inputs | `donor_unreachable` | do not restore |
-| `/api/sandbox/*` | No | donor-era sandbox execution intentionally excluded by Stage 3.5 | `donor_unreachable` / security boundary | do not remount |
+| `/api/pipelines/standard/tasks` | No | `workflowApi.startStandardPipeline`, `/pipelines/standard`; baseline recipe plan also advertised it | `live_legacy_broken` + `stale_contract` | recipe plan now fails closed; retire/isolate legacy page rather than remount backend |
+| `/api/pipelines/action_transfer/tasks` | No | `workflowApi.startActionTransferPipeline`, `/pipelines/action-transfer`; baseline recipe plan advertised it | `live_legacy_broken` + `stale_contract` | fail closed; later bind current semantic capability workflow if implemented |
+| `/api/pipelines/digital_human/tasks` | No | `workflowApi.startDigitalHumanPipeline`, `/pipelines/digital-human` | `live_legacy_broken` | isolate/retire legacy page; current recipe remains partial/capability-gated |
+| `/api/tasks*` | No | `workflowApi` task history/status/events/delete; `AppShell` task panels | `live_legacy_broken` | replace product task visibility with UV capability/job state or remove legacy task UI |
+| `/api/sessions*` | No | `workflowApi.fetchSessions/deleteSession`; `AppShell` session task panels | `live_legacy_broken` | Project Store remains canonical; remove legacy session authority from shell |
+| `/api/models*` | No | `workflowApi.fetchApiModels`; legacy `PipelinePage` model selectors | `live_legacy_broken` | Capability Registry/runtime config remain current authority |
+| `/api/pipelines/standard/templates` | No | legacy standard pipeline page | `live_legacy_broken` | do not remount solely for old UI |
+| `/api/upload_media` | No | legacy `PipelinePage` media upload | `live_legacy_broken` | current project source APIs remain authority |
+| `/api/project/*` | Mostly No | `WorkflowPanel` old start/status/execute/intervene/artifact lifecycle | `live_legacy_broken` | retire/isolate old whole-workflow controller; do not recreate a second project store |
+| `/api/sandbox/*` | No | `workflowApi` sandbox task listing; sidebar `/sandbox` | `live_legacy_broken` / security boundary | remove from normal product shell unless rebuilt behind current capability authorization |
+
+`/api/stages` is a special compatibility endpoint still mounted by `uv_studio/server.py`, but its existence does not restore the old project/pipeline runtime.
+
+## Main-shell evidence
+
+Stage 8 `AppShell` defines primary navigation entries for:
+
+```text
+/
+/sandbox
+/pipelines/standard
+/pipelines/action-transfer
+/pipelines/digital-human
+```
+
+It also polls old sessions, pipeline tasks and sandbox tasks through `workflowApi` and constructs links back into those legacy routes.
+
+`frontend/app/layout.tsx` wraps **all pages** in this AppShell. Consequently the new `/projects` product surface was added inside a shell whose navigation/task model still belongs to VideoClaw.
+
+This coexistence is a central Product Truth Recovery finding.
 
 ## Current authority replacements
 
-| Concern | Current UV Studio authority |
+| Concern | UV-owned authority to preserve |
 |---|---|
 | project identity/persistence | Project Store + `/api/uv/projects*` |
-| recipe definitions | Recipe Registry + UV recipe API |
-| execution availability | capability offers/selection/authorization plus current UV-owned workflow routes |
+| recipe definitions | Recipe Registry + recipe API |
+| execution availability | Capability Registry/selection/authorization + current UV workflow/domain APIs |
 | media inputs | project-owned source registration/media APIs |
-| deterministic edit/render | UV editor commands + bounded FFmpeg/MLT adapters |
-| dubbing | UV dubbing/editor/prepared-audio/review/render state and capability execution |
-| music video | UV Music Map/Direction/Assembly/Review APIs |
-| provider/runtime choices | Capability Registry + runtime configuration; never legacy `/api/models` as canonical truth |
+| deterministic edit/render | editor commands + bounded FFmpeg/MLT adapters |
+| dubbing | UV dubbing/editor/prepared-audio/review/render state |
+| music video | UV Music Map/Direction/Assembly/Review state |
+| provider/runtime choices | Capability Registry + runtime configuration |
+| jobs/progress | UV capability/job execution, not historical `/api/tasks` |
 
 ## Safety rule
 
-A stale contract or donor caller is **not** justification to remount the legacy backend. Reintroduction requires an explicit UV-owned adapter that preserves D-017 authorization, secret safety, project path boundaries and provider-neutral canonical state.
+A live broken frontend caller is **not** justification to remount the complete legacy backend. Reintroduction must be an explicit UV-owned adapter/workflow preserving D-017 authorization, secret safety, project path boundaries and provider-neutral canonical state.
 
-## Retirement procedure
+## Retirement/isolation procedure
 
-For any legacy file considered for deletion or reuse:
+1. enumerate each live legacy route/component/API call;
+2. identify whether a current UV-owned replacement already exists;
+3. remove it from normal AppShell/navigation first when it cannot execute safely;
+4. replace any still-needed user outcome with Product Orchestrator + current domain/capability actions;
+5. delete live legacy components only after import/build/tests prove no supported path depends on them;
+6. leave the pinned `vendor/` tree as provenance unless a separate dependency decision removes it.
 
-1. prove whether it belongs to live `frontend/`, `uv_studio/`, tests, or only `vendor/`;
-2. prove whether a current product import/call site reaches it;
-3. classify as current/compatibility/donor/dead;
-4. replace current callers with UV-owned semantics where needed;
-5. delete only after tests prove no supported path depends on it.
-
-The vendor tree itself remains pinned upstream provenance and is not being opportunistically edited or deleted in this recovery slice.
+The next Product Orchestrator/UI-isolation work must treat the live legacy shell as an explicit migration target, not as harmless donor residue.
