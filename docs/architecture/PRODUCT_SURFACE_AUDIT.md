@@ -2,17 +2,55 @@
 
 ## Scope
 
-This audit records user-visible Stage 8 `main` behavior that explains why a technically functional backend can feel non-functional to a first-time user. It complements `PRODUCT_TRUTH_MATRIX.md`: the matrix classifies execution truth, while this file records concrete navigation, workflow-isolation and prerequisite-presentation defects.
+This audit records Stage 8 `main` user-visible behavior that explains why a technically substantial backend can feel non-functional. It covers both the newer UV Project Store/product UI and the still-live VideoClaw shell/pipeline UI.
 
-## 1. The entry screen promises workflow isolation but does not deliver it
+## 1. The global shell exposes a second, broken product architecture
+
+`frontend/app/layout.tsx` wraps all pages with `AppShell`.
+
+The Stage 8 `AppShell` imports legacy session/task/sandbox functions from `workflowApi` and places these entries in its primary sidebar:
+
+```text
+Video-Claw -> /
+临时工作台 -> /sandbox
+文艺短视频 -> /pipelines/standard
+动作迁移 -> /pipelines/action-transfer
+数字人口播 -> /pipelines/digital-human
+```
+
+The three pipeline routes are real Next pages. Each renders `PipelinePage`, which calls the live `workflowApi.ts` functions for old `/api/pipelines/*`, `/api/tasks`, `/api/models`, `/api/upload_media` and related endpoints.
+
+The current UV-owned FastAPI server does not mount those pipeline/task/model/upload routes.
+
+Classification: **main-navigation entry points into removed backend runtime**.
+
+This is not harmless donor code. A normal user can enter it through the sidebar.
+
+Required recovery: remove/isolate these old entries from the normal shell unless the intended outcome is reimplemented through current UV semantic capabilities/domain actions. Do not remount the complete old backend.
+
+## 2. Two branding/theme systems coexist
+
+The newer project UI is branded UV Studio and uses its own dark product styling.
+
+Legacy pipeline pages render `BrandHeader` with `Video-Claw` branding and `PipelinePage` controls using `bg-white`, gray light borders and light form styling.
+
+Thus the same root application can visibly switch between two products/design systems.
+
+Classification: **live visual/runtime architecture split**.
+
+This gives a second concrete source for the reported “white fields in a dark app” class of experience, separate from the Stage 9 `uv-input` CSS bug found during installed-app review.
+
+Required recovery: one product shell/theme and one product architecture. Legacy pages are not merely restyled; their backend contracts must first be replaced or retired.
+
+## 3. The Projects entry screen promises workflow isolation but does not deliver it
 
 `frontend/app/projects/page.tsx` tells the user:
 
 > Выберите задачу — студия подключит только нужные этапы.
 
-The actual project page always mounts:
+But `/projects/{projectId}` always mounts:
 
-- `ProjectEditor` (targeted existing-video edit);
+- `ProjectEditor`;
 - `SequenceContinuityPanel`;
 - `DubbingWorkflowPanel`;
 - `DubbingPrecisionPanel`;
@@ -20,105 +58,114 @@ The actual project page always mounts:
 - execution-plan diagnostics;
 - archive/recovery controls.
 
-Recipe-specific panels are added **in addition** to that universal set.
+Recipe-specific panels are appended **in addition**.
 
 Consequences:
 
-- Photo -> Video still shows targeted-edit, continuity and dubbing concepts.
-- Visualizer still shows targeted-edit, continuity and dubbing concepts.
-- Story/Commercial/Free projects get their preparation workspace plus unrelated specialist workflows.
-- Music Video receives its three music panels plus the same generic editor/continuity/dubbing stack.
+- Photo -> Video still shows targeted edit, continuity and dubbing concepts.
+- Visualizer does too.
+- Story/Commercial/Free get preparation UI plus unrelated specialist workflows.
+- Music Video gets music panels plus generic edit/continuity/dubbing.
 
 Classification: **cross-workflow leakage / product promise violation**.
 
-Required recovery: Product Orchestrator determines relevant workspaces/next actions from recipe + canonical state. A recipe must not merely append panels to a universal project page.
+Required recovery: Product Orchestrator determines relevant workspaces/next actions. Recipe selection must not merely append more panels to a universal page.
 
-## 2. Recipe selection does not expose readiness
+## 4. Recipe selection does not expose readiness
 
-The project creation screen renders every recipe as the same selectable card using recipe title/description/UI metadata. It does not query project-level execution readiness before allowing selection.
+Project creation renders recipes as similar selectable cards without product-level readiness.
 
-Therefore these can look equally ready to the user even though their actual product truth differs materially:
+Actual truth differs:
 
-- Photo -> Video: working local path;
-- Visualizer: working local path;
+- Photo -> Video: real local path;
+- Visualizer: real local path;
 - Performance/Lip-sync: optional runtime setup required;
-- General Video: incomplete product journey;
-- Narrated Video: Stage 8 baseline advertised an unmounted legacy pipeline;
-- Action Transfer: Stage 8 baseline advertised an unmounted legacy pipeline;
+- General Video: incomplete current journey;
+- Narrated Video: baseline recipe plan advertised an unmounted legacy pipeline;
+- Action Transfer: same;
 - Digital Human: partial;
-- Story/Commercial: preparation state rather than complete production path.
+- Story/Commercial: preparation state, not complete production.
 
 Classification: **readiness-blind mode selection**.
 
-Required recovery: recipe cards consume Product Orchestrator/catalog readiness and visibly distinguish `ready`, `setup_required`, `partial`, `unavailable` before project creation.
+Required recovery: product catalog/orchestrator visibly distinguishes `ready`, `setup_required`, `partial`, `unavailable` before project creation.
 
-## 3. Project creation has a hidden prerequisite unrelated to the chosen task
+## 5. Project creation has a non-outcome hidden prerequisite
 
-Stage 8 `main` disables `Создать проект` unless all of these are true:
+Stage 8 disables `Создать проект` unless:
 
 - title is non-empty;
 - a recipe is selected;
-- creation is not already in progress.
+- creation is not busy.
 
-The required title is represented only by disabled-button state; it is not a product outcome prerequisite. This was one of the first defects exposed by installed-app human testing on the archived Stage 9 branch.
+A required title is not a production prerequisite yet it manifests mainly as a dead primary button. This was separately exposed by Stage 9 human testing.
 
 Classification: **unexplained primary-action gating**.
 
-Recovery direction: project identity can receive a safe default title; important blocking prerequisites should be explicit and task-relevant.
+Recovery: safe default project identity; visible prerequisites only when they matter to the selected outcome.
 
-## 4. `Производственный интерфейс` is a navigation loop
+## 6. `Производственный интерфейс` is a navigation loop
 
-On the projects page:
-
-```text
-Производственный интерфейс -> href="/"
-```
-
-But `frontend/app/page.tsx` contains only:
+On `/projects`:
 
 ```text
-redirect('/projects')
+Производственный интерфейс -> /
 ```
 
-Therefore the control returns the user to the same projects surface instead of opening another production interface.
+But `frontend/app/page.tsx` redirects `/` to `/projects`.
 
-Classification: **dead-end / misleading navigation**.
+So the control claims another interface but returns to the current area.
 
-Recovery direction: remove the control unless a real destination exists. Do not preserve historical product vocabulary with a loop.
+At the same time AppShell itself labels `/` as `Video-Claw`, creating contradictory expectations: the sidebar says `/` is the old product, while the route redirects to the new projects surface.
 
-## 5. Historical native-execution CTA also leads to the same loop
+Classification: **dead-end / split-navigation semantics**.
 
-The Stage 8 project page conditionally renders this when `executionPlan.can_prepare_native_execution` is true:
+## 7. Historical native-execution CTA also loops instead of executing
+
+The Stage 8 project page conditionally showed:
 
 ```text
-Открыть существующие производственные инструменты -> href="/"
+Открыть существующие производственные инструменты -> /
 ```
 
-Again, `/` redirects to `/projects`.
+For baseline `narrated_video` and `action_transfer`, execution plans claimed `AVAILABLE`, but this CTA neither invoked the advertised `/api/pipelines/*` target nor navigated to the actual `/pipelines/*` legacy page; it simply redirected to projects.
 
-On the Stage 8 baseline this was especially misleading for `narrated_video` and `action_transfer`: their execution plans reported an `AVAILABLE` compatibility target, yet the visible CTA did not call that target and merely returned to the projects page.
+Recovery already removes the false base `AVAILABLE` state for those recipes.
 
-The recovery branch already removes the false `AVAILABLE` state for those recipes, so this CTA disappears for them. The underlying UI pattern must still be retired or replaced by Product Orchestrator actions.
+Classification: **advertised execution without a valid UI action**.
 
-Classification: **advertised execution without executable UI action**.
+## 8. The directly linked legacy pipeline pages are broken for a different reason
 
-## 6. Targeted edit is real but exposes its internal state machine
+Unlike the CTA above, AppShell’s `/pipelines/*` links do reach real pipeline pages. But those pages call APIs that current `uv_studio/server.py` does not provide.
 
-`ProjectEditor` provides real source import, video preview, timeline/range selection and a semantic range-selection command. It then mounts replacement and render panels.
+So Stage 8 simultaneously has:
 
-The primary `Подготовить изменение` action is disabled until the user has simultaneously supplied:
+```text
+UV recipe metadata -> claims legacy target available
+project CTA        -> loops to /projects
+AppShell pipeline  -> reaches legacy page
+legacy page        -> calls removed backend API
+```
 
-1. a source video;
-2. a valid timeline selection;
-3. a non-empty change request.
+This is a complete product-truth split across metadata, navigation, frontend and backend.
 
-After that, UI copy exposes implementation/domain sequence:
+## 9. Targeted edit is real but exposes internal state machine
+
+`ProjectEditor` genuinely supports source import, preview, timeline/range selection and a semantic range command.
+
+The main change action is disabled until:
+
+1. a source exists;
+2. a valid range is selected;
+3. change text is non-empty.
+
+Then the UI exposes durable domain sequence:
 
 ```text
 Brief -> Plan -> Candidate -> Review -> Accepted -> Render
 ```
 
-Those domain objects are valuable for durable/reviewable production state, but a normal user should primarily see outcome-oriented steps such as:
+Those states are valuable for safe/reviewable production, but the default user journey should read more like:
 
 ```text
 Choose fragment -> Describe change -> Prepare result -> Preview -> Accept -> Export
@@ -126,49 +173,51 @@ Choose fragment -> Describe change -> Prepare result -> Preview -> Accept -> Exp
 
 Classification: **real backend workflow with frontend-owned prerequisite/state-machine interpretation**.
 
-Recovery direction: keep the domain model; project it through Product Orchestrator `prerequisites` and `next_actions`.
+Recovery: preserve domain model; project it through Product Orchestrator prerequisites/next actions.
 
-## 7. Execution-plan status is not a sufficient product readiness model
+## 10. Execution-plan status is not product readiness
 
-`/execution-plan` currently serves two different concepts:
+`/execution-plan` combines:
 
 - recipe compatibility target planning;
-- Stage 8 capability readiness projection for Photo -> Video, Visualizer and Performance/Lip-sync.
+- Stage 8 capability readiness projection for Photo/Visualizer/Performance.
 
-For capability-driven Stage 8 modes, the API can report `compatibility=available` with `target=null`, because the execution path is a semantic capability rather than a legacy/native pipeline target.
+Capability-driven modes can be `available` with `target=null`, which is valid lower-level semantics. Therefore `compatibility` cannot be the main product readiness concept.
 
-That is valid lower-level behavior but makes `compatibility` unsuitable as the primary product readiness concept.
+Recovery: Product Orchestrator separates:
 
-Classification: **semantic overload**.
-
-Recovery direction: Product Orchestrator exposes separate:
-
-- product readiness;
+- readiness;
 - prerequisites;
+- relevant workspaces;
 - next actions;
 - capability/runtime diagnostics.
 
-## 8. Current UI/backend ownership summary
+## 11. Current surface/backend ownership summary
 
-| Product area | Frontend behavior | Backend truth | Main product problem |
-|---|---|---|---|
-| Projects | creates/opens canonical projects | strong Project Store | readiness-blind recipe selection |
-| Targeted edit | interactive source/range/change workflow | strong edit/replacement/render domain | state machine exposed directly |
-| Dubbing | multiple specialist panels | substantial real domain/capability path | globally mounted + setup/prerequisite burden |
-| Continuity | specialist panel | real optional policy | globally mounted when irrelevant |
-| Music Video | map/direction/assembly/review panels | substantial real workflow | manual internal authoring burden + unrelated global panels |
-| Photo -> Video | small dedicated panel | real local capability | good reference flow, polluted by global panels |
-| Visualizer | small dedicated panel | real local capability | good reference flow, polluted by global panels |
-| Performance Lip-sync | dedicated panel | real optional verified runtime path | setup should be projected before entry |
-| Story/Commercial | brief/script/material binding | real preparation state | promise exceeds complete user journey |
-| Narrated/Action Transfer | recipe selection suggested a mode | Stage 8 baseline execution metadata pointed at unmounted routes | false readiness; fixed fail-closed in recovery branch |
+| Surface | Backend truth | Main problem |
+|---|---|---|
+| global AppShell legacy sidebar/tasks | old session/task/pipeline APIs mostly absent | normal navigation into dead runtime |
+| `/pipelines/*` | pages exist; required old backend routes absent | broken execution + second design system |
+| `/projects` | strong Project Store | readiness-blind recipe selection |
+| targeted edit | strong edit/replacement/render domain | internal state machine exposed |
+| dubbing | substantial real domain/capability path | globally mounted + setup burden |
+| continuity | real optional policy | globally mounted when irrelevant |
+| Music Video | substantial real workflow | low-level manual authoring + unrelated panels |
+| Photo -> Video | real local capability | good flow polluted by global shell/panels |
+| Visualizer | real local capability | good flow polluted by global shell/panels |
+| Performance Lip-sync | real optional verified path | setup should be shown before entry |
+| Story/Commercial | real brief/script/material prep | promise exceeds complete journey |
+| Narrated/Action Transfer | baseline plans claimed unmounted pipeline targets | false readiness repaired fail-closed |
 
-## Recovery acceptance rules derived from this audit
+## Recovery acceptance rules
 
-1. No navigation control may point to a route that only redirects back to the current product surface while claiming a different tool/workspace.
-2. Mode selection must expose truthful readiness before project creation.
-3. A selected recipe must control relevant workspace/action visibility.
-4. A disabled primary action must have visible, structured prerequisites.
-5. Domain state names are not the default user journey; expose them progressively when review/debugging requires them.
-6. A visible execution action must call a current UV-owned semantic action or current mounted API, not historical intent metadata.
-7. Photo -> Video and Visualizer remain reference flows for simple intent -> inputs -> action -> artifact behavior.
+1. Main navigation must not expose runtime surfaces whose backend contracts are absent.
+2. Do not restore the old backend merely to satisfy old frontend callers.
+3. Mode selection must expose truthful readiness before project creation.
+4. Selected recipe/orchestrator state controls relevant workspace visibility.
+5. Disabled primary actions must have visible structured prerequisites.
+6. Domain state names are progressive/advanced detail, not the default mental model.
+7. A visible execution action must call a current UV semantic/domain action or mounted API.
+8. One product shell/branding/theme must own the normal experience.
+9. Photo -> Video and Visualizer remain reference flows for intent -> inputs -> action -> artifact.
+10. Cold-start tests must exercise navigation/readiness and fail on dead legacy entry points rather than only testing known successful domain paths.
