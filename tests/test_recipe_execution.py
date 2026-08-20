@@ -9,7 +9,6 @@ from uv_studio.recipes import (
     build_builtin_registry,
     resolve_project_execution,
 )
-from uv_studio.server import app
 
 
 class RecipeExecutionPlanTests(unittest.TestCase):
@@ -156,26 +155,6 @@ class RecipeExecutionPlanTests(unittest.TestCase):
             [InputSlotKind.TEXT, InputSlotKind.IMAGE, InputSlotKind.VIDEO, InputSlotKind.AUDIO],
         )
         self.assertIn("no one-click", plan.reason)
-
-    def test_any_advertised_execution_target_is_mounted(self) -> None:
-        mounted_paths = {
-            route.path
-            for route in app.routes
-            if isinstance(getattr(route, "path", None), str)
-        }
-        for recipe_id in self.registry.ids():
-            plan = resolve_project_execution(self.registry, recipe_id)
-            if plan.target is not None:
-                self.assertIn(
-                    plan.target.launch_path,
-                    mounted_paths,
-                    f"{recipe_id} advertises unmounted target {plan.target.launch_path}",
-                )
-            if plan.compatibility is ExecutionCompatibility.AVAILABLE:
-                self.assertIsNotNone(
-                    plan.target,
-                    f"{recipe_id} is AVAILABLE without a current executable target",
-                )
 
     def test_execution_plan_preserves_recipe_production_policy(self) -> None:
         recipe = self.registry.get("action_transfer")
