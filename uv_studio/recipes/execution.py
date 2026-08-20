@@ -3,6 +3,11 @@
 This module answers whether a registered recipe can currently be served by an
 existing compatibility target. It does not launch work and does not choose a
 provider/model. Provider execution belongs to the Stage 3 Capability Registry.
+
+Product-truth rule: an ``AVAILABLE`` compatibility plan may describe only a
+currently reachable UV-owned execution target. Historical donor routes that are
+not mounted by :mod:`uv_studio.server` must fail closed until a current workflow
+replaces them.
 """
 
 from __future__ import annotations
@@ -157,9 +162,6 @@ class RecipeExecutionPlan:
         }
 
 
-_NATIVE = "native_videoclaw"
-
-
 def _general_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     return RecipeExecutionPlan(
         recipe_id=recipe.recipe_id,
@@ -179,8 +181,13 @@ def _narrated_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     return RecipeExecutionPlan(
         recipe_id=recipe.recipe_id,
         recipe_title=recipe.title,
-        compatibility=ExecutionCompatibility.AVAILABLE,
-        reason="The native VideoClaw standard pipeline is narration/topic-led and matches this recipe.",
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "The historical VideoClaw standard pipeline matches narrated-video semantics, but "
+            "UV Studio deliberately does not mount /api/pipelines/standard/tasks after the Stage 3.5 "
+            "runtime-security boundary. A current UV-owned narrated workflow has not replaced that "
+            "route yet, so the recipe must fail closed instead of advertising an unreachable target."
+        ),
         input_slots=(
             ExecutionInputSlot("text", "Тема или готовый дикторский текст", InputSlotKind.TEXT, maps_to="text"),
             ExecutionInputSlot("title", "Заголовок", InputSlotKind.TEXT, required=False, maps_to="title"),
@@ -191,11 +198,7 @@ def _narrated_video(recipe: RecipeDefinition) -> RecipeExecutionPlan:
             RuntimeConfigSlot("video_model", "Модель видео", "video.generate", required=False, maps_to="video_model"),
         ),
         production_policy=recipe.production_policy,
-        target=CompatibilityTarget(
-            adapter_id=_NATIVE,
-            target_id="standard",
-            launch_path="/api/pipelines/standard/tasks",
-        ),
+        target=None,
     )
 
 
@@ -227,8 +230,12 @@ def _action_transfer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
     return RecipeExecutionPlan(
         recipe_id=recipe.recipe_id,
         recipe_title=recipe.title,
-        compatibility=ExecutionCompatibility.AVAILABLE,
-        reason="The native action_transfer request contract matches source video + target image motion transfer.",
+        compatibility=ExecutionCompatibility.UNAVAILABLE,
+        reason=(
+            "The provider-neutral video.action_transfer capability contract still exists, but the historical "
+            "VideoClaw /api/pipelines/action_transfer/tasks route is not mounted by the UV-owned server. "
+            "Action Transfer needs a current authorized capability workflow before it can be advertised as executable."
+        ),
         input_slots=(
             ExecutionInputSlot("target_reference", "Целевой образ/персонаж", InputSlotKind.IMAGE, maps_to="image_path"),
             ExecutionInputSlot("source_video", "Видео с исходным движением", InputSlotKind.VIDEO, maps_to="video_path"),
@@ -245,11 +252,7 @@ def _action_transfer(recipe: RecipeDefinition) -> RecipeExecutionPlan:
             RuntimeConfigSlot("video_model", "Модель переноса движения", "video.action_transfer", maps_to="video_model"),
         ),
         production_policy=recipe.production_policy,
-        target=CompatibilityTarget(
-            adapter_id=_NATIVE,
-            target_id="action_transfer",
-            launch_path="/api/pipelines/action_transfer/tasks",
-        ),
+        target=None,
     )
 
 

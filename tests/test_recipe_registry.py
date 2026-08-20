@@ -65,8 +65,11 @@ class RecipeRegistryTests(unittest.TestCase):
     def test_narrated_video_is_not_the_general_default(self) -> None:
         recipe = build_builtin_registry().get("narrated_video")
         self.assertIn("speech.synthesize", recipe.required_capabilities)
-        self.assertEqual(VIDEOCLAW_PIPELINE_BINDINGS[recipe.recipe_id], "standard")
+        self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
         self.assertNotEqual(recipe.recipe_id, "general_video")
+
+    def test_legacy_videoclaw_pipeline_bindings_fail_closed(self) -> None:
+        self.assertEqual(VIDEOCLAW_PIPELINE_BINDINGS, {})
 
     def test_existing_video_specialized_recipes_require_source_review(self) -> None:
         registry = build_builtin_registry()

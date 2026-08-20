@@ -22,12 +22,13 @@ class RecipeExecutionPlanTests(unittest.TestCase):
         self.assertIsNone(plan.target)
         self.assertIn("narration-led", plan.reason)
 
-    def test_narrated_video_maps_to_standard_with_runtime_model_slots(self) -> None:
+    def test_narrated_video_fails_closed_without_mounted_uv_workflow(self) -> None:
         plan = resolve_project_execution(self.registry, "narrated_video")
-        self.assertEqual(plan.compatibility, ExecutionCompatibility.AVAILABLE)
-        self.assertTrue(plan.can_prepare_native_execution)
-        self.assertEqual(plan.target.target_id, "standard")
-        self.assertEqual(plan.target.launch_path, "/api/pipelines/standard/tasks")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        self.assertIn("does not mount", plan.reason)
+        self.assertIn("UV-owned", plan.reason)
         self.assertEqual(
             [slot.slot_id for slot in plan.runtime_config_slots],
             ["llm_model", "image_model", "video_model"],
@@ -51,10 +52,13 @@ class RecipeExecutionPlanTests(unittest.TestCase):
         self.assertNotIn("kling", encoded)
         self.assertNotIn("seedance", encoded)
 
-    def test_action_transfer_binding_is_available_and_sample_first(self) -> None:
+    def test_action_transfer_fails_closed_without_current_recipe_workflow(self) -> None:
         plan = resolve_project_execution(self.registry, "action_transfer")
-        self.assertEqual(plan.compatibility, ExecutionCompatibility.AVAILABLE)
-        self.assertEqual(plan.target.target_id, "action_transfer")
+        self.assertEqual(plan.compatibility, ExecutionCompatibility.UNAVAILABLE)
+        self.assertFalse(plan.can_prepare_native_execution)
+        self.assertIsNone(plan.target)
+        self.assertIn("not mounted", plan.reason)
+        self.assertIn("video.action_transfer", plan.reason)
         self.assertEqual(
             [slot.slot_id for slot in plan.input_slots],
             ["target_reference", "source_video", "instruction"],

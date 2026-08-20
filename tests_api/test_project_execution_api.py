@@ -54,12 +54,13 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertIsNone(plan["target"])
         self.assertIn("narration-led", plan["reason"])
 
-    def test_narrated_video_reports_real_native_contract_and_offer_readiness(self) -> None:
+    def test_narrated_video_fails_closed_but_preserves_capability_requirements(self) -> None:
         project_id = self._create("narrated_video")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
-        self.assertEqual(plan["compatibility"], "available")
-        self.assertEqual(plan["target"]["target_id"], "standard")
-        self.assertEqual(plan["target"]["launch_path"], "/api/pipelines/standard/tasks")
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        self.assertIn("does not mount", plan["reason"])
         self.assertEqual(
             [slot["slot_id"] for slot in plan["runtime_config_slots"]],
             ["llm_model", "image_model", "video_model"],
@@ -72,10 +73,13 @@ class ProjectExecutionApiTests(unittest.TestCase):
                 1,
             )
 
-    def test_action_transfer_preserves_required_production_gates(self) -> None:
+    def test_action_transfer_fails_closed_and_preserves_required_production_gates(self) -> None:
         project_id = self._create("action_transfer")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
-        self.assertEqual(plan["compatibility"], "available")
+        self.assertEqual(plan["compatibility"], "unavailable")
+        self.assertFalse(plan["can_prepare_native_execution"])
+        self.assertIsNone(plan["target"])
+        self.assertIn("not mounted", plan["reason"])
         self.assertEqual(plan["production_policy"]["source_review"], "required")
         self.assertEqual(plan["production_policy"]["sample_first"], "required")
         self.assertEqual(plan["production_policy"]["final_review"], "required")

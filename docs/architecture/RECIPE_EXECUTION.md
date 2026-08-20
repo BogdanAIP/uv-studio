@@ -40,27 +40,27 @@ The existing VideoClaw `standard` pipeline is narration/topic-led and requires a
 
 Therefore UV Studio explicitly reports that a true general-video execution path is not implemented yet.
 
-### `narrated_video` → available via native `standard`
+### `narrated_video` → unavailable
 
-The existing request requires:
+The historical VideoClaw `standard` request accepted:
 
 - `text` (topic or narration script);
 - `llm_model`;
 - `image_model`;
 - optional `video_model` and additional rendering/TTS settings.
 
-This is semantically compatible with `narrated_video`.
+That historical contract is broadly compatible with `narrated_video`, but its `/api/pipelines/standard/tasks` target is not mounted by the Stage 3.5 UV-owned server. The current build therefore exposes no launch target and reports the recipe unavailable until a current UV-owned workflow exists.
 
-### `action_transfer` → available via native `action_transfer`
+### `action_transfer` → unavailable
 
-The existing request requires:
+The historical VideoClaw request accepted:
 
 - target image path;
 - reference motion video path;
 - prompt text;
 - video model.
 
-UV Studio exposes source video + target reference as required content slots. The instruction slot is optional at recipe level because the compatibility adapter can supply a conservative default transfer instruction when the user does not specify one.
+UV Studio preserves source video + target reference as required content slots and the provider-neutral `video.action_transfer` capability requirement. The historical `/api/pipelines/action_transfer/tasks` route is not mounted, so the current build exposes no launch target and reports the recipe unavailable.
 
 ### `digital_human` → partial
 

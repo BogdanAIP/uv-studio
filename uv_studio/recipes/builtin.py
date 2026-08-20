@@ -1,4 +1,4 @@
-"""Initial provider-neutral recipes and temporary VideoClaw pipeline bindings."""
+"""Initial provider-neutral recipes and fail-closed legacy compatibility metadata."""
 
 from __future__ import annotations
 
@@ -349,14 +349,11 @@ BUILTIN_RECIPES = (
     FREE_PROJECT,
 )
 
-# Temporary compatibility metadata. This is deliberately kept outside the
-# provider-neutral RecipeDefinition and may disappear when Stage 3 capability
-# execution replaces direct pipeline binding.
-VIDEOCLAW_PIPELINE_BINDINGS: dict[str, str] = {
-    "narrated_video": "standard",
-    "action_transfer": "action_transfer",
-    "digital_human": "digital_human",
-}
+# Retained as an empty compatibility export so existing importers fail closed
+# instead of receiving routes that the Stage 3.5 UV-owned server does not mount.
+# Current execution truth is projected by RecipeExecutionPlan and, later, the
+# Product Orchestrator rather than by direct VideoClaw pipeline bindings.
+VIDEOCLAW_PIPELINE_BINDINGS: dict[str, str] = {}
 
 
 def build_builtin_registry() -> RecipeRegistry:

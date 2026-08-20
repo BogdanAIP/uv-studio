@@ -1,14 +1,31 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "product-recovery-truth-inventory",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Establish truthful product readiness by inventorying visible workflows, removing stale executable recipe targets and defining the first Product Orchestrator contract before further UI or release work.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-truth-inventory",
+    "pull_request": 42,
+    "write_scope": [
+      "docs/architecture/**",
+      "project-context/**",
+      "ROADMAP.md",
+      "tests/**",
+      "tests_api/**",
+      "uv_studio/recipes/**",
+      "uv_studio/server.py"
+    ]
+  },
   "last_completed": {
     "id": "stage-8-additional-recipes",
     "pull_request": 37,
     "merge_commit": "5eb8f6c2256b9b67dd1e896fc929682eb19b16ca"
   },
   "handoff": {
-    "next_slice_id": "stage-9-desktop-productization-release-hardening",
+    "next_slice_id": "product-recovery-orchestrator-foundation",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

@@ -132,7 +132,7 @@ General create-from-brief video. Does not require narration, music, story, conti
 
 ### `narrated_video`
 
-Narration-led explainer/informational workflow. Temporarily maps to the existing VideoClaw `standard` pipeline for future execution work.
+Narration-led explainer/informational workflow. Its recipe contract remains valid, but the current build exposes no direct legacy pipeline binding and reports execution unavailable until a UV-owned workflow is mounted.
 
 ### `action_transfer`
 
@@ -142,17 +142,15 @@ Existing VideoClaw action-transfer use case represented as a UV Studio recipe wi
 
 Existing talking/digital-human use case represented as a UV Studio recipe with required source review/sample/final review policy.
 
-## Temporary VideoClaw bindings
+## Legacy VideoClaw bindings
 
-Compatibility bindings live outside `RecipeDefinition`:
+The public compatibility export is deliberately empty:
 
 ```text
-narrated_video -> standard
-action_transfer -> action_transfer
-digital_human -> digital_human
+VIDEOCLAW_PIPELINE_BINDINGS = {}
 ```
 
-They are migration metadata, not the long-term capability contract.
+Stage 3.5 removed the complete legacy pipeline runtime from the UV-owned server. Keeping historical route names here would advertise execution paths that are not mounted. Existing importers may retain the symbol during migration, but every recipe now fails closed or resolves through current semantic capability execution.
 
 The large upstream film orchestration remains specialized and is not made the universal default.
 

@@ -1,71 +1,114 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: stage-8-additional-recipes -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: product-recovery-truth-inventory -->
 
-**Updated:** 2026-08-16
+**Updated:** 2026-08-20
 
 **Repository:** `BogdanAIP/uv-studio`
 
-## Product now
+## Current lifecycle
 
-Stage 8 Additional Recipes is merged through PR #37 / merge commit `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca` after Chat-first review on exact head `91dcf820b8df76730584f3c27457c782db00b213`. The final pre-merge review head passed all five permanent CI jobs in Actions run `31971331754`, including API integration, real HTTP, FFmpeg/MLT real-media evidence, frontend lint/audit/build and Playwright browser outcomes on Ubuntu and Windows.
+`product-recovery-truth-inventory` is the active review recovery slice on branch `fix/product-recovery-truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8. The fail-closed review removed stale public `VIDEOCLAW_PIPELINE_BINDINGS` values and aligned recipe documentation so no current public recipe contract advertises the removed legacy routes. Implementation and durable context are frozen for exact-head review in PR #42.
 
-The repository is now intentionally returning to the canonical `idle` lifecycle. This closure commit advances `last_completed` to `stage-8-additional-recipes` and keeps `stage-9-desktop-productization-release-hardening` as the next handoff. Stage 9 remains blocked until this exact post-merge idle head itself passes all permanent required checks.
+Stage 9 PR #38 was closed **without merge** and retained as an archived engineering reference. Its branch contains substantial Windows packaging/native-shell work, but the installed application failed human product review and must not become the maintained baseline before D-062 Product Truth Recovery passes.
 
-## Stage 8 delivered product modes
+The first recovery PR attempt (#41) used a non-conforming branch prefix and is superseded by PR #42 on the `fix/` branch; no product behavior depends on that administrative attempt.
 
-Stage 8 broadens UV Studio by composition rather than by introducing another universal project, timeline or provider engine:
+## Why recovery started from main
 
-1. **Story Video** — composition-first brief/script workspace with exact project-owned image/video/audio bindings.
-2. **Commercial / Product** — the same portable workspace model with product-oriented media roles and truthful capability readiness.
-3. **Photo → Video** — semantic capability `video.compose_photos` through deterministic local FFmpeg, ordered project-owned stills plus optional project-owned audio, bounded render settings and artifact provenance.
-4. **Audio Visualizer** — semantic capability `audio.visualize` through deterministic local FFmpeg, project-owned master audio plus optional artwork, waveform rendering and measured-duration verification.
-5. **Performance / Lip-sync** — optional local MuseTalk 1.5 supplied portrait + finished speech path, exposed only when the reviewed runtime boundary is satisfied.
-6. **Free Project** — intentionally no required one-click pipeline; users compose the UV-owned primitives their project needs.
+The product-truth defects predate Stage 9 packaging. The Stage 8 `main` baseline contains two coupled contradictions.
 
-Story/commercial/free persist typed/versioned Stage 8 input workspaces beneath the canonical Project Store. Photo/visualizer remain bounded local/free deterministic media operations. Performance/lip-sync keeps heavyweight ML/runtime/model installation outside the normal UV Studio dependency graph.
+### Backend execution truth
 
-## Stage 8 review findings closed
+- `uv_studio/server.py` deliberately mounts the UV-owned API boundary and does not mount historical `/api/pipelines/*` routes;
+- `uv_studio/recipes/execution.py` nevertheless marked `narrated_video` and `action_transfer` as `AVAILABLE` and pointed them at `/api/pipelines/standard/tasks` and `/api/pipelines/action_transfer/tasks`;
+- unit and API tests explicitly encoded those stale paths/readiness values as expected behavior.
 
-Before merge, review and exact-head CI closed the following concrete defects and trust-boundary gaps:
+The recovery branch now fails both recipes closed while preserving typed inputs, capability requirements and production policy, and adds an API-boundary regression guard against advertising unmounted base execution targets.
 
-- restored semantic capability identity `video.compose_photos` in blocked execution-plan diagnostics;
-- removed browser races that treated an already-visible control as proof of completed asynchronous project-source registration;
-- synchronized performance portrait/speech selection with exact registered source IDs;
-- removed source-count-driven component remounts that could discard user-selected media and manual photo order;
-- added browser regression proving a user-defined photo order survives a later audio upload and is preserved in final render provenance;
-- hardened the verified MuseTalk checkout against untracked/ignored importable or executable shadows and untracked symlinks outside explicitly allowed `.venv/` / `venv/` trees;
-- disabled MuseTalk checkout bytecode creation with Python `-B`;
-- pinned exact SHA-256 identities for the six binary model payloads used by the accepted MuseTalk 1.5 inference profile because those payloads participate in executable deserialization/runtime loading;
-- rejected loader-preferred alternative VAE/Whisper payloads that could cause different bytes to execute while pinned files remained present;
-- persisted stable `runtime_profile` and full `model_payload_sha256` provenance into successful verified lip-sync artifacts.
+### Frontend architecture split
 
-D-043 records the complete optional MuseTalk trust boundary. The accepted Stage 8 profile is deliberately fail-closed: future upstream/model revisions require an explicit reviewed profile/fingerprint update rather than silent compatibility.
+The live Stage 8 `frontend/` contains both the newer UV Project Store/product UI and a still-compiled VideoClaw workflow UI.
 
-## Architecture invariants
+Confirmed live files include:
 
-- Project Store and UV-owned domain state are canonical; engines, model runtimes and compatibility surfaces are adapters rather than competing authorities.
-- GUI, scripts, AI and MCP converge on UV-owned semantic capabilities/commands/workflows.
-- Paid/remote execution remains optional and behind D-017; provider/model identifiers remain outside canonical project state.
-- Stage 8 remains composition-first under D-042; it did not add a second universal media/project/timeline engine.
-- Performance/lip-sync remains `configuration_required`/partial unless the exact D-043 checkout, shadow-code, model-payload, runtime and CUDA preflight succeeds.
-- Windows and Linux remain continuous engineering targets.
-- Development/review remains Chat-first under D-040; automatic Codex review is excluded.
+- `frontend/lib/workflowApi.ts`;
+- `frontend/components/HomePage.tsx`;
+- `frontend/components/WorkflowPanel.tsx`;
+- `frontend/components/pipelines/PipelinePage.tsx`;
+- `/pipelines/standard`, `/pipelines/action-transfer`, `/pipelines/digital-human` pages.
 
-## Verification history
+The root `AppShell` itself imports `workflowApi`, polls old session/pipeline/sandbox task APIs and places `/sandbox` plus all three pipeline pages in the main sidebar. `frontend/app/layout.tsx` wraps all routes in that AppShell. The old pipeline pages call backend endpoints that Stage 3.5 intentionally stopped mounting.
 
-- Stable Stage 7 idle base: `main@b68669a9eb56e2d85601b9e35f1783ce23a33c1a`, green CI #1431.
-- Stage 8 product baseline: `2fb903794cf6b6bef576f941c21c18bee9059377`, green CI #1572 / Actions `31969309483`.
-- Initial Stage 8 review transition: `18f46b504feffad7d67878408c15070244381af9`, green CI #1574 / Actions `31969673721`.
-- Final security-reviewed Stage 8 head: `91dcf820b8df76730584f3c27457c782db00b213`, all five permanent jobs green in Actions run `31971331754`.
-- Stage 8 merge commit: `5eb8f6c2256b9b67dd1e896fc929682eb19b16ca`.
-- The exact idle closure head created by this document update is the final Stage 8 completion gate and must pass the same five permanent jobs before Stage 9 starts.
+Therefore the product is not merely “new UV UI plus harmless vendor residue”. Two frontend eras coexist in the live build, with different state models, backend contracts, branding and visual styles. This is a major source of the observed confusing/dead UI.
 
-## Cross-cutting backlog
+## Product Truth Inventory
 
-Non-blocking debt remains deliberately outside Stage 8: broader codec/device fixtures, reproducible Python dependency locking, schema migration/versioning for growing extension state, generated frontend contracts, a future common command envelope, reusable frontend primitives, CI job decomposition, deeper renderer file-handle/TOCTOU hardening, richer continuity authoring and eventual retirement of transitional compatibility surfaces.
+`docs/architecture/PRODUCT_TRUTH_MATRIX.md` is the working audit source. Current classification:
+
+- `photo_to_video` — real local intent-to-result capability path, though the page is polluted by unrelated global panels/shell UI;
+- `visualizer` — same;
+- `performance_lip_sync` — real `working_with_setup` path under the verified optional MuseTalk runtime;
+- targeted existing-video edit — mechanically real but UX/orchestration remains too state-machine-heavy;
+- dubbing — substantial real workflow with setup/UX orchestration gaps;
+- `music_video` — substantial real domain/assembly/review implementation but default authoring is too schema/state-heavy;
+- `general_video`, `story_video`, `commercial_product`, `digital_human`, `free_project` — partial at product-journey level;
+- `narrated_video` and `action_transfer` — baseline metadata was misleading because advertised targets were not mounted; recovery now reports them unavailable until current UV-owned workflows exist;
+- live `/pipelines/*`, old session/task/model/upload/sandbox surfaces — compiled/routable legacy frontend against disabled backend contracts and must be isolated/retired rather than used as release functionality.
+
+## Product surface findings
+
+- recipe selection promises that only relevant stages will load, but the project page globally mounts targeted edit, sequence continuity and three dubbing panels for every recipe;
+- recipe cards do not express readiness before project creation;
+- `Производственный интерфейс` points to `/`, while `/` redirects to `/projects` in the current route entry;
+- the same AppShell simultaneously exposes legacy VideoClaw pipeline navigation;
+- legacy pipeline pages carry separate Video-Claw branding/light controls and call unmounted APIs;
+- informed browser E2E proves known paths, not cold-start discoverability.
+
+## Architecture direction
+
+D-062 Product Truth Recovery Gate is accepted. Recovery preserves:
+
+- Project Store, archives and portable domain state;
+- D-017 execution authorization and provider-neutral Capability Registry;
+- deterministic FFmpeg media operations, provenance and cancellation;
+- proven edit/dubbing/music state;
+- MLT where it provides real value;
+- archived Stage 9 installer/runtime/native-shell engineering.
+
+The missing product layer is a Product Orchestrator that projects readiness, structured prerequisites, relevant workspaces and next semantic actions from canonical state plus runtime availability.
+
+The frontend migration has **two parallel responsibilities**:
+
+1. stop React from independently reconstructing every new UV domain state machine;
+2. isolate/retire the live VideoClaw shell/pipeline/session/task/model surfaces whose backend contracts no longer exist.
+
+Stage 3.5 is not rolled back to make old UI function.
+
+D-033 reuse-first remains binding. OpenCut/MLT/UV editor ownership must be explicitly re-evaluated before further generic NLE growth.
+
+## Current slice deliverables
+
+1. maintain Product Truth, surface, interaction and evidence maps;
+2. fail closed stale `narrated_video` and `action_transfer` base compatibility targets;
+3. add an API-boundary contract test for advertised executable targets;
+4. classify live legacy VideoClaw frontend/API surfaces;
+5. define the minimum Product Orchestrator contract and next handoff;
+6. keep code changes bounded: no broad frontend rewrite in the inventory PR.
+
+## Verification direction
+
+Existing unit/API/real-media/informed browser tests remain valuable. D-062 adds a later cold-start product-evidence class that cannot seed workflow state through hidden APIs when discoverability/setup is what is being tested.
+
+PR #42 must pass all ordinary permanent checks on its final exact review head before merge.
+
+## Release status
+
+Release/signing work is paused as a priority. D-059 trusted signing remains necessary for eventual public distribution, but it is downstream of product truth.
+
+A future Stage 9 candidate must pass both the preserved release/security/integrity gates and the Product Truth Gate, including cold-start UI-only evidence and a successful installed Windows human review.
 
 ## Next handoff
 
-`stage-9-desktop-productization-release-hardening` remains the declared next slice. Its entry conditions are defined in `project-context/NEXT_TASK.md`; it must not begin until the exact post-merge idle head is green across all permanent checks.
+After this inventory/contract-repair slice is reviewed, merged and context is returned to green `idle`, continue with `product-recovery-orchestrator-foundation` as defined in `project-context/NEXT_TASK.md`.

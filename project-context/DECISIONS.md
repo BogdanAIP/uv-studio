@@ -48,3 +48,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-039 — Optional sequence continuity and bounded inspection](decisions/D-039-sequence-continuity-bounded-inspection.md)
 - [D-040 — Chat-first development; no automatic Codex review](decisions/D-040-chat-first-no-automatic-codex-review.md)
 - [D-041 — Music Video Mode: UV-owned Music Map and reference-only storyboard research](decisions/D-041-music-video-map-reference-only-storyboard.md)
+- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md)
