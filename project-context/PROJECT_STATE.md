@@ -3,114 +3,131 @@
 <!-- uv-context-state: draft -->
 <!-- uv-active-slice: stage-9-desktop-productization-release-hardening -->
 
+**Updated:** 2026-08-20
+
 ## Current lifecycle
 
-Stage 9 Desktop Productization & Release Hardening is the single active draft slice in PR #38 on `stage-9/desktop-productization-release-hardening`, based on exact green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 merged as PR #37.
+Stage 9 Desktop Productization & Release Hardening remains the single active Draft slice in PR #38 on `stage-9/desktop-productization-release-hardening`, based on green idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8 merged as PR #37.
 
-The branch remains **Draft**. Productization is substantially implemented and both Stage 9 evidence decisions are now accepted:
+The branch is now explicitly **paused from merge readiness by D-062 Product Truth Recovery Gate**.
 
-- D-057 constrained-host/long-project evidence — **Accepted**;
-- D-058 redistributable Windows media runtime boundary — **Accepted** on exact head `6060f620fe6f0751496e98ba85e5405ece3613a7`.
+The last product-code head audited before this context correction was `9defd097b140d1b1c9837bddd30d43768cb8e408`. Subsequent documentation-only commits record the recovery decision and do not claim new product behavior.
 
-The remaining blockers before `draft -> review` are real Windows artifact signing and the final whole-payload release/security/dependency/license audit, followed by post-signing checksums and one exact review-head proof.
+Stage 9 packaging, installer, update/rollback, integrity, native-shell and release-hardening work remains valuable and must be preserved. However, the first human Windows 10 installed-app review and a broader repository/history audit showed that green engineering/release automation does not prove a coherent user-facing product.
 
-## Product goal
+## Product-recovery finding
 
-Ship a native Windows product that requires no separately prepared Python, Node/npm, FFmpeg or MLT while preserving canonical projects, archives, capability authorization, user data and all permanent user-facing workflows through packaged execution.
+The release blocker is no longer primarily signing or publication polish.
 
-## Implemented and proven Stage 9 foundation
+Human review first exposed first-run usability failures: project creation could be left disabled, native controls were unreadable, prerequisite-dependent controls looked broken, and launch diagnostics remained too visible. The subsequent audit found deeper pre-Stage-9 causes:
 
-- **D-044 immutable release manifest** — complete sorted payload inventory with size/SHA-256, path/symlink rejection and deep same-size tamper detection;
-- **D-045 packaged mutable-state boundary** — immutable application payload separated from `%LOCALAPPDATA%/UV Studio` projects/config/logs;
-- **D-046 exact release input profile** — CPython 3.13.14, exact 32-package shipping graph, Node.js 24.19.0, pinned binary/source media coordinates and build-tool identities;
-- **D-047 packaged toolchain resolution** — FFmpeg/FFprobe/MLT resolve only from verified manifest-owned paths;
-- **D-048 official Next standalone frontend** with dynamic project routes and bundled Node runtime;
-- **D-049 desktop launcher supervision** for frozen backend + standalone frontend lifecycle;
-- **D-050 per-user versioned NSIS installation** with deep verification before activation;
-- **D-051 fail-closed project migration preparation/recovery**;
-- **D-052 evidence-based media-payload curation rule**;
-- **D-053 installer-carried A -> B -> A update/rollback** while preserving user data;
-- **D-054 secret-safe diagnostics/recovery health**;
-- **D-055 installed clean-machine proof** with host Python/Node/FFmpeg/FFprobe/MLT removed from PATH;
-- **D-056 cancellable local FFmpeg jobs** with process termination/reaping and no partial Project Store artifact publication;
-- **D-057 constrained-host/long-project evidence**, accepted with 2,000+2,000 Project Store scale evidence and real ten-minute media work;
-- **D-058 redistributable Windows media boundary**, accepted with exact Shotcut/FFmpeg/MLT runtime closure, component provenance and hash-pinned license/notice payload;
-- **release checksum generator** — deterministic fail-closed `SHA256SUMS` writer/verifier committed and tested, intentionally reserved for the post-signing publication step.
+- Stage 3.5 correctly stopped mounting the complete legacy VideoClaw FastAPI application for authorization/secret safety;
+- some legacy frontend clients and recipe execution plans still reference historical `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/sandbox/*` surfaces that are not mounted by the current UV-owned server;
+- `narrated_video` and `action_transfer` execution metadata can advertise legacy pipeline targets despite those targets not being current mounted product routes;
+- `general_video` is presented as a product recipe although its own execution layer states that a true general-video execution path is not implemented;
+- some visible recipes provide preparation/state forms rather than a complete intent-to-result workflow;
+- the frontend directly reconstructs several feature-specific state machines and prerequisites instead of receiving one product-level workflow/next-action projection;
+- D-033 selected a reuse-first MLT/OpenCut foundation, but implementation has drifted toward more UV-owned editor/timeline UI while MLT is largely a derived projection/render boundary;
+- current browser E2E can exercise informed paths and seeded intermediate state without proving cold-start discoverability or setup truth.
 
-## D-057 acceptance evidence
+These findings explain why the application can be technically healthy while a normal user experiences apparently dead controls and unclear workflows.
 
-D-057 is **Accepted**. Exact head `e1fba386f5fefd46806317a844023169e7ecacc7` proved:
+## D-062 Product Truth Recovery Gate
 
-- coarse secret-safe logical CPU / total+available RAM diagnostics with fail-soft OS probes;
-- no hostname/user/process/environment/path inventory in resource diagnostics;
-- 2,000 source + 2,000 artifact Project Store round-trip/load/JSON evidence under a bounded traced Python allocation envelope;
-- real ten-minute CPU-only media with extraction near 598–600 seconds through `LocalFFmpegAdapter`;
-- Linux and Windows application baselines, both bootstraps, shipping-Python/runtime compatibility and frontend compatibility;
-- Stage 9 Windows Release #112 / run `32107133982` including packaged execution, clean-machine install/uninstall and A -> B -> A rollback;
-- fresh CI #1758 / run `32109010491` passing `development-context` after the PR journal was restored to the required six-section contract.
+D-062 is accepted and `docs/architecture/PRODUCT_RECOVERY_PLAN.md` is the recovery authority.
 
-D-056 cancellation remains the bounded escape path for work that is too expensive on a constrained host; D-057 does not invent a universal RAM/CPU minimum.
+Stage 9 may not merge until all of the following are true:
 
-## D-058 acceptance evidence
+1. every visible recipe/action has a truthful readiness state backed by a mounted executable path;
+2. there are zero execution-plan targets pointing at unmounted endpoints;
+3. stale donor/legacy frontend clients are either retired or explicitly isolated as compatibility code;
+4. a Product Orchestrator projects workflow readiness, prerequisites and semantic next actions for GUI/AI/MCP/scripts;
+5. D-033 editor ownership/reuse ambiguity is explicitly re-resolved before generic NLE growth;
+6. permanent scenarios A-E complete through the UI without manual API calls or hidden test-only state seeding;
+7. clean-state browser evidence passes;
+8. human Windows installed-app review passes;
+9. the existing Stage 9 security/integrity/release checks remain green.
 
-D-058 is **Accepted** on exact head `6060f620fe6f0751496e98ba85e5405ece3613a7`.
+## Recovery order
 
-The accepted media boundary contains:
+The next implementation work is deliberately ordered around product truth rather than more visual polish:
 
-- official Shotcut portable `26.4.30` carrier SHA-256 `986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a`;
-- official `shotcut-src-26.4.30.txz` corresponding-source SHA-256 `fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442`;
-- exact FFmpeg `n8.1-11-g75d37c499d`, with machine-audited `nonfree_enabled=false` and `legal/ffmpeg-buildconf.json` included before D-044;
-- exactly four MLT runtime modules: `libmltavformat.dll`, `libmltcore.dll`, `libmltqt6.dll`, `libmltxml.dll`;
-- exact media closure of **446 files / 128,695,917 bytes (122.73 MiB)**;
-- **52 retained PE binaries** mapped exactly once into **28 component groups** by `packaging/media-runtime-components.windows-x86_64.json`;
-- **27 exact license/notice assets** covering all 28 component groups by `packaging/media-runtime-license-files.windows-x86_64.json`;
-- mandatory SHA-256 pinning for all 27 license assets;
-- corrected `liblzma-5.dll` licensing scope of `0BSD` based on the upstream XZ 5.8.3 liblzma boundary;
-- fail-closed unknown/duplicate PE, incomplete provenance, changed license bytes, unsafe paths and partial legal staging.
+1. Product Truth Inventory for every visible mode/action;
+2. recipe/execution contract repair, including stale launch paths and false readiness;
+3. Product Orchestrator contract and incremental common semantic command envelope;
+4. editor-foundation re-resolution under reuse-first constraints;
+5. simplified permanent journeys: targeted edit, dubbing, music video, narrated video, general video;
+6. rationalization of additional recipes and optional ML setup;
+7. cold-start UI-only product regressions;
+8. resume Stage 9 package/release work and only then finish trusted signing/publication.
 
-Acceptance evidence:
+## Foundation to preserve
 
-- CI #1788 / run `32139063217`: **completed / success** across every permanent job;
-- Stage 9 Windows Release #142 / run `32139063188`: **completed / success** through exact acquisition, pinned license staging, D-044 build/deep verification, tamper rejection, packaged media/frontend/backend execution, desktop supervision, installer, silent install/uninstall and A -> B -> A rollback;
-- Windows Release #142 artifact id `9325376444`, digest `sha256:e676ab832c7f5c536d6f1783051c895505a9b8bf932d98f9831f6cf95e901446`;
-- direct artifact inspection confirmed **27/27** expected license files, **27/27** pinned SHA matches and **27/27** corresponding D-044 file/hash entries.
+The recovery is **not** a rewrite. The following are considered valuable proven foundations unless later evidence explicitly supersedes them:
 
-The former Kdenlive carrier remains rejected historical evidence because its exact FFmpeg self-report contained `--enable-nonfree`.
+- Project Store, portable archives, migrations and path/traversal boundaries;
+- D-017 authorization and provider-neutral Capability Registry;
+- provenance, cancellation and capability-job ownership;
+- deterministic FFmpeg range/edit/render/preview/dubbing/music/photo/visualizer operations;
+- portable accepted edit, dubbing and music state;
+- MLT runtime/adapter where it provides demonstrated engine value;
+- D-044 immutable release inventory and deep tamper verification;
+- D-045 mutable user-data separation under `%LOCALAPPDATA%/UV Studio`;
+- exact packaged Python/Node/media toolchain resolution;
+- per-user versioned NSIS install/update/rollback/uninstall model;
+- Rust/WebView2 native Windows host and bounded backend/frontend lifecycle;
+- Stage 9 legal/security/dependency hardening already proven.
 
-## Remaining release blockers
+## Stage 9 engineering foundation already delivered
 
-1. **Real Windows artifact signing.** No signing identity/service is fabricated. UV-owned executable/installer signing needs a real public trust path and exact verification evidence.
-2. **Final whole-payload release/security/dependency/license audit.** D-058 closes the media-runtime redistribution boundary, not every dependency or release obligation in the complete product.
-3. **Post-signing release checksums.** `tools/write_release_checksums.py` is ready, but `SHA256SUMS` must be generated only after signing because signing modifies executable bytes.
-4. **Exact review-head evidence and context transition.** PR body, decisions and state must identify the final signed/audited head and green permanent checks before PR #38 changes from Draft to Review.
+The branch contains substantial release engineering that should be retained for later reconciliation:
 
-## Signing/publication boundary
+- D-044 immutable release manifest;
+- D-045 packaged mutable-state boundary;
+- D-046 exact supported release runtimes;
+- D-047 manifest-owned packaged toolchain resolution;
+- D-048 official Next standalone frontend packaging;
+- D-049 desktop launcher/supervision foundation, later complemented by D-061 Rust/WebView2 native host;
+- D-050 per-user versioned Windows installation;
+- D-051 fail-closed Project Store migration preparation/recovery;
+- D-052 curated media payload policy;
+- D-053 installer-carried update/rollback;
+- D-054 secret-safe diagnostics/recovery health;
+- D-055 installed clean-machine runtime independence proof;
+- D-056 cancellable local capability jobs;
+- D-057 constrained-host/long-project evidence;
+- D-058 redistributable Windows media runtime boundary;
+- D-059 public signing boundary definition;
+- D-060 product UX surface boundary;
+- D-061 Rust WebView2 desktop host.
 
-The required publication order remains:
+D-059 trusted public signing remains necessary for public release, but it is **not the current highest-priority blocker**. Signing a product whose core user journeys are misleading would not satisfy the roadmap completion gate.
 
-`build -> final immutable runtime -> sign UV-owned binaries -> build/sign installer as applicable -> verify Authenticode -> SHA256SUMS -> publish`
+## Architecture invariants during recovery
 
-Third-party FFmpeg/MLT/Qt/runtime DLLs are not to be silently re-signed with a UV identity merely because they are carried in the installer.
-
-Self-signed certificates are not accepted as public-release evidence.
-
-## Preserved invariants
-
-- Project Store remains canonical; runtime/provider state never replaces project truth.
-- Provider/model IDs remain adapter/runtime concerns rather than canonical semantics.
+- Project Store and UV-owned domain state remain canonical.
+- Provider/model/runtime identities remain adapter/runtime concerns rather than canonical project semantics.
 - Paid/remote execution stays optional and explicit under D-017.
-- FFmpeg/MLT execution remains bounded to project-owned verified media and packaged executables are manifest-owned.
-- Shotcut is only an acquisition carrier, not a second editor authority.
-- MuseTalk remains optional/fail-closed under D-043 and is not a baseline desktop dependency.
-- Chat-first review plus ordinary GitHub CI remain readiness authority under D-040.
-- Stage 9 remains one PR/slice; release research and hardening are evidence within this lifecycle, not competing active slices.
+- No legacy VideoClaw route is remounted merely to make a button work if that would bypass the UV-owned authorization/security boundary.
+- User-visible readiness must be derived from actual executable product truth.
+- Internal plan/candidate/review/runtime structures remain durable where useful but must not dominate ordinary UX when no user decision is required.
+- GUI, scripts, AI and MCP converge on UV-owned semantic actions/commands rather than independent workflow implementations.
+- Reuse-first remains mandatory: do not expand a custom generic NLE until editor ownership is explicitly re-decided.
+- Windows and Linux remain continuous engineering targets; Windows installed-app human review remains a release gate.
 
-## Preserved post-Stage-9 direction
+## Current limitations requiring recovery
 
-The provider-neutral UV Character Asset design for image **and video** continuity remains recorded in `docs/uv-character-asset-design.md` and `project-context/NEXT_TASK.md`. It is intentionally not mixed into Stage 9 product code.
+- Recipe metadata, mounted routes and frontend behavior are not yet guaranteed to agree.
+- Legacy donor API/client code remains in the repository and needs call-site evidence before retirement.
+- General/narrated/action-transfer/digital-human product readiness is not yet a truthful end-to-end matrix.
+- Music Video exposes too much internal Music Map/shot schema as ordinary authoring work.
+- Dubbing can depend on separately configured local ASR/runtime prerequisites that are not yet presented as a coherent first-run setup path.
+- Targeted editing exposes internal production gates more directly than necessary for the common user journey.
+- Story/Commercial composition workspaces do not yet constitute complete production flows.
+- Current E2E does not provide a separate cold-start, no-hidden-seeding product proof.
 
-## Completion gate
+## Next handoff
 
-Stage 9 may move to review only after real Windows signing and the final whole-payload audit are present, post-signing checksums are produced from the exact signed bytes, the packaged installer/update/recovery flows remain green, and the exact review head passes all permanent required checks plus Stage 9 Windows Release.
+The next implementation target is `product-recovery-truth-inventory`, defined in `project-context/NEXT_TASK.md`.
 
-After merge, the repository must atomically return to green `idle` on `main` before `post-roadmap-release-maintenance` begins.
+Because the repository protocol permits only one active slice, that recovery slice must not begin concurrently with active Stage 9 implementation. PR #38 remains Draft/paused while the recovery transition is coordinated; its branch is preserved as the Stage 9 engineering/package reference for later reconciliation.
