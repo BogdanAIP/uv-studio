@@ -68,3 +68,4 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-059 — Windows code-signing publication boundary](decisions/D-059-windows-code-signing-publication-boundary.md)
 - [D-060 — Product UX surface boundary](decisions/D-060-product-ux-surface-boundary.md)
 - [D-061 — Rust WebView2 desktop host](decisions/D-061-rust-webview2-desktop-host.md)
+- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md)
