@@ -252,6 +252,34 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         )
         self.assertIsNotNone(photo_artifacts[0]["metadata"]["audio_binding"])
 
+        for source in photo_project["sources"]:
+            if source["kind"] == "image":
+                (self.temp_root / "projects" / photo_id / source["path"]).write_bytes(
+                    b"tampered e2e image"
+                )
+        page.reload()
+        expect(page.get_by_text("Нет проверенных изображений. Загрузите новую копию.")).to_be_visible()
+        expect(
+            page.get_by_role("button", name="Собрать видео из фотографий", exact=True)
+        ).to_be_disabled()
+
+        page.locator('input[aria-label="Изображения Stage 8"]').set_input_files(
+            str(self.red_image)
+        )
+        expect(page.get_by_text("1. red.png", exact=True)).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("2. red.png", exact=True)).to_have_count(0)
+        expect(
+            page.get_by_role("button", name="Собрать видео из фотографий", exact=True)
+        ).to_be_enabled()
+        with page.expect_response(
+            lambda response: (
+                "/workflow/actions/compose_photos" in response.url
+                and response.request.method == "POST"
+            )
+        ) as recovered_action_response:
+            page.get_by_role("button", name="Собрать видео из фотографий", exact=True).click()
+        self.assertEqual(recovered_action_response.value.status, 200)
+
         visualizer_id, visualizer_encoded = self._create_project(
             "E2E Stage 8 Visualizer", "visualizer"
         )

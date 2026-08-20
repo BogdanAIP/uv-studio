@@ -76,6 +76,7 @@ def _photo_workflow(
     source_media: ProjectSourceMediaStore,
 ) -> ProjectWorkflowState:
     image_sources = tuple(source for source in project.sources if source.kind == "image")
+    verified_image_ids: list[str] = []
     unverified_image_ids: list[str] = []
     for source in image_sources:
         try:
@@ -86,7 +87,9 @@ def _photo_workflow(
             )
         except (SourceMediaError, SourceMediaNotFound, ProjectStoreError):
             unverified_image_ids.append(source.id)
-    images_ready = bool(image_sources) and not unverified_image_ids
+            continue
+        verified_image_ids.append(source.id)
+    images_ready = bool(verified_image_ids)
     capability_known = True
     capability_ready = False
     capability_configurable = False
@@ -95,9 +98,10 @@ def _photo_workflow(
         diagnostics.append(
             WorkflowDiagnostic(
                 code="source_media_unverified",
-                severity="error",
+                severity="warning" if images_ready else "error",
                 message=(
-                    "Один или несколько image source не прошли проверку project-owned bytes: "
+                    "Image source исключены из сборки, потому что не прошли проверку "
+                    "project-owned bytes: "
                     + ", ".join(unverified_image_ids)
                 ),
             )
@@ -139,24 +143,28 @@ def _photo_workflow(
             )
         )
 
+    if images_ready:
+        image_resolution = (
+            "Повреждённые ссылки исключены из сборки; загрузите новую копию, если этот кадр нужен."
+            if unverified_image_ids
+            else None
+        )
+    elif image_sources:
+        image_resolution = (
+            "Загрузите новую копию фотографии: зарегистрированные файлы отсутствуют или повреждены."
+        )
+    else:
+        image_resolution = "Загрузите одну или несколько фотографий."
+
     prerequisites = (
         WorkflowPrerequisite(
             prerequisite_id="source.images",
             title="Фотографии",
             explanation=(
-                "Нужна хотя бы одна фотография; все зарегистрированные файлы "
-                "должны пройти проверку project-owned bytes."
+                "Нужна хотя бы одна фотография, прошедшая проверку project-owned bytes."
             ),
             satisfied=images_ready,
-            resolution=(
-                None
-                if images_ready
-                else (
-                    "Повторно загрузите фотографии: зарегистрированные файлы отсутствуют или повреждены."
-                    if image_sources
-                    else "Загрузите одну или несколько фотографий."
-                )
-            ),
+            resolution=image_resolution,
         ),
         WorkflowPrerequisite(
             prerequisite_id="capability.video.compose_photos",
@@ -209,6 +217,10 @@ def _photo_workflow(
                 },
                 "audio_source_id": {"type": "string", "minLength": 1},
             },
+        },
+        suggested_input={
+            "image_source_ids": tuple(verified_image_ids),
+            "duration_per_image_us": 2_000_000,
         },
         execution_class="local_deterministic",
         authorization_class="d017_exact_one_shot_if_required",

@@ -154,7 +154,7 @@ class ProductOrchestratorTests(unittest.TestCase):
                     ("capability.video.compose_photos",),
                 )
 
-    def test_referenced_image_requires_verified_project_media_bytes(self) -> None:
+    def test_unverified_image_is_excluded_without_blocking_verified_recovery(self) -> None:
         verified_image = ProjectReference(
             id="src_image",
             kind="image",
@@ -171,12 +171,17 @@ class ProductOrchestratorTests(unittest.TestCase):
             _registry(OfferAvailability.AVAILABLE),
             StubSourceMedia("src_image"),
         )
-        self.assertEqual(state.readiness, WorkflowReadiness.SETUP_REQUIRED)
-        self.assertFalse(state.next_actions[0].enabled)
-        self.assertEqual(state.next_actions[0].blocked_by, ("source.images",))
+        self.assertEqual(state.readiness, WorkflowReadiness.READY)
+        self.assertTrue(state.next_actions[0].enabled)
+        self.assertEqual(state.next_actions[0].blocked_by, ())
+        self.assertEqual(
+            state.next_actions[0].suggested_input["image_source_ids"],
+            ("src_image",),
+        )
         self.assertEqual(state.diagnostics[0].code, "source_media_unverified")
+        self.assertEqual(state.diagnostics[0].severity, "warning")
         self.assertIn("src_broken", state.diagnostics[0].message)
-        self.assertIn("Повторно загрузите", state.prerequisites[0].resolution)
+        self.assertIn("исключены", state.prerequisites[0].resolution)
 
     def test_latest_photo_artifact_becomes_current_outcome(self) -> None:
         old = ProjectReference(

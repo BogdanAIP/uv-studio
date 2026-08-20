@@ -168,6 +168,18 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         self.assertEqual(state["next_actions"][0]["blocked_by"], ["source.images"])
         self.assertEqual(state["diagnostics"][0]["code"], "source_media_unverified")
 
+        replacement_id = self._add_image()
+        recovered_response = self.client.get(self._url())
+        self.assertEqual(recovered_response.status_code, 200, recovered_response.text)
+        recovered = recovered_response.json()
+        self.assertEqual(recovered["readiness"], "ready")
+        self.assertTrue(recovered["next_actions"][0]["enabled"])
+        self.assertEqual(
+            recovered["next_actions"][0]["suggested_input"]["image_source_ids"],
+            [replacement_id],
+        )
+        self.assertEqual(recovered["diagnostics"][0]["severity"], "warning")
+
     def test_hash_mismatched_image_does_not_advertise_readiness(self) -> None:
         source_id = self._add_image()
         _reference, path = ProjectSourceMediaStore(self.store).resolve(

@@ -38,8 +38,12 @@ FFmpeg arguments.
 
 A source reference alone is not readiness evidence. The Photo-to-Video
 projection uses the existing `ProjectSourceMediaStore.resolve_verified()` trust
-boundary, so missing files or bytes that no longer match canonical
-`sha256`/`size_bytes` metadata block the image prerequisite before execution.
+boundary and publishes only verified image IDs as the action's
+`suggested_input`. Missing files or bytes that no longer match canonical
+`sha256`/`size_bytes` metadata are excluded. If none remain, the image
+prerequisite is blocked; a fresh verified upload supplies a new ID and recovers
+the workflow without inventing a second store or a source-mutation API in this
+slice.
 
 ## HTTP contract
 
@@ -54,7 +58,7 @@ POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
 - a user-facing summary;
 - structured prerequisites and their resolution hints;
 - relevant workspaces only;
-- stable next-action IDs with bounded input schemas and execution metadata;
+- stable next-action IDs with bounded input schemas, verified suggested inputs and execution metadata;
 - current/recent result artifacts;
 - separate jobs, decisions and diagnostics collections.
 

@@ -46,6 +46,7 @@ class WorkflowAction:
     blocked_by: tuple[str, ...]
     prerequisite_ids: tuple[str, ...]
     input_schema: dict[str, Any]
+    suggested_input: dict[str, Any]
     execution_class: str
     authorization_class: str
     capability_id: str

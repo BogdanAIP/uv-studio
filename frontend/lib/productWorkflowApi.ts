@@ -25,6 +25,7 @@ export interface WorkflowAction {
   blocked_by: string[];
   prerequisite_ids: string[];
   input_schema: Record<string, unknown>;
+  suggested_input: Record<string, unknown>;
   execution_class: string;
   authorization_class: string;
   capability_id: string;
