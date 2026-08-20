@@ -1,60 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-orchestrator-foundation -->
+<!-- uv-next-slice: product-recovery-editor-ownership-resolution -->
 
 ## Goal
 
-After Product Truth Inventory closes false/stale readiness contracts, introduce the first UV Studio Product Orchestrator projection so the frontend can answer: **what can the user do next, what prerequisite blocks it, and which workspace is actually relevant?** At the same time, begin isolating the live VideoClaw shell/pipeline runtime surfaces that point to backend routes Stage 3.5 intentionally removed.
+Re-resolve the D-033 editor ownership boundary before any further generic NLE growth: decide whether UV Studio remains a bounded task-oriented orchestrator/editor, reuses more OpenCut Classic UI primitives, or delegates more timeline behavior to MLT behind UV commands.
 
 ## Required direction
 
-- implement a read-only `ProjectWorkflowState` projection over canonical Project Store/domain state plus runtime capability availability;
-- expose explicit readiness: `ready`, `setup_required`, `partial`, `unavailable`;
-- expose structured prerequisites rather than implicit disabled-button conditions;
-- expose stable semantic `next_actions` with bounded inputs, execution/authorization class and expected result kind;
-- expose `relevant_workspaces` (or equivalent) so recipe/orchestrator state, not a universal page, controls which specialist tools are shown;
-- keep Project Store and existing domain state canonical; the orchestrator must not become a second persistence engine;
-- migrate one representative working flow (prefer Photo -> Video or Visualizer) to consume the orchestrator before broad workflow migration;
-- remove/isolate legacy VideoClaw pipeline/session/task/sandbox navigation from the normal AppShell unless an entry is backed by current UV-owned semantics;
-- do **not** remount the complete legacy `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/project/*` or `/api/sandbox/*` runtime merely to satisfy `workflowApi` callers;
-- keep the live old frontend code only as bounded migration evidence until replacement/removal is proven by build/tests;
-- preserve D-017 authorization and provider-neutral capability boundaries;
-- do not add generic NLE features until the D-033 editor ownership/reuse question is explicitly re-resolved.
-
-## First representative outcome
-
-A good first proof is a deterministic mode such as Photo -> Video:
-
-```text
-project recipe + current sources + runtime availability
- -> GET ProjectWorkflowState
- -> readiness=ready or explicit prerequisite
- -> relevant workspace=photo composition
- -> next action=compose photos
- -> existing video.compose_photos capability
- -> artifact
-```
-
-On that project, unrelated dubbing/continuity/targeted-edit workspaces should not be presented as primary workflow steps, and the legacy pipeline sidebar must not remain a competing path.
+- audit the actual post-Stage-8 ownership of timeline state, preview, editing commands and final render;
+- compare the accepted D-033 map with the code that now exists;
+- evaluate the smallest credible ownership options using current executable evidence and license/deployment constraints;
+- preserve Project Store and the one UV command model in every option;
+- do not add new generic timeline, waveform, compositor or transition primitives during the decision slice;
+- record the selected direction as a new ADR or an explicit D-033 amendment;
+- require separate owner approval before implementing a fundamental ownership change.
 
 ## Completion proof
 
-The slice is complete when:
-
-- at least one real workflow renders its enabled/blocked actions from Product Orchestrator state;
-- a blocked action names an actionable prerequisite;
-- relevant workspace projection prevents unrelated specialist panels from being presented for that representative recipe;
-- the normal AppShell no longer advertises at least the three broken legacy `/pipelines/*` runtime entries, or they have been replaced by current UV semantic actions;
-- GUI/API tests prove the same readiness/action semantics;
-- existing domain/capability tests remain green;
-- no duplicate canonical workflow/project/task store is introduced.
+The slice is complete when one accepted ownership map states what UV Studio, MLT and any OpenCut-derived UI each own; current deviations are documented; rejected options have concrete evidence; and the next bounded implementation slice can be scoped without ambiguous editor authority.
 
 ## Entry gate
 
-Do not start this slice until `product-recovery-truth-inventory` has:
-
-- a reviewed Product Truth Matrix;
-- zero known base `AVAILABLE` execution plans pointing to unmounted routes;
-- explicit classification of live legacy VideoClaw shell/pipeline/session/task/model/sandbox surfaces;
-- focused contract tests preventing stale executable targets from returning;
-- all ordinary permanent checks green on the exact review head.
+Do not begin until Product Orchestrator foundation is merged, its context is closed to `idle`, and the Photo-to-Video reference flow proves that product orchestration can remain separate from generic editor ownership.

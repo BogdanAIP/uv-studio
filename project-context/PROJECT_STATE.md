@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: product-recovery-truth-inventory -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-20
 
@@ -9,7 +9,9 @@
 
 ## Current lifecycle
 
-`product-recovery-truth-inventory` is the active review recovery slice on branch `fix/product-recovery-truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8. The fail-closed review removed stale public `VIDEOCLAW_PIPELINE_BINDINGS` values and aligned recipe documentation so no current public recipe contract advertises the removed legacy routes. Implementation and durable context are frozen for exact-head review in PR #42.
+`product-recovery-orchestrator-foundation` is the active draft slice on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed.
+
+This slice adds a read projection and one semantic action for `photo_to_video`, makes the project UI consume readiness/prerequisites/relevant-workspace truth, and removes the legacy pipeline/session/task/sandbox model from normal AppShell navigation without remounting its backend.
 
 Stage 9 PR #38 was closed **without merge** and retained as an archived engineering reference. Its branch contains substantial Windows packaging/native-shell work, but the installed application failed human product review and must not become the maintained baseline before D-062 Product Truth Recovery passes.
 
@@ -90,18 +92,16 @@ D-033 reuse-first remains binding. OpenCut/MLT/UV editor ownership must be expli
 
 ## Current slice deliverables
 
-1. maintain Product Truth, surface, interaction and evidence maps;
-2. fail closed stale `narrated_video` and `action_transfer` base compatibility targets;
-3. add an API-boundary contract test for advertised executable targets;
-4. classify live legacy VideoClaw frontend/API surfaces;
-5. define the minimum Product Orchestrator contract and next handoff;
-6. keep code changes bounded: no broad frontend rewrite in the inventory PR.
+1. add `ProjectWorkflowState` as a read-only projection over Project Store, recipes and runtime capability availability;
+2. expose explicit readiness, structured prerequisites, relevant workspaces and stable semantic next actions;
+3. route `compose_photos` through the existing `video.compose_photos` capability execution/authorization boundary;
+4. make the Photo-to-Video page render the projected action and only its relevant composition workspace;
+5. remove legacy `/pipelines/*`, sandbox/session/task polling and Video-Claw branding from the normal AppShell;
+6. prove blocked and executable Photo-to-Video states through unit, API, build and browser evidence without a second workflow store.
 
 ## Verification direction
 
-Existing unit/API/real-media/informed browser tests remain valuable. D-062 adds a later cold-start product-evidence class that cannot seed workflow state through hidden APIs when discoverability/setup is what is being tested.
-
-PR #42 must pass all ordinary permanent checks on its final exact review head before merge.
+Focused projection/API tests must prove the same prerequisite/action semantics as the frontend. The existing real Photo-to-Video browser outcome must execute through the semantic workflow action, and all permanent cross-platform checks remain required on the final review head.
 
 ## Release status
 
@@ -111,4 +111,4 @@ A future Stage 9 candidate must pass both the preserved release/security/integri
 
 ## Next handoff
 
-After this inventory/contract-repair slice is reviewed, merged and context is returned to green `idle`, continue with `product-recovery-orchestrator-foundation` as defined in `project-context/NEXT_TASK.md`.
+After this foundation slice is reviewed, merged and context returns to green `idle`, continue with `product-recovery-editor-ownership-resolution` as defined in `project-context/NEXT_TASK.md`. That follow-up may change the D-033 ownership map, so it is an ADR decision slice rather than an implicit implementation extension.
