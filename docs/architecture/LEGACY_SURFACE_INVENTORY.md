@@ -12,18 +12,26 @@ Stage 3.5 intentionally stopped mounting the complete VideoClaw FastAPI applicat
 - `stale_contract` — current metadata/client code still implies a route is executable even though it is not mounted;
 - `unknown` — requires call-site evidence before classification.
 
+## Current frontend finding
+
+The live UV-owned `frontend/lib` on the Stage 8 `main` baseline contains current modules such as `projectsApi.ts`, `editorApi.ts`, `dubbingApi.ts`, `musicVideoApi.ts`, `stage8MediaApi.ts` and capability/job/render clients. It does **not** contain `workflowApi.ts`; repository-tree checks also found no live `frontend` files named `HomePage` or `WorkflowPanel`.
+
+The historical `workflowApi.ts` does exist at `vendor/videoclaw-app/frontend/lib/workflowApi.ts` inside the pinned donor tree. That vendored frontend is provenance/compatibility material, not current UV-owned product authority.
+
+Therefore the confirmed active stale contract in this slice is **recipe execution/readiness metadata plus tests**, not an imported live React `workflowApi` client. The vendor route families below remain useful historical inventory and must stay isolated unless a reviewed UV-owned adapter explicitly reuses them.
+
 ## Confirmed legacy route families
 
-| Route family | Current server mounted? | Known role | Classification | Action |
+| Route family | Current server mounted? | Current product evidence | Classification | Action |
 |---|---:|---|---|---|
-| `/api/pipelines/standard/tasks` | No | historical narrated/standard VideoClaw production pipeline | `stale_contract` in recipe execution metadata; donor compatibility elsewhere | recipe metadata fails closed now; do not remount |
-| `/api/pipelines/action_transfer/tasks` | No | historical action-transfer pipeline | `stale_contract` in recipe execution metadata; donor compatibility elsewhere | recipe metadata fails closed now; later bind current capability workflow or remain unavailable |
-| `/api/pipelines/digital_human/tasks` | No | historical product-promo digital-human pipeline | compatibility/donor surface; current recipe already does not claim full compatibility | keep isolated pending call-site audit |
-| `/api/tasks` | No | historical task polling/control | donor/compatibility client surface | audit callers; retire if unreachable |
-| `/api/sessions` | No | historical VideoClaw session state | donor/compatibility client surface | audit callers; Project Store remains canonical |
-| `/api/models` | No | historical provider/model catalog | donor/compatibility client surface | audit callers; Capability Registry/runtime config remain current authority |
-| `/api/upload_media` | No | historical upload path | donor/compatibility client surface | audit callers; current project media registration is authority |
-| `/api/sandbox/*` | No | historical sandbox task execution | donor/compatibility client surface | do not remount; audit and retire unreachable callers |
+| `/api/pipelines/standard/tasks` | No | Stage 8 `RecipeExecutionPlan` and tests falsely advertised it for `narrated_video` | `stale_contract` | recovery branch fails closed; do not remount |
+| `/api/pipelines/action_transfer/tasks` | No | Stage 8 `RecipeExecutionPlan` and tests falsely advertised it for `action_transfer` | `stale_contract` | recovery branch fails closed; later bind a current capability workflow or remain unavailable |
+| `/api/pipelines/digital_human/tasks` | No | historical vendor product-promo route; current recipe already has no executable target | `donor_unreachable` / compatibility research | keep isolated pending explicit reuse decision |
+| `/api/tasks` | No | present in donor-era workflow model, not current UV frontend authority | `donor_unreachable` | no current replacement needed merely for donor parity |
+| `/api/sessions` | No | donor-era session state; Project Store is current canonical identity/state | `donor_unreachable` | do not restore as canonical state |
+| `/api/models` | No | donor-era provider/model catalog; current capability/runtime layer owns readiness | `donor_unreachable` | do not restore as product authority |
+| `/api/upload_media` | No | donor-era upload path; current project media APIs own registered inputs | `donor_unreachable` | do not restore |
+| `/api/sandbox/*` | No | donor-era sandbox execution intentionally excluded by Stage 3.5 | `donor_unreachable` / security boundary | do not remount |
 
 ## Current authority replacements
 
@@ -40,16 +48,16 @@ Stage 3.5 intentionally stopped mounting the complete VideoClaw FastAPI applicat
 
 ## Safety rule
 
-A stale caller is **not** justification to remount the legacy backend. Reintroduction requires an explicit UV-owned adapter that preserves D-017 authorization, secret safety, project path boundaries and provider-neutral canonical state.
+A stale contract or donor caller is **not** justification to remount the legacy backend. Reintroduction requires an explicit UV-owned adapter that preserves D-017 authorization, secret safety, project path boundaries and provider-neutral canonical state.
 
 ## Retirement procedure
 
-For each legacy frontend/client file:
+For any legacy file considered for deletion or reuse:
 
-1. prove whether it is reachable from current product navigation/import graph;
-2. identify tests or compatibility adapters that still import it;
+1. prove whether it belongs to live `frontend/`, `uv_studio/`, tests, or only `vendor/`;
+2. prove whether a current product import/call site reaches it;
 3. classify as current/compatibility/donor/dead;
 4. replace current callers with UV-owned semantics where needed;
 5. delete only after tests prove no supported path depends on it.
 
-This slice records the route-family truth. File-by-file retirement can proceed in bounded follow-up commits after dependency evidence is available.
+The vendor tree itself remains pinned upstream provenance and is not being opportunistically edited or deleted in this recovery slice.
