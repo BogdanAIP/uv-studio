@@ -5,7 +5,7 @@
     "id": "stage-9-desktop-productization-release-hardening",
     "kind": "stage",
     "roadmap_stage": "stage-9",
-    "goal": "Turn the proven UV Studio application into a reproducible, installable and diagnosable native Windows product that does not require users to prepare Python, Node/npm or FFmpeg separately, while preserving canonical projects and all permanent user outcomes through packaged execution.",
+    "goal": "Turn the proven UV Studio application into a reproducible, installable and diagnosable native Windows product that does not require users to prepare Python, Node/npm or FFmpeg separately, while preserving canonical projects and all permanent user outcomes through packaged execution. Product Truth Recovery under D-062 is now a mandatory merge gate.",
     "base_branch": "main",
     "branch": "stage-9/desktop-productization-release-hardening",
     "pull_request": 38,
@@ -37,7 +37,7 @@
     "merge_commit": "5eb8f6c2256b9b67dd1e896fc929682eb19b16ca"
   },
   "handoff": {
-    "next_slice_id": "post-roadmap-release-maintenance",
+    "next_slice_id": "product-recovery-truth-inventory",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
