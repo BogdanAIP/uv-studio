@@ -1,45 +1,109 @@
 # Next Task
 
-<!-- uv-next-slice: post-roadmap-release-maintenance -->
+<!-- uv-next-slice: product-recovery-truth-inventory -->
 
 ## Goal
 
-After Stage 9 Desktop Productization & Release Hardening is reviewed, merged and closed to a green idle lifecycle, transition UV Studio from roadmap implementation to release maintenance and explicitly scoped follow-up development.
+Restore product truth before further Stage 9 release progression. The first recovery slice audits every user-visible workflow against the actual mounted UV-owned execution path, repairs false/stale recipe execution readiness, and establishes the initial Product Orchestrator contract.
+
+This handoff is governed by D-062 and `docs/architecture/PRODUCT_RECOVERY_PLAN.md`.
 
 ## Required direction
 
-- treat the Stage 9 packaged Windows release and its project/archive compatibility contract as the maintained product baseline;
-- triage real release feedback, crashes, security findings, dependency/toolchain advisories and hardware/codec compatibility issues into bounded fix/chore/research slices;
-- preserve project migration, backup/recovery and release-manifest compatibility across maintenance releases;
-- keep installer/update/signing provenance and third-party notices current;
-- require explicit architecture decisions before adding new universal engines, mandatory cloud dependencies or provider-specific canonical state;
-- continue permanent packaged-app and user-outcome regressions for every release-affecting change;
-- add future product capabilities only as separately scoped slices with their own evidence and lifecycle.
+### 1. Build the Product Truth Matrix
 
-## Preserved future capability: UV Character Asset
+Create `docs/architecture/PRODUCT_TRUTH_MATRIX.md` and inventory every visible recipe and primary action.
 
-Do not lose the post-Stage-9 character-consistency direction recorded in `docs/uv-character-asset-design.md`.
+For each entry record:
 
-The intended architecture is a provider-neutral portable `.uvcharacter` whose canonical truth is source references + human-authored character description, while face/subject embeddings, crops, FLUX/video conditioning payloads, LoRA coordinates, scores and continuity summaries are versioned rebuildable caches.
+- user intent/recipe;
+- frontend route/component and handler;
+- frontend API function;
+- mounted backend route;
+- domain command/service;
+- required capability/offer;
+- actual adapter/runtime;
+- user-visible setup prerequisite;
+- expected result/artifact/state change;
+- truthful status: `working`, `working_with_setup`, `partial`, `misleading`, or `dead`;
+- automated and human evidence status.
 
-This capability must be designed for **both image and video generation from the first format version**:
+At minimum cover:
 
-- image native multi-reference conditioning without mandatory per-character training;
-- optional trained adapters/LoRAs as replaceable provider payloads, never identity truth;
-- local face/whole-subject identity evaluation and candidate ranking;
-- video still/keyframe/motion/pose conditioning behind provider-neutral capabilities;
-- sampled-frame identity evaluation, intra-shot temporal drift and previous-shot continuity;
-- scene/shot appearance-state overlays so outfit/hair/story changes do not overwrite base character identity;
-- cross-project portability, provenance, privacy and no silent remote upload of biometric-like references/embeddings.
+- `general_video`;
+- `narrated_video`;
+- `music_video`;
+- targeted existing-video edit;
+- dubbing;
+- `action_transfer`;
+- `digital_human`;
+- `story_video`;
+- `commercial_product`;
+- `photo_to_video`;
+- `visualizer`;
+- `performance_lip_sync`;
+- `free_project`.
 
-Inline Studio is useful architectural research for this idea, but its GPL implementation must not be copied into the UV Studio MIT codebase. Reimplement the concept behind UV-owned Project Store and semantic capability boundaries.
+### 2. Repair execution truth
 
-Implementation starts only after Stage 9 is merged and idle, beginning with a dedicated architecture decision for the concrete Character Asset format and capability contracts.
+- eliminate every `AVAILABLE`/ready target whose launch path is not mounted by the current UV-owned server;
+- remove historical compatibility assumptions from product readiness;
+- derive readiness from a current executable workflow/capability/adapter;
+- introduce structured `setup_required` / `partial` / `unavailable` semantics where needed;
+- ensure create-project/workspace UI does not present unfinished modes as ordinary ready workflows;
+- add backend tests that enumerate advertised executable targets and fail when the mounted application cannot serve them.
+
+### 3. Audit stale legacy frontend surfaces
+
+Inventory current call sites for legacy VideoClaw-derived clients/routes including `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/sandbox/*`, upload/cache helpers and redirect-only pipeline pages.
+
+Classify each item as:
+
+- required compatibility surface;
+- unreachable/dead donor code;
+- transitional code still used by a supported path.
+
+Do not delete before dependency/call-site evidence exists.
+
+### 4. Propose the first Product Orchestrator contract
+
+Define a typed product-level projection based on real current domain state, at minimum:
+
+- workflow/recipe intent;
+- readiness;
+- prerequisites;
+- semantic next actions;
+- active jobs;
+- required user decisions;
+- recent artifacts/results;
+- actionable diagnostics.
+
+The orchestrator must project existing Project Store + capability/runtime truth; it must not become another canonical project database.
+
+### 5. Preserve proven foundations
+
+Do not rewrite Project Store, authorization, Capability Registry, deterministic FFmpeg adapters, portable domain state, MLT integration or Stage 9 packaging/native-shell work merely to simplify the first recovery slice.
+
+Do not remount the complete VideoClaw backend to make stale launch paths work.
+
+Do not begin a broad frontend redesign before the truth matrix and execution contract are repaired.
 
 ## Completion proof
 
-This handoff is entered only after Stage 9 is merged, the repository returns to `idle`, and the exact post-merge idle `main` passes all permanent required checks. Subsequent maintenance or feature work must start from that verified baseline under the normal one-active-slice protocol.
+This first recovery slice is complete when:
+
+- `PRODUCT_TRUTH_MATRIX.md` covers every visible recipe and primary action;
+- automated contract tests prove that anything advertised as directly executable is backed by a current mounted UV-owned route and real execution boundary;
+- known stale readiness for general/narrated/action-transfer/digital-human and any other affected modes is corrected;
+- legacy frontend/API surfaces are classified with evidence rather than assumptions;
+- an initial Product Orchestrator contract is documented and covered by focused tests/fixtures;
+- existing permanent engineering checks remain green;
+- no Stage 9 packaging/integrity foundation is silently weakened.
 
 ## Entry gate
 
-Do not start post-roadmap release maintenance while `stage-9-desktop-productization-release-hardening` is still draft/review, unmerged, not atomically closed to `idle`, or has a failing post-merge required check.
+Do not run this as a second concurrent implementation slice while PR #38 is actively changing product code. PR #38 is now Draft/paused under D-062. Coordinate the lifecycle transition first, preserving the Stage 9 branch as engineering/package reference for later reconciliation.
+
+## Following work
+
+After this slice, implement the Product Orchestrator and simplify the five permanent journeys in the order defined by `PRODUCT_RECOVERY_PLAN.md`. Resume final Stage 9 release/signing work only after the full Product Truth Gate is satisfied.
