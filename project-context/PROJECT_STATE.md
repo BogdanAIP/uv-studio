@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-truth-inventory -->
 
 **Updated:** 2026-08-20
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-truth-inventory` is the active draft recovery slice on branch `fix/product-recovery-truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8. Review was reopened after the fail-closed execution change exposed stale public `VIDEOCLAW_PIPELINE_BINDINGS` and recipe documentation that still advertised removed legacy routes.
+`product-recovery-truth-inventory` is the active review recovery slice on branch `fix/product-recovery-truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8. The fail-closed review removed stale public `VIDEOCLAW_PIPELINE_BINDINGS` values and aligned recipe documentation so no current public recipe contract advertises the removed legacy routes. Implementation and durable context are frozen for exact-head review in PR #42.
 
 Stage 9 PR #38 was closed **without merge** and retained as an archived engineering reference. Its branch contains substantial Windows packaging/native-shell work, but the installed application failed human product review and must not become the maintained baseline before D-062 Product Truth Recovery passes.
 
