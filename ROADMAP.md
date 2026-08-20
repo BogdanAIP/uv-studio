@@ -4,15 +4,18 @@ The roadmap targets the full product. Early stages create useful working slices,
 
 ## Program completion gate
 
-The initial UV Studio program is complete when Stage 9 produces a distributable Windows release and the release candidate proves all five permanent regression scenarios through user-facing workflows rather than manual API calls.
+The initial UV Studio program is complete when Stage 9 produces a distributable Windows release **after the Product Truth Recovery Gate passes**, and the release candidate proves all five permanent regression scenarios through user-facing workflows rather than manual API calls or test-only state seeding.
 
 The completion gate requires:
 
 - clean-machine installation without a separately prepared Python, Node/npm or FFmpeg toolchain;
 - canonical projects that survive restart, export/import, upgrade, backup and recovery;
 - complete UI paths for general video, narrated video, music-video excerpt, dubbing and targeted existing-video range edit;
+- truthful recipe/workflow readiness backed by actually mounted executable product paths;
+- a product-level orchestration contract that exposes prerequisites and next actions instead of requiring the frontend to reconstruct independent backend state machines;
 - local/free baseline implementations wherever a viable local path exists, with remote/paid providers remaining explicit optional choices;
 - real media fixtures and evidence-based output checks on Windows and Linux;
+- cold-start user-outcome evidence without hidden API/test fixture setup;
 - cancellation, diagnostics, migration and rollback behavior suitable for user data;
 - license/security/dependency audit and signed release artifacts;
 - no mandatory dependency on VideoClaw, Qwen, MCP, a particular model vendor or a paid API in canonical project state.
@@ -26,9 +29,11 @@ A stage is not complete merely because its backend contract exists.
 Every product stage must satisfy both gates that apply to it:
 
 1. **Engineering gate** — provider-neutral contracts, portable state, security/permission boundaries, rollback behavior and representative automated tests are real.
-2. **User-outcome gate** — the intended workflow can be completed through the product UI without manual API calls or hidden provider/runtime assumptions.
+2. **User-outcome gate** — the intended workflow can be completed through the product UI without manual API calls, hidden provider/runtime assumptions or test-only pre-seeded state.
 
 Infrastructure-only stages may have no end-user UI, but they must prove the runtime boundary they claim. Security, dependency ownership and real-media verification are progressive obligations and must not be deferred wholesale to Stage 9.
+
+A failed clean installed-app human journey is product evidence and may block release even when automated engineering/release checks are green.
 
 ## Permanent architecture rules
 
@@ -39,9 +44,13 @@ Infrastructure-only stages may have no end-user UI, but they must prove the runt
 - provider choice and expected paid cost must remain explicit for chargeable generation;
 - capability discovery/ordering is metadata, not permission to execute or spend;
 - all product execution paths that can contact a remote or non-free provider must pass the product-owned authorization boundary; legacy compatibility routes may not bypass it;
+- user-visible readiness must be backed by an actually reachable UV-owned execution path; an unmounted or historical route is never `available` product functionality;
+- users express intent and product decisions; internal plan/candidate/review/runtime state is progressively disclosed only when actionable;
+- GUI, AI, MCP and scripts converge on one product-owned semantic action/command model;
 - secrets and machine-only runtime configuration stay outside portable project state and outside commit-prone vendor configuration;
 - professional workflow policy (source review, planning, sample-first generation, scene/take gates, evidence-based review) is separate from the provider that performs an AI operation;
 - OpenClaw, Qwen-MM-Plugins and other MCP/runtime packages are optional adapters, not the canonical project state or mandatory execution layer;
+- reuse mature editor/media components before growing a UV-owned generic NLE surface;
 - Windows remains a first-class target even when an optional third-party package currently requires WSL2.
 
 ## Stage 0 — Clean baseline
@@ -277,9 +286,39 @@ Goal: broaden product by composing existing primitives, not new engines.
 
 Exit: each mode is mostly recipe + capability mapping + production policy + minimal UI and passes its relevant user-facing regression path.
 
+## Product Truth Recovery — mandatory gate before Stage 9 merge
+
+The first installed-app human review and subsequent repository/history audit showed that the engineering foundation and packaged runtime can be healthy while product-level workflow truth is not.
+
+This recovery is defined in `docs/architecture/PRODUCT_RECOVERY_PLAN.md` and accepted by D-062.
+
+It preserves the strong backend/runtime foundation while restoring product coherence through these ordered phases:
+
+1. **Product Truth Inventory** — map every visible action to frontend handler, API, mounted route, domain command, capability/adapter and actual result; classify it as working/setup-required/partial/misleading/dead.
+2. **Recipe/execution contract repair** — remove false `available` states and stale launch paths; readiness must derive from reachable execution.
+3. **Product Orchestrator** — project one workflow state with structured prerequisites and next actions so React is not the primary orchestrator of independent backend state machines.
+4. **Editor foundation re-resolution** — explicitly resolve the D-033 gap before growing more UV-owned generic NLE behavior.
+5. **Core intent-to-result journeys** — recover targeted edit, dubbing, music video, narrated video and general video in that order, while keeping setup/remote cost explicit.
+6. **Additional recipe rationalization** — retain working photo/visualizer flows, turn composition-only modes into real workflows, and gate optional ML modes truthfully.
+7. **Cold-start product verification** — clean-state UI-only regression without hidden test seeding, plus human installed-app acceptance.
+8. **Resume Stage 9** — reconcile preserved packaging/native-shell work with the recovered product, then finish signing/publication.
+
+Recovery exit:
+
+- every visible recipe/action has a truthful readiness state backed by a mounted executable path;
+- no execution-plan target points to an unmounted endpoint;
+- the frontend consumes product-orchestrator next actions/prerequisites rather than reconstructing hidden workflow state;
+- editor ownership/reuse direction is explicitly accepted;
+- all five permanent scenarios complete through UI without manual API calls or test-only state seeding;
+- cold-start automated evidence and human Windows installed-app review pass.
+
+Until this gate passes, Stage 9 may remain an engineering/package branch but **must not merge as the maintained product baseline**.
+
 ## Stage 9 — Desktop Productization & Release Hardening
 
-Goal: turn the already-secure, already-tested product runtime into a distributable Windows application.
+Goal: turn the secure, product-truth-verified runtime into a distributable Windows application.
+
+Stage 9 packaging/native-shell work may be developed and preserved before the recovery gate is complete, but final merge/release readiness is blocked on Product Truth Recovery.
 
 - bundled/provisioned frontend/backend/FFmpeg runtime;
 - launcher and process supervision;
@@ -294,7 +333,7 @@ Goal: turn the already-secure, already-tested product runtime into a distributab
 - signed release artifacts;
 - documentation/sample projects/release build.
 
-Exit: user installs and runs UV Studio without manually preparing Python/Node/FFmpeg; all permanent regression scenarios pass through the packaged application; optional WSL/cloud integrations do not prevent normal native-Windows use.
+Exit: user installs and runs UV Studio without manually preparing Python/Node/FFmpeg; the Product Truth Recovery Gate is green; all permanent regression scenarios pass through the packaged application from clean user-visible state; human installed-app review passes; optional WSL/cloud integrations do not prevent normal native-Windows use.
 
 ## Permanent regression scenarios
 
