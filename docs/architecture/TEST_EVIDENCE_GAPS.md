@@ -116,6 +116,11 @@ May use deterministic fixture/API setup when necessary. Proves that a known prod
 
 Existing E2E belongs here.
 
+The Photo -> Video informed regression additionally verifies that the visible
+action calls `/workflow/actions/compose_photos`, that the normal shell contains
+no legacy pipeline/sandbox entry points and that unrelated generic
+editor/continuity/dubbing workspaces are not mounted for that recipe.
+
 ### Class C — Cold-start product journey
 
 Must start from user-equivalent clean state and use user-visible actions for all product decisions/setup.

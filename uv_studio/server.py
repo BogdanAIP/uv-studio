@@ -38,6 +38,7 @@ from uv_studio.api.music_video_review import router as music_video_review_router
 from uv_studio.api.prepared_audio import router as prepared_audio_router  # noqa: E402
 from uv_studio.api.prepared_audio_promotion import router as prepared_audio_promotion_router  # noqa: E402
 from uv_studio.api.project_media import router as project_media_router  # noqa: E402
+from uv_studio.api.project_workflow import router as project_workflow_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
 from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
 from uv_studio.api.recipes import router as recipes_router  # noqa: E402
@@ -81,6 +82,7 @@ app.include_router(qwen_mm_router)
 app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)
+app.include_router(project_workflow_router)
 app.include_router(project_media_router)
 app.include_router(stage8_workspace_router)
 app.include_router(prepared_audio_router)

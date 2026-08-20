@@ -49,7 +49,7 @@ Therefore the product is not merely “new UV UI plus harmless vendor residue”
 
 `docs/architecture/PRODUCT_TRUTH_MATRIX.md` is the working audit source. Current classification:
 
-- `photo_to_video` — real local intent-to-result capability path, though the page is polluted by unrelated global panels/shell UI;
+- `photo_to_video` — first Product Orchestrator reference flow: truthful readiness/prerequisites, relevant `photo_composition` workspace and semantic `compose_photos` action over the real local capability path;
 - `visualizer` — same;
 - `performance_lip_sync` — real `working_with_setup` path under the verified optional MuseTalk runtime;
 - targeted existing-video edit — mechanically real but UX/orchestration remains too state-machine-heavy;
@@ -57,15 +57,15 @@ Therefore the product is not merely “new UV UI plus harmless vendor residue”
 - `music_video` — substantial real domain/assembly/review implementation but default authoring is too schema/state-heavy;
 - `general_video`, `story_video`, `commercial_product`, `digital_human`, `free_project` — partial at product-journey level;
 - `narrated_video` and `action_transfer` — baseline metadata was misleading because advertised targets were not mounted; recovery now reports them unavailable until current UV-owned workflows exist;
-- live `/pipelines/*`, old session/task/model/upload/sandbox surfaces — compiled/routable legacy frontend against disabled backend contracts and must be isolated/retired rather than used as release functionality.
+- live `/pipelines/*`, old session/task/model/upload/sandbox surfaces — compiled/routable migration debt against disabled backend contracts; the normal shell no longer links, polls or brands itself through that model.
 
 ## Product surface findings
 
-- recipe selection promises that only relevant stages will load, but the project page globally mounts targeted edit, sequence continuity and three dubbing panels for every recipe;
+- the D-062 baseline globally mounted targeted edit, sequence continuity and three dubbing panels for every recipe; the first orchestrated Photo-to-Video flow now mounts only its relevant composition workspace;
 - recipe cards do not express readiness before project creation;
-- `Производственный интерфейс` points to `/`, while `/` redirects to `/projects` in the current route entry;
-- the same AppShell simultaneously exposes legacy VideoClaw pipeline navigation;
-- legacy pipeline pages carry separate Video-Claw branding/light controls and call unmounted APIs;
+- the looping `Производственный интерфейс` CTA has been removed from the projects page;
+- the normal AppShell is now UV-owned and exposes only Project Store projects, with no legacy VideoClaw pipeline/sandbox navigation or session/task polling;
+- legacy pipeline pages remain compiled migration debt and are deliberately not remounted or advertised;
 - informed browser E2E proves known paths, not cold-start discoverability.
 
 ## Architecture direction
@@ -98,6 +98,16 @@ D-033 reuse-first remains binding. OpenCut/MLT/UV editor ownership must be expli
 4. make the Photo-to-Video page render the projected action and only its relevant composition workspace;
 5. remove legacy `/pipelines/*`, sandbox/session/task polling and Video-Claw branding from the normal AppShell;
 6. prove blocked and executable Photo-to-Video states through unit, API, build and browser evidence without a second workflow store.
+
+## Current implementation evidence
+
+- `ProjectWorkflowState` schema v1 projects Project Store, Recipe Registry and Capability Registry state without persisting orchestration data;
+- `GET /api/uv/projects/{project_id}/workflow` fails non-migrated recipes closed and reports unknown recovered recipes without losing project data;
+- `POST /api/uv/projects/{project_id}/workflow/actions/compose_photos` validates bounded semantic inputs and delegates to the existing D-017 capability execution function and local FFmpeg offer;
+- 369 domain/unit tests pass (`2` optional skips) and 183 API tests pass;
+- the frontend production build and TypeScript pass; ESLint reports zero errors (pre-existing legacy-source warnings remain);
+- the real Stage 8 browser outcome passes through `/workflow/actions/compose_photos`, produces a `photo_to_video_render` artifact, and asserts absence of legacy navigation and unrelated Photo-to-Video workspaces;
+- rendered 1600×1000 and 390×844 checks show no horizontal overflow, visible keyboard focus and an above-the-fold mobile Photo-to-Video workspace; visual QA caused the task workspace to move ahead of secondary project statistics.
 
 ## Verification direction
 

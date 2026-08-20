@@ -3,9 +3,13 @@
 import { useMemo, useState } from 'react';
 import type { ProjectReference } from '@/lib/projectsApi';
 import {
+  executeComposePhotosAction,
+  type WorkflowAction,
+  type WorkflowPrerequisite,
+} from '@/lib/productWorkflowApi';
+import {
   projectStage8ArtifactUrl,
   renderAudioVisualizer,
-  renderPhotoToVideo,
   uploadProjectImageSource,
   uploadStage8AudioSource,
 } from '@/lib/stage8MediaApi';
@@ -19,10 +23,12 @@ interface Stage8MediaPanelProps {
   projectId: string;
   recipeId: 'photo_to_video' | 'visualizer';
   sources: ProjectReference[];
+  workflowAction?: WorkflowAction;
+  workflowPrerequisites?: WorkflowPrerequisite[];
   onProjectChanged: () => Promise<void> | void;
 }
 
-export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChanged }: Stage8MediaPanelProps) {
+export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction, workflowPrerequisites, onProjectChanged }: Stage8MediaPanelProps) {
   const images = useMemo(() => sources.filter(source => source.kind === 'image'), [sources]);
   const audios = useMemo(() => sources.filter(source => source.kind === 'audio'), [sources]);
   const [imageOrder, setImageOrder] = useState(() => images.map(source => source.id));
@@ -104,14 +110,13 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
     setError(null);
     setMessage(null);
     try {
-      const response = await renderPhotoToVideo(
-        projectId,
-        orderedImageIds,
-        Math.round(duration * 1_000_000),
-        selectedPhotoAudioId || undefined,
-      );
-      setArtifactId(response.result.artifact.id);
-      setMessage('Видео из фотографий собрано локальным FFmpeg capability.');
+      const response = await executeComposePhotosAction(projectId, {
+        image_source_ids: orderedImageIds,
+        duration_per_image_us: Math.round(duration * 1_000_000),
+        ...(selectedPhotoAudioId ? { audio_source_id: selectedPhotoAudioId } : {}),
+      });
+      setArtifactId(response.execution.result.artifact.id);
+      setMessage('Видео собрано через Product Orchestrator и локальный FFmpeg capability.');
       await onProjectChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось собрать видео');
@@ -146,7 +151,9 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-indigo-900/60 bg-indigo-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-indigo-400">Stage 8 · локальная сборка</p>
+      <p className="text-xs uppercase tracking-wider text-indigo-400">
+        {recipeId === 'photo_to_video' ? 'Product workflow · локальная сборка' : 'Локальная сборка'}
+      </p>
       <h2 className="mt-2 text-xl font-medium">
         {recipeId === 'photo_to_video' ? 'Фотографии → видео' : 'Аудио → визуализатор'}
       </h2>
@@ -218,7 +225,18 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
               </select>
             </label>
           </div>
-          <button type="button" disabled={busy || orderedImageIds.length === 0} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
+          {workflowAction && !workflowAction.enabled && (
+            <div className="space-y-1 text-sm text-amber-300">
+              {(workflowPrerequisites ?? [])
+                .filter(prerequisite => !prerequisite.satisfied)
+                .map(prerequisite => (
+                  <p key={prerequisite.prerequisite_id}>
+                    {prerequisite.resolution ?? prerequisite.explanation}
+                  </p>
+                ))}
+            </div>
+          )}
+          <button type="button" disabled={busy || orderedImageIds.length === 0 || workflowAction?.enabled === false} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
             Собрать видео из фотографий
           </button>
         </div>

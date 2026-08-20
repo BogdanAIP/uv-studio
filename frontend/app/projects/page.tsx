@@ -118,12 +118,6 @@ export default function ProjectsPage() {
                 disabled={importing}
               />
             </label>
-            <Link
-              href="/"
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 px-4 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-900"
-            >
-              Производственный интерфейс
-            </Link>
           </div>
         </div>
 

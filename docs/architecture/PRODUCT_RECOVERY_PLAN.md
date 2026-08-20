@@ -139,6 +139,12 @@ Each next action has a stable semantic ID, user-facing explanation, enabled stat
 
 Orchestration is a projection over canonical domain state plus runtime availability, not a second canonical store.
 
+Foundation status: implemented for Photo -> Video. `ProjectWorkflowState`
+projects Project Store + recipe/capability availability, and semantic action
+`compose_photos` delegates to the existing D-017 capability execution boundary.
+The UV-owned shell also isolates legacy pipeline/session/task/sandbox navigation.
+Other recipes remain explicitly partial until migrated.
+
 ## Phase 4 — Editor foundation decision
 
 Before adding generic editor functionality, explicitly decide:

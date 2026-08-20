@@ -197,7 +197,15 @@ class Stage8BrowserOutcomes(unittest.TestCase):
 
         photo_id, photo_encoded = self._create_project("E2E Stage 8 Photo", "photo_to_video")
         page.goto(f"/projects/{photo_encoded}")
+        expect(page.get_by_text("UV Studio", exact=True)).to_be_visible()
+        expect(page.get_by_text("Video-Claw", exact=True)).to_have_count(0)
+        expect(page.locator('a[href^="/pipelines"], a[href="/sandbox"]')).to_have_count(0)
         expect(page.get_by_role("heading", name="Фотографии → видео", exact=True)).to_be_visible()
+        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="Перевод, TTS и forced alignment", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="WebVTT из канонического текста", exact=True)).to_have_count(0)
         page.locator('input[aria-label="Изображения Stage 8"]').set_input_files(
             [str(self.red_image), str(self.blue_image)]
         )
@@ -213,7 +221,14 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         _select_option_containing(photo_audio, self.audio.name)
         expect(page.get_by_text("1. blue.png", exact=True)).to_be_visible(timeout=60_000)
         expect(page.get_by_text("2. red.png", exact=True)).to_be_visible(timeout=60_000)
-        page.get_by_role("button", name="Собрать видео из фотографий", exact=True).click()
+        with page.expect_response(
+            lambda response: (
+                "/workflow/actions/compose_photos" in response.url
+                and response.request.method == "POST"
+            )
+        ) as action_response:
+            page.get_by_role("button", name="Собрать видео из фотографий", exact=True).click()
+        self.assertEqual(action_response.value.status, 200)
         expect(page.get_by_role("link", name="Открыть готовый рендер", exact=True)).to_be_visible(
             timeout=120_000
         )
