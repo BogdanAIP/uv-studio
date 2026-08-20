@@ -7,8 +7,8 @@
     "roadmap_stage": "product-recovery",
     "goal": "Establish truthful product readiness by inventorying visible workflows, removing stale executable recipe targets and defining the first Product Orchestrator contract before further UI or release work.",
     "base_branch": "main",
-    "branch": "product-recovery/truth-inventory",
-    "pull_request": 41,
+    "branch": "fix/product-recovery-truth-inventory",
+    "pull_request": null,
     "write_scope": [
       "docs/architecture/**",
       "project-context/**",
