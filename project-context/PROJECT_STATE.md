@@ -9,19 +9,21 @@
 
 ## Current lifecycle
 
-`product-recovery-truth-inventory` is the active draft recovery slice on branch `product-recovery/truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8.
+`product-recovery-truth-inventory` is the active draft recovery slice on branch `fix/product-recovery-truth-inventory`, created from clean idle `main@d57bc315c27ed21f26c9050d661c792f95ab8aa3` after Stage 8.
 
 Stage 9 PR #38 was closed **without merge** and retained as an archived engineering reference. Its branch contains substantial Windows packaging/native-shell work, but the installed application failed human product review and must not become the maintained baseline before D-062 Product Truth Recovery passes.
 
+The first recovery PR attempt (#41) used a non-conforming branch prefix and is superseded by the `fix/` branch; no product behavior depends on that administrative attempt.
+
 ## Why recovery started from main
 
-The product-truth defects predate Stage 9 packaging. Current `main` already contains a direct contradiction:
+The product-truth defects predate Stage 9 packaging. The Stage 8 `main` baseline contained a direct contradiction:
 
 - `uv_studio/server.py` deliberately mounts the UV-owned API boundary and does not mount historical `/api/pipelines/*` routes;
-- `uv_studio/recipes/execution.py` nevertheless marks `narrated_video` and `action_transfer` as `AVAILABLE` and points them at `/api/pipelines/standard/tasks` and `/api/pipelines/action_transfer/tasks`;
-- `tests/test_recipe_execution.py` explicitly encoded those stale paths as expected behavior.
+- `uv_studio/recipes/execution.py` nevertheless marked `narrated_video` and `action_transfer` as `AVAILABLE` and pointed them at `/api/pipelines/standard/tasks` and `/api/pipelines/action_transfer/tasks`;
+- unit and API tests explicitly encoded those stale paths/readiness values as expected behavior.
 
-This is a backend/product-contract defect, not a styling issue. Recovery therefore starts at the pre-Stage-9 product architecture and later reconciles the preserved Stage 9 packaging work.
+This is a backend/product-contract defect, not a styling issue. The recovery branch now fails both recipes closed while preserving typed inputs, capability requirements and production policy, and adds a regression guard against advertising unmounted execution targets.
 
 ## Product Truth Inventory
 
@@ -34,7 +36,11 @@ This is a backend/product-contract defect, not a styling issue. Recovery therefo
 - dubbing — substantial real workflow with setup/UX orchestration gaps;
 - `music_video` — substantial real domain/assembly/review implementation but default authoring is too schema/state-heavy;
 - `general_video`, `story_video`, `commercial_product`, `digital_human`, `free_project` — partial at product-journey level;
-- `narrated_video` and `action_transfer` — confirmed misleading execution metadata because their advertised legacy launch targets are not mounted.
+- `narrated_video` and `action_transfer` — the baseline metadata was misleading because its advertised legacy launch targets were not mounted; the recovery branch now reports them unavailable until current workflows exist.
+
+## Legacy surface finding
+
+The live UV-owned `frontend/` on `main` does **not** contain the historical `workflowApi.ts`, `HomePage` or `WorkflowPanel` names found during broader historical/vendor inspection. `vendor/videoclaw-app/frontend/lib/workflowApi.ts` still exists inside the pinned donor tree and is not current frontend authority. Therefore the confirmed active stale contract is the recipe execution/readiness layer and its tests; donor route families remain isolated inventory, not evidence that current React imports them.
 
 ## Architecture direction
 
