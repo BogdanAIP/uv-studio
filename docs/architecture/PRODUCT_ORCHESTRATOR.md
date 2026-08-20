@@ -21,6 +21,7 @@ Photo-to-Video action.
 ```text
 Photo -> Video intent
   -> GET ProjectWorkflowState
+  -> verify every registered image through ProjectSourceMediaStore
   -> readiness + structured prerequisites
   -> relevant workspace: photo_composition
   -> action: compose_photos
@@ -34,6 +35,11 @@ Photo -> Video intent
 The action accepts only registered source IDs, an optional registered audio ID
 and a bounded per-image duration. It cannot pass filesystem paths or arbitrary
 FFmpeg arguments.
+
+A source reference alone is not readiness evidence. The Photo-to-Video
+projection uses the existing `ProjectSourceMediaStore.resolve_verified()` trust
+boundary, so missing files or bytes that no longer match canonical
+`sha256`/`size_bytes` metadata block the image prerequisite before execution.
 
 ## HTTP contract
 
@@ -61,6 +67,7 @@ but project as `unavailable` with a `recipe_unknown` diagnostic.
 | Concern | Owner |
 |---|---|
 | project identity, sources, artifacts | Project Store |
+| current source bytes/integrity | Project Source Media Store |
 | recipe intent/policy | Recipe Registry |
 | runtime availability | Capability Registry |
 | readiness/prerequisites/relevant workspace/next action | Product Orchestrator |

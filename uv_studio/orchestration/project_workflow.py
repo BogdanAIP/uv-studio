@@ -6,6 +6,12 @@ from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailab
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.capabilities.selection import NoEligibleOffer, SelectionPolicy, select_offer
 from uv_studio.projects.models import ProjectDocument, ProjectReference
+from uv_studio.projects.source_media import (
+    ProjectSourceMediaStore,
+    SourceMediaError,
+    SourceMediaNotFound,
+)
+from uv_studio.projects.store import ProjectStoreError
 from uv_studio.recipes.models import RecipeDefinition
 
 from .models import (
@@ -67,13 +73,35 @@ def _photo_workflow(
     project: ProjectDocument,
     recipe: RecipeDefinition,
     registry: CapabilityRegistry,
+    source_media: ProjectSourceMediaStore,
 ) -> ProjectWorkflowState:
     image_sources = tuple(source for source in project.sources if source.kind == "image")
-    images_ready = bool(image_sources)
+    unverified_image_ids: list[str] = []
+    for source in image_sources:
+        try:
+            source_media.resolve_verified(
+                project.project_id,
+                source.id,
+                expected_kind="image",
+            )
+        except (SourceMediaError, SourceMediaNotFound, ProjectStoreError):
+            unverified_image_ids.append(source.id)
+    images_ready = bool(image_sources) and not unverified_image_ids
     capability_known = True
     capability_ready = False
     capability_configurable = False
     diagnostics: list[WorkflowDiagnostic] = []
+    if unverified_image_ids:
+        diagnostics.append(
+            WorkflowDiagnostic(
+                code="source_media_unverified",
+                severity="error",
+                message=(
+                    "Один или несколько image source не прошли проверку project-owned bytes: "
+                    + ", ".join(unverified_image_ids)
+                ),
+            )
+        )
     try:
         select_offer(
             registry,
@@ -115,9 +143,20 @@ def _photo_workflow(
         WorkflowPrerequisite(
             prerequisite_id="source.images",
             title="Фотографии",
-            explanation="Нужна хотя бы одна фотография из этого проекта.",
+            explanation=(
+                "Нужна хотя бы одна фотография; все зарегистрированные файлы "
+                "должны пройти проверку project-owned bytes."
+            ),
             satisfied=images_ready,
-            resolution=None if images_ready else "Загрузите одну или несколько фотографий.",
+            resolution=(
+                None
+                if images_ready
+                else (
+                    "Повторно загрузите фотографии: зарегистрированные файлы отсутствуют или повреждены."
+                    if image_sources
+                    else "Загрузите одну или несколько фотографий."
+                )
+            ),
         ),
         WorkflowPrerequisite(
             prerequisite_id="capability.video.compose_photos",
@@ -223,6 +262,7 @@ def project_workflow_state(
     project: ProjectDocument,
     recipe: RecipeDefinition | None,
     registry: CapabilityRegistry,
+    source_media: ProjectSourceMediaStore,
 ) -> ProjectWorkflowState:
     """Project user intent into truthful readiness and semantic next actions."""
 
@@ -251,5 +291,5 @@ def project_workflow_state(
     if project.recipe_id != recipe.recipe_id:
         raise ValueError("project and recipe identifiers do not match")
     if project.recipe_id == _PHOTO_RECIPE_ID:
-        return _photo_workflow(project, recipe, registry)
+        return _photo_workflow(project, recipe, registry, source_media)
     return _unsupported_recipe(project, recipe)

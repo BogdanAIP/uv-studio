@@ -135,7 +135,7 @@ Thus even after entering the new Project Store architecture, a selected task doe
 | Visualizer | `Stage8MediaPanel` | `audio.visualize` | clean real local path |
 | Story/Commercial preparation | `Stage8CompositionPanel` | Stage 8 workspace state | real preparation, not full production |
 | Performance lip-sync | dedicated panel | verified MuseTalk capability path | real with explicit setup |
-| project readiness | Product Orchestrator block | Project Store + Recipe/Capability Registry projection | implemented for Photo -> Video; other recipes fail closed as partial |
+| project readiness | Product Orchestrator block | Project Store + verified Source Media + Recipe/Capability Registry projection | implemented for Photo -> Video; other recipes fail closed as partial |
 
 ## Live legacy frontend -> disabled backend map
 

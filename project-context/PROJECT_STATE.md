@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-20
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-orchestrator-foundation` is the active review slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Exact-head review found and the current head repairs two bounded contract gaps: readiness now shares the executor's strict selection policy, and the UV shell retains access to current provider settings without restoring legacy workflow navigation.
+`product-recovery-orchestrator-foundation` is the active draft slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Review repairs already align readiness with the executor's strict selection policy and retain current settings without restoring legacy navigation; the remaining bounded repair makes image readiness verify Project Store media bytes before the slice returns to review.
 
 This slice adds a read projection and one semantic action for `photo_to_video`, makes the project UI consume readiness/prerequisites/relevant-workspace truth, and removes the legacy pipeline/session/task/sandbox model from normal AppShell navigation without remounting its backend.
 
@@ -106,7 +106,8 @@ D-033 reuse-first remains binding. OpenCut/MLT/UV editor ownership must be expli
 - `GET /api/uv/projects/{project_id}/workflow` fails non-migrated recipes closed and reports unknown recovered recipes without losing project data;
 - `POST /api/uv/projects/{project_id}/workflow/actions/compose_photos` validates bounded semantic inputs and delegates to the existing D-017 capability execution function and local FFmpeg offer;
 - readiness and action execution now share strict `local_free_first` eligibility, so remote or non-free offers cannot enable the local action;
-- 370 domain/unit tests pass (`2` optional skips) and 184 API tests pass;
+- the image prerequisite verifies every registered image through the existing Project Source Media Store, so missing or hash-mismatched project bytes fail closed before execution;
+- 371 domain/unit tests pass (`2` optional skips) and 186 API tests pass;
 - the frontend production build and TypeScript pass; ESLint reports zero errors (pre-existing legacy-source warnings remain);
 - the real Stage 8 browser outcome passes through `/workflow/actions/compose_photos`, produces a `photo_to_video_render` artifact, and asserts absence of legacy navigation and unrelated Photo-to-Video workspaces;
 - rendered 1600×1000 and 390×844 checks show no horizontal overflow, visible keyboard focus, an above-the-fold mobile Photo-to-Video workspace, and a reachable UV-shell settings page without Video-Claw branding; visual QA caused the task workspace to move ahead of secondary project statistics.

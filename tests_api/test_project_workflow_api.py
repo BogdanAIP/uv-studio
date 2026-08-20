@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import hashlib
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -26,7 +27,7 @@ from uv_studio.capabilities import (
     OperationKind,
 )
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
-from uv_studio.projects.models import ProjectReference
+from uv_studio.projects.source_media import ProjectSourceMediaStore
 from uv_studio.projects.store import ProjectStore
 from uv_studio.server import app
 
@@ -97,19 +98,21 @@ class ProjectWorkflowApiTests(unittest.TestCase):
     def _url(self, suffix: str = "workflow") -> str:
         return f"/api/uv/projects/{self.project.project_id}/{suffix}"
 
-    def _add_image(self) -> None:
-        project = self.store.load_project(self.project.project_id)
-        self.store.update_project(
+    def _add_image(self) -> str:
+        body = b"verified image fixture"
+        media = ProjectSourceMediaStore(self.store)
+        allocation = media.allocate(self.project.project_id, "image.png")
+        allocation.absolute_path.write_bytes(body)
+        media.register(
             self.project.project_id,
-            sources=(
-                *project.sources,
-                ProjectReference(
-                    id="src_image",
-                    kind="image",
-                    path="sources/image.png",
-                ),
-            ),
+            allocation,
+            media_kind="image",
+            metadata={
+                "sha256": hashlib.sha256(body).hexdigest(),
+                "size_bytes": len(body),
+            },
         )
+        return allocation.source_id
 
     def test_get_projects_truthful_readiness_and_semantic_action(self) -> None:
         response = self.client.get(self._url())
@@ -133,7 +136,7 @@ class ProjectWorkflowApiTests(unittest.TestCase):
     def test_remote_available_offer_does_not_enable_local_free_action(self) -> None:
         self.registry = _registry(locality=LocalityClass.REMOTE)
         app.dependency_overrides[get_capability_registry] = lambda: self.registry
-        self._add_image()
+        source_id = self._add_image()
 
         state_response = self.client.get(self._url())
         self.assertEqual(state_response.status_code, 200, state_response.text)
@@ -142,18 +145,51 @@ class ProjectWorkflowApiTests(unittest.TestCase):
 
         action_response = self.client.post(
             self._url("workflow/actions/compose_photos"),
-            json={"image_source_ids": ["src_image"]},
+            json={"image_source_ids": [source_id]},
         )
         self.assertEqual(action_response.status_code, 409, action_response.text)
         self.assertEqual(action_response.json()["detail"]["code"], "workflow_action_blocked")
         self.assertEqual(self.executor.calls, [])
 
+    def test_missing_registered_image_does_not_advertise_readiness(self) -> None:
+        source_id = self._add_image()
+        _reference, path = ProjectSourceMediaStore(self.store).resolve(
+            self.project.project_id,
+            source_id,
+            expected_kind="image",
+        )
+        path.unlink()
+
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200, response.text)
+        state = response.json()
+        self.assertEqual(state["readiness"], "setup_required")
+        self.assertFalse(state["next_actions"][0]["enabled"])
+        self.assertEqual(state["next_actions"][0]["blocked_by"], ["source.images"])
+        self.assertEqual(state["diagnostics"][0]["code"], "source_media_unverified")
+
+    def test_hash_mismatched_image_does_not_advertise_readiness(self) -> None:
+        source_id = self._add_image()
+        _reference, path = ProjectSourceMediaStore(self.store).resolve(
+            self.project.project_id,
+            source_id,
+            expected_kind="image",
+        )
+        path.write_bytes(b"tampered image fixture")
+
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200, response.text)
+        state = response.json()
+        self.assertEqual(state["readiness"], "setup_required")
+        self.assertFalse(state["next_actions"][0]["enabled"])
+        self.assertEqual(state["diagnostics"][0]["code"], "source_media_unverified")
+
     def test_semantic_action_delegates_to_existing_capability_boundary(self) -> None:
-        self._add_image()
+        source_id = self._add_image()
         response = self.client.post(
             self._url("workflow/actions/compose_photos"),
             json={
-                "image_source_ids": ["src_image"],
+                "image_source_ids": [source_id],
                 "duration_per_image_us": 3_000_000,
             },
         )
@@ -171,7 +207,7 @@ class ProjectWorkflowApiTests(unittest.TestCase):
                     self.project.project_id,
                     "local_ffmpeg.video_compose_photos",
                     {
-                        "image_source_ids": ["src_image"],
+                        "image_source_ids": [source_id],
                         "duration_per_image_us": 3_000_000,
                     },
                 )
@@ -179,19 +215,19 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         )
 
     def test_action_input_is_bounded_before_execution(self) -> None:
-        self._add_image()
+        source_id = self._add_image()
         response = self.client.post(
             self._url("workflow/actions/compose_photos"),
-            json={"image_source_ids": ["src_image", "src_image"]},
+            json={"image_source_ids": [source_id, source_id]},
         )
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(self.executor.calls, [])
 
     def test_unknown_action_fails_closed(self) -> None:
-        self._add_image()
+        source_id = self._add_image()
         response = self.client.post(
             self._url("workflow/actions/legacy_pipeline"),
-            json={"image_source_ids": ["src_image"]},
+            json={"image_source_ids": [source_id]},
         )
         self.assertEqual(response.status_code, 404, response.text)
         self.assertEqual(self.executor.calls, [])

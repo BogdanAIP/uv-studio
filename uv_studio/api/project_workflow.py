@@ -26,6 +26,7 @@ from uv_studio.capabilities.authorization import OneShotAuthorizationStore
 from uv_studio.capabilities.registry import CapabilityRegistry
 from uv_studio.orchestration import WORKFLOW_SCHEMA_VERSION, project_workflow_state
 from uv_studio.projects.models import ProjectDocument, ProjectValidationError
+from uv_studio.projects.source_media import ProjectSourceMediaStore
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 from uv_studio.recipes import RecipeRegistry, UnknownRecipe
 
@@ -84,7 +85,12 @@ def _state(
         recipe = recipe_registry.get(project.recipe_id)
     except UnknownRecipe:
         recipe = None
-    return project_workflow_state(project, recipe, capability_registry).to_dict()
+    return project_workflow_state(
+        project,
+        recipe,
+        capability_registry,
+        ProjectSourceMediaStore(store),
+    ).to_dict()
 
 
 @router.get("/{project_id}/workflow")
