@@ -8,7 +8,7 @@
     "goal": "Introduce the first Product Orchestrator projection and prove Photo-to-Video from user intent through semantic action, Project Store, Capability Registry and the existing deterministic adapter while isolating legacy workflow navigation.",
     "base_branch": "main",
     "branch": "fix/product-recovery-orchestrator-foundation",
-    "pull_request": null,
+    "pull_request": 43,
     "write_scope": [
       "docs/architecture/**",
       "e2e/**",
