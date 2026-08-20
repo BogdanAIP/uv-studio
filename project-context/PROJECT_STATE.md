@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-orchestrator-foundation -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-20
 
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-orchestrator-foundation` is the active review slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Review repairs align readiness with the executor's strict selection policy, retain current settings without restoring legacy navigation, verify image bytes through the existing Project Source Media Store, and make a fresh verified upload recover an all-damaged Photo project without requiring a new source-deletion API.
+`product-recovery-orchestrator-foundation` completed in PR #43 and merged as `297556a76484e3445feb93e6f22f512e212d8360`; the lifecycle is closed to `idle`. The delivered foundation aligns readiness with the executor's strict selection policy, retains current settings without restoring legacy navigation, verifies image bytes through the existing Project Source Media Store, and lets a fresh verified upload recover an all-damaged Photo project without requiring a new source-deletion API. The declared next handoff is the separately authorized ADR slice `product-recovery-editor-ownership-resolution`; it has not been initialized.
 
 This slice adds a read projection and one semantic action for `photo_to_video`, makes the project UI consume readiness/prerequisites/relevant-workspace truth, and removes the legacy pipeline/session/task/sandbox model from normal AppShell navigation without remounting its backend.
 
