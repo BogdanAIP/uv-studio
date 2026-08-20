@@ -15,34 +15,37 @@ import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityP
 import { Stage8CompositionPanel } from '@/components/editor/Stage8CompositionPanel';
 import { Stage8MediaPanel } from '@/components/editor/Stage8MediaPanel';
 import {
-  getProjectExecutionPlan,
+  getProjectWorkflow,
+  type ProjectWorkflowState,
+} from '@/lib/productWorkflowApi';
+import {
   getUVProject,
-  ProjectExecutionPlan,
   projectArchiveUrl,
   UVProject,
 } from '@/lib/projectsApi';
 
-const compatibilityLabels: Record<ProjectExecutionPlan['compatibility'], string> = {
-  available: 'Совместимый процесс найден',
-  partial: 'Частичная совместимость',
-  unavailable: 'Процесс пока недоступен',
+const readinessLabels: Record<ProjectWorkflowState['readiness'], string> = {
+  ready: 'Готово к следующему действию',
+  setup_required: 'Нужна подготовка',
+  partial: 'Сценарий переносится в новый процесс',
+  unavailable: 'Сценарий пока недоступен',
 };
 
 export default function ProjectPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = useMemo(() => decodeURIComponent(params.projectId), [params.projectId]);
   const [project, setProject] = useState<UVProject | null>(null);
-  const [executionPlan, setExecutionPlan] = useState<ProjectExecutionPlan | null>(null);
+  const [workflow, setWorkflow] = useState<ProjectWorkflowState | null>(null);
   const [workflowRefresh, setWorkflowRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getUVProject(projectId), getProjectExecutionPlan(projectId)])
-      .then(([projectValue, planValue]) => {
+    Promise.all([getUVProject(projectId), getProjectWorkflow(projectId)])
+      .then(([projectValue, workflowValue]) => {
         if (!active) return;
         setProject(projectValue);
-        setExecutionPlan(planValue);
+        setWorkflow(workflowValue);
       })
       .catch(err => {
         if (active) setError(err instanceof Error ? err.message : 'Не удалось загрузить проект');
@@ -54,6 +57,15 @@ export default function ProjectPage() {
 
   const refreshProject = async () => {
     setProject(await getUVProject(projectId));
+  };
+
+  const refreshProjectWorkflow = async () => {
+    const [projectValue, workflowValue] = await Promise.all([
+      getUVProject(projectId),
+      getProjectWorkflow(projectId),
+    ]);
+    setProject(projectValue);
+    setWorkflow(workflowValue);
   };
 
   const refreshMusicPrerequisites = async () => {
@@ -68,7 +80,7 @@ export default function ProjectPage() {
 
         {error ? (
           <div className="mt-8 rounded-xl border border-red-900/70 bg-red-950/40 p-5 text-red-200">{error}</div>
-        ) : !project || !executionPlan ? (
+        ) : !project || !workflow ? (
           <div className="mt-8 text-slate-400">Загрузка проекта…</div>
         ) : (
           <>
@@ -76,10 +88,21 @@ export default function ProjectPage() {
               <p className="font-mono text-xs text-slate-600">{project.project_id}</p>
               <h1 className="mt-3 text-4xl font-semibold tracking-tight">{project.title}</h1>
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">{executionPlan.recipe_title}</span>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">{workflow.recipe_title}</span>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-slate-500">schema v{project.schema_version}</span>
               </div>
             </header>
+
+            {workflow.relevant_workspaces.some(workspace => workspace.workspace_id === 'photo_composition') && (
+              <Stage8MediaPanel
+                projectId={project.project_id}
+                recipeId="photo_to_video"
+                sources={project.sources}
+                workflowAction={workflow.next_actions.find(action => action.action_id === 'compose_photos')}
+                workflowPrerequisites={workflow.prerequisites}
+                onProjectChanged={refreshProjectWorkflow}
+              />
+            )}
 
             <section className="grid gap-4 py-8 sm:grid-cols-2 lg:grid-cols-4">
               <ProjectStat label="Источники" value={project.sources.length} />
@@ -97,10 +120,12 @@ export default function ProjectPage() {
               />
             )}
 
-            <ProjectEditor
-              projectId={project.project_id}
-              onProjectChanged={refreshProject}
-            />
+            {project.recipe_id !== 'photo_to_video' && (
+              <ProjectEditor
+                projectId={project.project_id}
+                onProjectChanged={refreshProject}
+              />
+            )}
 
             {project.recipe_id === 'music_video' && (
               <>
@@ -122,10 +147,10 @@ export default function ProjectPage() {
               </>
             )}
 
-            {(project.recipe_id === 'photo_to_video' || project.recipe_id === 'visualizer') && (
+            {project.recipe_id === 'visualizer' && (
               <Stage8MediaPanel
                 projectId={project.project_id}
-                recipeId={project.recipe_id}
+                recipeId="visualizer"
                 sources={project.sources}
                 onProjectChanged={refreshProject}
               />
@@ -139,70 +164,65 @@ export default function ProjectPage() {
               />
             )}
 
-            <SequenceContinuityPanel
-              projectId={project.project_id}
-              onProjectChanged={refreshProject}
-            />
+            {project.recipe_id !== 'photo_to_video' && (
+              <>
+                <SequenceContinuityPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
 
-            <DubbingWorkflowPanel
-              projectId={project.project_id}
-              onProjectChanged={refreshProject}
-            />
+                <DubbingWorkflowPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
 
-            <DubbingPrecisionPanel
-              projectId={project.project_id}
-              onProjectChanged={refreshProject}
-            />
+                <DubbingPrecisionPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
 
-            <DubbingSubtitleExportPanel
-              projectId={project.project_id}
-              onProjectChanged={refreshProject}
-            />
+                <DubbingSubtitleExportPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProject}
+                />
+              </>
+            )}
 
             <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500">Готовность процесса</p>
-                  <h2 className="mt-2 text-xl font-medium">{compatibilityLabels[executionPlan.compatibility]}</h2>
+                  <p className="text-xs uppercase tracking-wider text-slate-500">Product Orchestrator</p>
+                  <h2 className="mt-2 text-xl font-medium">{readinessLabels[workflow.readiness]}</h2>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs ${
-                  executionPlan.compatibility === 'available'
+                  workflow.readiness === 'ready'
                     ? 'bg-emerald-950 text-emerald-300'
-                    : executionPlan.compatibility === 'partial'
+                    : workflow.readiness === 'setup_required' || workflow.readiness === 'partial'
                       ? 'bg-amber-950 text-amber-300'
                       : 'bg-slate-800 text-slate-400'
                 }`}>
-                  {executionPlan.compatibility}
+                  {workflow.readiness}
                 </span>
               </div>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">{executionPlan.reason}</p>
+              <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-400">{workflow.summary}</p>
 
-              {executionPlan.input_slots.length > 0 && (
+              {workflow.prerequisites.length > 0 && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-medium text-slate-200">Нужные материалы</h3>
+                  <h3 className="text-sm font-medium text-slate-200">Что нужно для следующего действия</h3>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {executionPlan.input_slots.map(slot => (
-                      <div key={slot.slot_id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                    {workflow.prerequisites.map(prerequisite => (
+                      <div key={prerequisite.prerequisite_id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm text-slate-200">{slot.title}</span>
-                          <span className="text-xs text-slate-600">{slot.kind}</span>
+                          <span className="text-sm text-slate-200">{prerequisite.title}</span>
+                          <span className={`text-xs ${prerequisite.satisfied ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {prerequisite.satisfied ? 'Готово' : 'Требуется'}
+                          </span>
                         </div>
-                        <p className="mt-2 text-xs text-slate-500">{slot.required ? 'Обязательно' : 'Необязательно'}</p>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">{prerequisite.explanation}</p>
+                        {prerequisite.resolution && (
+                          <p className="mt-2 text-xs leading-5 text-amber-300">{prerequisite.resolution}</p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {executionPlan.runtime_config_slots.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-slate-200">Настройки выполнения</h3>
-                  <p className="mt-1 text-xs text-slate-500">Здесь указаны типы необходимых возможностей, а не конкретные платные поставщики.</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {executionPlan.runtime_config_slots.map(slot => (
-                      <span key={slot.slot_id} className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-300">
-                        {slot.title} · {slot.capability_id}
-                      </span>
                     ))}
                   </div>
                 </div>
@@ -222,14 +242,6 @@ export default function ProjectPage() {
                 >
                   Скачать архив проекта
                 </a>
-                {executionPlan.can_prepare_native_execution && (
-                  <Link
-                    href="/"
-                    className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-                  >
-                    Открыть существующие производственные инструменты
-                  </Link>
-                )}
               </div>
             </section>
           </>

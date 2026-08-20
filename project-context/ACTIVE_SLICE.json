@@ -1,14 +1,34 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "product-recovery-orchestrator-foundation",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Introduce the first Product Orchestrator projection and prove Photo-to-Video from user intent through semantic action, Project Store, Capability Registry and the existing deterministic adapter while isolating legacy workflow navigation.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-orchestrator-foundation",
+    "pull_request": 43,
+    "write_scope": [
+      "docs/architecture/**",
+      "e2e/**",
+      "frontend/**",
+      "project-context/**",
+      "tests/**",
+      "tests_api/**",
+      "uv_studio/api/capability_execution.py",
+      "uv_studio/api/project_workflow.py",
+      "uv_studio/orchestration/**",
+      "uv_studio/server.py"
+    ]
+  },
   "last_completed": {
     "id": "product-recovery-truth-inventory",
     "pull_request": 42,
     "merge_commit": "0a759f60899693de2970ca1f25b2fde687a8f4ee"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-orchestrator-foundation",
+    "next_slice_id": "product-recovery-editor-ownership-resolution",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

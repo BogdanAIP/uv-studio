@@ -2,11 +2,16 @@
 
 ## Purpose
 
-This document is the auditable source of truth for what UV Studio promises and what the Stage 8 `main` application can actually execute. A feature is not `working` merely because source code, domain state or tests exist; it is working only when a user-visible action reaches a current mounted UV-owned execution path and produces the expected result.
+This document records the D-062 Stage 8 audit baseline and the current recovery
+status. A feature is not `working` merely because source code, domain state or
+tests exist; it is working only when a user-visible action reaches a current
+mounted UV-owned execution path and produces the expected result.
 
 Status values:
 
 - `working` — current UI -> current mounted API -> implementation -> result;
+- `working_orchestrated` — `working` plus truthful Product Orchestrator readiness,
+  prerequisites, relevant workspace and semantic next action;
 - `working_with_setup` — complete path exists after an explicit optional runtime/config prerequisite;
 - `partial` — valuable pieces exist but the product journey is incomplete;
 - `misleading` — UI/metadata implies readiness that current backend execution does not support;
@@ -15,7 +20,8 @@ Status values:
 
 ## Fundamental Stage 8 architecture split
 
-The live product contains **two frontend architectures at once**.
+At the D-062 audit baseline, the live product contained **two frontend
+architectures at once**.
 
 ### A. UV-owned project architecture
 
@@ -43,7 +49,12 @@ AppShell sidebar
 
 Most of the latter backend routes were intentionally removed from `uv_studio/server.py` by Stage 3.5.
 
-The legacy layer is not only under `vendor/`: `frontend/lib/workflowApi.ts`, `HomePage.tsx`, `WorkflowPanel.tsx`, `PipelinePage.tsx` and the three pipeline routes are live source and are compiled by the current frontend. `AppShell` imports `workflowApi` and places legacy routes in primary navigation. `frontend/app/layout.tsx` wraps all routes in that shell.
+The legacy layer is not only under `vendor/`: `frontend/lib/workflowApi.ts`,
+`HomePage.tsx`, `WorkflowPanel.tsx`, `PipelinePage.tsx` and the three pipeline
+routes remain compiled migration debt. In the audit baseline, `AppShell`
+imported `workflowApi` and placed legacy routes in primary navigation. The
+Product Orchestrator foundation replaces that shell with a UV-owned project
+shell that neither links nor polls those routes.
 
 This is a central Product Truth defect: the new UV product was added without completing retirement/isolation of the old runtime-facing frontend.
 
@@ -65,7 +76,9 @@ It does **not** mount the complete old VideoClaw runtime. Important absent famil
 
 ## Main-shell truth
 
-Stage 8 `AppShell` imports `clearTempCache`, `fetchPipelineTasks`, `fetchSandboxTasks` and `fetchSessions` from `workflowApi` and defines primary navigation for:
+The audited Stage 8 `AppShell` imported `clearTempCache`, `fetchPipelineTasks`,
+`fetchSandboxTasks` and `fetchSessions` from `workflowApi` and defined primary
+navigation for:
 
 ```text
 /
@@ -77,6 +90,12 @@ Stage 8 `AppShell` imports `clearTempCache`, `fetchPipelineTasks`, `fetchSandbox
 ```
 
 The pipeline pages use a separate `Video-Claw` BrandHeader and light controls. They are therefore both a backend-contract problem and a second visible design system.
+
+The Product Orchestrator recovery shell now advertises `/projects` and the
+currently mounted `/settings` configuration surface only. It does not import or
+poll the old workflow client. The settings page no longer mounts the historical
+Video-Claw header; its mixed-language field copy remains presentation migration
+debt, not a second workflow/runtime contract.
 
 ## UV project-page composition audit
 
@@ -112,23 +131,24 @@ Thus even after entering the new Project Store architecture, a selected task doe
 | dubbing | dubbing panels/APIs | ASR/capabilities + dubbing domain state | substantial real workflow, setup/state heavy |
 | music map/direction | music panels/APIs | Music Map/Direction | real, low-level authoring burden |
 | music assembly/review | music panels/APIs | Assembly/Review + media render | real |
-| Photo -> Video | `Stage8MediaPanel` | `video.compose_photos` | clean real local path |
+| Photo -> Video | Product Orchestrator -> `Stage8MediaPanel` | workflow action -> `video.compose_photos` | first orchestrated real local path |
 | Visualizer | `Stage8MediaPanel` | `audio.visualize` | clean real local path |
 | Story/Commercial preparation | `Stage8CompositionPanel` | Stage 8 workspace state | real preparation, not full production |
 | Performance lip-sync | dedicated panel | verified MuseTalk capability path | real with explicit setup |
-| project readiness | execution-plan block | RecipeExecutionPlan + capability projection | overloaded, not product orchestration |
+| project readiness | Product Orchestrator block | Project Store + verified Source Media + Recipe/Capability Registry projection | implemented for Photo -> Video; other recipes fail closed as partial |
 
 ## Live legacy frontend -> disabled backend map
 
 | Live surface | Client calls | Current backend truth | Status |
 |---|---|---|---|
-| `AppShell` legacy sidebar/task panels | sessions/tasks/sandbox cache APIs | most routes absent | `live_legacy_broken` |
+| legacy `AppShell` sidebar/task implementation | sessions/tasks/sandbox cache APIs | most routes absent | isolated from the normal shell; retained only in Git history |
 | `/pipelines/standard` | models/templates/upload/standard task/task events | routes absent | `live_legacy_broken` |
 | `/pipelines/action-transfer` | models/upload/action-transfer task/task events | routes absent | `live_legacy_broken` |
 | `/pipelines/digital-human` | models/upload/digital-human task/task events | routes absent | `live_legacy_broken` |
 | `WorkflowPanel` / `HomePage` old main workflow | `/api/project/start`, status, execute, intervene, artifacts, sessions | old workflow runtime absent | `live_legacy_broken` unless fully unreachable from current route entry |
 
-Even an unreachable compiled legacy component is migration debt; sidebar-linked pipeline pages are confirmed normal-navigation surfaces.
+Compiled legacy route source remains migration debt, but the normal shell no longer
+links or polls those surfaces. Direct retirement is a later bounded cleanup.
 
 ## Recipe matrix
 
@@ -141,7 +161,7 @@ Even an unreachable compiled legacy component is migration debt; sidebar-linked 
 | `digital_human` | portrait + speech -> talking video | current UV recipe is partial/setup-dependent; separate legacy page calls disabled promo pipeline | `partial` + legacy broken surface | keep capability-gated; retire legacy promo path |
 | `story_video` | story -> video | typed brief/script/material workspace plus generic leaked panels | `partial` | orchestrate production after core flow isolation |
 | `commercial_product` | product brief/materials -> ad video | preparation state plus generic leaked panels | `partial` | orchestrated product flow |
-| `photo_to_video` | photos + optional audio -> video | real local FFmpeg capability path | `working` but shell/page polluted | use as UX reference; isolate relevant workspace |
+| `photo_to_video` | photos + optional audio -> video | Product Orchestrator action delegates to the real local FFmpeg capability path | `working_orchestrated` | first reference journey; keep permanent evidence |
 | `visualizer` | audio + optional artwork -> video | real local FFmpeg capability path | `working` but shell/page polluted | use as UX reference |
 | `performance_lip_sync` | portrait + speech -> lip sync | verified optional MuseTalk path | `working_with_setup` | show setup before entry |
 | `free_project` | flexible tools | real primitives but no next-action owner; unrelated workflows globally visible | `partial` | orchestrator/tool palette |
@@ -172,7 +192,9 @@ Recipe cards look similarly selectable before the user knows whether a mode is w
 
 ### Dual navigation/state models
 
-The global shell shows legacy session/task/pipeline concepts while `/projects` uses Project Store/project IDs. The user is exposed to two incompatible notions of “project/task/workflow” in one application.
+At the audit baseline, the global shell showed legacy session/task/pipeline
+concepts while `/projects` used Project Store/project IDs. The Product
+Orchestrator foundation removes that competing model from the normal shell.
 
 ### Broken legacy pipeline execution
 

@@ -3,9 +3,13 @@
 import { useMemo, useState } from 'react';
 import type { ProjectReference } from '@/lib/projectsApi';
 import {
+  executeComposePhotosAction,
+  type WorkflowAction,
+  type WorkflowPrerequisite,
+} from '@/lib/productWorkflowApi';
+import {
   projectStage8ArtifactUrl,
   renderAudioVisualizer,
-  renderPhotoToVideo,
   uploadProjectImageSource,
   uploadStage8AudioSource,
 } from '@/lib/stage8MediaApi';
@@ -19,13 +23,22 @@ interface Stage8MediaPanelProps {
   projectId: string;
   recipeId: 'photo_to_video' | 'visualizer';
   sources: ProjectReference[];
+  workflowAction?: WorkflowAction;
+  workflowPrerequisites?: WorkflowPrerequisite[];
   onProjectChanged: () => Promise<void> | void;
 }
 
-export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChanged }: Stage8MediaPanelProps) {
+export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction, workflowPrerequisites, onProjectChanged }: Stage8MediaPanelProps) {
   const images = useMemo(() => sources.filter(source => source.kind === 'image'), [sources]);
   const audios = useMemo(() => sources.filter(source => source.kind === 'audio'), [sources]);
-  const [imageOrder, setImageOrder] = useState(() => images.map(source => source.id));
+  const composableImages = useMemo(() => {
+    if (recipeId !== 'photo_to_video' || !workflowAction) return images;
+    const suggestedIds = workflowAction.suggested_input.image_source_ids;
+    if (!Array.isArray(suggestedIds)) return [];
+    const verifiedIds = new Set(suggestedIds.filter((value): value is string => typeof value === 'string'));
+    return images.filter(source => verifiedIds.has(source.id));
+  }, [images, recipeId, workflowAction]);
+  const [imageOrder, setImageOrder] = useState(() => composableImages.map(source => source.id));
   const [photoAudioId, setPhotoAudioId] = useState('');
   const [durationSeconds, setDurationSeconds] = useState('2');
   const [visualizerAudioId, setVisualizerAudioId] = useState(() => audios[0]?.id ?? '');
@@ -36,14 +49,14 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
   const [artifactId, setArtifactId] = useState<string | null>(null);
 
   const orderedImageIds = useMemo(() => {
-    const availableIds = new Set(images.map(source => source.id));
+    const availableIds = new Set(composableImages.map(source => source.id));
     const preserved = imageOrder.filter(sourceId => availableIds.has(sourceId));
     const preservedIds = new Set(preserved);
-    const appended = images
+    const appended = composableImages
       .map(source => source.id)
       .filter(sourceId => !preservedIds.has(sourceId));
     return [...preserved, ...appended];
-  }, [imageOrder, images]);
+  }, [imageOrder, composableImages]);
   const selectedPhotoAudioId = audios.some(source => source.id === photoAudioId) ? photoAudioId : '';
   const selectedVisualizerAudioId = audios.some(source => source.id === visualizerAudioId)
     ? visualizerAudioId
@@ -104,14 +117,13 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
     setError(null);
     setMessage(null);
     try {
-      const response = await renderPhotoToVideo(
-        projectId,
-        orderedImageIds,
-        Math.round(duration * 1_000_000),
-        selectedPhotoAudioId || undefined,
-      );
-      setArtifactId(response.result.artifact.id);
-      setMessage('Видео из фотографий собрано локальным FFmpeg capability.');
+      const response = await executeComposePhotosAction(projectId, {
+        image_source_ids: orderedImageIds,
+        duration_per_image_us: Math.round(duration * 1_000_000),
+        ...(selectedPhotoAudioId ? { audio_source_id: selectedPhotoAudioId } : {}),
+      });
+      setArtifactId(response.execution.result.artifact.id);
+      setMessage('Видео собрано через Product Orchestrator и локальный FFmpeg capability.');
       await onProjectChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось собрать видео');
@@ -146,7 +158,9 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-indigo-900/60 bg-indigo-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-indigo-400">Stage 8 · локальная сборка</p>
+      <p className="text-xs uppercase tracking-wider text-indigo-400">
+        {recipeId === 'photo_to_video' ? 'Product workflow · локальная сборка' : 'Локальная сборка'}
+      </p>
       <h2 className="mt-2 text-xl font-medium">
         {recipeId === 'photo_to_video' ? 'Фотографии → видео' : 'Аудио → визуализатор'}
       </h2>
@@ -186,11 +200,15 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
           <div>
             <h3 className="text-sm font-medium text-slate-200">Порядок фотографий</h3>
             {orderedImageIds.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Изображений пока нет.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {images.length > 0
+                  ? 'Нет проверенных изображений. Загрузите новую копию.'
+                  : 'Изображений пока нет.'}
+              </p>
             ) : (
               <div className="mt-3 space-y-2">
                 {orderedImageIds.map((sourceId, index) => {
-                  const source = images.find(item => item.id === sourceId);
+                  const source = composableImages.find(item => item.id === sourceId);
                   if (!source) return null;
                   return (
                     <div key={sourceId} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
@@ -218,7 +236,18 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, onProjectChange
               </select>
             </label>
           </div>
-          <button type="button" disabled={busy || orderedImageIds.length === 0} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
+          {workflowAction && !workflowAction.enabled && (
+            <div className="space-y-1 text-sm text-amber-300">
+              {(workflowPrerequisites ?? [])
+                .filter(prerequisite => !prerequisite.satisfied)
+                .map(prerequisite => (
+                  <p key={prerequisite.prerequisite_id}>
+                    {prerequisite.resolution ?? prerequisite.explanation}
+                  </p>
+                ))}
+            </div>
+          )}
+          <button type="button" disabled={busy || orderedImageIds.length === 0 || workflowAction?.enabled === false} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
             Собрать видео из фотографий
           </button>
         </div>

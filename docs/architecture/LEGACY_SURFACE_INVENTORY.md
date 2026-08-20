@@ -1,5 +1,9 @@
 # Legacy VideoClaw Surface Inventory
 
+> Audit snapshot: the shell findings below describe the D-062 baseline. The
+> Product Orchestrator foundation replaces the normal shell with a UV-owned
+> projects shell; legacy route/component source remains isolated migration debt.
+
 ## Purpose
 
 Stage 3.5 intentionally stopped mounting the complete VideoClaw FastAPI application. This inventory distinguishes the current UV-owned product architecture from legacy VideoClaw surfaces that still remain **inside the live frontend**, not only under `vendor/`.

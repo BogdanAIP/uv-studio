@@ -1,5 +1,9 @@
 # UV Studio Product Surface Audit
 
+> Audit snapshot: shell/navigation findings describe the D-062 baseline. The
+> Product Orchestrator foundation removes legacy pipeline/session/task/sandbox
+> entries and polling from the normal UV Studio shell.
+
 ## Scope
 
 This audit records Stage 8 `main` user-visible behavior that explains why a technically substantial backend can feel non-functional. It covers both the newer UV Project Store/product UI and the still-live VideoClaw shell/pipeline UI.

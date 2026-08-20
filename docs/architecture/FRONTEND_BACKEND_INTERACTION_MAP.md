@@ -88,10 +88,10 @@ This remains the product backend boundary.
 
 ## Architecture B — live legacy VideoClaw path
 
-Important live frontend files:
+Important audited legacy frontend files (now isolated from normal navigation):
 
 - `frontend/lib/workflowApi.ts`;
-- `frontend/components/AppShell.tsx` legacy navigation/task logic;
+- prior `frontend/components/AppShell.tsx` legacy navigation/task logic (replaced by the UV-owned shell);
 - `frontend/components/HomePage.tsx`;
 - `frontend/components/WorkflowPanel.tsx`;
 - `frontend/components/pipelines/PipelinePage.tsx`;
@@ -103,7 +103,7 @@ Important live frontend files:
 
 ### AppShell coupling
 
-The Stage 8 `AppShell` imports from `workflowApi`:
+The D-062 audit-baseline `AppShell` imported from `workflowApi`:
 
 ```text
 clearTempCache
@@ -124,7 +124,10 @@ and places these routes in primary navigation:
 
 It also constructs links for old session/pipeline/sandbox running/completed tasks.
 
-Because `frontend/app/layout.tsx` wraps all pages with `AppShell`, this legacy model is part of the normal product shell, including when the user is inside `/projects`.
+Before the Product Orchestrator foundation, `frontend/app/layout.tsx` made this
+legacy model part of the normal product shell, including inside `/projects`.
+The current `AppShell` is UV-owned and contains no legacy runtime import,
+navigation or polling.
 
 ### workflowApi old contracts
 
@@ -155,7 +158,9 @@ Most of these are not mounted by the current UV server.
 
 Each of the three `/pipelines/*` pages renders `PipelinePage`, which directly imports legacy model/task/upload/start functions from `workflowApi`.
 
-So these are not historical files that merely compile: they are main-sidebar routes whose normal execution path points at a backend removed for security/runtime-independence reasons.
+At the audit baseline these were main-sidebar routes whose normal execution path
+pointed at a backend removed for security/runtime-independence reasons. They now
+remain compiled migration debt without a normal-shell entry point.
 
 `BrandHeader` labels that UI `Video-Claw`, and `PipelinePage` uses a separate light/white form design. This makes the architecture split visible to the user as well as technical.
 
@@ -362,14 +367,14 @@ Music Map, Dubbing Review and Replacement Review may remain coherent dedicated d
 
 ## Immediate Product Orchestrator seam
 
-Recommended next-slice family:
+Implemented first-slice family:
 
 ```text
 GET /api/uv/projects/{project_id}/workflow
 POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
 ```
 
-Start with a read projection plus one representative action. It should contain:
+The read projection plus representative `compose_photos` action contains:
 
 - truthful readiness;
 - prerequisites;
@@ -379,8 +384,11 @@ Start with a read projection plus one representative action. It should contain:
 - recent result artifacts;
 - separate diagnostics.
 
-No new canonical workflow store is introduced.
+No new canonical workflow store is introduced. See
+[`PRODUCT_ORCHESTRATOR.md`](PRODUCT_ORCHESTRATOR.md) for the concrete ownership map.
 
 ## UI-isolation companion work
 
-The same next recovery phase should make the shell Product-Orchestrator-aware and stop exposing the legacy VideoClaw runtime surfaces as normal navigation. This is not merely cosmetic: it removes user entry points into APIs the backend intentionally does not provide.
+The normal shell is now UV-owned and does not expose or poll legacy VideoClaw
+pipeline/session/task/sandbox surfaces. Legacy route source is isolated rather
+than made functional by remounting the disabled backend.

@@ -69,29 +69,6 @@ export interface VisualizerResult extends CapabilityVideoResult {
   output: VisualizerOutput & Record<string, unknown>;
 }
 
-export async function renderPhotoToVideo(
-  projectId: string,
-  imageSourceIds: string[],
-  durationPerImageUs: number,
-  audioSourceId?: string,
-): Promise<CapabilityVideoEnvelope<PhotoToVideoResult>> {
-  const input: Record<string, unknown> = {
-    image_source_ids: imageSourceIds,
-    duration_per_image_us: durationPerImageUs,
-  };
-  if (audioSourceId) input.audio_source_id = audioSourceId;
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.compose_photos/execute`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selection_policy: 'local_free_first', input }),
-    },
-  );
-  if (!response.ok) throw await apiError(response, 'Не удалось собрать видео из фотографий');
-  return response.json();
-}
-
 export async function renderAudioVisualizer(
   projectId: string,
   audioSourceId: string,
