@@ -23,3 +23,5 @@ Compact record of completed development slices. Detailed rationale remains in th
 | 5 hardening | PR #34, `e98015da` | Current Review semantics, media byte-integrity gates, translation/take identity fixes, legacy-root retirement and permanent cross-platform browser E2E | D-032, D-035, D-038 |
 | 6 | PR #35, `ea0b766c` | Optional linked-shot continuity, SHA-bound accepted anchors, bounded TimelineContext, provider-neutral Review Assist and fail-closed Review/Accept trust boundaries | D-039, D-040 |
 | 7 | PR #36, `523424bf` | Optional Music Video Mode: exact-song Music Map, Music Director, rhythm audit, sample-first generated assets, SHA-bound Assembly, master-audio FFmpeg render, Analysis Assist, evidence-bound Final Review and cross-platform browser/real-media proof | D-041 |
+| 8 | PR #37, `5eb8f6c` | Additional compositional recipes plus deterministic Photo-to-Video, Visualizer and setup-gated Performance/Lip-sync user outcomes | D-042, D-043 |
+| Product recovery | PR #42, `0a759f6` | Product truth inventory, fail-closed stale execution/binding contracts and explicit dual-frontend recovery boundary | D-062 |

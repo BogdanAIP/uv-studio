@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-truth-inventory -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: product-recovery-truth-inventory -->
 
 **Updated:** 2026-08-20
 
