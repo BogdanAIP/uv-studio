@@ -1,13 +1,14 @@
 'use client';
 
 import clsx from 'clsx';
-import { FolderKanban, Sparkles } from 'lucide-react';
+import { FolderKanban, Settings, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const projectsActive = pathname === '/' || pathname.startsWith('/projects');
+  const settingsActive = pathname.startsWith('/settings');
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -23,7 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
 
-          <nav aria-label="Основная навигация">
+          <nav className="flex items-center gap-1" aria-label="Основная навигация">
             <Link
               href="/projects"
               className={clsx(
@@ -35,6 +36,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <FolderKanban className="h-4 w-4" aria-hidden="true" />
               Проекты
+            </Link>
+            <Link
+              href="/settings"
+              className={clsx(
+                'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition',
+                settingsActive
+                  ? 'bg-sky-500/15 text-sky-300'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
+              )}
+            >
+              <Settings className="h-4 w-4" aria-hidden="true" />
+              Настройки
             </Link>
           </nav>
         </div>

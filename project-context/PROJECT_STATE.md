@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-20
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-orchestrator-foundation` is the active review slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed.
+`product-recovery-orchestrator-foundation` is the active draft slice in PR #43 on branch `fix/product-recovery-orchestrator-foundation`, created from exact green idle `main@0d148afb7d47b52196197559328897d85ea7c8eb` after Product Truth Inventory PR #42 merged and its lifecycle was closed. Exact-head review found two bounded contract gaps—selection-aware readiness and access to current provider settings—which are being repaired before the slice returns to review.
 
 This slice adds a read projection and one semantic action for `photo_to_video`, makes the project UI consume readiness/prerequisites/relevant-workspace truth, and removes the legacy pipeline/session/task/sandbox model from normal AppShell navigation without remounting its backend.
 
@@ -64,7 +64,8 @@ Therefore the product is not merely “new UV UI plus harmless vendor residue”
 - the D-062 baseline globally mounted targeted edit, sequence continuity and three dubbing panels for every recipe; the first orchestrated Photo-to-Video flow now mounts only its relevant composition workspace;
 - recipe cards do not express readiness before project creation;
 - the looping `Производственный интерфейс` CTA has been removed from the projects page;
-- the normal AppShell is now UV-owned and exposes only Project Store projects, with no legacy VideoClaw pipeline/sandbox navigation or session/task polling;
+- the normal AppShell is now UV-owned and exposes Project Store projects plus the current provider/runtime settings route, with no legacy VideoClaw pipeline/sandbox navigation or session/task polling;
+- the settings route no longer mounts its historical Video-Claw header; its older mixed-language field copy remains explicit frontend migration debt rather than a second shell/runtime contract;
 - legacy pipeline pages remain compiled migration debt and are deliberately not remounted or advertised;
 - informed browser E2E proves known paths, not cold-start discoverability.
 
@@ -104,10 +105,11 @@ D-033 reuse-first remains binding. OpenCut/MLT/UV editor ownership must be expli
 - `ProjectWorkflowState` schema v1 projects Project Store, Recipe Registry and Capability Registry state without persisting orchestration data;
 - `GET /api/uv/projects/{project_id}/workflow` fails non-migrated recipes closed and reports unknown recovered recipes without losing project data;
 - `POST /api/uv/projects/{project_id}/workflow/actions/compose_photos` validates bounded semantic inputs and delegates to the existing D-017 capability execution function and local FFmpeg offer;
-- 369 domain/unit tests pass (`2` optional skips) and 183 API tests pass;
+- readiness and action execution now share strict `local_free_first` eligibility, so remote or non-free offers cannot enable the local action;
+- 370 domain/unit tests pass (`2` optional skips) and 184 API tests pass;
 - the frontend production build and TypeScript pass; ESLint reports zero errors (pre-existing legacy-source warnings remain);
 - the real Stage 8 browser outcome passes through `/workflow/actions/compose_photos`, produces a `photo_to_video_render` artifact, and asserts absence of legacy navigation and unrelated Photo-to-Video workspaces;
-- rendered 1600×1000 and 390×844 checks show no horizontal overflow, visible keyboard focus and an above-the-fold mobile Photo-to-Video workspace; visual QA caused the task workspace to move ahead of secondary project statistics.
+- rendered 1600×1000 and 390×844 checks show no horizontal overflow, visible keyboard focus, an above-the-fold mobile Photo-to-Video workspace, and a reachable UV-shell settings page without Video-Claw branding; visual QA caused the task workspace to move ahead of secondary project statistics.
 
 ## Verification direction
 

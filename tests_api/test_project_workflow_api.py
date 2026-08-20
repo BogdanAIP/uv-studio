@@ -31,7 +31,12 @@ from uv_studio.projects.store import ProjectStore
 from uv_studio.server import app
 
 
-def _registry(availability: OfferAvailability = OfferAvailability.AVAILABLE) -> CapabilityRegistry:
+def _registry(
+    availability: OfferAvailability = OfferAvailability.AVAILABLE,
+    *,
+    locality: LocalityClass = LocalityClass.LOCAL,
+    cost: CostClass = CostClass.FREE,
+) -> CapabilityRegistry:
     capability = CapabilityDefinition(
         "video.compose_photos",
         "Photo composition",
@@ -48,8 +53,8 @@ def _registry(availability: OfferAvailability = OfferAvailability.AVAILABLE) -> 
         "Photo composition",
         availability,
         "test runtime",
-        LocalityClass.LOCAL,
-        CostClass.FREE,
+        locality,
+        cost,
         False,
     )
     return CapabilityRegistry((capability,), (adapter,), (offer,))
@@ -123,6 +128,24 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(response.json()["detail"]["code"], "workflow_action_blocked")
+        self.assertEqual(self.executor.calls, [])
+
+    def test_remote_available_offer_does_not_enable_local_free_action(self) -> None:
+        self.registry = _registry(locality=LocalityClass.REMOTE)
+        app.dependency_overrides[get_capability_registry] = lambda: self.registry
+        self._add_image()
+
+        state_response = self.client.get(self._url())
+        self.assertEqual(state_response.status_code, 200, state_response.text)
+        self.assertEqual(state_response.json()["readiness"], "unavailable")
+        self.assertFalse(state_response.json()["next_actions"][0]["enabled"])
+
+        action_response = self.client.post(
+            self._url("workflow/actions/compose_photos"),
+            json={"image_source_ids": ["src_image"]},
+        )
+        self.assertEqual(action_response.status_code, 409, action_response.text)
+        self.assertEqual(action_response.json()["detail"]["code"], "workflow_action_blocked")
         self.assertEqual(self.executor.calls, [])
 
     def test_semantic_action_delegates_to_existing_capability_boundary(self) -> None:

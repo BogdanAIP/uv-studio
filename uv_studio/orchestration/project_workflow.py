@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailability
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
+from uv_studio.capabilities.selection import NoEligibleOffer, SelectionPolicy, select_offer
 from uv_studio.projects.models import ProjectDocument, ProjectReference
 from uv_studio.recipes.models import RecipeDefinition
 
@@ -69,15 +71,16 @@ def _photo_workflow(
     image_sources = tuple(source for source in project.sources if source.kind == "image")
     images_ready = bool(image_sources)
     capability_known = True
-    offer_summary = {
-        "total": 0,
-        "available": 0,
-        "configuration_required": 0,
-        "unavailable": 0,
-    }
+    capability_ready = False
+    capability_configurable = False
     diagnostics: list[WorkflowDiagnostic] = []
     try:
-        offer_summary = registry.offer_summary(_PHOTO_CAPABILITY_ID)
+        select_offer(
+            registry,
+            _PHOTO_CAPABILITY_ID,
+            policy=SelectionPolicy.LOCAL_FREE_FIRST,
+        )
+        capability_ready = True
     except UnknownCapability:
         capability_known = False
         diagnostics.append(
@@ -87,11 +90,14 @@ def _photo_workflow(
                 message=f"Capability {_PHOTO_CAPABILITY_ID!r} отсутствует в текущем runtime.",
             )
         )
+    except NoEligibleOffer:
+        capability_configurable = any(
+            offer.availability is OfferAvailability.CONFIGURATION_REQUIRED
+            and offer.cost_class is CostClass.FREE
+            and offer.locality is LocalityClass.LOCAL
+            for offer in registry.offers_for(_PHOTO_CAPABILITY_ID)
+        )
 
-    capability_ready = capability_known and offer_summary["available"] > 0
-    capability_configurable = (
-        capability_known and offer_summary["configuration_required"] > 0
-    )
     if not capability_ready and capability_known:
         diagnostics.append(
             WorkflowDiagnostic(

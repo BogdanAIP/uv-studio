@@ -91,6 +91,12 @@ navigation for:
 
 The pipeline pages use a separate `Video-Claw` BrandHeader and light controls. They are therefore both a backend-contract problem and a second visible design system.
 
+The Product Orchestrator recovery shell now advertises `/projects` and the
+currently mounted `/settings` configuration surface only. It does not import or
+poll the old workflow client. The settings page no longer mounts the historical
+Video-Claw header; its mixed-language field copy remains presentation migration
+debt, not a second workflow/runtime contract.
+
 ## UV project-page composition audit
 
 Inside the newer `/projects/{projectId}` architecture, workflows are also not isolated by recipe. The page always mounts:

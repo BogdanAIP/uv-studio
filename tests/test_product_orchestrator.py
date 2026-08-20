@@ -19,7 +19,12 @@ from uv_studio.projects.models import ProjectDocument, ProjectReference
 from uv_studio.recipes import build_builtin_registry
 
 
-def _registry(availability: OfferAvailability) -> CapabilityRegistry:
+def _registry(
+    availability: OfferAvailability,
+    *,
+    locality: LocalityClass = LocalityClass.LOCAL,
+    cost: CostClass = CostClass.FREE,
+) -> CapabilityRegistry:
     capability = CapabilityDefinition(
         "video.compose_photos",
         "Photo composition",
@@ -41,8 +46,8 @@ def _registry(availability: OfferAvailability) -> CapabilityRegistry:
         "Local photo composition",
         availability,
         "test runtime",
-        LocalityClass.LOCAL,
-        CostClass.FREE,
+        locality,
+        cost,
         False,
     )
     return CapabilityRegistry((capability,), (adapter,), (offer,))
@@ -104,6 +109,30 @@ class ProductOrchestratorTests(unittest.TestCase):
             ("source.images", "capability.video.compose_photos"),
         )
         self.assertEqual(state.diagnostics[0].code, "capability_not_available")
+
+    def test_readiness_uses_same_local_free_policy_as_execution(self) -> None:
+        image = ProjectReference(
+            id="src_image",
+            kind="image",
+            path="sources/image.png",
+        )
+        ineligible_offers = (
+            {"locality": LocalityClass.REMOTE, "cost": CostClass.FREE},
+            {"locality": LocalityClass.LOCAL, "cost": CostClass.PAID},
+        )
+        for offer_metadata in ineligible_offers:
+            with self.subTest(**offer_metadata):
+                state = project_workflow_state(
+                    _project(sources=(image,)),
+                    self.recipes.get("photo_to_video"),
+                    _registry(OfferAvailability.AVAILABLE, **offer_metadata),
+                )
+                self.assertEqual(state.readiness, WorkflowReadiness.UNAVAILABLE)
+                self.assertFalse(state.next_actions[0].enabled)
+                self.assertEqual(
+                    state.next_actions[0].blocked_by,
+                    ("capability.video.compose_photos",),
+                )
 
     def test_latest_photo_artifact_becomes_current_outcome(self) -> None:
         old = ProjectReference(

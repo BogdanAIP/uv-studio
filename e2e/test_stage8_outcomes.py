@@ -200,6 +200,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         expect(page.get_by_text("UV Studio", exact=True)).to_be_visible()
         expect(page.get_by_text("Video-Claw", exact=True)).to_have_count(0)
         expect(page.locator('a[href^="/pipelines"], a[href="/sandbox"]')).to_have_count(0)
+        expect(page.locator('a[href="/settings"]')).to_be_visible()
         expect(page.get_by_role("heading", name="Фотографии → видео", exact=True)).to_be_visible()
         expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)

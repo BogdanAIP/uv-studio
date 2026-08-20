@@ -11,6 +11,11 @@ Project Store remains canonical, domain modules retain their own durable state,
 Capability Registry owns runtime offers, and the D-017 execution boundary owns
 selection, consent and adapter dispatch.
 
+Readiness must use the same offer-eligibility policy as execution. For the first
+journey, both projection and action execution use strict `local_free_first`;
+an available remote, hybrid or non-free offer therefore cannot enable the local
+Photo-to-Video action.
+
 ## First supported journey
 
 ```text
@@ -66,10 +71,12 @@ No orchestration state file or duplicate task/session record is introduced.
 
 ## UI boundary
 
-The normal shell exposes UV Studio projects only. It no longer imports or polls
-the legacy `workflowApi` session/task/sandbox layer and no longer advertises
-`/pipelines/*` or `/sandbox` navigation. Legacy route source remains isolated
-migration evidence until a later explicit retirement slice.
+The normal shell exposes UV Studio projects and the current provider/runtime
+settings route. It no longer imports or polls the legacy `workflowApi`
+session/task/sandbox layer and no longer advertises `/pipelines/*` or `/sandbox`
+navigation. The settings route uses the UV shell rather than its historical
+Video-Claw header. Legacy route source remains isolated migration evidence until
+a later explicit retirement slice.
 
 For `photo_to_video`, the project page renders only the
 `photo_composition` workspace returned by Product Orchestrator; generic editor,

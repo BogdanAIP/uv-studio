@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle, Loader2, Save, Settings, XCircle } from 'lucide-react';
-import BrandHeader from '@/components/BrandHeader';
 import { fetchModelGroupsByType, fetchVideoModelGroupsByAbility } from '@/lib/modelRegistry';
 import {
   VIDEO_RATIOS,
@@ -316,7 +315,6 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <BrandHeader />
       <main className="w-full max-w-6xl mx-auto px-6 pt-10 pb-12">
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 mb-3">
