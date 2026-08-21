@@ -113,9 +113,8 @@ def targeted_edit_workflow_state(
         )
 
     try:
-        plans = ReplacementPlanStore(store).validate_project(project.project_id).plans
+        ReplacementPlanStore(store).validate_project(project.project_id)
     except (ReplacementPlanError, ProjectStoreError) as exc:
-        plans = ()
         diagnostics.append(
             WorkflowDiagnostic(
                 code="targeted_edit_plan_invalid",
@@ -185,14 +184,15 @@ def targeted_edit_workflow_state(
 
     source_ready = bool(verified_videos)
     brief_ready = bool(briefs)
-    replacement_source_ready = False
-    eligible_replacement_pair: tuple[str, str] | None = None
+    eligible_replacement_pairs: list[dict[str, str]] = []
     path_by_source_id = {source.id: source.path for source in verified_videos}
     for brief in briefs:
         for source_id, source_path in path_by_source_id.items():
             if source_path != brief.source_path:
-                replacement_source_ready = True
-                eligible_replacement_pair = eligible_replacement_pair or (brief.edit_id, source_id)
+                eligible_replacement_pairs.append(
+                    {"edit_id": brief.edit_id, "replacement_source_id": source_id}
+                )
+    replacement_source_ready = bool(eligible_replacement_pairs)
 
     candidate_ready = bool(current_candidates)
     review_ready = bool(approved_reviews)
@@ -240,11 +240,7 @@ def targeted_edit_workflow_state(
             title="Исходное видео",
             explanation="Нужно хотя бы одно проверенное project-owned видео для редактирования.",
             satisfied=source_ready,
-            resolution=(
-                None
-                if source_ready
-                else "Импортируйте исходное видео в рабочее пространство."
-            ),
+            resolution=None if source_ready else "Импортируйте исходное видео в рабочее пространство.",
         ),
         WorkflowPrerequisite(
             prerequisite_id="edit.brief",
@@ -343,11 +339,6 @@ def targeted_edit_workflow_state(
         )
         if not ready
     )
-    prepare_suggested = (
-        {"edit_id": eligible_replacement_pair[0], "replacement_source_id": eligible_replacement_pair[1]}
-        if eligible_replacement_pair
-        else {}
-    )
     prepare_action = WorkflowAction(
         action_id="prepare_replacement",
         title="Подготовить вариант замены",
@@ -366,8 +357,9 @@ def targeted_edit_workflow_state(
                 "edit_id": _enum_property(brief_ids),
                 "replacement_source_id": _enum_property(verified_source_ids),
             },
+            "x-allowed-pairs": tuple(eligible_replacement_pairs),
         },
-        suggested_input=prepare_suggested,
+        suggested_input=dict(eligible_replacement_pairs[0]) if eligible_replacement_pairs else {},
         execution_class="domain_operation",
         authorization_class="none",
         capability_id=None,
@@ -484,13 +476,7 @@ def targeted_edit_workflow_state(
                 description="Исходник, диапазон, вариант замены, проверка и финальная сборка.",
             ),
         ),
-        next_actions=(
-            select_action,
-            prepare_action,
-            review_action,
-            accept_action,
-            render_action,
-        ),
+        next_actions=(select_action, prepare_action, review_action, accept_action, render_action),
         active_jobs=(),
         user_decisions=tuple(
             {
