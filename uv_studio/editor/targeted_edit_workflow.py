@@ -16,6 +16,7 @@ from uv_studio.projects.replacement_candidate import (
 )
 from uv_studio.projects.replacement_plan import (
     ReplacementPlan,
+    ReplacementPlanError,
     ReplacementPlanNotFound,
     ReplacementPlanProposal,
     ReplacementPlanStore,
@@ -108,25 +109,26 @@ class TargetedEditWorkflowService:
 
         change = _requested_change(brief)
         plans = ReplacementPlanStore(self.project_store)
-        previous_plan_state = plans.load(project_id)
-        try:
-            previous_plan = previous_plan_state.get(brief.edit_id)
-        except ReplacementPlanNotFound:
-            previous_plan = None
-
-        plan_state = plans.approve(
-            project_id,
-            ReplacementPlanProposal(
-                edit_id=brief.edit_id,
-                method_class="prepared_asset",
-                goal=change,
-                required_changes=(change,),
-                allowed_changes=(),
-                forbidden_changes=("Не изменять исходное видео вне выбранного диапазона.",),
-                audio_strategy="preserve_source",
-            ),
+        proposal = ReplacementPlanProposal(
+            edit_id=brief.edit_id,
+            method_class="prepared_asset",
+            goal=change,
+            required_changes=(change,),
+            allowed_changes=(),
+            forbidden_changes=("Не изменять исходное видео вне выбранного диапазона.",),
+            audio_strategy="preserve_source",
         )
-        plan = plan_state.get(brief.edit_id)
+
+        # Capture the exact previous plan and install this action's plan under one short lock.
+        # The expensive media copy remains outside the lock, while rollback below refuses to
+        # overwrite any plan/Brief mutation that happened after this installation.
+        with self.project_store._lock:
+            previous_plan_state = plans.load(project_id)
+            try:
+                previous_plan = previous_plan_state.get(brief.edit_id)
+            except ReplacementPlanNotFound:
+                previous_plan = None
+            plan = plans.approve(project_id, proposal).get(brief.edit_id)
 
         artifact_path = None
         artifact_id = f"art_{uuid.uuid4().hex}"
@@ -160,11 +162,12 @@ class TargetedEditWorkflowService:
             if not artifact_path.is_file() or artifact_path.is_symlink() or artifact_path.stat().st_size <= 0:
                 raise TargetedEditWorkflowError("replacement candidate artifact must be a non-empty regular file")
 
-            project = self.project_store.load_project(project_id)
-            self.project_store.update_project(
-                project_id,
-                artifacts=(*project.artifacts, reference),
-            )
+            with self.project_store._lock:
+                project = self.project_store.load_project(project_id)
+                self.project_store.update_project(
+                    project_id,
+                    artifacts=(*project.artifacts, reference),
+                )
             registered = True
 
             # Bind to the exact plan created by this semantic action. CandidateStore.register
@@ -192,11 +195,12 @@ class TargetedEditWorkflowService:
         except Exception:
             if registered:
                 try:
-                    project = self.project_store.load_project(project_id)
-                    self.project_store.update_project(
-                        project_id,
-                        artifacts=tuple(item for item in project.artifacts if item.id != artifact_id),
-                    )
+                    with self.project_store._lock:
+                        project = self.project_store.load_project(project_id)
+                        self.project_store.update_project(
+                            project_id,
+                            artifacts=tuple(item for item in project.artifacts if item.id != artifact_id),
+                        )
                 except Exception:
                     pass
             try:
@@ -206,15 +210,19 @@ class TargetedEditWorkflowService:
                 pass
 
             try:
-                # Do not roll back over a concurrent mutation. Restore only if the currently
-                # approved plan is still exactly the one this semantic action installed.
+                # Do not roll back over concurrent Plan or Brief mutation. Restore the previous
+                # Plan only when the current, still-valid plan is exactly the one this action installed.
                 with self.project_store._lock:
                     current_state = plans.load(project_id)
                     try:
                         current_plan = current_state.get(brief.edit_id)
                     except ReplacementPlanNotFound:
                         current_plan = None
-                    if current_plan == plan:
+                    try:
+                        valid_current_plan = plans.validate_project(project_id).get(brief.edit_id)
+                    except (ReplacementPlanError, ReplacementPlanNotFound):
+                        valid_current_plan = None
+                    if current_plan == plan and valid_current_plan == plan:
                         if previous_plan is None:
                             plans.remove(project_id, brief.edit_id)
                         else:
