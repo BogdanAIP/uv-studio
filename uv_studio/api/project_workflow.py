@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,7 +24,14 @@ from uv_studio.api.capability_execution import (
 from uv_studio.api.projects import get_project_store
 from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
+from uv_studio.capabilities.execution import (
+    CapabilityToolFailed,
+    CapabilityToolUnavailable,
+    InvalidCapabilityInput,
+    UnsupportedCapabilityExecution,
+)
 from uv_studio.capabilities.registry import CapabilityRegistry
+from uv_studio.editor.dubbing_workflow import DubbingWorkflowService
 from uv_studio.editor.targeted_edit_workflow import (
     TargetedEditWorkflowError,
     TargetedEditWorkflowService,
@@ -35,6 +43,7 @@ from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStore
 from uv_studio.recipes import RecipeRegistry, UnknownRecipe
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Product Orchestrator"])
+_AUDIO_LOUDNESS_OFFER_ID = "local_ffmpeg.audio_measure_loudness"
 
 
 class _StrictActionRequest(BaseModel):
@@ -130,6 +139,65 @@ class RenderAcceptedEditsActionRequest(_StrictActionRequest):
     source_path: str = Field(min_length=1, max_length=512)
 
 
+class DubbingSourceActionRequest(_StrictActionRequest):
+    source_id: str = Field(min_length=1, max_length=128)
+    language: str | None = Field(default=None, min_length=2, max_length=64)
+    start_us: int | None = Field(default=None, ge=0)
+    end_us: int | None = Field(default=None, gt=0)
+
+
+class DubbingTranscriptSegmentActionRequest(_StrictActionRequest):
+    segment_id: str = Field(min_length=1, max_length=128)
+    start_us: int = Field(ge=0)
+    end_us: int = Field(gt=0)
+    text: str = Field(min_length=1, max_length=8000)
+    speaker_label: str | None = Field(default=None, min_length=1, max_length=128)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class DubbingTranscriptActionRequest(_StrictActionRequest):
+    source_id: str = Field(min_length=1, max_length=128)
+    language: str = Field(min_length=2, max_length=64)
+    start_us: int = Field(ge=0)
+    end_us: int = Field(gt=0)
+    segments: list[DubbingTranscriptSegmentActionRequest] = Field(min_length=1, max_length=100_000)
+    dubbing_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class DubbingTranslationSegmentActionRequest(_StrictActionRequest):
+    segment_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=8000)
+
+
+class SaveDubbingTranslationActionRequest(_StrictActionRequest):
+    dubbing_id: str = Field(min_length=1, max_length=128)
+    target_language: str = Field(min_length=2, max_length=64)
+    segments: list[DubbingTranslationSegmentActionRequest] = Field(min_length=1, max_length=100_000)
+    translation_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class AttachPreparedSpeechActionRequest(_StrictActionRequest):
+    dubbing_id: str = Field(min_length=1, max_length=128)
+    audio_id: str = Field(min_length=1, max_length=128)
+    translation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    segment_id: str | None = Field(default=None, min_length=1, max_length=128)
+    take_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class ReviewPreparedSpeechActionRequest(_StrictActionRequest):
+    take_id: str = Field(min_length=1, max_length=128)
+    verdict: Literal["approved", "rejected", "needs_revision"]
+    content_fidelity_confirmed: bool
+    synchronization_confirmed: bool
+    note: str | None = Field(default=None, max_length=4000)
+    review_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class AcceptDubbingReviewActionRequest(_StrictActionRequest):
+    review_id: str = Field(min_length=1, max_length=128)
+    accepted_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 WorkflowActionRequest = (
     ComposePhotosActionRequest
     | RenderVisualizerActionRequest
@@ -138,6 +206,12 @@ WorkflowActionRequest = (
     | ReviewReplacementActionRequest
     | AcceptReplacementActionRequest
     | RenderAcceptedEditsActionRequest
+    | DubbingSourceActionRequest
+    | DubbingTranscriptActionRequest
+    | SaveDubbingTranslationActionRequest
+    | AttachPreparedSpeechActionRequest
+    | ReviewPreparedSpeechActionRequest
+    | AcceptDubbingReviewActionRequest
 )
 
 
@@ -208,6 +282,20 @@ def _validated_action_input(
         expected = action_types.get(action_id)
         if expected is not None:
             return _request_payload(request, expected, action_id=action_id)
+    if state["recipe_id"] == "dubbing":
+        action_types = {
+            "transcribe_dubbing_source": DubbingSourceActionRequest,
+            "import_dubbing_transcript": DubbingTranscriptActionRequest,
+            "accept_asr_transcript": DubbingTranscriptActionRequest,
+            "save_dubbing_translation": SaveDubbingTranslationActionRequest,
+            "attach_prepared_speech": AttachPreparedSpeechActionRequest,
+            "review_prepared_speech": ReviewPreparedSpeechActionRequest,
+            "accept_dubbing_review": AcceptDubbingReviewActionRequest,
+            "render_accepted_dubbing": DubbingSourceActionRequest,
+        }
+        expected = action_types.get(action_id)
+        if expected is not None:
+            return _request_payload(request, expected, action_id=action_id)
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Workflow action not found for this project",
@@ -228,9 +316,12 @@ def _enforce_projected_input_contract(
         return
 
     rejected: dict[str, Any] = {}
+    additional_allowed = schema.get("additionalProperties") is not False
     for field_name, value in input_payload.items():
         field_schema = properties.get(field_name)
         if not isinstance(field_schema, dict):
+            if not additional_allowed:
+                rejected[field_name] = value
             continue
         allowed = field_schema.get("enum")
         if isinstance(allowed, (list, tuple)) and value not in allowed:
@@ -295,6 +386,76 @@ def _execute_targeted_domain_action(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "workflow_action_state_conflict", "message": str(exc)},
         ) from exc
+    except ProjectValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "workflow_action_state_conflict", "message": str(exc)},
+        ) from exc
+    except ProjectStoreError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return {
+        "schema_version": WORKFLOW_SCHEMA_VERSION,
+        "action_id": action_id,
+        "result": result,
+    }
+
+
+def _dubbing_loudness_measure(local_ffmpeg: Any, registry: CapabilityRegistry):
+    def measure(project_id: str, audio_id: str) -> Mapping[str, Any]:
+        offer = registry.get_offer(_AUDIO_LOUDNESS_OFFER_ID)
+        result = local_ffmpeg.execute(
+            project_id=project_id,
+            offer=offer,
+            payload={"audio_id": audio_id},
+        )
+        return dict(result.output)
+
+    return measure
+
+
+def _execute_dubbing_domain_action(
+    *,
+    project_id: str,
+    action_id: str,
+    input_payload: dict[str, Any],
+    store: ProjectStore,
+    local_ffmpeg: Any,
+    registry: CapabilityRegistry,
+) -> dict[str, Any]:
+    service = DubbingWorkflowService(store, _dubbing_loudness_measure(local_ffmpeg, registry))
+    try:
+        if action_id == "import_dubbing_transcript":
+            result = service.import_transcript(project_id, input_payload)
+        elif action_id == "accept_asr_transcript":
+            result = service.accept_asr_transcript(project_id, input_payload)
+        elif action_id == "save_dubbing_translation":
+            result = service.save_translation(project_id, input_payload)
+        elif action_id == "attach_prepared_speech":
+            result = service.attach_prepared_speech(project_id, input_payload)
+        elif action_id == "review_prepared_speech":
+            result = service.review_prepared_speech(project_id, input_payload)
+        elif action_id == "accept_dubbing_review":
+            result = service.accept_review(project_id, input_payload)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workflow domain action not found for this project",
+            )
+    except ProjectNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found") from exc
+    except (CapabilityToolUnavailable, UnsupportedCapabilityExecution) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local audio review tooling is unavailable in this installation",
+        ) from exc
+    except CapabilityToolFailed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Local audio review measurement failed",
+        ) from exc
+    except InvalidCapabilityInput as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except ProjectValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -377,11 +538,25 @@ async def execute_project_workflow_action(
 
     capability_id = action.get("capability_id")
     if capability_id is None:
-        return _execute_targeted_domain_action(
-            project_id=project_id,
-            action_id=action_id,
-            input_payload=input_payload,
-            store=store,
+        if state["recipe_id"] == "free_project":
+            return _execute_targeted_domain_action(
+                project_id=project_id,
+                action_id=action_id,
+                input_payload=input_payload,
+                store=store,
+            )
+        if state["recipe_id"] == "dubbing":
+            return _execute_dubbing_domain_action(
+                project_id=project_id,
+                action_id=action_id,
+                input_payload=input_payload,
+                store=store,
+                local_ffmpeg=local_ffmpeg,
+                registry=registry,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow domain action not found for this project",
         )
     if not isinstance(capability_id, str) or not capability_id:
         raise HTTPException(
