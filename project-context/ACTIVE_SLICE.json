@@ -8,7 +8,7 @@
     "goal": "Audit the current editor implementation against accepted D-033, correct contradictory recovery documentation, and apply only bounded conformance fixes that preserve the existing UV Project Store, Command API, MLT and OpenCut ownership model.",
     "base_branch": "main",
     "branch": "research/product-recovery-editor-ownership-resolution",
-    "pull_request": null,
+    "pull_request": 44,
     "write_scope": [
       "docs/architecture/**",
       "frontend/components/editor/**",
