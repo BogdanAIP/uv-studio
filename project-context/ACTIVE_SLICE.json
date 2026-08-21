@@ -16,7 +16,9 @@
       "project-context/**",
       "tests/**",
       "tests_api/**",
-      "uv_studio/editor/**"
+      "uv_studio/editor/**",
+      "uv_studio/api/edit_state.py",
+      "uv_studio/api/editor_commands.py"
     ]
   },
   "last_completed": {
