@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-workspace-routing -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: product-recovery-workspace-routing -->
 
 **Updated:** 2026-08-21
 
@@ -9,11 +9,11 @@
 
 ## Current lifecycle
 
-`product-recovery-workspace-routing` is the active review slice on branch `fix/product-recovery-workspace-routing`, created from the explicit idle `main` after PR #44.
+`product-recovery-workspace-routing` completed in PR #45. The repository is back in explicit `idle` state and the next authorized handoff is `product-recovery-targeted-edit-orchestration`.
 
-The implementation is complete for review: Visualizer is migrated to the existing Product Orchestrator contract, and `relevant_workspaces` is authoritative for both deterministic reference journeys. The slice adds no second workflow store, does not remount legacy VideoClaw runtime and does not grow generic NLE functionality.
+PR #45 migrated Visualizer to Product Orchestrator, made projected workspaces authoritative for both deterministic reference journeys, enforced projected source choices before capability dispatch, and preserved the existing Project Store/Capability Registry/D-017 authority boundaries.
 
-PR #44 completed the D-033 conformance audit, reaffirmed the accepted editor foundation and repaired the accepted-edit mutation bypass. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
+PR #44 remains the completed D-033 conformance baseline. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
 ## Product definition
 
@@ -27,7 +27,7 @@ UV Studio remains a desktop/local-first video **production and editing workspace
 
 ## Accepted editor foundation — D-033
 
-D-033 remains binding and is not reopened by this slice:
+D-033 remains binding:
 
 - UV Studio owns canonical project/edit/domain state and semantic mutations;
 - MLT remains the bounded timeline/editing engine representation where mapped;
@@ -39,7 +39,7 @@ D-033 remains binding and is not reopened by this slice:
 
 ### Photo -> Video
 
-Photo -> Video remains the first deterministic reference journey:
+Photo -> Video is the first deterministic reference journey:
 
 - verified project-owned images satisfy the source prerequisite;
 - local/free `video.compose_photos` availability determines executable readiness;
@@ -49,45 +49,45 @@ Photo -> Video remains the first deterministic reference journey:
 
 ### Visualizer
 
-Visualizer is now the second deterministic Product Orchestrator journey:
+Visualizer is the second deterministic Product Orchestrator journey:
 
-- verified project-owned master audio is the required source prerequisite;
-- verified project-owned artwork is optional and only verified images are offered as choices;
+- verified project-owned master audio is required;
+- verified project-owned artwork is optional;
 - local/free `audio.visualize` availability determines executable readiness;
 - `audio_visualizer` is projected through `relevant_workspaces`;
 - semantic action `render_visualizer` delegates through the existing capability/D-017 execution boundary;
-- the product panel no longer calls the raw capability execution endpoint directly;
-- the action input schema bounds usable source IDs to verified project-owned media;
-- `suggested_input` is executable action input, while option lists remain in the schema;
+- the product panel does not call the raw capability execution endpoint directly;
+- the action input schema exposes only verified project-owned source choices;
+- the HTTP Product Orchestrator boundary revalidates submitted source IDs against the fresh projected action contract before dispatch;
+- `suggested_input` remains executable action input rather than a UI-only side channel;
 - missing, damaged or substituted audio fails closed and blocks execution.
 
 ## Authoritative workspace routing
 
 For Photo -> Video and Visualizer, the project page renders the workspace declared by `workflow.relevant_workspaces` instead of reconstructing the choice from `recipe_id`.
 
-When a dedicated migrated workspace is present, the page does not also mount unrelated `ProjectEditor`, Sequence Continuity or Dubbing panels. This removes the duplicate frontend workspace authority for the migrated deterministic paths.
+When a dedicated migrated workspace is present, the page does not also mount unrelated `ProjectEditor`, Sequence Continuity or Dubbing panels.
 
 Non-migrated recipes remain fail-closed as `partial` at the Product Orchestrator boundary and preserve their existing domain implementations until later bounded migrations.
 
-## Verification evidence required for review
+## Verification evidence
 
-Focused API/browser coverage now exercises:
+The maintained regression suite covers:
 
 - Visualizer `setup_required` without verified master audio;
 - `ready` state with verified audio and projected `audio_visualizer` workspace;
 - strict action input and local/free `audio.visualize` dispatch;
 - executable `suggested_input` semantics;
+- rejection of source IDs excluded by the freshly projected action schema before capability execution;
 - source-integrity failure after audio tampering;
 - browser execution through `/workflow/actions/render_visualizer`;
 - real `audio_visualizer_render` artifact creation;
 - absence of unrelated Editor/Continuity/Dubbing panels for both deterministic migrated journeys;
 - non-migrated recipe projection remaining `partial` with no fabricated actions/workspaces.
 
-The final review head must pass every repository-required Ubuntu/Windows check and have no unresolved review threads before merge. Exact active-head SHAs and check conclusions remain live GitHub facts rather than durable project-state content.
+Existing browser suites remain Class B informed-regression evidence, not Class C cold-start proof.
 
-Existing Stage 8 browser tests remain Class B informed-regression evidence, not Class C cold-start proof.
-
-## Remaining product gaps outside this slice
+## Remaining product gaps
 
 - targeted existing-video edit, dubbing and music video still need product-level Orchestrator journeys that progressively disclose their existing durable domain state;
 - Narrated and General Video do not yet have complete current user journeys;
@@ -97,4 +97,4 @@ Existing Stage 8 browser tests remain Class B informed-regression evidence, not 
 
 ## Next handoff
 
-After this slice is reviewed, merged and closed to `idle`, `product-recovery-targeted-edit-orchestration` is the next planned slice: project the existing targeted-edit domain chain into understandable prerequisites and next actions without replacing the accepted Brief -> Plan -> Candidate -> Review -> Accept invariants.
+Continue with `product-recovery-targeted-edit-orchestration` from `project-context/NEXT_TASK.md`: project the existing targeted-edit domain chain into understandable prerequisites and next actions without replacing the accepted Brief -> Plan -> Candidate -> Review -> Accept invariants or creating a second workflow engine.

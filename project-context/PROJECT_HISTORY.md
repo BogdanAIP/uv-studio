@@ -27,3 +27,4 @@ Compact record of completed development slices. Detailed rationale remains in th
 | Product recovery | PR #42, `0a759f6` | Product truth inventory, fail-closed stale execution/binding contracts and explicit dual-frontend recovery boundary | D-062 |
 | Product recovery | PR #43, `297556a` | Product Orchestrator foundation for Photo-to-Video plus UV-owned normal shell isolation | D-062 |
 | Product recovery | PR #44, `04a4b63` | D-033 implementation conformance audit, accepted-edit semantic-command repair and synchronized recovery truth | D-033, D-062 |
+| Product recovery | PR #45, `966fc1f` | Visualizer Product Orchestrator migration, authoritative Photo/Visualizer workspace routing and projected-source contract enforcement | D-062 |

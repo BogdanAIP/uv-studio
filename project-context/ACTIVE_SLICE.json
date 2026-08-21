@@ -1,30 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "product-recovery-workspace-routing",
-    "kind": "fix",
-    "roadmap_stage": "product-recovery",
-    "goal": "Migrate Visualizer to Product Orchestrator and make relevant_workspaces authoritative for the two migrated deterministic project journeys without introducing new orchestration persistence or generic NLE functionality.",
-    "base_branch": "main",
-    "branch": "fix/product-recovery-workspace-routing",
-    "pull_request": 45,
-    "write_scope": [
-      "docs/architecture/**",
-      "e2e/test_stage8_outcomes.py",
-      "frontend/app/projects/**",
-      "frontend/components/editor/Stage8MediaPanel.tsx",
-      "frontend/lib/productWorkflowApi.ts",
-      "project-context/**",
-      "tests_api/test_project_workflow_api.py",
-      "uv_studio/api/project_workflow.py",
-      "uv_studio/orchestration/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "product-recovery-editor-ownership-resolution",
-    "pull_request": 44,
-    "merge_commit": "04a4b63409ac9d4b33ca317754ecc715ba5c4daf"
+    "id": "product-recovery-workspace-routing",
+    "pull_request": 45,
+    "merge_commit": "966fc1f498635d4551c4fee7e8e00b06d2b64093"
   },
   "handoff": {
     "next_slice_id": "product-recovery-targeted-edit-orchestration",
