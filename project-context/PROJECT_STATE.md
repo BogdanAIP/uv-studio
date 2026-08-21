@@ -63,7 +63,9 @@ Approved Reviews already represented in Accepted state are not re-advertised as 
 - Dubbing;
 - Sequence Continuity.
 
-The compatibility path for old ProjectEditor surfaces is deliberately narrow. If a targeted-edit style call receives a recipe-level 404, frontend fallback to the pre-existing UV-owned domain/capability endpoint is allowed only after a fresh workflow projection explicitly reports `workflow_not_migrated` and contains no `targeted_edit` workspace. A migrated `free_project` cannot hide an Orchestrator failure behind legacy compatibility.
+The compatibility path for old ProjectEditor surfaces is deliberately narrow. Only established one-to-one actions such as range selection, Review, Accept and final render may fall back after a recipe-level 404, and only after a fresh workflow projection explicitly reports `workflow_not_migrated` and contains no `targeted_edit` workspace. A migrated `free_project` cannot hide an Orchestrator failure behind legacy compatibility.
+
+Composite replacement preparation is intentionally **not** part of that fallback. On non-migrated pages the historical Plan approval and Candidate preparation remain two explicit steps until that recipe receives its own Product Orchestrator migration. This avoids pretending multiple old mutations are one atomic semantic action.
 
 This compatibility exists to avoid breaking still-unmigrated domain regressions while Product Truth Recovery proceeds. It is not a second architecture.
 
