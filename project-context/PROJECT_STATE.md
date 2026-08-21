@@ -2,7 +2,6 @@
 
 <!-- uv-context-state: draft -->
 <!-- uv-active-slice: product-recovery-editor-ownership-resolution -->
-<!-- uv-last-completed: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-21
 
