@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-targeted-edit-orchestration -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: product-recovery-targeted-edit-orchestration -->
 
 **Updated:** 2026-08-21
 
@@ -9,11 +9,9 @@
 
 ## Current lifecycle
 
-`product-recovery-targeted-edit-orchestration` is the active **Review** slice on branch `fix/product-recovery-targeted-edit-orchestration`, based on unchanged `main` after PR #45.
+`product-recovery-targeted-edit-orchestration` completed in PR #46 with merge commit `440c85f54c83e7a9a650250c52ed9b7d4fd1b18f`. The repository is back in explicit `idle` state and the next authorized handoff is `product-recovery-dubbing-orchestration`.
 
-The final Draft head passed every permanent repository check on Ubuntu and Windows, including API integration, real-media, frontend build and browser user-outcome suites. PR #46 is no longer Draft; the repository context is now in `review` and requires the exact Review head to pass the same permanent checks before merge.
-
-The complete PR diff has been self-reviewed, the write scope matches all changed files, and there are zero unresolved review threads. PR #45 remains the last completed slice until #46 is actually merged.
+PR #46 migrated targeted existing-video editing into Product Orchestrator with truthful stage readiness, authoritative workspace routing, evidence-based Review/Accept, concurrency-safe replacement preparation and capability-backed final render while preserving D-028/D-032/D-033 canonical authority boundaries.
 
 Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
@@ -29,7 +27,7 @@ Photo -> Video and Visualizer remain deterministic local/free reference journeys
 
 Non-migrated recipes remain fail-closed as `partial`/unavailable at the Product Orchestrator boundary. Their old UV-owned domain panels may remain temporarily reachable as compatibility surfaces, but they are not alternate workflow authority.
 
-## Targeted edit — implemented orchestration
+## Targeted edit — completed orchestration
 
 The migrated product chain is:
 
@@ -59,7 +57,7 @@ Product-level readiness follows the current stage rather than merely the presenc
 
 ## Workspace isolation and migration compatibility
 
-`free_project` is now authoritative targeted-edit routing. Its normal project page does not also mount:
+`free_project` is authoritative targeted-edit routing. Its normal project page does not also mount:
 
 - the historical Stage 8 Free workspace;
 - Dubbing;
@@ -71,7 +69,16 @@ Composite replacement preparation is intentionally **not** part of that fallback
 
 This compatibility exists to avoid breaking still-unmigrated domain regressions while Product Truth Recovery proceeds. It is not a second architecture.
 
-## Verification implemented in this slice
+## Verification completed for PR #46
+
+The exact Review head passed every permanent repository check on Ubuntu and Windows:
+
+- development-context lifecycle validation;
+- Ubuntu and Windows bootstrap/unit suites;
+- Ubuntu and Windows API integration and real HTTP probes;
+- real-media golden suites;
+- frontend dependency audit, lint and build;
+- Ubuntu and Windows browser user-outcome suites.
 
 Focused API/domain evidence covers:
 
@@ -88,14 +95,7 @@ Focused API/domain evidence covers:
 - exact restoration of a real previous Plan when Candidate preparation fails without a concurrent mutation;
 - preservation of a concurrent Plan change when Candidate preparation fails, rather than rolling it back.
 
-Browser evidence now separates product responsibilities:
-
-- dedicated `free_project` targeted-edit journey performs import -> range -> replacement -> review -> accept -> render through the real UI and Product Orchestrator semantic actions;
-- that targeted journey asserts Dubbing/Continuity/old Free workspace are absent;
-- Story/Commercial retain their existing Stage 8 preparation round-trip regression;
-- Dubbing + Sequence Continuity retain a separate temporary compatibility regression on non-migrated `general_video` instead of being forced into the targeted-edit project.
-
-These remain Class B informed-regression tests. They do not replace future Class C cold-start product evidence or installed Windows human acceptance.
+Browser evidence remains Class B informed regression. PR #46 does **not** claim Class C cold-start product usability or installed Windows human acceptance.
 
 ## Architecture invariants preserved
 
@@ -105,14 +105,14 @@ These remain Class B informed-regression tests. They do not replace future Class
 - D-017 Capability Registry/authorization boundaries remain in force for capability-backed operations;
 - domain actions may have `capability_id = null` only when they delegate to bounded UV-owned semantic/domain services;
 - accepted edit state remains non-destructive and evidence-based Review remains mandatory before acceptance;
-- no generic NLE expansion or new editor ownership decision is introduced by this slice.
+- no generic NLE expansion or new editor ownership decision was introduced by PR #46.
 
 ## Remaining recovery work
 
-Targeted edit is now `working_orchestrated` at Class A/B evidence level, but it is not a release-ready claim. Remaining product-wide gaps include readiness-blind recipe creation, non-migrated workspace leakage, missing/partial General/Narrated/Music journeys, Dubbing setup/orchestration, later Class C cold-start journeys and installed-app acceptance.
+Targeted edit is `working_orchestrated` at Class A/B evidence level, but UV Studio is not yet release-ready. Remaining product-wide gaps include readiness-blind recipe creation, non-migrated workspace leakage, missing/partial General/Narrated/Music journeys, Dubbing setup/orchestration, later Class C cold-start journeys and installed-app acceptance.
 
-The next planned slice is `product-recovery-dubbing-orchestration`.
+The next authorized slice is `product-recovery-dubbing-orchestration`.
 
 ## Next handoff
 
-If the exact Review head passes all permanent checks with zero unresolved blocking findings and the base remains unchanged, merge PR #46, close the lifecycle to `idle`, and continue with `product-recovery-dubbing-orchestration`: project the existing dubbing domains into truthful prerequisites and outcome-oriented next actions while preserving transcript/translation/prepared-speech/alignment/review/render authority boundaries.
+Begin `product-recovery-dubbing-orchestration` from this exact idle `main`: project the existing dubbing domains into truthful prerequisites and outcome-oriented semantic next actions while preserving transcript/translation/prepared-speech/alignment/review/render authority boundaries and D-017 provider/authorization rules.
