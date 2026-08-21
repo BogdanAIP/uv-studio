@@ -93,15 +93,75 @@ def _without_consumed_accept_actions(
     return tuple(normalized)
 
 
+def _targeted_readiness(
+    state: ProjectWorkflowState,
+    current_outcome: WorkflowArtifact | None,
+) -> tuple[WorkflowReadiness, str]:
+    prerequisites = {item.prerequisite_id: item for item in state.prerequisites}
+    render = prerequisites.get("capability.video.render_edits")
+    source = prerequisites.get("source.video")
+    brief = prerequisites.get("edit.brief")
+    replacement = prerequisites.get("source.replacement_video")
+    accepted = prerequisites.get("edit.accepted")
+
+    if render is not None and not render.satisfied:
+        hard_failure = any(
+            diagnostic.code in {
+                "targeted_edit_render_capability_unknown",
+                "targeted_edit_render_capability_unavailable",
+            }
+            and diagnostic.severity == "error"
+            for diagnostic in state.diagnostics
+        )
+        if hard_failure:
+            return (
+                WorkflowReadiness.UNAVAILABLE,
+                "Точечное редактирование нельзя завершить в текущем runtime: локальная финальная сборка недоступна.",
+            )
+        return (
+            WorkflowReadiness.SETUP_REQUIRED,
+            "Завершите настройку локальной финальной сборки перед работой с этим сценарием.",
+        )
+
+    if source is not None and not source.satisfied:
+        return (
+            WorkflowReadiness.SETUP_REQUIRED,
+            "Импортируйте исходное видео, чтобы начать точечное редактирование.",
+        )
+
+    if (
+        brief is not None
+        and brief.satisfied
+        and replacement is not None
+        and not replacement.satisfied
+    ):
+        return (
+            WorkflowReadiness.SETUP_REQUIRED,
+            "Задача изменения сохранена. Импортируйте отдельный видеоклип для замены выбранного фрагмента.",
+        )
+
+    if accepted is not None and accepted.satisfied and current_outcome is not None:
+        return (
+            WorkflowReadiness.READY,
+            "Текущий мастер точно соответствует принятому состоянию правок.",
+        )
+
+    return state.readiness, state.summary
+
+
 def _normalize_targeted_projection(
     state: ProjectWorkflowState,
     source_media,
 ) -> ProjectWorkflowState:
     """Keep read-only product truth aligned with current accepted/rendered revisions."""
 
+    current_outcome = _current_targeted_outcome(state)
+    readiness, summary = _targeted_readiness(state, current_outcome)
     return replace(
         state,
-        current_outcome=_current_targeted_outcome(state),
+        readiness=readiness,
+        summary=summary,
+        current_outcome=current_outcome,
         next_actions=_without_consumed_accept_actions(state, source_media),
     )
 
