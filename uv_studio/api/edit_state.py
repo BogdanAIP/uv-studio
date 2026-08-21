@@ -1,4 +1,4 @@
-"""UV-owned HTTP API for non-destructive accepted range-edit decisions."""
+"""Read-only HTTP API for canonical non-destructive accepted range-edit state."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from uv_studio.api.projects import get_project_store
 from uv_studio.projects import (
     EditStateError,
-    EditStateNotFound,
     ProjectStore,
     RangeEditState,
     RangeEditStateStore,
@@ -42,8 +41,6 @@ def _payload(state: RangeEditState) -> RangeEditStatePayload:
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if isinstance(exc, EditStateNotFound):
-        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edit decision not found")
     if isinstance(exc, EditStateError):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, ProjectStoreError):
@@ -56,21 +53,10 @@ def get_edit_state(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
 ) -> RangeEditStatePayload:
+    """Inspect accepted edit decisions without exposing a privileged mutation route."""
+
     try:
         store.load_project(project_id)
         return _payload(RangeEditStateStore(store).load(project_id))
-    except (ProjectNotFound, EditStateError, ProjectStoreError) as exc:
-        raise _translate(exc) from exc
-
-
-@router.delete("/{project_id}/edits/{edit_id}", response_model=RangeEditStatePayload)
-def remove_edit(
-    project_id: str,
-    edit_id: str,
-    store: ProjectStore = Depends(get_project_store),
-) -> RangeEditStatePayload:
-    try:
-        store.load_project(project_id)
-        return _payload(RangeEditStateStore(store).remove(project_id, edit_id))
     except (ProjectNotFound, EditStateError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
