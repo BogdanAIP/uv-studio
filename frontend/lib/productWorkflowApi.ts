@@ -102,12 +102,160 @@ export interface RenderVisualizerActionResponse {
   execution: CapabilityVideoEnvelope<VisualizerResult>;
 }
 
+const TARGETED_EDIT_COMPAT_ACTIONS = new Set([
+  'select_target_range',
+  'prepare_replacement',
+  'review_replacement',
+  'accept_replacement',
+  'render_accepted_edits',
+]);
+
 async function apiError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
   const detail = body?.detail;
   if (typeof detail === 'string') return new Error(detail);
   if (detail !== undefined) return new Error(JSON.stringify(detail));
   return new Error(fallback);
+}
+
+async function jsonOrError<T>(response: Response, fallback: string): Promise<T> {
+  if (!response.ok) throw await apiError(response, fallback);
+  return response.json();
+}
+
+function requiredString(input: Record<string, unknown>, key: string): string {
+  const value = input[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Legacy targeted-edit compatibility input is missing ${key}`);
+  }
+  return value.trim();
+}
+
+function recordArray(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    : [];
+}
+
+function requestedChangeFromBrief(brief: Record<string, unknown>): string {
+  const constraints = recordArray(brief.constraints);
+  const requested = constraints.find(item => item.constraint_id === 'requested_change') ?? constraints[0];
+  const requirement = requested?.requirement;
+  if (typeof requirement !== 'string' || !requirement.trim()) {
+    throw new Error('Legacy targeted-edit compatibility could not resolve the requested change');
+  }
+  return requirement.trim();
+}
+
+async function executeLegacyTargetedAction<TResult>(
+  projectId: string,
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<WorkflowActionResponse<TResult>> {
+  const encodedProjectId = encodeURIComponent(projectId);
+
+  if (actionId === 'select_target_range') {
+    const response = await fetch(`/api/uv/projects/${encodedProjectId}/editor/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'select_range', ...input }),
+    });
+    const result = await jsonOrError<TResult>(response, 'Не удалось подготовить выбранный диапазон');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'prepare_replacement') {
+    const editId = requiredString(input, 'edit_id');
+    const replacementSourceId = requiredString(input, 'replacement_source_id');
+    const editorState = await jsonOrError<Record<string, unknown>>(
+      await fetch(`/api/uv/projects/${encodedProjectId}/editor/state`, { cache: 'no-store' }),
+      'Не удалось прочитать текущее состояние редактора',
+    );
+    const brief = recordArray(editorState.briefs).find(item => item.edit_id === editId);
+    const replacement = recordArray(editorState.sources).find(item => item.id === replacementSourceId);
+    if (!brief || !replacement) {
+      throw new Error('Текущий Brief или выбранный клип больше не существует в проекте');
+    }
+    const sourcePath = replacement.path;
+    if (typeof sourcePath !== 'string' || !sourcePath) {
+      throw new Error('Выбранный клип не имеет project-owned source path');
+    }
+    const change = requestedChangeFromBrief(brief);
+    const planState = await jsonOrError<Record<string, unknown>>(
+      await fetch(
+        `/api/uv/projects/${encodedProjectId}/replacement-plans/${encodeURIComponent(editId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            edit_id: editId,
+            method_class: 'prepared_asset',
+            goal: change,
+            required_changes: [change],
+            allowed_changes: [],
+            forbidden_changes: ['Не изменять исходное видео вне выбранного диапазона.'],
+            audio_strategy: 'preserve_source',
+          }),
+        },
+      ),
+      'Не удалось утвердить план замены',
+    );
+    const plan = recordArray(planState.plans).find(item => item.edit_id === editId);
+    if (!plan) throw new Error('Утверждённый план не найден в текущем состоянии проекта');
+
+    const candidateEnvelope = await jsonOrError<Record<string, unknown>>(
+      await fetch(`/api/uv/projects/${encodedProjectId}/replacement-candidates/prepared-asset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edit_id: editId, source_path: sourcePath }),
+      }),
+      'Не удалось подготовить вариант замены',
+    );
+    const candidate = candidateEnvelope.candidate;
+    if (!candidate || typeof candidate !== 'object') {
+      throw new Error('Подготовка замены завершилась без candidate');
+    }
+    return {
+      schema_version: 1,
+      action_id: actionId,
+      result: { plan, candidate } as TResult,
+    };
+  }
+
+  if (actionId === 'review_replacement') {
+    const response = await fetch(`/api/uv/projects/${encodedProjectId}/replacement-reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await jsonOrError<TResult>(response, 'Не удалось сохранить проверку варианта');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'accept_replacement') {
+    const reviewId = requiredString(input, 'review_id');
+    const response = await fetch(
+      `/api/uv/projects/${encodedProjectId}/replacement-reviews/${encodeURIComponent(reviewId)}/accept`,
+      { method: 'POST' },
+    );
+    const result = await jsonOrError<TResult>(response, 'Не удалось принять проверенную замену');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'render_accepted_edits') {
+    const response = await fetch(
+      `/api/uv/projects/${encodedProjectId}/capabilities/video.render_edits/execute`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input }),
+      },
+    );
+    const execution = await jsonOrError<TResult>(response, 'Не удалось собрать мастер-рендер');
+    return { schema_version: 1, action_id: actionId, execution };
+  }
+
+  throw new Error(`Legacy targeted-edit compatibility does not support ${actionId}`);
 }
 
 export async function getProjectWorkflow(projectId: string): Promise<ProjectWorkflowState> {
@@ -131,8 +279,15 @@ export async function executeProjectWorkflowAction<TResult = Record<string, unkn
       body: JSON.stringify(input),
     },
   );
-  if (!response.ok) throw await apiError(response, 'Не удалось выполнить следующее действие проекта');
-  return response.json();
+  if (response.ok) return response.json();
+
+  // Migration-only compatibility: old ProjectEditor surfaces can still exist on recipes whose
+  // ProductWorkflowState has not migrated yet. A recipe-level 404 must not turn those established
+  // UV-owned domain paths into dead controls. Migrated free_project never takes this fallback.
+  if (response.status === 404 && TARGETED_EDIT_COMPAT_ACTIONS.has(actionId)) {
+    return executeLegacyTargetedAction<TResult>(projectId, actionId, input);
+  }
+  throw await apiError(response, 'Не удалось выполнить следующее действие проекта');
 }
 
 export async function executeComposePhotosAction(
