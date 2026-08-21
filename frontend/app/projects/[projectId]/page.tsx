@@ -38,6 +38,11 @@ export default function ProjectPage() {
   const [workflow, setWorkflow] = useState<ProjectWorkflowState | null>(null);
   const [workflowRefresh, setWorkflowRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const projectedWorkspaceIds = useMemo(
+    () => new Set((workflow?.relevant_workspaces ?? []).map(workspace => workspace.workspace_id)),
+    [workflow],
+  );
+  const hasProjectedWorkspace = projectedWorkspaceIds.size > 0;
 
   useEffect(() => {
     let active = true;
@@ -93,12 +98,23 @@ export default function ProjectPage() {
               </div>
             </header>
 
-            {workflow.relevant_workspaces.some(workspace => workspace.workspace_id === 'photo_composition') && (
+            {projectedWorkspaceIds.has('photo_composition') && (
               <Stage8MediaPanel
                 projectId={project.project_id}
                 recipeId="photo_to_video"
                 sources={project.sources}
                 workflowAction={workflow.next_actions.find(action => action.action_id === 'compose_photos')}
+                workflowPrerequisites={workflow.prerequisites}
+                onProjectChanged={refreshProjectWorkflow}
+              />
+            )}
+
+            {projectedWorkspaceIds.has('audio_visualizer') && (
+              <Stage8MediaPanel
+                projectId={project.project_id}
+                recipeId="visualizer"
+                sources={project.sources}
+                workflowAction={workflow.next_actions.find(action => action.action_id === 'render_visualizer')}
                 workflowPrerequisites={workflow.prerequisites}
                 onProjectChanged={refreshProjectWorkflow}
               />
@@ -120,7 +136,7 @@ export default function ProjectPage() {
               />
             )}
 
-            {project.recipe_id !== 'photo_to_video' && (
+            {!hasProjectedWorkspace && (
               <ProjectEditor
                 projectId={project.project_id}
                 onProjectChanged={refreshProject}
@@ -147,15 +163,6 @@ export default function ProjectPage() {
               </>
             )}
 
-            {project.recipe_id === 'visualizer' && (
-              <Stage8MediaPanel
-                projectId={project.project_id}
-                recipeId="visualizer"
-                sources={project.sources}
-                onProjectChanged={refreshProject}
-              />
-            )}
-
             {project.recipe_id === 'performance_lip_sync' && (
               <PerformanceLipSyncPanel
                 projectId={project.project_id}
@@ -164,7 +171,7 @@ export default function ProjectPage() {
               />
             )}
 
-            {project.recipe_id !== 'photo_to_video' && (
+            {!hasProjectedWorkspace && (
               <>
                 <SequenceContinuityPanel
                   projectId={project.project_id}
