@@ -124,6 +124,7 @@ export default function ProjectPage() {
               <ProjectEditor
                 projectId={project.project_id}
                 onProjectChanged={refreshProjectWorkflow}
+                orchestrated
               />
             )}
 
