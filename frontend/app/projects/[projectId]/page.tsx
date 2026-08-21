@@ -133,11 +133,16 @@ export default function ProjectPage() {
               <>
                 <DubbingSourceSetupPanel
                   projectId={project.project_id}
-                  sourceCount={project.sources.filter(source => source.kind === 'video').length}
+                  sources={project.sources}
+                  transcriptAction={workflow.next_actions.find(action => action.action_id === 'import_dubbing_transcript')}
                   onProjectChanged={refreshProjectWorkflow}
                 />
                 <DubbingWorkflowPanel
-                  key={`dubbing-sources-${project.sources.length}`}
+                  key={`dubbing-${project.sources.length}-${
+                    workflow.prerequisites.find(item => item.prerequisite_id === 'dubbing.transcript')?.satisfied
+                      ? 'transcript-ready'
+                      : 'transcript-missing'
+                  }`}
                   projectId={project.project_id}
                   onProjectChanged={refreshProjectWorkflow}
                 />
