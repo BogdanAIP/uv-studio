@@ -20,14 +20,14 @@ The repository contains strong individual layers that do not yet compose into on
 - some legacy frontend clients and historical execution metadata still describe removed runtime contracts;
 - some visible recipes do not have a complete current UV-owned user journey;
 - frontend components still reconstruct several backend state machines and hidden prerequisites;
-- D-033 selected a reuse-first UV + MLT + OpenCut editor foundation, but the implementation needs a conformance audit before further generic editor growth;
+- D-033 selected a reuse-first UV + MLT + OpenCut editor foundation, but conformance must remain enforced before further generic editor growth;
 - informed E2E tests can pass with seeded or implementation-aware state while a first-time user cannot discover the required path.
 
-The D-033 audit is therefore an implementation-quality task. It is **not** permission to reopen product identity or to choose one winner between UV Studio, OpenCut and MLT.
+The D-033 work is therefore implementation quality, not permission to reopen product identity or choose one winner between UV Studio, OpenCut and MLT.
 
 ## Recovery principles
 
-1. **Truth before polish.** A ready action must map to a reachable mounted execution path.
+1. **Truth before polish.** A ready action must map to a reachable current execution path.
 2. **Intent before internal state.** Users express outcomes; the product maps them to plans, capabilities, jobs, reviews and artifacts.
 3. **Reuse before new editor code.** D-033 remains the accepted baseline; new generic editor primitives require conformance evidence and reuse analysis first.
 4. **One semantic action model.** GUI, AI, MCP and scripts converge on the same product semantics.
@@ -156,7 +156,9 @@ Each next action has a stable semantic ID, user-facing explanation, enabled stat
 
 Orchestration is a projection over canonical domain state plus runtime availability, not a second canonical store.
 
-**Foundation status:** implemented for **Photo → Video only** in PR #43. `compose_photos` delegates to the existing D-017 capability execution boundary. The UV-owned shell also isolates legacy pipeline/session/task/sandbox navigation. Visualizer still has a real deterministic capability path but is not yet migrated to Product Orchestrator. Other recipes remain explicitly partial until migrated.
+**Foundation status:** Photo -> Video was implemented first in PR #43. The workspace-routing recovery adds Visualizer as the second deterministic reference. Both now delegate semantic Product Orchestrator actions to existing local/free capability execution and use `relevant_workspaces` as the project-page workspace authority. Other recipes remain explicitly partial until migrated.
+
+`WorkflowAction.suggested_input` must itself satisfy the action contract when present. Lists of available project-owned choices belong in the bounded action schema/projection rather than an undocumented side channel.
 
 When additional workflows are migrated, do not assume every semantic action is necessarily a capability execution. State/domain decisions such as approve/reject/accept may be owned by coherent UV domain commands without a provider capability ID.
 
@@ -169,15 +171,7 @@ D-033 is the accepted ownership map. This phase does **not** choose between “U
 3. **conformance defect** — a canonical editor mutation bypass, duplicate authority or unjustified general-purpose custom primitive;
 4. **evidence-backed amendment candidate** — only where reproducible technical evidence shows the accepted boundary itself is unsuitable.
 
-Current first bounded defect: accepted range edits are canonical D-028 timeline state, while the historical `DELETE /api/uv/projects/{project_id}/edits/{edit_id}` route mutates `RangeEditStateStore` directly. That removal path should converge on the editor Command API after call-site evidence and regression tests.
-
-Exit:
-
-- one current ownership/conformance map against D-033;
-- contradictory recovery documentation corrected;
-- concrete bypasses found by the audit removed or recorded as bounded follow-up;
-- no generic NLE expansion during the audit;
-- D-033 reaffirmed/clarified by default, or amended only with explicit reproducible counter-evidence.
+**Status:** PR #44 reaffirmed/clarified D-033 and repaired the concrete accepted-edit removal bypass. Accepted edit removal now goes through the semantic Editor Command API and `/edits` remains read-only. Remaining undo/redo, broader MLT/OpenCut reuse and full GUI/scripts/AI/MCP mutation-equivalence concerns are bounded follow-up work rather than a foundation reset.
 
 ## Phase 5 — Core journeys
 
@@ -198,12 +192,13 @@ Exit:
 
 Internal Brief/Plan/Candidate/Review state remains durable where valuable, but ordinary users should see it only when a decision is required.
 
-Workspace presentation should increasingly come from Product Orchestrator `relevant_workspaces` rather than a parallel frontend recipe switch.
+Workspace presentation should come from Product Orchestrator `relevant_workspaces` as each journey is migrated rather than from a parallel frontend recipe switch.
+
+**Next core migration:** targeted existing-video edit, preserving its accepted Brief -> Plan -> Candidate -> Review -> Accept domain chain underneath user-facing next actions.
 
 ## Phase 6 — Additional recipes
 
-- keep Photo → Video as the first orchestrated reference flow;
-- migrate Visualizer as the second simple deterministic reference flow;
+- preserve Photo -> Video and Visualizer as the two deterministic orchestrated reference flows;
 - turn Story/Commercial from preparation-only workspaces into orchestrated paths;
 - keep Performance/Lip-sync visibly setup-gated;
 - give Action Transfer/Digital Human real current paths or keep them unavailable/partial;
