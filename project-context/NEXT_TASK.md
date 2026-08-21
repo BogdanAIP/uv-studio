@@ -1,24 +1,24 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-dubbing-orchestration -->
+<!-- uv-next-slice: product-recovery-music-orchestration -->
 
 ## Goal
 
-Project the existing dubbing production chain through Product Orchestrator readiness, prerequisites, relevant workspaces and outcome-oriented semantic next actions without replacing its durable transcript, translation, prepared-speech, alignment, review and render domains.
+Project the existing Music Video chain through Product Orchestrator readiness, prerequisites, relevant workspaces and semantic next actions without replacing its canonical Music Map, Direction, Assembly, Rhythm Audit or Review state.
 
 ## Required direction
 
-- preserve the existing D-034–D-037 dubbing domain boundaries and D-017 authorization/provider rules;
-- derive readiness and prerequisites from current project-owned media, runtime availability and canonical dubbing state;
-- expose understandable user outcomes such as import, transcribe, translate when requested, prepare speech, review, accept and export rather than making internal state-machine objects the primary UX;
-- keep transcript/translation/prepared-audio/alignment/review state canonical in their existing stores;
-- route the project page from Product Orchestrator `relevant_workspaces` rather than globally mounting dubbing panels;
-- do not create a second dubbing workflow store or silently add remote/paid fallbacks.
+- preserve existing music-domain authority and D-017 provider/runtime boundaries;
+- derive readiness from project-owned song and visual sources, runtime availability and canonical music state;
+- expose user outcomes such as add song, analyze structure, review direction, add visuals, assemble, rhythm-review and export;
+- keep Music Map, direction, assembly and review stores canonical;
+- route the project page from Product Orchestrator `relevant_workspaces` and remove unrelated workspace leakage from the dedicated Music Video journey;
+- do not add a second music workflow store.
 
 ## Completion proof
 
-The slice is complete when a dubbing project has truthful Product Orchestrator readiness/prerequisites/next actions derived from canonical domain state, the frontend exposes only the relevant dubbing workspace and follows those actions without bypassing review/authorization boundaries, and focused API/browser tests prove setup-gated, transcribed, prepared/reviewed and exportable states.
+The slice is complete when `music_video` has truthful Product Orchestrator readiness, prerequisites and next actions derived from canonical state, its frontend follows those actions without bypassing review/provider boundaries, and focused API/browser evidence proves source/setup, direction/assembly, review and exportable states.
 
 ## Entry gate
 
-Do not begin until `product-recovery-targeted-edit-orchestration` is reviewed and merged, its lifecycle is closed to `idle`, and targeted existing-video editing is routed through Product Orchestrator without weakening D-028/D-032/D-033 invariants.
+Do not begin until `product-recovery-dubbing-orchestration` is reviewed and merged, its lifecycle is closed to `idle`, and Dubbing is routed through Product Orchestrator without weakening D-034-D-037 or D-017.

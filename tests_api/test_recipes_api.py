@@ -32,6 +32,7 @@ class RecipesApiTests(unittest.TestCase):
                 "visualizer",
                 "performance_lip_sync",
                 "free_project",
+                "dubbing",
             ],
         )
         encoded = str(recipes).lower()
@@ -116,6 +117,22 @@ class RecipesApiTests(unittest.TestCase):
         self.assertEqual(free_project["required_capabilities"], [])
         encoded = str({"performance": performance, "free_project": free_project}).lower()
         for provider in ("videoclaw", "qwen", "dashscope", "kling", "seedance"):
+            self.assertNotIn(provider, encoded)
+
+    def test_dubbing_recipe_is_provider_neutral_and_review_gated(self) -> None:
+        response = self.client.get("/api/uv/recipes/dubbing")
+        self.assertEqual(response.status_code, 200, response.text)
+        recipe = response.json()
+        self.assertEqual(recipe["required_inputs"], ["source_video"])
+        self.assertEqual(recipe["required_capabilities"], ["video.render_dubbing"])
+        self.assertEqual(
+            recipe["optional_capabilities"],
+            ["speech.transcribe", "text.translate", "speech.synthesize", "audio.align"],
+        )
+        self.assertEqual(recipe["production_policy"]["source_review"], "required")
+        self.assertEqual(recipe["production_policy"]["final_review"], "required")
+        encoded = str(recipe).lower()
+        for provider in ("videoclaw", "qwen", "dashscope", "edge_tts", "whisperx", "argos"):
             self.assertNotIn(provider, encoded)
 
     def test_unknown_recipe_is_404(self) -> None:

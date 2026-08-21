@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
+import { DubbingSourceSetupPanel } from '@/components/editor/DubbingSourceSetupPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
@@ -126,6 +127,34 @@ export default function ProjectPage() {
                 onProjectChanged={refreshProjectWorkflow}
                 orchestrated
               />
+            )}
+
+            {projectedWorkspaceIds.has('dubbing') && (
+              <>
+                <DubbingSourceSetupPanel
+                  projectId={project.project_id}
+                  sources={project.sources}
+                  transcriptAction={workflow.next_actions.find(action => action.action_id === 'import_dubbing_transcript')}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <DubbingWorkflowPanel
+                  key={`dubbing-${project.sources.length}-${
+                    workflow.prerequisites.find(item => item.prerequisite_id === 'dubbing.transcript')?.satisfied
+                      ? 'transcript-ready'
+                      : 'transcript-missing'
+                  }`}
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <DubbingPrecisionPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <DubbingSubtitleExportPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+              </>
             )}
 
             <section className="grid gap-4 py-8 sm:grid-cols-2 lg:grid-cols-4">
