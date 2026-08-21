@@ -2,289 +2,213 @@
 
 ## Purpose
 
-This document maps the Stage 8 `main` frontend through its HTTP contracts into backend/domain/capability layers. The corrected audit shows that there are **two live frontend architectures** in the same Next.js application.
+This is the current interaction/ownership map after Product Truth Inventory (#42) and the first Product Orchestrator foundation (#43). Historical Stage 8 coupling is retained only where it explains migration debt.
 
-The backend is not generally empty. The newer UV-owned backend contains strong canonical/domain/capability layers. The product problem is that the frontend combines those layers with a still-live VideoClaw workflow shell whose backend runtime was intentionally removed at Stage 3.5.
-
-## Actual Stage 8 high-level architecture
+## Supported product path
 
 ```text
-frontend/app/layout.tsx
+UV-owned AppShell
+      |
+      v
+   /projects
+      |
+      +--> Project Store / Recipe Registry
+      |
+      +--> Product Orchestrator (migrated recipes)
+      |        |
+      |        +--> readiness / prerequisites / relevant workspaces / next actions
+      |
+      +--> UV semantic/domain APIs
+               |
+        +------+----------------+
+        |                       |
+   Project/domain state    Capability Registry + D-017
+        |                       |
+        +-----------+-----------+
+                    v
+       FFmpeg / MLT / local ML / MCP / providers
+```
+
+The frontend renders product state, collects bounded inputs and invokes semantic/domain actions. It is not the canonical workflow/timeline store.
+
+## Canonical authorities
+
+| Concern | Current authority | Direction |
+|---|---|---|
+| project identity/sources/artifacts | Project Store | preserve |
+| recipe intent/policy | Recipe Registry | preserve |
+| product readiness/prerequisites/workspaces/next actions | Product Orchestrator | expand recipe-by-recipe |
+| capability metadata/selection | Capability Registry + SelectionPolicy | preserve |
+| remote/non-free consent | D-017 authorization | preserve |
+| edit/dubbing/music/continuity durable state | UV project/domain stores | preserve |
+| meaningful editor mutations | UV semantic/domain command boundaries | enforce D-033 |
+| editor engine representation | MLT behind UV adapter | preserve/expand only with evidence |
+| reusable editor interaction UI | selective OpenCut Classic-derived components/helpers | reuse where valuable |
+| accepted-edit final export | current bounded FFmpeg path | preserve until parity evidence changes ownership |
+
+## Product Orchestrator status
+
+Implemented HTTP seam:
+
+```text
+GET  /api/uv/projects/{project_id}/workflow
+POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
+```
+
+`ProjectWorkflowState` is a read projection over canonical project/domain state plus runtime capability availability. It does not create a second workflow database.
+
+### Photo -> Video
+
+Current first migrated journey:
+
+```text
+project images
+ -> verify project-owned bytes
+ -> Product Orchestrator readiness/prerequisites
+ -> relevant workspace: photo_composition
+ -> semantic action: compose_photos
+ -> video.compose_photos
+ -> local FFmpeg adapter
+ -> project video artifact
+ -> refreshed current_outcome/recent_artifacts
+```
+
+This is `working_orchestrated`.
+
+### Visualizer
+
+Current execution path is real:
+
+```text
+project audio + optional artwork
+ -> audio.visualize
+ -> local FFmpeg adapter
+ -> project artifact
+```
+
+But Visualizer is **not yet Product-Orchestrator-migrated**. `project_workflow_state()` currently returns the generic not-migrated/partial projection for it. It is the next deterministic reference candidate.
+
+## Current project-page routing
+
+Photo-to-Video uses Product Orchestrator `relevant_workspaces` to decide its primary workspace and avoids unrelated generic panels.
+
+The remaining recipes still use a parallel frontend `recipe_id` decision tree and, for every non-photo project, mount generic `ProjectEditor`, Sequence Continuity and three Dubbing panels before/alongside specialist panels.
+
+Target direction:
+
+```text
+ProjectWorkflowState.relevant_workspaces
         |
         v
-     AppShell
-      /    \
-     /      \
-legacy       UV-owned product
-sidebar      /projects
-pipeline     project editor / dubbing / music / Stage8
-routes       |
- |           frontend/lib/*Api.ts
-workflowApi  |
- |           /api/uv/* + capabilities
-old APIs     |
- X           v
-(not mounted) Project Store / domain state / Capability Registry
-                            |
-                            v
-                  FFmpeg / MLT / local ML / MCP / providers
+workspace registry / renderer
+        |
+        +--> only declared task workspaces
 ```
 
-The coexistence is literal: `AppShell` is the root wrapper for every route and contains VideoClaw navigation/task polling while `/projects` exposes the newer UV-owned project system.
+Do not replace this with another universal page that appends every specialist tool.
 
-## Architecture A — UV-owned project/product path
-
-Important frontend clients:
-
-- `projectsApi.ts`;
-- `recipesApi.ts`;
-- `editorApi.ts`;
-- `renderApi.ts`;
-- `dubbingApi.ts`;
-- `dubbingPrecisionApi.ts`;
-- `subtitleApi.ts`;
-- `sequenceContinuityApi.ts`;
-- `musicVideoApi.ts`;
-- `musicVideoReviewApi.ts`;
-- `performanceLipSyncApi.ts`;
-- `stage8WorkspaceApi.ts`;
-- `stage8MediaApi.ts`.
-
-These use the current UV-owned FastAPI routers and durable Project Store/domain state.
-
-### Canonical authorities
-
-| Concern | Authority | Recovery decision |
-|---|---|---|
-| project identity/state | `uv_studio/projects` / Project Store | keep |
-| recipes | `uv_studio/recipes` | keep; repair product readiness semantics |
-| capability metadata | Capability Registry/offers | keep |
-| capability selection | selection policy | keep |
-| remote/paid authorization | D-017 authorization | keep |
-| result/provenance/cancellation | capability execution layer | keep |
-| edit/dubbing/music state | project domain extensions | keep |
-| product readiness/next step | no single owner | add Product Orchestrator |
-| generic editor ownership | React + UV state + MLT projection | re-evaluate under D-033 |
-
-### Server composition
-
-`uv_studio/server.py` mounts explicit UV routers for:
-
-- configuration;
-- capabilities and capability execution;
-- MCP/Qwen optional integrations;
-- recipes/execution projection;
-- projects/archives/media;
-- prepared audio;
-- editor commands/state;
-- replacement plan/candidate/review;
-- continuity/sequence state;
-- dubbing state/review/precision;
-- Music Map/Direction/Assembly/Analysis/Review;
-- Stage 8 workspaces/media;
-- artifacts/media access.
-
-This remains the product backend boundary.
-
-## Architecture B — live legacy VideoClaw path
-
-Important audited legacy frontend files (now isolated from normal navigation):
-
-- `frontend/lib/workflowApi.ts`;
-- prior `frontend/components/AppShell.tsx` legacy navigation/task logic (replaced by the UV-owned shell);
-- `frontend/components/HomePage.tsx`;
-- `frontend/components/WorkflowPanel.tsx`;
-- `frontend/components/pipelines/PipelinePage.tsx`;
-- `frontend/components/BrandHeader.tsx`;
-- `/pipelines/standard`;
-- `/pipelines/action-transfer`;
-- `/pipelines/digital-human`;
-- `/sandbox` and related old helpers.
-
-### AppShell coupling
-
-The D-062 audit-baseline `AppShell` imported from `workflowApi`:
+## Editor path and D-033 ownership
 
 ```text
-clearTempCache
-fetchPipelineTasks
-fetchSandboxTasks
-fetchSessions
+browser interaction
+(playhead/drag/zoom/forms)
+        |
+        | transient only
+        v
+UV semantic/domain command
+        |
+        v
+canonical Project Store/domain state
+        |
+        +--> MLT derived engine projection
+        |
+        +--> bounded FFmpeg/render adapters
 ```
 
-and places these routes in primary navigation:
+`RangeTimeline.tsx` and `timelineMath.ts` selectively adapt OpenCut Classic ruler/playhead/snap interaction ideas. UV integer-microsecond identity remains canonical.
 
-```text
-/
-/sandbox
-/pipelines/standard
-/pipelines/action-transfer
-/pipelines/digital-human
-```
+`MLTTimelineAdapter` derives ephemeral engine XML from accepted UV edit state. Raw MLT XML is not exposed as a public mutation surface.
 
-It also constructs links for old session/pipeline/sandbox running/completed tasks.
+PR #44 repairs one concrete D-033 bypass: accepted-edit removal moves from direct `DELETE /edits/{edit_id}` store mutation to semantic `remove_accepted_edit` on `/editor/commands`; `/edits` becomes read-only inspection.
 
-Before the Product Orchestrator foundation, `frontend/app/layout.tsx` made this
-legacy model part of the normal product shell, including inside `/projects`.
-The current `AppShell` is UV-owned and contains no legacy runtime import,
-navigation or polling.
-
-### workflowApi old contracts
-
-The live `workflowApi.ts` calls route families such as:
-
-```text
-/api/sessions
-/api/pipelines/standard/tasks
-/api/pipelines/action_transfer/tasks
-/api/pipelines/digital_human/tasks
-/api/tasks
-/api/sandbox/tasks
-/api/models
-/api/pipelines/standard/templates
-/api/upload_media
-/api/project/start
-/api/project/{session}/status
-/api/project/{session}/execute/{stage}
-/api/project/{session}/intervene
-/api/project/{session}/stop
-/api/project/{session}/models
-/api/project/{session}/artifact/*
-```
-
-Most of these are not mounted by the current UV server.
-
-### PipelinePage path
-
-Each of the three `/pipelines/*` pages renders `PipelinePage`, which directly imports legacy model/task/upload/start functions from `workflowApi`.
-
-At the audit baseline these were main-sidebar routes whose normal execution path
-pointed at a backend removed for security/runtime-independence reasons. They now
-remain compiled migration debt without a normal-shell entry point.
-
-`BrandHeader` labels that UI `Video-Claw`, and `PipelinePage` uses a separate light/white form design. This makes the architecture split visible to the user as well as technical.
-
-## Why Stage 3.5 must not be reversed
-
-The old backend was removed because complete VideoClaw routing could bypass the UV-owned authorization/secret/runtime boundaries. A live broken legacy page is migration debt, not justification to mount that backend again.
-
-The migration direction is:
-
-```text
-old user outcome still wanted?
-  yes -> map to Product Orchestrator + current UV domain/capability action
-  no  -> remove route/navigation from live product
-```
-
-not:
-
-```text
-broken old page -> restore whole old backend
-```
-
-## Projects / recipes path
-
-```text
-ProjectsPage
- -> listUVRecipes
- -> listUVProjects
- -> createUVProject / import archive
- -> Project Store
-
-ProjectPage
- -> getUVProject
- -> getProjectExecutionPlan
- -> render generic + recipe panels
-```
-
-Problem: recipe selection is readiness-blind and project composition globally mounts unrelated specialist workflows.
+This does not imply all coherent domains must collapse into one endpoint. Replacement Review, Dubbing Review and Music domains may keep dedicated UV-owned contracts when those contracts themselves are the semantic/domain mutation boundary.
 
 ## Targeted edit path
 
 ```text
-source upload
- -> project source registration/probe
-
-editor state
- -> project edit extensions + MLT projection
-
-select range + change request
- -> editor command select_range
- -> ProjectMediaRange + RangeContinuityBrief
-
-replacement plan
+source upload/probe
+ -> project source registration
+ -> select range + change request
+ -> EditorCommandService / RangeContinuityBrief
+ -> replacement plan
  -> candidate preparation/capability
- -> review
- -> accept
- -> render
+ -> evidence-based review
+ -> accepted edit
+ -> bounded render/export
 ```
 
-This backend chain is real and should be preserved. The Product Orchestrator should translate its prerequisites/domain state into understandable next actions.
+The backend chain is real. Recovery work is primarily next-action/prerequisite projection and reducing implementation vocabulary exposed to ordinary users.
 
 ## Dubbing path
 
 ```text
-project source
+project video
  -> speech.transcribe capability
  -> accepted transcript
  -> optional translation
- -> prepared speech/TTS/import
- -> review
- -> accept
+ -> prepared speech / TTS / import
+ -> review/alignment
+ -> accepted dubbing state
  -> video.render_dubbing
- -> artifact
- -> optional alignment/subtitles
+ -> artifact/subtitles
 ```
 
-Real domain path. Main defects: setup visibility, internal-state burden and global mounting for unrelated recipes.
-
-## Sequence continuity path
-
-Dedicated sequence state/commands/take context/review exist and are useful as optional policy. The defect is product placement: it is globally visible rather than activated only when relevant.
+This is substantial real functionality. Remaining product gaps are setup visibility, workflow isolation and intent-first orchestration.
 
 ## Music Video path
 
 ```text
-song source
+song
  -> Music Map
  -> Direction
+ -> assets
  -> Assembly
- -> render_music_video
- -> rhythm/review
- -> artifact
+ -> rhythm/final review
+ -> render artifact
 ```
 
-Strong domain model; UI currently asks the user to manually author too much internal timing/shot structure. Orchestrator should propose/populate durable plans, not delete them.
+The domain model is real. Product recovery should propose/populate plans and expose decisions, not delete the durable Music Map/Direction/Review state.
 
-## Photo -> Video path
+## Story / Commercial / Free
+
+Stage 8 workspace APIs persist useful brief/script/material choices. They are preparation state, not complete production engines. Product Orchestrator must expose truthful next actions before these modes can be called complete journeys.
+
+## Performance lip-sync
+
+Verified MuseTalk-backed `video.digital_human` execution is real when optional runtime/model/CUDA preflight succeeds. Product readiness should project that setup requirement before the user enters the workflow.
+
+## Legacy VideoClaw migration debt
+
+The Stage 8 baseline had a root AppShell that linked/polled the old VideoClaw runtime through `workflowApi.ts`. PR #43 removed that authority from the supported shell.
+
+Still-present legacy source includes:
+
+- `frontend/lib/workflowApi.ts`;
+- HomePage / WorkflowPanel;
+- PipelinePage and `/pipelines/*` routes;
+- related old sandbox/session/task helpers.
+
+These call historical families such as `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/upload_media` and old `/api/project/*` routes. The UV-owned server intentionally does not restore those families.
+
+Migration rule:
 
 ```text
-images + optional audio
- -> video.compose_photos
- -> local FFmpeg adapter
- -> artifact
+wanted outcome?
+  yes -> rebuild on Product Orchestrator + current UV semantic/domain/capability path
+  no  -> remove after call-site/dependency proof
 ```
 
-Reference example of simple intent -> inputs -> action -> result.
-
-## Visualizer path
-
-```text
-audio + optional artwork
- -> audio.visualize
- -> local FFmpeg adapter
- -> artifact
-```
-
-Second reference flow.
-
-## Story / Commercial / Free path
-
-Stage 8 workspace APIs persist useful brief/script/material selections. They are preparation state, not complete production engines. Orchestrator must expose the truthful next action rather than imply completion from workspace existence.
-
-## Performance lip-sync path
-
-Semantic `video.digital_human` execution through the verified MuseTalk profile is real when exact optional runtime/model/CUDA preflight succeeds. Product readiness should expose this setup requirement before entry.
+Never use a broken legacy page as justification to remount the complete old backend.
 
 ## Capability architecture to preserve
 
@@ -292,103 +216,30 @@ Semantic `video.digital_human` execution through the verified MuseTalk profile i
 CapabilityDefinition
  -> CapabilityOffer(s)
  -> SelectionPolicy
- -> D-017 Authorization
- -> Execution
- -> Adapter
- -> Result + provenance + artifact
+ -> D-017 authorization when required
+ -> Execution adapter
+ -> result + provenance + artifact
 ```
 
-Important invariants:
+Invariants:
 
-- semantic capability IDs remain provider-neutral;
+- semantic IDs stay provider-neutral;
 - `local_free_first` fails closed;
-- paid/remote execution is explicit;
-- adapters are peers, not one mandatory runtime;
+- remote/non-free execution is explicit;
 - project-scoped inputs prevent arbitrary host-path execution;
-- results/provenance are explicit.
+- MCP/local/provider adapters are peers, not mandatory product authorities.
 
 Product Orchestrator consumes this layer; it does not replace it.
 
-## Project/domain state to preserve
+## Current major gaps
 
-Project Store owns typed/versioned state for edits, replacement plans/candidates/reviews, dubbing, music, continuity, Stage 8 workspaces, archives and migrations. This is why recovery is not a rewrite.
+1. Product Orchestrator coverage is still only one recipe.
+2. Non-photo project pages still reconstruct workspace relevance in React and overexpose unrelated domains.
+3. Recipe creation does not show readiness before project creation.
+4. Core journeys (targeted edit, dubbing, music, narrated, general) still need intent-first Product Orchestrator projections.
+5. D-033 conformance is incomplete in areas such as shared undo/redo and full GUI/scripts/AI/MCP mutation equivalence; these are bounded follow-up problems, not a reason to redefine the product/editor foundation.
+6. Legacy frontend route source still needs dependency-proven retirement.
 
-## Main architectural gap
+## Next interaction-layer slice
 
-There are actually **two gaps**.
-
-### Gap 1 — no product-level next-action owner for UV workflows
-
-Today:
-
-```text
-React component
- -> inspect several domain states
- -> infer prerequisites
- -> disable/enable control
- -> invoke specialized API
- -> refresh
-```
-
-Target:
-
-```text
-Product Orchestrator
- -> canonical state + runtime availability
- -> readiness + prerequisites + relevant workspaces + next actions
-
-React
- -> render product projection
- -> collect bounded input
- -> invoke semantic action
-```
-
-### Gap 2 — old live frontend still targets removed runtime
-
-Today:
-
-```text
-AppShell / PipelinePage / WorkflowPanel
- -> workflowApi
- -> removed VideoClaw backend routes
-```
-
-Target:
-
-- remove old pipeline/session/sandbox navigation from normal shell unless rebuilt on current semantics;
-- retire duplicate project/task authority;
-- preserve wanted outcomes only through UV-owned commands/capabilities.
-
-## Migration rule
-
-Do not flatten all domain APIs into one giant controller. Consolidate **product action semantics**, not every HTTP route.
-
-Music Map, Dubbing Review and Replacement Review may remain coherent dedicated domains. Product Orchestrator maps them into stable user actions.
-
-## Immediate Product Orchestrator seam
-
-Implemented first-slice family:
-
-```text
-GET /api/uv/projects/{project_id}/workflow
-POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
-```
-
-The read projection plus representative `compose_photos` action contains:
-
-- truthful readiness;
-- prerequisites;
-- relevant workspaces;
-- next actions;
-- active jobs;
-- recent result artifacts;
-- separate diagnostics.
-
-No new canonical workflow store is introduced. See
-[`PRODUCT_ORCHESTRATOR.md`](PRODUCT_ORCHESTRATOR.md) for the concrete ownership map.
-
-## UI-isolation companion work
-
-The normal shell is now UV-owned and does not expose or poll legacy VideoClaw
-pipeline/session/task/sandbox surfaces. Legacy route source is isolated rather
-than made functional by remounting the disabled backend.
+After the D-033 conformance PR closes, migrate Visualizer to Product Orchestrator and introduce/strengthen a workspace renderer driven by `relevant_workspaces` for the orchestrated deterministic journeys. Photo and Visualizer should then prove one product contract can isolate two different local intent-to-artifact workflows without generic NLE growth.

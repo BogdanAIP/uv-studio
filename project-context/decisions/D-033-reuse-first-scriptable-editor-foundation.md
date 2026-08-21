@@ -1,7 +1,8 @@
 # D-033 — Reuse-first scriptable editor foundation
 
 Status: accepted  
-Date: 2026-08-12
+Date: 2026-08-12  
+Clarified: 2026-08-21
 
 ## Decision
 
@@ -132,14 +133,43 @@ Timeline interaction may create/select/edit the intent and may display candidate
 
 ## Consequences for Stage 4C
 
-Stage 4C implementation now starts from the selected reusable foundation rather than building a bespoke editor stack. The next slice must:
+Stage 4C implementation starts from the selected reusable foundation rather than building a bespoke editor stack. Implementation work must:
 
-- establish the UV Command API/MLT adapter boundary;
+- preserve the UV Command API/MLT adapter boundary;
 - provide source-media registration/import and safe preview delivery;
-- integrate/adapt reusable OpenCut Classic timeline/editor UX rather than duplicating it;
+- integrate/adapt reusable OpenCut Classic timeline/editor UX rather than duplicating it without evidence;
 - map integer-microsecond UV range identity to editor positions without losing exact identity;
-- route GUI, scripts, AI and MCP through the same commands;
+- route GUI, scripts, AI and MCP through shared UV-owned semantic/domain commands;
 - round-trip non-destructive accepted edits into visible timeline state;
 - prove browser/editor preview behavior against authoritative UV render output before claiming parity.
 
-Future transitions, keyframes, masks, audio editing, subtitles, waveform, tracking and similar general editor features should follow the same reuse-first rule: evaluate compatible mature components before custom implementation.
+Future transitions, keyframes, masks, audio editing, subtitles, waveform, tracking and similar general editor features follow the same reuse-first rule: evaluate compatible mature components before custom implementation.
+
+## 2026-08-21 Product Recovery clarification
+
+The D-062 recovery audit does **not** reopen D-033 as a choice between “UV/React”, OpenCut and MLT. The selected architecture is deliberately composite and remains accepted.
+
+The implementation is evaluated against D-033 using four classes:
+
+1. **conforming adaptation** — for example transient browser playhead/drag/form state that does not become canonical project state;
+2. **incomplete implementation** — an accepted D-033 responsibility such as product-level undo/redo or wider command convergence that still needs proof;
+3. **conformance defect** — a canonical editor mutation bypass, duplicate authority or unjustified custom general-purpose primitive;
+4. **evidence-backed amendment candidate** — only when reproducible technical evidence shows an accepted ownership boundary itself is unsuitable.
+
+The default recovery action is to repair classes 2 and 3 while reaffirming D-033. A superseding editor-foundation decision requires concrete executable counter-evidence; implementation preference or the amount of existing custom UI is not sufficient.
+
+### Command-boundary clarification
+
+“One Command API” means one UV-owned semantic/domain mutation authority, not necessarily one giant HTTP endpoint for every media domain.
+
+Coherent domains such as Replacement Review, Dubbing Review or Music Map may retain dedicated UV-owned contracts when those contracts validate and own their domain mutation semantics. What is prohibited is a privileged public route that directly mutates canonical timeline/project state while bypassing the corresponding UV semantic/domain command boundary.
+
+Accepted range edits are canonical non-destructive timeline state under D-028. During the 2026-08-21 conformance audit, the historical direct `DELETE /api/uv/projects/{project_id}/edits/{edit_id}` path was identified as such a bypass. Recovery moves accepted-edit removal through semantic `remove_accepted_edit` on the shared editor command boundary and leaves the edit-state HTTP surface read-only.
+
+### Current MLT/OpenCut interpretation
+
+Current MLT use is primarily a derived accepted-edit projection/render seam. This is an incomplete use of the engine's proven generic mechanics, not evidence that MLT should become canonical or that D-033 should be discarded. Future generic timeline mechanics should delegate more to MLT when the product actually needs them and the adapter mapping is proven.
+
+Current OpenCut reuse is selective in timeline/ruler/playhead/snap interaction code, which is consistent with D-033. UV Studio is not required to import an arbitrary percentage of OpenCut; reuse is driven by concrete product primitives and license/maintenance value.
+
+See `docs/architecture/EDITOR_FOUNDATION_CONFORMANCE.md` for the current implementation map and bounded remediation evidence.

@@ -290,29 +290,29 @@ Exit: each mode is mostly recipe + capability mapping + production policy + mini
 
 The first installed-app human review and subsequent repository/history audit showed that the engineering foundation and packaged runtime can be healthy while product-level workflow truth is not.
 
-This recovery is defined in `docs/architecture/PRODUCT_RECOVERY_PLAN.md` and accepted by D-062.
+This recovery is defined in `docs/architecture/PRODUCT_RECOVERY_PLAN.md` and accepted by D-062. It restores product coherence without redefining UV Studio's already-set identity as a hybrid local-first production **and editing** workspace.
 
-It preserves the strong backend/runtime foundation while restoring product coherence through these ordered phases:
+Ordered phases:
 
-1. **Product Truth Inventory** — map every visible action to frontend handler, API, mounted route, domain command, capability/adapter and actual result; classify it as working/setup-required/partial/misleading/dead.
-2. **Recipe/execution contract repair** — remove false `available` states and stale launch paths; readiness must derive from reachable execution.
-3. **Product Orchestrator** — project one workflow state with structured prerequisites and next actions so React is not the primary orchestrator of independent backend state machines.
-4. **Editor foundation re-resolution** — explicitly resolve the D-033 gap before growing more UV-owned generic NLE behavior.
-5. **Core intent-to-result journeys** — recover targeted edit, dubbing, music video, narrated video and general video in that order, while keeping setup/remote cost explicit.
-6. **Additional recipe rationalization** — retain working photo/visualizer flows, turn composition-only modes into real workflows, and gate optional ML modes truthfully.
-7. **Cold-start product verification** — clean-state UI-only regression without hidden test seeding, plus human installed-app acceptance.
+1. **Product Truth Inventory** — map every visible action to frontend handler, mounted API, domain command, capability/adapter and actual result. **Completed in PR #42; keep the inventory current.**
+2. **Recipe/execution contract repair** — remove false `available` states and stale launch paths. **Base repair completed in PR #42.**
+3. **Product Orchestrator** — project readiness, prerequisites, relevant workspaces and semantic next actions so React is not the primary orchestrator. **Foundation implemented for Photo -> Video in PR #43; expand recipe-by-recipe.**
+4. **D-033 editor conformance** — audit the live implementation against the already accepted UV + MLT + selective OpenCut ownership map; repair command/authority bypasses and record incomplete work before generic NLE growth. This is **not** a new choice between UV Studio, OpenCut and MLT and not a product-identity decision.
+5. **Core intent-to-result journeys** — recover targeted edit, dubbing, music video, narrated video and general video in that order, keeping setup/remote cost explicit and internal domain state progressively disclosed.
+6. **Additional recipe rationalization** — retain Photo as the first orchestrated deterministic reference, migrate Visualizer as the second, turn composition-only modes into real workflows, and gate optional ML modes truthfully.
+7. **Cold-start product verification** — clean-state UI-only regression without hidden state seeding, plus human installed-app acceptance.
 8. **Resume Stage 9** — reconcile preserved packaging/native-shell work with the recovered product, then finish signing/publication.
 
 Recovery exit:
 
-- every visible recipe/action has a truthful readiness state backed by a mounted executable path;
+- every visible recipe/action has a truthful readiness state backed by a current executable path;
 - no execution-plan target points to an unmounted endpoint;
-- the frontend consumes product-orchestrator next actions/prerequisites rather than reconstructing hidden workflow state;
-- editor ownership/reuse direction is explicitly accepted;
+- the frontend consumes Product Orchestrator next actions/prerequisites/relevant workspaces for migrated journeys rather than reconstructing hidden workflow state;
+- D-033 conformance is established, with generic editor growth blocked behind the accepted reuse/command boundaries rather than a new foundation debate;
 - all five permanent scenarios complete through UI without manual API calls or test-only state seeding;
 - cold-start automated evidence and human Windows installed-app review pass.
 
-Until this gate passes, Stage 9 may remain an engineering/package branch but **must not merge as the maintained product baseline**.
+Until this gate passes, Stage 9 may remain an engineering/package reference but **must not merge as the maintained product baseline**.
 
 ## Stage 9 — Desktop Productization & Release Hardening
 

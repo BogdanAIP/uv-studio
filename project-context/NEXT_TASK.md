@@ -1,25 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-editor-ownership-resolution -->
+<!-- uv-next-slice: product-recovery-workspace-routing -->
 
 ## Goal
 
-Re-resolve the D-033 editor ownership boundary before any further generic NLE growth: decide whether UV Studio remains a bounded task-oriented orchestrator/editor, reuses more OpenCut Classic UI primitives, or delegates more timeline behavior to MLT behind UV commands.
+Make Product Orchestrator workspace projection authoritative for a second real deterministic journey by migrating `visualizer` and removing recipe-specific frontend reconstruction from the orchestrated path.
 
 ## Required direction
 
-- audit the actual post-Stage-8 ownership of timeline state, preview, editing commands and final render;
-- compare the accepted D-033 map with the code that now exists;
-- evaluate the smallest credible ownership options using current executable evidence and license/deployment constraints;
-- preserve Project Store and the one UV command model in every option;
-- do not add new generic timeline, waveform, compositor or transition primitives during the decision slice;
-- record the selected direction as a new ADR or an explicit D-033 amendment;
-- require separate owner approval before implementing a fundamental ownership change.
+- keep Project Store, Recipe Registry, Capability Registry and D-017 as the existing authorities;
+- add truthful `visualizer` readiness, prerequisites, relevant workspace and semantic action without introducing orchestration persistence;
+- render orchestrated workspaces from `ProjectWorkflowState.relevant_workspaces` rather than from a parallel `recipe_id` decision tree;
+- keep `photo_to_video` as the first reference and prove both deterministic workflows use the same product contract;
+- do not expose generic editor, continuity, dubbing or music workspaces unless the Product Orchestrator explicitly declares them relevant;
+- keep non-migrated recipes fail-closed as `partial` at the Product Orchestrator boundary rather than inventing readiness from legacy execution metadata;
+- preserve the D-033 editor foundation and do not add generic NLE primitives in this slice.
 
 ## Completion proof
 
-The slice is complete when one accepted ownership map states what UV Studio, MLT and any OpenCut-derived UI each own; current deviations are documented; rejected options have concrete evidence; and the next bounded implementation slice can be scoped without ambiguous editor authority.
+The slice is complete when Photo-to-Video and Visualizer both reach real local artifacts through Product Orchestrator semantic actions, their project pages are driven by projected workspaces instead of a duplicate recipe switch, irrelevant specialist panels are absent from both journeys, and focused API/browser tests prove blocked/setup/ready/result states.
 
 ## Entry gate
 
-Do not begin until Product Orchestrator foundation is merged, its context is closed to `idle`, and the Photo-to-Video reference flow proves that product orchestration can remain separate from generic editor ownership.
+Do not begin until the D-033 conformance audit is reviewed and merged, its lifecycle is closed to `idle`, and any editor-foundation deviations discovered there are either corrected or explicitly recorded as bounded follow-up work.

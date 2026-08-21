@@ -13,8 +13,14 @@ from uv_studio.projects.continuity_brief import (
     RangeContinuityBriefStore,
     ReviewTarget,
 )
+from uv_studio.projects.edit_state import (
+    EditStateError,
+    EditStateNotFound,
+    RangeEditState,
+    RangeEditStateStore,
+)
 from uv_studio.projects.media_ranges import MAX_CONTEXT_US, ProjectMediaRange, ResolvedProjectMediaRange
-from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.models import ProjectValidationError, validate_identifier
 from uv_studio.projects.source_media import (
     ProjectSourceMediaStore,
     SourceMediaError,
@@ -93,6 +99,32 @@ class SelectRangeResult:
         }
 
 
+@dataclass(frozen=True)
+class RemoveAcceptedEditCommand:
+    edit_id: str
+
+    def __post_init__(self) -> None:
+        try:
+            normalized = validate_identifier(self.edit_id, field_name="edit_id")
+        except ProjectValidationError as exc:
+            raise EditorCommandError(str(exc)) from exc
+        object.__setattr__(self, "edit_id", normalized)
+
+
+@dataclass(frozen=True)
+class RemoveAcceptedEditResult:
+    command: str
+    edit_id: str
+    state: RangeEditState
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "command": self.command,
+            "edit_id": self.edit_id,
+            "state": self.state.to_dict(),
+        }
+
+
 class EditorCommandService:
     """Single semantic mutation boundary for editor product callers."""
 
@@ -100,6 +132,7 @@ class EditorCommandService:
         self.project_store = project_store
         self.source_media = ProjectSourceMediaStore(project_store)
         self.briefs = RangeContinuityBriefStore(project_store)
+        self.accepted_edits = RangeEditStateStore(project_store)
 
     @staticmethod
     def _new_edit_id() -> str:
@@ -215,4 +248,26 @@ class EditorCommandService:
             edit_id=edit_id,
             resolved_range=resolved,
             brief=brief,
+        )
+
+    def remove_accepted_edit(
+        self,
+        project_id: str,
+        command: RemoveAcceptedEditCommand,
+    ) -> RemoveAcceptedEditResult:
+        """Remove one canonical accepted edit through the shared mutation boundary."""
+
+        if not isinstance(command, RemoveAcceptedEditCommand):
+            raise EditorCommandError("remove_accepted_edit requires RemoveAcceptedEditCommand")
+        try:
+            self.project_store.load_project(project_id)
+            state = self.accepted_edits.remove(project_id, command.edit_id)
+        except (ProjectNotFound, EditStateNotFound):
+            raise
+        except (EditStateError, ProjectStoreError, ProjectValidationError) as exc:
+            raise EditorCommandError(str(exc)) from exc
+        return RemoveAcceptedEditResult(
+            command="remove_accepted_edit",
+            edit_id=command.edit_id,
+            state=state,
         )

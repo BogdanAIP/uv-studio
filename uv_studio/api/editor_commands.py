@@ -20,7 +20,12 @@ from uv_studio.capabilities.execution import (
     UnsupportedCapabilityExecution,
 )
 from uv_studio.editor import MLTTimelineAdapter
-from uv_studio.editor.commands import EditorCommandError, EditorCommandService, SelectRangeCommand
+from uv_studio.editor.commands import (
+    EditorCommandError,
+    EditorCommandService,
+    RemoveAcceptedEditCommand,
+    SelectRangeCommand,
+)
 from uv_studio.editor.dubbing_alignment_commands import (
     AcceptDubbingAlignmentCommand,
     AlignmentMarkInput,
@@ -63,7 +68,7 @@ from uv_studio.projects.dubbing_review import (
     DubbingReviewNotFound,
     DubbingReviewStore,
 )
-from uv_studio.projects.edit_state import EditStateError, RangeEditStateStore
+from uv_studio.projects.edit_state import EditStateError, EditStateNotFound, RangeEditStateStore
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.prepared_audio import PreparedAudioError, PreparedAudioNotFound
 from uv_studio.projects.prepared_speech import (
@@ -93,6 +98,11 @@ class SelectRangeCommandPayload(_StrictModel):
     change_request: str = Field(min_length=1, max_length=4000)
     context_before_us: int = Field(default=5_000_000, ge=0, le=30_000_000)
     context_after_us: int = Field(default=5_000_000, ge=0, le=30_000_000)
+
+
+class RemoveAcceptedEditCommandPayload(_StrictModel):
+    command: Literal["remove_accepted_edit"]
+    edit_id: str = Field(min_length=1, max_length=128)
 
 
 class TranscriptSegmentCommandPayload(_StrictModel):
@@ -184,6 +194,7 @@ class AcceptDubbingReviewCommandPayload(_StrictModel):
 EditorCommandPayload = Annotated[
     Union[
         SelectRangeCommandPayload,
+        RemoveAcceptedEditCommandPayload,
         ImportDubbingTranscriptCommandPayload,
         AcceptAsrTranscriptCommandPayload,
         UpsertDubbingTranslationCommandPayload,
@@ -202,6 +213,12 @@ class SelectRangeCommandResultPayload(_StrictModel):
     edit_id: str
     resolved_range: dict
     brief: dict
+
+
+class RemoveAcceptedEditResultPayload(_StrictModel):
+    command: Literal["remove_accepted_edit"]
+    edit_id: str
+    state: dict
 
 
 class ImportDubbingTranscriptResultPayload(_StrictModel):
@@ -245,6 +262,7 @@ class AcceptDubbingReviewResultPayload(_StrictModel):
 
 EditorCommandResultPayload = Union[
     SelectRangeCommandResultPayload,
+    RemoveAcceptedEditResultPayload,
     ImportDubbingTranscriptResultPayload,
     AcceptAsrTranscriptResultPayload,
     UpsertDubbingTranslationResultPayload,
@@ -296,6 +314,8 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     if isinstance(exc, SourceMediaNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source media not found")
+    if isinstance(exc, EditStateNotFound):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Edit decision not found")
     if isinstance(exc, PreparedAudioNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prepared audio not found")
     if isinstance(exc, DubbingTranscriptNotFound):
@@ -397,6 +417,12 @@ def execute_editor_command(
                 ),
             )
             return SelectRangeCommandResultPayload.model_validate(result.to_dict())
+        if isinstance(payload, RemoveAcceptedEditCommandPayload):
+            result = EditorCommandService(store).remove_accepted_edit(
+                project_id,
+                RemoveAcceptedEditCommand(edit_id=payload.edit_id),
+            )
+            return RemoveAcceptedEditResultPayload.model_validate(result.to_dict())
         if isinstance(payload, ImportDubbingTranscriptCommandPayload):
             result = DubbingCommandService(store).import_transcript(
                 project_id,
@@ -480,6 +506,7 @@ def execute_editor_command(
     except (
         ProjectNotFound,
         SourceMediaNotFound,
+        EditStateNotFound,
         PreparedAudioNotFound,
         DubbingTranscriptNotFound,
         DubbingTranslationNotFound,
