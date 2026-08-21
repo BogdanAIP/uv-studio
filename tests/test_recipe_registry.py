@@ -35,6 +35,7 @@ class RecipeRegistryTests(unittest.TestCase):
                 "visualizer",
                 "performance_lip_sync",
                 "free_project",
+                "dubbing",
             ),
         )
         self.assertEqual(registry.list(), BUILTIN_RECIPES)
@@ -121,6 +122,18 @@ class RecipeRegistryTests(unittest.TestCase):
         self.assertEqual(recipe.required_inputs, ())
         self.assertEqual(recipe.required_capabilities, ())
         self.assertIn("timeline.assemble", recipe.optional_capabilities)
+        self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
+
+    def test_dubbing_is_dedicated_review_gated_recipe(self) -> None:
+        recipe = build_builtin_registry().get("dubbing")
+        self.assertEqual(recipe.required_inputs, ("source_video",))
+        self.assertEqual(recipe.required_capabilities, ("video.render_dubbing",))
+        self.assertEqual(
+            recipe.optional_capabilities,
+            ("speech.transcribe", "text.translate", "speech.synthesize", "audio.align"),
+        )
+        self.assertEqual(recipe.production_policy.source_review, PolicyMode.REQUIRED)
+        self.assertEqual(recipe.production_policy.final_review, PolicyMode.REQUIRED)
         self.assertNotIn(recipe.recipe_id, VIDEOCLAW_PIPELINE_BINDINGS)
 
     def test_duplicate_registration_is_rejected(self) -> None:
