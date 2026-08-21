@@ -11,8 +11,10 @@
     "pull_request": 47,
     "write_scope": [
       "docs/architecture/**",
+      "e2e/test_dubbing_orchestrator_outcome.py",
       "e2e/test_user_outcomes.py",
       "frontend/app/projects/**",
+      "frontend/components/editor/DubbingSourceSetupPanel.tsx",
       "frontend/components/editor/DubbingWorkflowPanel.tsx",
       "frontend/components/editor/DubbingPrecisionPanel.tsx",
       "frontend/components/editor/DubbingSubtitleExportPanel.tsx",
