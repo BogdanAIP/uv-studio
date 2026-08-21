@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel';
+import { DubbingSourceSetupPanel } from '@/components/editor/DubbingSourceSetupPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
@@ -130,7 +131,13 @@ export default function ProjectPage() {
 
             {projectedWorkspaceIds.has('dubbing') && (
               <>
+                <DubbingSourceSetupPanel
+                  projectId={project.project_id}
+                  sourceCount={project.sources.filter(source => source.kind === 'video').length}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
                 <DubbingWorkflowPanel
+                  key={`dubbing-sources-${project.sources.length}`}
                   projectId={project.project_id}
                   onProjectChanged={refreshProjectWorkflow}
                 />
