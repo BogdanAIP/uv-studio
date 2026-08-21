@@ -2,267 +2,202 @@
 
 ## Purpose
 
-This document records the D-062 Stage 8 audit baseline and the current recovery
-status. A feature is not `working` merely because source code, domain state or
-tests exist; it is working only when a user-visible action reaches a current
-mounted UV-owned execution path and produces the expected result.
+This document keeps two things separate:
+
+1. the **D-062 Stage 8 audit baseline** that explains how the product became confusing;
+2. the **current recovery state** after PR #42 and PR #43.
+
+Historical baseline findings must not be written as if they still describe the current shell, and current partial recovery must not be overstated as application-wide completion.
+
+A feature is `working` only when a user-visible action reaches a current mounted UV-owned path and produces the expected state/artifact.
 
 Status values:
 
 - `working` — current UI -> current mounted API -> implementation -> result;
-- `working_orchestrated` — `working` plus truthful Product Orchestrator readiness,
-  prerequisites, relevant workspace and semantic next action;
+- `working_orchestrated` — `working` plus truthful Product Orchestrator readiness/prerequisites/relevant workspace/semantic next action;
 - `working_with_setup` — complete path exists after an explicit optional runtime/config prerequisite;
-- `partial` — valuable pieces exist but the product journey is incomplete;
-- `misleading` — UI/metadata implies readiness that current backend execution does not support;
-- `live_legacy_broken` — compiled/routable live legacy UI calls routes intentionally absent from the UV-owned server;
-- `vendor_donor` — pinned upstream provenance under `vendor/` only.
+- `partial` — valuable implementation exists but the user journey is incomplete;
+- `unavailable` — intentionally fail-closed at the current product boundary;
+- `historically_misleading` — an older visible/metadata contract advertised execution that was not actually mounted;
+- `legacy_isolated` — legacy source still exists but is no longer part of the supported normal shell;
+- `live_legacy_broken` — compiled/routable legacy page still depends on backend contracts intentionally absent from the UV-owned server.
 
-## Fundamental Stage 8 architecture split
-
-At the D-062 audit baseline, the live product contained **two frontend
-architectures at once**.
-
-### A. UV-owned project architecture
+## Current top-level architecture
 
 ```text
 /projects
+ -> UV-owned AppShell
  -> Project Store
  -> Recipe Registry
- -> ProjectEditor / Dubbing / Music / Stage8 workspaces
- -> UV-owned /api/uv/* and capability APIs
- -> Project/domain state + Capability Registry
- -> FFmpeg / MLT / ML / MCP / provider adapters
+ -> Product Orchestrator where migrated
+ -> UV semantic/domain APIs
+ -> Capability Registry / D-017
+ -> FFmpeg / MLT / local ML / MCP / provider adapters
 ```
 
-### B. Live legacy VideoClaw architecture
+The supported normal shell now exposes Projects and Settings. It no longer polls old VideoClaw sessions/tasks/sandbox state or advertises `/pipelines/*` as primary product navigation.
+
+## Historical D-062 frontend split
+
+At the Stage 8 audit baseline the live build combined:
 
 ```text
-AppShell sidebar
- -> /sandbox
- -> /pipelines/standard
- -> /pipelines/action-transfer
- -> /pipelines/digital-human
- -> workflowApi.ts
- -> /api/pipelines/* /api/tasks /api/sessions /api/models /api/upload_media /api/project/* /api/sandbox/*
+UV Project Store UI
++
+legacy VideoClaw AppShell/session/task/pipeline UI
 ```
 
-Most of the latter backend routes were intentionally removed from `uv_studio/server.py` by Stage 3.5.
+The legacy UI called `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/upload_media`, old `/api/project/*` and `/api/sandbox/*` contracts that Stage 3.5 had intentionally stopped mounting.
 
-The legacy layer is not only under `vendor/`: `frontend/lib/workflowApi.ts`,
-`HomePage.tsx`, `WorkflowPanel.tsx`, `PipelinePage.tsx` and the three pipeline
-routes remain compiled migration debt. In the audit baseline, `AppShell`
-imported `workflowApi` and placed legacy routes in primary navigation. The
-Product Orchestrator foundation replaces that shell with a UV-owned project
-shell that neither links nor polls those routes.
-
-This is a central Product Truth defect: the new UV product was added without completing retirement/isolation of the old runtime-facing frontend.
+PR #43 corrected the **normal shell** side of this split. Legacy source such as `workflowApi.ts`, HomePage/WorkflowPanel/PipelinePage and `/pipelines/*` routes still remains migration debt, but the supported AppShell no longer links or polls it.
 
 ## Current server boundary
 
-`uv_studio/server.py` mounts UV-owned routers for configuration, capabilities/execution, MCP/Qwen pack, recipes, projects/media, editor commands, replacement workflow, dubbing, sequence continuity, music, Stage 8 workspaces and artifact/media access.
+`uv_studio/server.py` mounts UV-owned routers for projects/media, recipes, Product Orchestrator, editor/replacement state, dubbing, sequence continuity, music, Stage 8 workspaces, capabilities/execution, MCP and configuration.
 
-It does **not** mount the complete old VideoClaw runtime. Important absent families include:
+It intentionally does **not** restore the complete historical VideoClaw runtime. Important absent families still include:
 
 - `/api/pipelines/*`;
 - `/api/tasks*`;
 - `/api/sessions*`;
 - `/api/models*`;
 - `/api/upload_media`;
-- most `/api/project/*` old workflow routes;
+- most historical `/api/project/*` workflow routes;
 - `/api/sandbox/*`.
 
-`/api/stages` remains only a compatibility metadata endpoint and does not restore those workflows.
+## Current project-page composition
 
-## Main-shell truth
+The old statement “the project page always mounts Editor + Continuity + Dubbing for every recipe” is now only a **baseline historical finding**.
 
-The audited Stage 8 `AppShell` imported `clearTempCache`, `fetchPipelineTasks`,
-`fetchSandboxTasks` and `fetchSessions` from `workflowApi` and defined primary
-navigation for:
+Current code behaves as follows:
 
-```text
-/
-/sandbox
-/pipelines/standard
-/pipelines/action-transfer
-/pipelines/digital-human
-/settings
-```
+- `photo_to_video` is the first isolated Product Orchestrator flow and mounts its projected `photo_composition` workspace instead of generic Editor/Continuity/Dubbing panels;
+- every **non-photo** recipe still receives `ProjectEditor`, `SequenceContinuityPanel`, `DubbingWorkflowPanel`, `DubbingPrecisionPanel` and `DubbingSubtitleExportPanel` before/alongside recipe-specific panels;
+- music, story/commercial/free, visualizer and performance then add their specialist panels by `recipe_id`.
 
-The pipeline pages use a separate `Video-Claw` BrandHeader and light controls. They are therefore both a backend-contract problem and a second visible design system.
+Therefore cross-workflow leakage is **fixed for Photo-to-Video only**, not application-wide.
 
-The Product Orchestrator recovery shell now advertises `/projects` and the
-currently mounted `/settings` configuration surface only. It does not import or
-poll the old workflow client. The settings page no longer mounts the historical
-Video-Claw header; its mixed-language field copy remains presentation migration
-debt, not a second workflow/runtime contract.
+## Core frontend -> backend truth
 
-## UV project-page composition audit
-
-Inside the newer `/projects/{projectId}` architecture, workflows are also not isolated by recipe. The page always mounts:
-
-1. `ProjectEditor`;
-2. `SequenceContinuityPanel`;
-3. `DubbingWorkflowPanel`;
-4. `DubbingPrecisionPanel`;
-5. `DubbingSubtitleExportPanel`;
-6. execution-plan diagnostics;
-7. archive/recovery controls.
-
-Recipe-specific panels are then appended:
-
-- story/commercial/free -> `Stage8CompositionPanel`;
-- music -> Music Map/Assembly/Review panels;
-- photo/visualizer -> `Stage8MediaPanel`;
-- performance lip-sync -> `PerformanceLipSyncPanel`.
-
-Thus even after entering the new Project Store architecture, a selected task does not isolate its relevant workflow. This contradicts the Stage 2 product promise that selecting a task loads only the needed stages.
-
-## Core UV frontend -> backend ownership map
-
-| User area | Live UV frontend | Current backend authority | Truth |
+| User area | Current UI/API | Backend authority | Current truth |
 |---|---|---|---|
-| project create/open/archive | project pages + `projectsApi` | Project Store | strong foundation |
-| generic source import | `ProjectEditor` / `editorApi` | project media/editor state | real |
-| targeted range selection | `ProjectEditor` | editor commands + continuity brief | real, prerequisites implicit |
-| replacement plan/candidate/review | replacement panels | dedicated replacement APIs + capabilities | real, state machine exposed |
-| final edit render | render panel | accepted edit + media render | real |
-| sequence continuity | continuity panel | sequence state/review APIs | real optional policy, globally displayed |
-| dubbing | dubbing panels/APIs | ASR/capabilities + dubbing domain state | substantial real workflow, setup/state heavy |
-| music map/direction | music panels/APIs | Music Map/Direction | real, low-level authoring burden |
-| music assembly/review | music panels/APIs | Assembly/Review + media render | real |
-| Photo -> Video | Product Orchestrator -> `Stage8MediaPanel` | workflow action -> `video.compose_photos` | first orchestrated real local path |
-| Visualizer | `Stage8MediaPanel` | `audio.visualize` | clean real local path |
-| Story/Commercial preparation | `Stage8CompositionPanel` | Stage 8 workspace state | real preparation, not full production |
-| Performance lip-sync | dedicated panel | verified MuseTalk capability path | real with explicit setup |
-| project readiness | Product Orchestrator block | Project Store + verified Source Media + Recipe/Capability Registry projection | implemented for Photo -> Video; other recipes fail closed as partial |
+| project create/open/archive | project pages + `projectsApi` | Project Store | **strong foundation** |
+| Photo → Video | Product Orchestrator -> `Stage8MediaPanel` | workflow action -> `video.compose_photos` -> local FFmpeg | **working_orchestrated** |
+| Visualizer | recipe-specific `Stage8MediaPanel` | `audio.visualize` -> local FFmpeg | **working**, not orchestrated yet |
+| generic video import/preview | `ProjectEditor` / `editorApi` | project source media/editor state | **working** |
+| targeted range selection | `ProjectEditor` -> `/editor/commands` | `EditorCommandService` + Continuity Brief | **working** |
+| replacement plan/candidate/review | replacement UI/APIs | UV replacement domains + capabilities | **working**, internal state too visible |
+| accepted edit render | render panel | accepted edit state + bounded media render | **working** |
+| sequence continuity | continuity panel/APIs | sequence domain | **working optional domain**, still overexposed |
+| dubbing | dubbing panels/APIs | ASR/translation/speech/alignment/review/render domains | **substantial working path**, setup/UX partial |
+| music map/direction | music UI/APIs | Music Map/Direction domain | **working domain**, authoring burden high |
+| music assembly/review | music UI/APIs | Assembly/Review + render | **working domain** |
+| Story/Commercial preparation | `Stage8CompositionPanel` | Stage 8 composition state | **partial production journey** |
+| Performance lip-sync | dedicated panel | verified optional MuseTalk capability path | **working_with_setup** |
+| product workflow readiness | Product Orchestrator | Project Store + verified source state + Recipe/Capability Registry | **Photo only**; other recipes currently fail closed as `partial`/unavailable projection |
 
-## Live legacy frontend -> disabled backend map
+## Legacy frontend truth
 
-| Live surface | Client calls | Current backend truth | Status |
+| Legacy surface | Current shell exposure | Backend truth | Status |
 |---|---|---|---|
-| legacy `AppShell` sidebar/task implementation | sessions/tasks/sandbox cache APIs | most routes absent | isolated from the normal shell; retained only in Git history |
-| `/pipelines/standard` | models/templates/upload/standard task/task events | routes absent | `live_legacy_broken` |
-| `/pipelines/action-transfer` | models/upload/action-transfer task/task events | routes absent | `live_legacy_broken` |
-| `/pipelines/digital-human` | models/upload/digital-human task/task events | routes absent | `live_legacy_broken` |
-| `WorkflowPanel` / `HomePage` old main workflow | `/api/project/start`, status, execute, intervene, artifacts, sessions | old workflow runtime absent | `live_legacy_broken` unless fully unreachable from current route entry |
+| old session/task/sandbox AppShell behavior | removed from supported AppShell | backend families absent | `legacy_isolated` |
+| `/pipelines/standard` | not normal-shell navigation | historical endpoints absent | `live_legacy_broken` source/route debt |
+| `/pipelines/action-transfer` | not normal-shell navigation | historical endpoints absent | `live_legacy_broken` source/route debt |
+| `/pipelines/digital-human` | not normal-shell navigation | historical endpoints absent | `live_legacy_broken` source/route debt |
+| old HomePage/WorkflowPanel | no supported product authority | historical workflow runtime absent | `legacy_isolated` / migration debt |
 
-Compiled legacy route source remains migration debt, but the normal shell no longer
-links or polls those surfaces. Direct retirement is a later bounded cleanup.
+The correct recovery action is dependency-proven retirement/migration, **not** remounting the old backend.
 
-## Recipe matrix
+## Recipe matrix — current recovery truth
 
-| Recipe | Intended outcome | UV-owned path truth | Baseline status | Recovery action |
+| Recipe | Intended outcome | Current UV-owned path | Status | Required recovery |
 |---|---|---|---|---|
-| `general_video` | brief -> general video | no complete current brief -> plan -> assets -> assembly -> export path | `partial` | gate truthfully; build orchestrated UV path |
-| `narrated_video` | topic/script -> narration -> visuals -> video | baseline RecipeExecutionPlan advertised unmounted `/api/pipelines/standard/tasks`; a separate live legacy standard page also calls the same disabled API | `misleading` + legacy broken surface | recovery plan now fail-closed; later implement current semantic path |
-| `music_video` | song-driven clip | substantial UV Music Map/Direction/Assembly/Review domain path | `partial` UX | orchestrator proposes analysis/direction instead of forcing low-level manual map authoring |
-| `action_transfer` | motion source + target image -> result | baseline plan and live legacy pipeline both target disabled `/api/pipelines/action_transfer/tasks`; semantic capability exists separately | `misleading` | fail closed; later bind authorized capability workflow or remain unavailable |
-| `digital_human` | portrait + speech -> talking video | current UV recipe is partial/setup-dependent; separate legacy page calls disabled promo pipeline | `partial` + legacy broken surface | keep capability-gated; retire legacy promo path |
-| `story_video` | story -> video | typed brief/script/material workspace plus generic leaked panels | `partial` | orchestrate production after core flow isolation |
-| `commercial_product` | product brief/materials -> ad video | preparation state plus generic leaked panels | `partial` | orchestrated product flow |
-| `photo_to_video` | photos + optional audio -> video | Product Orchestrator action delegates to the real local FFmpeg capability path | `working_orchestrated` | first reference journey; keep permanent evidence |
-| `visualizer` | audio + optional artwork -> video | real local FFmpeg capability path | `working` but shell/page polluted | use as UX reference |
-| `performance_lip_sync` | portrait + speech -> lip sync | verified optional MuseTalk path | `working_with_setup` | show setup before entry |
-| `free_project` | flexible tools | real primitives but no next-action owner; unrelated workflows globally visible | `partial` | orchestrator/tool palette |
+| `general_video` | brief -> general video | no complete brief -> plan -> assets -> assembly -> export journey | `partial` | build orchestrated current path |
+| `narrated_video` | topic/script -> narration -> visuals -> video | historical stale pipeline target removed; no replacement full journey yet | `unavailable` product execution | implement current semantic path |
+| `music_video` | song-driven clip | real Music Map/Direction/Assembly/Review domains | `partial` UX | intent-first orchestration over existing domains |
+| `action_transfer` | motion source + target -> result | semantic capability exists, historical pipeline target removed | `unavailable` product journey | build authorized current workflow or keep unavailable |
+| `digital_human` | portrait + speech -> talking video | capability/domain pieces exist; no complete baseline journey | `partial` | truthful capability-gated workflow |
+| `story_video` | story -> video | brief/script/material workspace | `partial` | extend from preparation to orchestrated production |
+| `commercial_product` | brief/materials -> ad video | preparation workspace | `partial` | orchestrated production path |
+| `photo_to_video` | photos + optional audio -> video | Product Orchestrator `compose_photos` -> local FFmpeg | `working_orchestrated` | preserve as first reference journey |
+| `visualizer` | audio + optional artwork -> video | real `audio.visualize` local path, but Product Orchestrator reports generic not-migrated state | `working`, orchestration missing | next deterministic orchestration reference |
+| `performance_lip_sync` | portrait + speech -> lip-sync | verified optional MuseTalk path | `working_with_setup` | show setup/readiness before use |
+| `free_project` | flexible tools | reusable primitives, no coherent next-action owner | `partial` | orchestrated tool palette, not every specialist workflow at once |
 
 ## Permanent release scenarios
 
 | Scenario | Current truth | Status | Blocking gap |
 |---|---|---|---|
-| A. General video | no complete UV-owned path | `partial` | Product Orchestrator + execution baseline |
-| B. Narrated video | old plan and live legacy pipeline pointed to disabled backend | `misleading` baseline; recovery fail-closed | new narrated workflow |
-| C. Music-video excerpt | real domain/assembly/review, backend-schema-heavy UX | `partial` | intent-first orchestration |
-| D. Dubbing | substantial real path; runtime/setup and many internal gates | `working_with_setup` / UX-partial | prerequisite projection + isolation |
-| E. Targeted edit | real range/replacement/review/render | `working` / UX-partial | simplify next actions |
+| A. General video | no complete UV-owned journey | `partial` | orchestration + execution baseline |
+| B. Narrated video | historical path fail-closed; replacement incomplete | `unavailable/partial` | new narrated workflow |
+| C. Music-video excerpt | strong domains, schema-heavy journey | `partial` | intent-first orchestration |
+| D. Dubbing | substantial real path with runtime/setup gates | `working_with_setup` / UX-partial | prerequisite projection + task isolation |
+| E. Targeted edit | real range/replacement/review/render | `working` / UX-partial | simplify next actions + D-033 conformance |
 
-## Confirmed product-surface defects
+## Confirmed current defects
 
-### Cross-workflow leakage
+### Cross-workflow leakage remains for non-photo recipes
 
-A Photo -> Video, Story or Music project receives unrelated edit/continuity/dubbing panels because project-page composition is universal-first rather than recipe/orchestrator-driven.
+Photo-to-Video is no longer evidence for this defect. Visualizer, Story, Music and other non-photo projects still receive unrelated generic editor/continuity/dubbing workspaces because current project-page routing is only partly orchestrator-driven.
 
-### Readiness-blind project creation
+### Recipe creation is readiness-blind
 
-Recipe cards look similarly selectable before the user knows whether a mode is working, partial, setup-required or unavailable.
+`/projects` shows recipe cards before Product Orchestrator has a pre-project/readiness projection. Working, setup-gated, partial and unavailable tasks therefore look more equivalent than they are.
 
-### Hidden edit prerequisites
+### Product Orchestrator coverage is one journey, not two
 
-`ProjectEditor` disables the primary change action until source + valid range + change text all exist. The later UI exposes durable `Brief -> Plan -> Candidate -> Review -> Accepted -> Render` vocabulary. The domain model is valuable; the product explanation is not sufficient.
+Only `photo_to_video` is currently implemented in `project_workflow_state()`. Visualizer has a real local capability path but remains unmigrated at the product orchestration layer.
 
-### Dual navigation/state models
+### Targeted edit exposes implementation vocabulary
 
-At the audit baseline, the global shell showed legacy session/task/pipeline
-concepts while `/projects` used Project Store/project IDs. The Product
-Orchestrator foundation removes that competing model from the normal shell.
+The durable Brief -> Plan -> Candidate -> Review -> Accepted model is valuable, but ordinary users currently see too much of that state machine. Recovery should preserve domain rigor while making the next product action obvious.
 
-### Broken legacy pipeline execution
+### D-033 command-boundary defect
 
-The three main-sidebar pipeline routes render real pages but their `workflowApi` task/model/upload endpoints are not mounted by the UV server.
+Accepted range edits are canonical non-destructive timeline state. The historical direct `DELETE /api/uv/projects/{project_id}/edits/{edit_id}` route mutates `RangeEditStateStore` without going through the product-owned editor Command API. PR #44 tracks this bounded conformance repair; see `EDITOR_FOUNDATION_CONFORMANCE.md`.
 
-### Two visual systems
+### Legacy routes remain source debt
 
-Legacy `PipelinePage`/BrandHeader use Video-Claw branding and white controls while UV project surfaces use a different product theme. This can directly produce the “white field inside dark app” class of experience in addition to any separate missing CSS bugs.
+The supported shell is repaired, but direct legacy `/pipelines/*` pages still compile while requiring intentionally absent backend contracts. They remain retirement/migration debt rather than supported functionality.
 
-## False recipe contracts repaired in this branch
+## Recipe execution-plan truth
 
-### `narrated_video`
+PR #42 repaired the historically misleading `narrated_video` and `action_transfer` base execution targets. A base `RecipeExecutionPlan.target` may no longer advertise an unmounted FastAPI route.
 
-Stage 8 baseline required `AVAILABLE` + `/api/pipelines/standard/tasks`. Recovery changes the base plan to `UNAVAILABLE`, `target=None`, retaining typed inputs and runtime capability requirements.
+`RecipeExecutionPlan` is still a lower compatibility/capability layer; it is **not** Product Orchestrator readiness. Product Orchestrator separately owns user-facing:
 
-### `action_transfer`
-
-Stage 8 baseline required `AVAILABLE` + `/api/pipelines/action_transfer/tasks`. Recovery fails closed while preserving `video.action_transfer` readiness metadata and production policy.
-
-### New invariant
-
-Any future non-null base `RecipeExecutionPlan.target` must exist in the actual FastAPI route table. Base compatibility cannot silently advertise an absent route.
-
-This invariant intentionally does not define the eventual Product Orchestrator readiness semantics.
-
-## Why execution-plan is not enough
-
-`/execution-plan` mixes compatibility-target planning with Stage 8 capability readiness. Capability-driven Photo/Visualizer/Performance modes can become `available` with `target=None`, which is valid at that lower layer.
-
-Therefore Product Orchestrator must provide separate:
-
-- `readiness`;
-- `prerequisites`;
+- readiness;
+- prerequisites;
 - relevant workspaces;
-- `next_actions`;
-- jobs/results;
+- next actions;
+- current/recent outcomes;
 - diagnostics.
 
-## Product Orchestrator contract — next slice
+## Product Orchestrator contract status
 
 ```text
 ProjectWorkflowState
 - schema_version
-- project_id
-- recipe_id
-- readiness: ready | setup_required | partial | unavailable
-- summary
-- relevant_workspaces[]
+- project_id / recipe_id
+- readiness
+- summary / current_outcome
 - prerequisites[]
+- relevant_workspaces[]
 - next_actions[]
 - active_jobs[]
+- user_decisions[]
 - recent_artifacts[]
 - diagnostics[]
 ```
 
-Each prerequisite is structured and each next action has a stable semantic ID, visible explanation, enabled/blocked state, bounded input schema, execution/authorization class and expected result.
+The contract is a projection over canonical state and runtime availability, not a second workflow database.
 
-The orchestrator is a projection over Project Store/domain state plus runtime availability. It is **not** a second canonical workflow store and does not replace coherent domain APIs.
-
-## Recovery sequencing implication
-
-The next implementation phase has two jobs:
-
-1. introduce Product Orchestrator over the good UV-owned domain/capability architecture;
-2. remove/isolate legacy VideoClaw navigation and runtime-facing surfaces from the normal shell instead of remounting the unsafe old backend.
-
-Only after these are separated should broader visual redesign proceed.
+The current first action, `compose_photos`, is capability-backed. Future orchestration must not assume every semantic next action necessarily maps one-to-one to a capability; domain decisions such as approve/reject/accept may remain UV-owned domain commands.
 
 ## Test evidence
 
-Existing browser suites remain informed regression evidence. A later cold-start class must begin from user-equivalent state, must not seed transcripts/plans/reviews/Music Maps through hidden APIs, and must fail on broken legacy navigation, irrelevant workspaces and unexplained disabled primary actions.
+Existing browser suites are Class B informed regression evidence. They prove real frontend/backend/media paths but may know hidden state or setup order.
+
+Class C cold-start product tests must start from user-equivalent state, avoid API seeding of workflow decisions, fail on unexplained disabled actions or irrelevant workspaces, and prove an actual artifact for any task advertised as ready.
+
+Installed Windows human acceptance remains Class D and release-blocking.
