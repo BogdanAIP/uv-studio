@@ -139,6 +139,49 @@ def _validated_action_input(
     )
 
 
+def _enforce_projected_input_contract(
+    action: dict[str, Any],
+    input_payload: dict[str, Any],
+) -> None:
+    """Reject values excluded by the freshly projected action schema before dispatch."""
+
+    schema = action.get("input_schema")
+    if not isinstance(schema, dict):
+        return
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+
+    rejected: dict[str, Any] = {}
+    for field_name, value in input_payload.items():
+        field_schema = properties.get(field_name)
+        if not isinstance(field_schema, dict):
+            continue
+        allowed = field_schema.get("enum")
+        if isinstance(allowed, (list, tuple)) and value not in allowed:
+            rejected[field_name] = value
+            continue
+        if isinstance(value, list):
+            item_schema = field_schema.get("items")
+            if not isinstance(item_schema, dict):
+                continue
+            allowed_items = item_schema.get("enum")
+            if isinstance(allowed_items, (list, tuple)):
+                invalid_items = [item for item in value if item not in allowed_items]
+                if invalid_items:
+                    rejected[field_name] = invalid_items
+
+    if rejected:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "code": "workflow_action_input_rejected",
+                "message": "Workflow action input is not allowed by the current projected state",
+                "fields": rejected,
+            },
+        )
+
+
 @router.get("/{project_id}/workflow")
 def get_project_workflow(
     project_id: str,
@@ -202,6 +245,7 @@ async def execute_project_workflow_action(
         action_id=action_id,
         request=request,
     )
+    _enforce_projected_input_contract(action, input_payload)
     execution = await execute_project_capability(
         project_id=project_id,
         capability_id=action["capability_id"],
