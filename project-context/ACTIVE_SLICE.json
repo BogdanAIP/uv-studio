@@ -11,6 +11,7 @@
     "pull_request": 46,
     "write_scope": [
       "docs/architecture/**",
+      "e2e/test_stage8_composition_outcomes.py",
       "e2e/test_user_outcomes.py",
       "frontend/app/projects/**",
       "frontend/components/editor/ProjectEditor.tsx",
@@ -18,6 +19,7 @@
       "frontend/components/editor/EditorRenderPanel.tsx",
       "frontend/lib/editorApi.ts",
       "frontend/lib/productWorkflowApi.ts",
+      "frontend/lib/renderApi.ts",
       "project-context/**",
       "tests/**",
       "tests_api/**",
