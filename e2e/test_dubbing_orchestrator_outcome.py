@@ -1,11 +1,11 @@
 """Browser evidence for the dedicated Product Orchestrator Dubbing workspace.
 
 This is Class B informed regression evidence, not Class C cold-start acceptance: the
-project recipe and a reviewed manual transcript are established through UV-owned
-semantic APIs because optional whisper.cpp is not a CI prerequisite. The browser
-must still start from an empty Dubbing project, import its source through the visible
-Dubbing workspace, and complete translation -> prepared speech -> Review -> Accept ->
-render through production UI controls.
+Dubbing recipe itself is selected through a UV-owned setup API, while optional
+whisper.cpp remains outside CI prerequisites. From the empty project onward the
+canonical Dubbing journey is driven through visible production UI controls: source
+import, manual verified transcript, translation, prepared speech, Review, Accept and
+final render.
 """
 
 from __future__ import annotations
@@ -119,37 +119,6 @@ class DubbingOrchestratorBrowserOutcome(unittest.TestCase):
         page.set_default_timeout(30_000)
         return page
 
-    def _source_id(self, project_id: str) -> str:
-        state = _api_json("GET", _project_path(project_id, "/editor/state"))
-        for source in state["sources"]:
-            if source.get("metadata", {}).get("original_name") == self.source_video.name:
-                return source["id"]
-        self.fail("source imported through Dubbing workspace was not registered in Project Store")
-
-    def _save_manual_transcript(self, project_id: str, source_id: str) -> None:
-        response = _api_json(
-            "POST",
-            _project_path(project_id, "/workflow/actions/import_dubbing_transcript"),
-            {
-                "source_id": source_id,
-                "language": "en",
-                "start_us": 1_000_000,
-                "end_us": 2_000_000,
-                "segments": [
-                    {
-                        "segment_id": "segment_1",
-                        "start_us": 1_000_000,
-                        "end_us": 2_000_000,
-                        "text": "hello world",
-                        "speaker_label": "speaker_1",
-                        "confidence": 1.0,
-                    }
-                ],
-            },
-        )
-        self.assertEqual(response["action_id"], "import_dubbing_transcript")
-        self.assertEqual(response["result"]["command"], "import_dubbing_transcript")
-
     def test_dedicated_dubbing_workspace_starts_and_reaches_rendered_outcome(self) -> None:
         page = self._new_page()
         title = "Dedicated Dubbing E2E"
@@ -184,16 +153,22 @@ class DubbingOrchestratorBrowserOutcome(unittest.TestCase):
         )
         expect(page.get_by_text(self.source_video.name, exact=True).first).to_be_visible(timeout=45_000)
 
-        source_id = self._source_id(project_id)
-        self._save_manual_transcript(project_id, source_id)
+        expect(page.get_by_role("heading", name="Проверенный transcript без ASR", exact=True)).to_be_visible()
+        page.get_by_label("Начало ручного transcript", exact=True).fill("1")
+        page.get_by_label("Конец ручного transcript", exact=True).fill("2")
+        page.get_by_label("Текст ручного transcript", exact=True).fill("hello world")
+        page.get_by_role("button", name="Сохранить проверенный transcript", exact=True).click()
+        expect(
+            page.get_by_text("Проверенный transcript сохранён в каноническое состояние проекта.", exact=True)
+        ).to_be_visible(timeout=30_000)
 
         dubbing = page.get_by_text(
             "Дубляж в том же проекте и таймлайне", exact=True
         ).locator("xpath=ancestor::section[1]")
-        dubbing.get_by_role("button", name="Перечитать состояние", exact=True).click()
-
         translation_card = _card_for(dubbing, "Transcript и перевод")
-        expect(translation_card.get_by_role("paragraph").filter(has_text="hello world")).to_be_visible()
+        expect(translation_card.get_by_role("paragraph").filter(has_text="hello world")).to_be_visible(
+            timeout=30_000
+        )
         translation_card.locator("textarea").first.fill("привет мир")
         translation_card.get_by_role("button", name="Сохранить перевод", exact=True).click()
         expect(dubbing.get_by_text("Перевод сохранён и привязан", exact=False)).to_be_visible(timeout=30_000)
