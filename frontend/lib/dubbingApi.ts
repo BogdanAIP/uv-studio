@@ -1,5 +1,6 @@
 import type { ProjectReference } from './projectsApi';
 import type { CapabilityVideoEnvelope, CapabilityVideoResult } from './renderApi';
+import { executeProjectWorkflowAction } from './productWorkflowApi';
 
 export interface DubbingTranscriptSegment {
   segment_id: string;
@@ -193,6 +194,26 @@ async function editorCommand<T>(projectId: string, body: Record<string, unknown>
   return response.json();
 }
 
+async function orchestratedDomain<T>(
+  projectId: string,
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<T> {
+  const response = await executeProjectWorkflowAction<T>(projectId, actionId, input);
+  if (!('result' in response)) throw new Error(`${actionId}: ожидался semantic domain result`);
+  return response.result;
+}
+
+async function orchestratedCapability<T>(
+  projectId: string,
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<T> {
+  const response = await executeProjectWorkflowAction<T>(projectId, actionId, input);
+  if (!('execution' in response)) throw new Error(`${actionId}: ожидался capability execution result`);
+  return response.execution;
+}
+
 export async function getCurrentDubbingReviews(projectId: string): Promise<CurrentDubbingReviews> {
   const response = await fetch(
     `/api/uv/projects/${encodeURIComponent(projectId)}/dubbing-reviews/current`,
@@ -210,8 +231,6 @@ export async function getDubbingEditorState(projectId: string): Promise<DubbingE
   const state: DubbingEditorState = await response.json();
   const current = await getCurrentDubbingReviews(projectId);
   const ambiguous = new Set(current.ambiguous_legacy_take_ids);
-  // The panel needs the current Review, not a UUID-sorted history. Durable history
-  // remains in Project Store; ambiguous legacy histories intentionally expose none.
   return {
     ...state,
     dubbing_reviews: state.dubbing_reviews.filter(review => {
@@ -224,7 +243,16 @@ export async function getDubbingEditorState(projectId: string): Promise<DubbingE
 export async function transcribeProjectSource(
   projectId: string,
   input: { source_id: string; start_us?: number; end_us?: number; language?: string },
+  orchestrated = false,
 ): Promise<AsrDraft> {
+  if (orchestrated) {
+    const envelope = await orchestratedCapability<CapabilityEnvelope<AsrDraft>>(
+      projectId,
+      'transcribe_dubbing_source',
+      input,
+    );
+    return envelope.result.output;
+  }
   const response = await fetch(
     `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/speech.transcribe/execute`,
     {
@@ -241,15 +269,17 @@ export async function transcribeProjectSource(
 export async function acceptAsrTranscript(
   projectId: string,
   draft: AsrDraft,
+  orchestrated = false,
 ): Promise<{ command: 'accept_asr_transcript'; dubbing_id: string; payload: { transcript: DubbingTranscript } }> {
-  return editorCommand(projectId, {
-    command: 'accept_asr_transcript',
+  const input = {
     source_id: draft.source_id,
     language: draft.language,
     start_us: draft.start_us,
     end_us: draft.end_us,
     segments: draft.segments,
-  });
+  };
+  if (orchestrated) return orchestratedDomain(projectId, 'accept_asr_transcript', input);
+  return editorCommand(projectId, { command: 'accept_asr_transcript', ...input });
 }
 
 export async function saveDubbingTranslation(
@@ -260,6 +290,7 @@ export async function saveDubbingTranslation(
     segments: DubbingTranslationSegment[];
     translation_id?: string;
   },
+  orchestrated = false,
 ): Promise<{ command: 'upsert_dubbing_translation'; dubbing_id: string; payload: { translation: DubbingTranslation } }> {
   let safeInput = input;
   if (input.translation_id) {
@@ -269,6 +300,9 @@ export async function saveDubbingTranslation(
       const { translation_id: _ignored, ...withoutIdentity } = input;
       safeInput = withoutIdentity;
     }
+  }
+  if (orchestrated) {
+    return orchestratedDomain(projectId, 'save_dubbing_translation', safeInput as unknown as Record<string, unknown>);
   }
   return editorCommand(projectId, { command: 'upsert_dubbing_translation', ...safeInput });
 }
@@ -303,7 +337,11 @@ export async function attachPreparedSpeech(
     translation_id?: string;
     segment_id?: string;
   },
+  orchestrated = false,
 ): Promise<{ command: 'attach_prepared_speech'; dubbing_id: string; payload: { prepared_speech: PreparedSpeechTake } }> {
+  if (orchestrated) {
+    return orchestratedDomain(projectId, 'attach_prepared_speech', input as unknown as Record<string, unknown>);
+  }
   return editorCommand(projectId, { command: 'attach_prepared_speech', ...input });
 }
 
@@ -316,14 +354,22 @@ export async function reviewPreparedSpeech(
     synchronization_confirmed: boolean;
     note?: string;
   },
+  orchestrated = false,
 ): Promise<{ command: 'review_prepared_speech'; payload: { review: DubbingReview; current_review_id: string } }> {
+  if (orchestrated) {
+    return orchestratedDomain(projectId, 'review_prepared_speech', input as unknown as Record<string, unknown>);
+  }
   return editorCommand(projectId, { command: 'review_prepared_speech', ...input });
 }
 
 export async function acceptDubbingReview(
   projectId: string,
   reviewId: string,
+  orchestrated = false,
 ): Promise<{ command: 'accept_dubbing_review'; payload: { accepted_dubbing: AcceptedDubbingEdit } }> {
+  if (orchestrated) {
+    return orchestratedDomain(projectId, 'accept_dubbing_review', { review_id: reviewId });
+  }
   return editorCommand(projectId, {
     command: 'accept_dubbing_review',
     review_id: reviewId,
@@ -334,7 +380,15 @@ export async function acceptDubbingReview(
 export async function renderAcceptedDubbing(
   projectId: string,
   sourceId: string,
+  orchestrated = false,
 ): Promise<CapabilityVideoEnvelope<DubbingRenderResult>> {
+  if (orchestrated) {
+    return orchestratedCapability<CapabilityVideoEnvelope<DubbingRenderResult>>(
+      projectId,
+      'render_accepted_dubbing',
+      { source_id: sourceId },
+    );
+  }
   const response = await fetch(
     `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.render_dubbing/execute`,
     {
