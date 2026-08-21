@@ -389,6 +389,36 @@ class ProjectWorkflowApiTests(unittest.TestCase):
             ],
         )
 
+    def test_visualizer_action_rejects_source_outside_current_projection(self) -> None:
+        project_id = self._visualizer_project()
+        valid_audio_id = self._add_audio(project_id, body=b"valid visualizer audio")
+        damaged_audio_id = self._add_audio(project_id, body=b"damaged visualizer audio")
+        _reference, damaged_path = ProjectSourceMediaStore(self.store).resolve(
+            project_id,
+            damaged_audio_id,
+            expected_kind="audio",
+        )
+        damaged_path.write_bytes(b"tampered after registration")
+
+        state_response = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(state_response.status_code, 200, state_response.text)
+        action = state_response.json()["next_actions"][0]
+        self.assertTrue(action["enabled"])
+        self.assertEqual(
+            action["input_schema"]["properties"]["audio_source_id"]["enum"],
+            [valid_audio_id],
+        )
+
+        response = self.client.post(
+            self._url("workflow/actions/render_visualizer", project_id=project_id),
+            json={"audio_source_id": damaged_audio_id},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        detail = response.json()["detail"]
+        self.assertEqual(detail["code"], "workflow_action_input_rejected")
+        self.assertEqual(detail["fields"], {"audio_source_id": damaged_audio_id})
+        self.assertEqual(self.executor.calls, [])
+
     def test_visualizer_action_input_is_strict(self) -> None:
         project_id = self._visualizer_project()
         audio_id = self._add_audio(project_id)
