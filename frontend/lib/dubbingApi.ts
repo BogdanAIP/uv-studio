@@ -194,8 +194,7 @@ async function editorCommand<T>(projectId: string, body: Record<string, unknown>
   return response.json();
 }
 
-async function useDubbingOrchestrator(projectId: string, override?: boolean): Promise<boolean> {
-  if (override !== undefined) return override;
+async function useDubbingOrchestrator(projectId: string): Promise<boolean> {
   const workflow = await getProjectWorkflow(projectId);
   return workflow.recipe_id === 'dubbing' && workflow.relevant_workspaces.some(
     workspace => workspace.workspace_id === 'dubbing',
@@ -251,9 +250,8 @@ export async function getDubbingEditorState(projectId: string): Promise<DubbingE
 export async function transcribeProjectSource(
   projectId: string,
   input: { source_id: string; start_us?: number; end_us?: number; language?: string },
-  orchestrated?: boolean,
 ): Promise<AsrDraft> {
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     const envelope = await orchestratedCapability<CapabilityEnvelope<AsrDraft>>(
       projectId,
       'transcribe_dubbing_source',
@@ -277,7 +275,6 @@ export async function transcribeProjectSource(
 export async function acceptAsrTranscript(
   projectId: string,
   draft: AsrDraft,
-  orchestrated?: boolean,
 ): Promise<{ command: 'accept_asr_transcript'; dubbing_id: string; payload: { transcript: DubbingTranscript } }> {
   const input = {
     source_id: draft.source_id,
@@ -286,7 +283,7 @@ export async function acceptAsrTranscript(
     end_us: draft.end_us,
     segments: draft.segments,
   };
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedDomain(projectId, 'accept_asr_transcript', input);
   }
   return editorCommand(projectId, { command: 'accept_asr_transcript', ...input });
@@ -300,7 +297,6 @@ export async function saveDubbingTranslation(
     segments: DubbingTranslationSegment[];
     translation_id?: string;
   },
-  orchestrated?: boolean,
 ): Promise<{ command: 'upsert_dubbing_translation'; dubbing_id: string; payload: { translation: DubbingTranslation } }> {
   let safeInput = input;
   if (input.translation_id) {
@@ -311,7 +307,7 @@ export async function saveDubbingTranslation(
       safeInput = withoutIdentity;
     }
   }
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedDomain(projectId, 'save_dubbing_translation', safeInput as unknown as Record<string, unknown>);
   }
   return editorCommand(projectId, { command: 'upsert_dubbing_translation', ...safeInput });
@@ -347,9 +343,8 @@ export async function attachPreparedSpeech(
     translation_id?: string;
     segment_id?: string;
   },
-  orchestrated?: boolean,
 ): Promise<{ command: 'attach_prepared_speech'; dubbing_id: string; payload: { prepared_speech: PreparedSpeechTake } }> {
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedDomain(projectId, 'attach_prepared_speech', input as unknown as Record<string, unknown>);
   }
   return editorCommand(projectId, { command: 'attach_prepared_speech', ...input });
@@ -364,9 +359,8 @@ export async function reviewPreparedSpeech(
     synchronization_confirmed: boolean;
     note?: string;
   },
-  orchestrated?: boolean,
 ): Promise<{ command: 'review_prepared_speech'; payload: { review: DubbingReview; current_review_id: string } }> {
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedDomain(projectId, 'review_prepared_speech', input as unknown as Record<string, unknown>);
   }
   return editorCommand(projectId, { command: 'review_prepared_speech', ...input });
@@ -375,9 +369,8 @@ export async function reviewPreparedSpeech(
 export async function acceptDubbingReview(
   projectId: string,
   reviewId: string,
-  orchestrated?: boolean,
 ): Promise<{ command: 'accept_dubbing_review'; payload: { accepted_dubbing: AcceptedDubbingEdit } }> {
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedDomain(projectId, 'accept_dubbing_review', { review_id: reviewId });
   }
   return editorCommand(projectId, {
@@ -390,9 +383,8 @@ export async function acceptDubbingReview(
 export async function renderAcceptedDubbing(
   projectId: string,
   sourceId: string,
-  orchestrated?: boolean,
 ): Promise<CapabilityVideoEnvelope<DubbingRenderResult>> {
-  if (await useDubbingOrchestrator(projectId, orchestrated)) {
+  if (await useDubbingOrchestrator(projectId)) {
     return orchestratedCapability<CapabilityVideoEnvelope<DubbingRenderResult>>(
       projectId,
       'render_accepted_dubbing',
