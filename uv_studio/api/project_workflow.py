@@ -246,6 +246,15 @@ def _enforce_projected_input_contract(
                 if invalid_items:
                     rejected[field_name] = invalid_items
 
+    allowed_pairs = schema.get("x-allowed-pairs")
+    if isinstance(allowed_pairs, (list, tuple)) and allowed_pairs:
+        normalized_pairs = [pair for pair in allowed_pairs if isinstance(pair, dict)]
+        if normalized_pairs:
+            pair_keys = tuple(normalized_pairs[0])
+            candidate_pair = {key: input_payload.get(key) for key in pair_keys}
+            if candidate_pair not in normalized_pairs:
+                rejected["combination"] = candidate_pair
+
     if rejected:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
