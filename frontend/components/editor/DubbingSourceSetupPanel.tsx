@@ -1,7 +1,7 @@
 'use client';
 
 import { FileText, Loader2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { uploadProjectSource } from '@/lib/editorApi';
 import {
   executeProjectWorkflowAction,
@@ -55,6 +55,9 @@ export function DubbingSourceSetupPanel({
     [allowedSourceIds, videoSources],
   );
   const [selectedSourceId, setSelectedSourceId] = useState('');
+  const activeSourceId = transcriptSources.some(source => source.id === selectedSourceId)
+    ? selectedSourceId
+    : transcriptSources[0]?.id ?? '';
   const [language, setLanguage] = useState('en');
   const [startSeconds, setStartSeconds] = useState('0');
   const [endSeconds, setEndSeconds] = useState('');
@@ -62,11 +65,6 @@ export function DubbingSourceSetupPanel({
   const [busy, setBusy] = useState<BusyAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selectedSourceId && transcriptSources.some(source => source.id === selectedSourceId)) return;
-    setSelectedSourceId(transcriptSources[0]?.id ?? '');
-  }, [selectedSourceId, transcriptSources]);
 
   const handleFile = async (file: File | null) => {
     if (!file || busy !== null) return;
@@ -86,7 +84,7 @@ export function DubbingSourceSetupPanel({
   };
 
   const handleTranscript = async () => {
-    if (!transcriptAction?.enabled || !selectedSourceId || busy !== null) return;
+    if (!transcriptAction?.enabled || !activeSourceId || busy !== null) return;
     const startUs = toMicroseconds(startSeconds);
     const endUs = toMicroseconds(endSeconds);
     const text = transcriptText.trim();
@@ -112,7 +110,7 @@ export function DubbingSourceSetupPanel({
         projectId,
         'import_dubbing_transcript',
         {
-          source_id: selectedSourceId,
+          source_id: activeSourceId,
           language: normalizedLanguage,
           start_us: startUs,
           end_us: endUs,
@@ -190,7 +188,7 @@ export function DubbingSourceSetupPanel({
               Видео
               <select
                 aria-label="Видео для ручного transcript"
-                value={selectedSourceId}
+                value={activeSourceId}
                 onChange={event => setSelectedSourceId(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
               >
@@ -247,7 +245,7 @@ export function DubbingSourceSetupPanel({
 
           <button
             type="button"
-            disabled={busy !== null || !transcriptAction?.enabled || !selectedSourceId}
+            disabled={busy !== null || !transcriptAction?.enabled || !activeSourceId}
             onClick={() => void handleTranscript()}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
           >
