@@ -307,6 +307,17 @@ class BrowserUserOutcomes(unittest.TestCase):
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
         return project_id
 
+    def _create_project_via_api(self, page: Page, *, title: str, recipe_id: str) -> str:
+        project = _api_json(
+            "POST",
+            "/api/uv/projects",
+            {"title": title, "recipe_id": recipe_id},
+        )
+        project_id = project["project_id"]
+        page.goto(f"/projects/{urllib.parse.quote(project_id, safe='')}")
+        expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
+        return project_id
+
     def _upload_editor_video(self, page: Page, path: Path) -> None:
         picker = page.locator('input[type="file"][accept^="video"]')
         expect(picker).to_have_count(1)
@@ -343,10 +354,7 @@ class BrowserUserOutcomes(unittest.TestCase):
         page.get_by_role("button", name="Подготовить изменение", exact=True).click()
         expect(page.get_by_text("Brief сохранён", exact=True)).to_be_visible(timeout=30_000)
 
-        page.get_by_role("button", name="Утвердить план по готовому клипу", exact=True).click()
-        expect(page.get_by_text("План привязан к текущей ревизии Brief.", exact=True)).to_be_visible()
-        page.get_by_role("button", name="Подготовить full candidate", exact=True).click()
-
+        page.get_by_role("button", name="Подготовить вариант замены", exact=True).click()
         result_selects = page.locator('select[aria-label^="Результат "]')
         expect(result_selects.first).to_be_visible(timeout=45_000)
         count = result_selects.count()
@@ -361,10 +369,10 @@ class BrowserUserOutcomes(unittest.TestCase):
                 "Browser E2E подтверждает критерий по показанному full candidate."
             )
 
-        page.get_by_role("button", name="Одобрить", exact=True).click()
-        expect(page.get_by_text("Review:", exact=False).filter(has_text="approved")).to_be_visible()
+        page.get_by_role("button", name="Одобрить вариант", exact=True).click()
+        expect(page.get_by_text("Проверка: вариант одобрен", exact=True)).to_be_visible()
         page.get_by_role("button", name="Принять в timeline", exact=True).click()
-        expect(page.get_by_text("Замена принята через D-032", exact=False)).to_be_visible()
+        expect(page.get_by_text("Правка принята через D-032", exact=False)).to_be_visible()
 
         render_section = page.get_by_text(
             "Собрать принятые правки в один мастер", exact=True
@@ -582,21 +590,42 @@ class BrowserUserOutcomes(unittest.TestCase):
         self.assertEqual(final_state["anchor_take_id"], second_anchor_id)
         self.assertNotEqual(final_state["anchor_take_id"], first_anchor_id)
 
-    def test_targeted_edit_dubbing_and_sequence_user_outcomes(self) -> None:
+    def test_targeted_edit_isolated_while_dubbing_and_sequence_regressions_remain_operable(self) -> None:
         page = self._new_page()
         try:
-            project_id = self._create_project(page)
+            targeted_project_id = self._create_project_via_api(
+                page,
+                title="E2E Targeted Edit",
+                recipe_id="free_project",
+            )
+            expect(
+                page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)
+            ).to_be_visible()
+            expect(page.get_by_text("Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_have_count(0)
             self._upload_editor_video(page, self.source_video)
             self._upload_editor_video(page, self.replacement_video)
             self._complete_targeted_edit(page)
-            self._complete_dubbing(page, project_id)
-            self._complete_sequence_continuity(page, project_id)
+
+            regression_project_id = self._create_project_via_api(
+                page,
+                title="E2E Dubbing + Continuity",
+                recipe_id="general_video",
+            )
+            self._upload_editor_video(page, self.source_video)
+            self._upload_editor_video(page, self.replacement_video)
+            expect(page.get_by_text("Дубляж в том же проекте и таймлайне", exact=True)).to_be_visible()
+            expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_be_visible()
+            self._complete_dubbing(page, regression_project_id)
+            self._complete_sequence_continuity(page, regression_project_id)
 
             report = {
-                "project_id": project_id,
+                "targeted_edit_project_id": targeted_project_id,
+                "dubbing_continuity_project_id": regression_project_id,
                 "targeted_edit": "accepted_and_rendered",
                 "dubbing": "accepted_and_rendered",
                 "sequence_continuity": "two_linked_takes_accepted_and_reanchored",
+                "routing": "targeted_edit_isolated_from_dubbing_and_continuity",
                 "frontend": FRONTEND_ORIGIN,
             }
             (self.artifact_dir / "user-outcomes.json").write_text(
