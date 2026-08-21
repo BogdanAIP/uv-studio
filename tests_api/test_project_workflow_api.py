@@ -319,7 +319,12 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         action = state["next_actions"][0]
         self.assertTrue(action["enabled"])
         self.assertEqual(action["capability_id"], "audio.visualize")
-        self.assertEqual(action["suggested_input"]["audio_source_id"], audio_id)
+        self.assertEqual(action["suggested_input"], {"audio_source_id": audio_id})
+        self.assertTrue(
+            set(action["suggested_input"]).issubset(
+                set(action["input_schema"]["properties"])
+            )
+        )
         self.assertIn(audio_id, action["input_schema"]["properties"]["audio_source_id"]["enum"])
         self.assertIn(
             artwork_id,
