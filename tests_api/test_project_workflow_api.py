@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
-import hashlib
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -38,7 +38,7 @@ def _registry(
     locality: LocalityClass = LocalityClass.LOCAL,
     cost: CostClass = CostClass.FREE,
 ) -> CapabilityRegistry:
-    capability = CapabilityDefinition(
+    photo = CapabilityDefinition(
         "video.compose_photos",
         "Photo composition",
         "Compose photos",
@@ -46,10 +46,18 @@ def _registry(
         (MediaKind.IMAGE, MediaKind.AUDIO),
         (MediaKind.VIDEO,),
     )
+    visualizer = CapabilityDefinition(
+        "audio.visualize",
+        "Audio visualizer",
+        "Render audio visualizer",
+        OperationKind.DETERMINISTIC_MEDIA,
+        (MediaKind.AUDIO, MediaKind.IMAGE),
+        (MediaKind.VIDEO,),
+    )
     adapter = AdapterDefinition("local_ffmpeg", "FFmpeg", "local", AdapterKind.LOCAL)
-    offer = CapabilityOffer(
+    photo_offer = CapabilityOffer(
         "local_ffmpeg.video_compose_photos",
-        capability.capability_id,
+        photo.capability_id,
         adapter.adapter_id,
         "Photo composition",
         availability,
@@ -58,10 +66,25 @@ def _registry(
         cost,
         False,
     )
-    return CapabilityRegistry((capability,), (adapter,), (offer,))
+    visualizer_offer = CapabilityOffer(
+        "local_ffmpeg.audio_visualize",
+        visualizer.capability_id,
+        adapter.adapter_id,
+        "Audio visualizer",
+        availability,
+        "test runtime",
+        locality,
+        cost,
+        False,
+    )
+    return CapabilityRegistry(
+        (photo, visualizer),
+        (adapter,),
+        (photo_offer, visualizer_offer),
+    )
 
 
-class StubPhotoExecutor:
+class StubLocalFFmpegExecutor:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, dict]] = []
 
@@ -83,7 +106,7 @@ class ProjectWorkflowApiTests(unittest.TestCase):
             recipe_id="photo_to_video",
         )
         self.registry = _registry()
-        self.executor = StubPhotoExecutor()
+        self.executor = StubLocalFFmpegExecutor()
         app.dependency_overrides[get_project_store] = lambda: self.store
         app.dependency_overrides[get_capability_registry] = lambda: self.registry
         app.dependency_overrides[get_local_ffmpeg_adapter] = lambda: self.executor
@@ -95,24 +118,53 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
-    def _url(self, suffix: str = "workflow") -> str:
-        return f"/api/uv/projects/{self.project.project_id}/{suffix}"
+    def _url(self, suffix: str = "workflow", *, project_id: str | None = None) -> str:
+        resolved_project_id = project_id or self.project.project_id
+        return f"/api/uv/projects/{resolved_project_id}/{suffix}"
 
-    def _add_image(self) -> str:
-        body = b"verified image fixture"
+    def _add_source(
+        self,
+        *,
+        project_id: str,
+        media_kind: str,
+        filename: str,
+        body: bytes,
+    ) -> str:
         media = ProjectSourceMediaStore(self.store)
-        allocation = media.allocate(self.project.project_id, "image.png")
+        allocation = media.allocate(project_id, filename)
         allocation.absolute_path.write_bytes(body)
         media.register(
-            self.project.project_id,
+            project_id,
             allocation,
-            media_kind="image",
+            media_kind=media_kind,
             metadata={
                 "sha256": hashlib.sha256(body).hexdigest(),
                 "size_bytes": len(body),
             },
         )
         return allocation.source_id
+
+    def _add_image(self, *, project_id: str | None = None, body: bytes | None = None) -> str:
+        return self._add_source(
+            project_id=project_id or self.project.project_id,
+            media_kind="image",
+            filename="image.png",
+            body=body or b"verified image fixture",
+        )
+
+    def _add_audio(self, project_id: str, *, body: bytes | None = None) -> str:
+        return self._add_source(
+            project_id=project_id,
+            media_kind="audio",
+            filename="audio.wav",
+            body=body or b"verified audio fixture",
+        )
+
+    def _visualizer_project(self) -> str:
+        return self.store.create_project(
+            title="Visualizer workflow",
+            recipe_id="visualizer",
+        ).project_id
 
     def test_get_projects_truthful_readiness_and_semantic_action(self) -> None:
         response = self.client.get(self._url())
@@ -243,6 +295,117 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404, response.text)
         self.assertEqual(self.executor.calls, [])
+
+    def test_visualizer_readiness_uses_verified_audio_and_projected_workspace(self) -> None:
+        project_id = self._visualizer_project()
+
+        initial = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(initial.status_code, 200, initial.text)
+        initial_state = initial.json()
+        self.assertEqual(initial_state["readiness"], "setup_required")
+        self.assertEqual(
+            [workspace["workspace_id"] for workspace in initial_state["relevant_workspaces"]],
+            ["audio_visualizer"],
+        )
+        self.assertEqual(initial_state["next_actions"][0]["action_id"], "render_visualizer")
+        self.assertEqual(initial_state["next_actions"][0]["blocked_by"], ["source.audio"])
+
+        audio_id = self._add_audio(project_id)
+        artwork_id = self._add_image(project_id=project_id, body=b"visualizer artwork")
+        ready = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(ready.status_code, 200, ready.text)
+        state = ready.json()
+        self.assertEqual(state["readiness"], "ready")
+        action = state["next_actions"][0]
+        self.assertTrue(action["enabled"])
+        self.assertEqual(action["capability_id"], "audio.visualize")
+        self.assertEqual(action["suggested_input"]["audio_source_id"], audio_id)
+        self.assertIn(audio_id, action["input_schema"]["properties"]["audio_source_id"]["enum"])
+        self.assertIn(
+            artwork_id,
+            action["input_schema"]["properties"]["artwork_source_id"]["enum"],
+        )
+
+    def test_visualizer_tampered_audio_blocks_workflow_action(self) -> None:
+        project_id = self._visualizer_project()
+        audio_id = self._add_audio(project_id)
+        _reference, path = ProjectSourceMediaStore(self.store).resolve(
+            project_id,
+            audio_id,
+            expected_kind="audio",
+        )
+        path.write_bytes(b"tampered audio")
+
+        state_response = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(state_response.status_code, 200, state_response.text)
+        state = state_response.json()
+        self.assertEqual(state["readiness"], "setup_required")
+        self.assertFalse(state["next_actions"][0]["enabled"])
+        self.assertEqual(state["next_actions"][0]["blocked_by"], ["source.audio"])
+        self.assertEqual(state["diagnostics"][0]["code"], "source_media_unverified")
+
+        action_response = self.client.post(
+            self._url("workflow/actions/render_visualizer", project_id=project_id),
+            json={"audio_source_id": audio_id},
+        )
+        self.assertEqual(action_response.status_code, 409, action_response.text)
+        self.assertEqual(self.executor.calls, [])
+
+    def test_visualizer_action_delegates_to_existing_capability_boundary(self) -> None:
+        project_id = self._visualizer_project()
+        audio_id = self._add_audio(project_id)
+        artwork_id = self._add_image(project_id=project_id, body=b"visualizer artwork")
+
+        response = self.client.post(
+            self._url("workflow/actions/render_visualizer", project_id=project_id),
+            json={
+                "audio_source_id": audio_id,
+                "artwork_source_id": artwork_id,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["action_id"], "render_visualizer")
+        self.assertEqual(
+            payload["execution"]["selection"]["offer"]["offer_id"],
+            "local_ffmpeg.audio_visualize",
+        )
+        self.assertEqual(
+            self.executor.calls,
+            [
+                (
+                    project_id,
+                    "local_ffmpeg.audio_visualize",
+                    {
+                        "audio_source_id": audio_id,
+                        "artwork_source_id": artwork_id,
+                    },
+                )
+            ],
+        )
+
+    def test_visualizer_action_input_is_strict(self) -> None:
+        project_id = self._visualizer_project()
+        audio_id = self._add_audio(project_id)
+        response = self.client.post(
+            self._url("workflow/actions/render_visualizer", project_id=project_id),
+            json={"audio_source_id": audio_id, "raw_ffmpeg": "-filter_complex attacker"},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(self.executor.calls, [])
+
+    def test_non_migrated_recipe_remains_partial_without_workspaces_or_actions(self) -> None:
+        project_id = self.store.create_project(
+            title="Free project",
+            recipe_id="free_project",
+        ).project_id
+        response = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(response.status_code, 200, response.text)
+        state = response.json()
+        self.assertEqual(state["readiness"], "partial")
+        self.assertEqual(state["relevant_workspaces"], [])
+        self.assertEqual(state["next_actions"], [])
+        self.assertEqual(state["diagnostics"][0]["code"], "workflow_not_migrated")
 
 
 if __name__ == "__main__":
