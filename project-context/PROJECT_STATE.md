@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-editor-ownership-resolution -->
 
 **Updated:** 2026-08-21
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`product-recovery-editor-ownership-resolution` is active in Draft PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on `main@f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
+`product-recovery-editor-ownership-resolution` is in review for PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on `main@f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
 
 This is a **D-033 implementation conformance slice**, not a product-identity redesign and not a new choice between UV Studio, OpenCut and MLT. The audit has reaffirmed D-033 and recorded a non-breaking 2026-08-21 clarification in the decision itself.
 
@@ -130,7 +130,7 @@ These are bounded follow-up concerns. Generic NLE growth must not outrun them, b
 
 Existing unit/API/real-media/browser suites remain required. They are strong engineering and informed-regression evidence, but they do not replace Class C cold-start journeys or installed Windows human acceptance.
 
-The final PR #44 review head must pass the repository-required checks on Ubuntu and Windows. Intermediate CI already proved the new semantic accepted-edit removal path; one early API assertion incorrectly expected HTTP 405 for the removed DELETE route and was corrected to the actual absent-route 404. Exact final-head CI remains authoritative.
+Draft head `2e8a0061ffd6b0cbf90f85263bf583a37bf69ef3` passed exact-head CI run #2157. The review-state context commit creates a new head, so review acceptance and merge remain blocked until that exact review head passes the full required Ubuntu/Windows matrix.
 
 ## Release status
 
