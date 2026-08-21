@@ -61,7 +61,7 @@ OpenCut-derived interaction/UI helpers
 | MLT representation | `MLTTimelineAdapter` derives ephemeral MLT XML from accepted UV edit state | **conforming** |
 | Raw MLT mutation access | not exposed through public editor API | **conforming** |
 | Accepted edit state | `RangeEditStateStore`, D-028 | **conforming authority** |
-| Accepted edit removal | direct `DELETE /edits/{edit_id}` -> `RangeEditStateStore.remove` | **conformance defect**; bypasses semantic Command API |
+| Accepted edit removal | semantic `remove_accepted_edit` -> `EditorCommandService`; `/edits` HTTP surface is read-only | **conformance defect repaired in PR #44** |
 | Accepted edit render | UV accepted state -> bounded media render/FFmpeg path | **conforming with D-033 initial export rule** |
 | MLT generic mechanics | current product uses MLT mainly as a derived projection/render seam | **incomplete relative to potential Stage 4C breadth**, not evidence that D-033 is wrong |
 | OpenCut reuse breadth | selective ruler/playhead/snap interaction reuse | **allowed by D-033**; reuse percentage is not a goal by itself |
@@ -88,28 +88,30 @@ MLT XML and in-memory state remain engine representations. Increasing MLT respon
 
 “One command model” does not require collapsing every coherent domain into one giant endpoint. Music Map, Dubbing Review and Replacement Review may keep dedicated UV-owned domain contracts. The prohibited pattern is a privileged route that mutates canonical editor/project state while bypassing the product-owned semantic/domain command boundary.
 
-## First bounded remediation
+## First bounded remediation — implemented
 
-Accepted range edits are canonical non-destructive timeline state under D-028. The current read API is appropriate:
+Accepted range edits are canonical non-destructive timeline state under D-028. The read API remains appropriate:
 
 ```text
 GET /api/uv/projects/{project_id}/edits
 ```
 
-The current direct mutation is not:
+The historical direct mutation was not:
 
 ```text
 DELETE /api/uv/projects/{project_id}/edits/{edit_id}
     -> RangeEditStateStore.remove(...)
 ```
 
-PR #44 will:
+PR #44 now:
 
-1. add a typed semantic `remove_accepted_edit` command to `EditorCommandService`;
-2. expose it through the existing `/api/uv/projects/{project_id}/editor/commands` boundary;
-3. migrate regression coverage to that command;
-4. remove the direct mutating DELETE route after confirming there is no required production call site;
-5. keep GET edit-state inspection read-only.
+1. adds typed semantic `RemoveAcceptedEditCommand` and result contracts to `EditorCommandService`;
+2. exposes `remove_accepted_edit` through `/api/uv/projects/{project_id}/editor/commands`;
+3. validates accepted-edit identity before mutation and preserves project/edit not-found semantics;
+4. removes the direct mutating DELETE route so `/edits` is HTTP read-only;
+5. adds domain and API regression coverage that proves the canonical state changes only through the semantic command path.
+
+No production frontend call site depended on the removed DELETE route; the current editor client did not expose accepted-edit deletion. The direct route was therefore removable API debt rather than a required UI contract.
 
 This is a D-033 conformance repair, not new NLE functionality.
 
@@ -123,10 +125,12 @@ The following require separate bounded slices/evidence rather than being silentl
 - proving GUI/scripts/AI/MCP equivalence for each migrated meaningful editor mutation;
 - MLT preview/render parity before any change to the authoritative accepted-edit export rule.
 
+These are explicit implementation gaps. They do not block the current recovery from using the already-working bounded targeted-edit path, but generic NLE growth must not outrun them.
+
 ## Decision result for this slice
 
-Default decision: **reaffirm D-033**.
+**Reaffirm D-033 with the 2026-08-21 clarification recorded in the decision itself.**
 
-A superseding editor-foundation ADR is not warranted by the current evidence. The implementation has bounded deviations and incomplete portions, but the tested composite ownership model remains coherent with UV Studio's product goals.
+A superseding editor-foundation ADR is not warranted by the current evidence. The implementation has bounded incomplete portions, but the tested composite ownership model remains coherent with UV Studio's product goals and the first concrete mutation bypass has been repaired.
 
-If this conclusion changes during PR #44, the PR must include reproducible counter-evidence showing why a specific accepted D-033 boundary cannot satisfy the product. Preference, UI taste or the amount of existing custom code is not sufficient evidence.
+Any future proposal to replace this foundation must include reproducible counter-evidence showing why a specific accepted D-033 boundary cannot satisfy the product. Preference, UI taste or the amount of existing custom code is not sufficient evidence.
