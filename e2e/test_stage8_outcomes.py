@@ -285,15 +285,37 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         )
         page.goto(f"/projects/{visualizer_encoded}")
         expect(page.get_by_role("heading", name="Аудио → визуализатор", exact=True)).to_be_visible()
+        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="Перевод, TTS и forced alignment", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="WebVTT из канонического текста", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Загрузите master-аудио для визуализатора.", exact=True).first).to_be_visible()
+        expect(page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)).to_be_disabled()
+
         page.locator('input[aria-label="Аудио Stage 8"]').set_input_files(str(self.audio))
         visualizer_audio = page.get_by_label("Master-аудио визуализатора")
         expect(visualizer_audio).to_be_visible(timeout=60_000)
         _select_option_containing(visualizer_audio, self.audio.name)
+        expect(page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)).to_be_enabled()
         page.locator('input[aria-label="Изображения Stage 8"]').set_input_files(str(self.blue_image))
         artwork = page.get_by_label("Обложка визуализатора")
         expect(artwork).to_be_visible(timeout=60_000)
         _select_option_containing(artwork, self.blue_image.name)
-        page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True).click()
+        with page.expect_response(
+            lambda response: (
+                "/workflow/actions/render_visualizer" in response.url
+                and response.request.method == "POST"
+            )
+        ) as visualizer_action_response:
+            page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True).click()
+        self.assertEqual(visualizer_action_response.value.status, 200)
+        expect(
+            page.get_by_text(
+                "Аудиовизуализатор собран через Product Orchestrator и локальный FFmpeg capability.",
+                exact=True,
+            )
+        ).to_be_visible(timeout=120_000)
         expect(page.get_by_role("link", name="Открыть готовый рендер", exact=True)).to_be_visible(
             timeout=120_000
         )
@@ -306,10 +328,25 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         ]
         self.assertEqual(len(visualizer_artifacts), 1)
         self.assertIsNotNone(visualizer_artifacts[0]["metadata"]["artwork_binding"])
+        visualizer_audio_source = next(
+            item for item in visualizer_project["sources"] if item["kind"] == "audio"
+        )
         self.assertEqual(
             visualizer_artifacts[0]["metadata"]["audio_binding"]["source_id"],
-            next(item["id"] for item in visualizer_project["sources"] if item["kind"] == "audio"),
+            visualizer_audio_source["id"],
         )
+
+        (self.temp_root / "projects" / visualizer_id / visualizer_audio_source["path"]).write_bytes(
+            b"tampered e2e visualizer audio"
+        )
+        page.reload()
+        expect(
+            page.get_by_text(
+                "Загрузите новую копию аудио: зарегистрированные файлы отсутствуют или повреждены.",
+                exact=True,
+            ).first
+        ).to_be_visible(timeout=60_000)
+        expect(page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)).to_be_disabled()
 
         performance_id, performance_encoded = self._create_project(
             "E2E Stage 8 Performance", "performance_lip_sync"
