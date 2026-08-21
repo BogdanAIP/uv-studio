@@ -9,13 +9,11 @@
 
 ## Current lifecycle
 
-`product-recovery-editor-ownership-resolution` is in review for PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on `main@f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
+`product-recovery-editor-ownership-resolution` is in review for PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on the idle `main` that followed `product-recovery-orchestrator-foundation`.
 
 This is a **D-033 implementation conformance slice**, not a product-identity redesign and not a new choice between UV Studio, OpenCut and MLT. The audit has reaffirmed D-033 and recorded a non-breaking 2026-08-21 clarification in the decision itself.
 
-The previous slice `product-recovery-orchestrator-foundation` completed in PR #43 and merged as `297556a76484e3445feb93e6f22f512e212d8360`; its lifecycle was then closed to `idle` by `f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
-
-Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference for Windows packaging/native-shell work. Product Truth Recovery remains release-blocking.
+The previous slice `product-recovery-orchestrator-foundation` completed in PR #43. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference for Windows packaging/native-shell work. Product Truth Recovery remains release-blocking.
 
 ## Product definition
 
@@ -130,7 +128,7 @@ These are bounded follow-up concerns. Generic NLE growth must not outrun them, b
 
 Existing unit/API/real-media/browser suites remain required. They are strong engineering and informed-regression evidence, but they do not replace Class C cold-start journeys or installed Windows human acceptance.
 
-Draft head `2e8a0061ffd6b0cbf90f85263bf583a37bf69ef3` passed exact-head CI run #2157. The review-state context commit creates a new head, so review acceptance and merge remain blocked until that exact review head passes the full required Ubuntu/Windows matrix.
+The final review head must pass every repository-required Ubuntu/Windows check and have no unresolved review threads before merge. Exact active-head SHAs and check conclusions remain live GitHub facts rather than durable project-state content.
 
 ## Release status
 
