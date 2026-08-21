@@ -379,6 +379,7 @@ export function ProjectEditor({ projectId, onProjectChanged, orchestrated = fals
                 briefs={activeBriefs}
                 acceptedCount={activeAccepted.length}
                 latestResult={latestResult}
+                orchestrated={orchestrated}
               />
             </aside>
           </div>
@@ -449,7 +450,7 @@ function ContextInput({
         max={30}
         step={0.5}
         value={value}
-        onChange={event => onChange(Math.min(30, Math.max(0, Number(event.target.value) || 0))}
+        onChange={event => onChange(Math.min(30, Math.max(0, Number(event.target.value) || 0)))}
         className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-slate-200 outline-none focus:border-violet-500"
       />
     </label>
@@ -460,10 +461,12 @@ function WorkflowSummary({
   briefs,
   acceptedCount,
   latestResult,
+  orchestrated,
 }: {
   briefs: RangeContinuityBrief[];
   acceptedCount: number;
   latestResult: SelectRangeResult | null;
+  orchestrated: boolean;
 }) {
   const latestBrief = latestResult?.brief ?? briefs[briefs.length - 1] ?? null;
   const requestedChange = latestBrief?.constraints.find(item => item.constraint_id === 'requested_change');
@@ -492,7 +495,9 @@ function WorkflowSummary({
             ))}
           </div>
           <p className="mt-3 text-[10px] leading-4 text-slate-600">
-            Следующие действия используют этот же edit_id; технические Plan/Candidate остаются внутренними объектами проекта, а принятие — отдельным D-032 gate.
+            {orchestrated
+              ? 'Следующие действия используют этот же edit_id; технические Plan/Candidate остаются внутренними объектами проекта, а принятие — отдельным D-032 gate.'
+              : 'Следующие действия используют этот же edit_id; до миграции этого сценария Plan и Candidate остаются отдельными явными шагами, а принятие — отдельным D-032 gate.'}
           </p>
         </div>
       ) : (
