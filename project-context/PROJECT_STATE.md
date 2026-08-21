@@ -51,9 +51,11 @@ project-owned source video
 
 The Product Orchestrator owns no persistent workflow state. `Project Store` and the existing domain stores remain canonical.
 
-The UI no longer requires a user-visible technical Plan step. `prepare_replacement` combines Plan approval and Candidate preparation as one semantic operation while retaining the Plan object underneath for correctness/provenance. The service restores the exact prior Plan state and removes partial artifact registration if candidate preparation fails.
+The UI no longer requires a user-visible technical Plan step. `prepare_replacement` combines Plan approval and Candidate preparation as one semantic operation while retaining the Plan object underneath for correctness/provenance. Previous-Plan capture and installation of the action Plan occur under one short Project Store lock; the expensive media copy remains outside that lock. If Candidate preparation fails, partial artifact registration is removed and the exact previous Plan is restored only when the current valid Plan is still exactly the one installed by this action. A concurrent Plan or Brief mutation is never overwritten by rollback.
 
 Approved Reviews already represented in Accepted state are not re-advertised as executable Accept actions. A previous render remains historical evidence but is `current_outcome` only when its source and exact `edit_ids` still match the current Accepted state.
+
+Product-level readiness follows the current stage rather than merely the presence of an input video. Missing source, required replacement material or required render runtime produces truthful `setup_required`/`unavailable` state. When the exact current Accepted revision already has a matching master, that artifact is reported as the current outcome instead of presenting the project as if another render were still required.
 
 ## Workspace isolation and migration compatibility
 
@@ -75,6 +77,7 @@ Focused API/domain evidence covers:
 
 - empty/source-ready targeted workflow projection;
 - verified source identity and tamper fail-closed behavior;
+- stage-accurate readiness for missing replacement material, missing render runtime and an already-current master;
 - exact allowed edit/replacement pairs;
 - semantic range selection;
 - combined replacement Plan + Candidate preparation;
@@ -82,7 +85,8 @@ Focused API/domain evidence covers:
 - capability-backed final render input bounding;
 - consumed approved Reviews not being exposed for duplicate Accept;
 - stale renders not becoming `current_outcome` after Accepted state changes;
-- rollback of the prior hidden Plan state when Candidate preparation fails.
+- exact restoration of a real previous Plan when Candidate preparation fails without a concurrent mutation;
+- preservation of a concurrent Plan change when Candidate preparation fails, rather than rolling it back.
 
 Browser evidence now separates product responsibilities:
 
