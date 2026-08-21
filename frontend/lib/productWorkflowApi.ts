@@ -1,5 +1,5 @@
 import type { CapabilityVideoEnvelope } from '@/lib/renderApi';
-import type { PhotoToVideoResult } from '@/lib/stage8MediaApi';
+import type { PhotoToVideoResult, VisualizerResult } from '@/lib/stage8MediaApi';
 
 export type WorkflowReadiness = 'ready' | 'setup_required' | 'partial' | 'unavailable';
 
@@ -75,6 +75,17 @@ export interface ComposePhotosActionResponse {
   execution: CapabilityVideoEnvelope<PhotoToVideoResult>;
 }
 
+export interface RenderVisualizerActionInput {
+  audio_source_id: string;
+  artwork_source_id?: string;
+}
+
+export interface RenderVisualizerActionResponse {
+  schema_version: number;
+  action_id: 'render_visualizer';
+  execution: CapabilityVideoEnvelope<VisualizerResult>;
+}
+
 async function apiError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
   const detail = body?.detail;
@@ -104,5 +115,21 @@ export async function executeComposePhotosAction(
     },
   );
   if (!response.ok) throw await apiError(response, 'Не удалось собрать видео из фотографий');
+  return response.json();
+}
+
+export async function executeRenderVisualizerAction(
+  projectId: string,
+  input: RenderVisualizerActionInput,
+): Promise<RenderVisualizerActionResponse> {
+  const response = await fetch(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/render_visualizer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) throw await apiError(response, 'Не удалось собрать аудиовизуализатор');
   return response.json();
 }
