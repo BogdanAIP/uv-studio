@@ -128,6 +128,23 @@ export default function ProjectPage() {
               />
             )}
 
+            {projectedWorkspaceIds.has('dubbing') && (
+              <>
+                <DubbingWorkflowPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <DubbingPrecisionPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <DubbingSubtitleExportPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+              </>
+            )}
+
             <section className="grid gap-4 py-8 sm:grid-cols-2 lg:grid-cols-4">
               <ProjectStat label="Источники" value={project.sources.length} />
               <ProjectStat label="Артефакты" value={project.artifacts.length} />
