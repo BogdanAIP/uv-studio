@@ -1,3 +1,4 @@
+import { executeProjectWorkflowAction } from './productWorkflowApi';
 import type { ProjectReference } from './projectsApi';
 
 export interface RenderAcceptedEditsOutput {
@@ -42,16 +43,13 @@ export async function renderAcceptedEdits(
   projectId: string,
   sourcePath: string,
 ): Promise<CapabilityVideoEnvelope<RenderAcceptedEditsResult>> {
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.render_edits/execute`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: { source_path: sourcePath } }),
-    },
+  const response = await executeProjectWorkflowAction<CapabilityVideoEnvelope<RenderAcceptedEditsResult>>(
+    projectId,
+    'render_accepted_edits',
+    { source_path: sourcePath },
   );
-  if (!response.ok) throw await capabilityError(response, 'Не удалось собрать мастер-рендер');
-  return response.json();
+  if ('execution' in response) return response.execution;
+  throw new Error('Product Orchestrator вернул domain-ответ для render_accepted_edits.');
 }
 
 export async function createBrowserPreview(

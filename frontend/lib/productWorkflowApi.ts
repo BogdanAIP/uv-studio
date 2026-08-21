@@ -28,7 +28,7 @@ export interface WorkflowAction {
   suggested_input: Record<string, unknown>;
   execution_class: string;
   authorization_class: string;
-  capability_id: string;
+  capability_id: string | null;
   expected_result: string;
 }
 
@@ -63,6 +63,22 @@ export interface ProjectWorkflowState {
   diagnostics: WorkflowDiagnostic[];
 }
 
+export interface WorkflowDomainActionResponse<TResult = Record<string, unknown>> {
+  schema_version: number;
+  action_id: string;
+  result: TResult;
+}
+
+export interface WorkflowCapabilityActionResponse<TResult = Record<string, unknown>> {
+  schema_version: number;
+  action_id: string;
+  execution: TResult;
+}
+
+export type WorkflowActionResponse<TResult = Record<string, unknown>> =
+  | WorkflowDomainActionResponse<TResult>
+  | WorkflowCapabilityActionResponse<TResult>;
+
 export interface ComposePhotosActionInput {
   image_source_ids: string[];
   duration_per_image_us?: number;
@@ -86,12 +102,85 @@ export interface RenderVisualizerActionResponse {
   execution: CapabilityVideoEnvelope<VisualizerResult>;
 }
 
+const TARGETED_EDIT_COMPAT_ACTIONS = new Set([
+  'select_target_range',
+  'review_replacement',
+  'accept_replacement',
+  'render_accepted_edits',
+]);
+
 async function apiError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
   const detail = body?.detail;
   if (typeof detail === 'string') return new Error(detail);
   if (detail !== undefined) return new Error(JSON.stringify(detail));
   return new Error(fallback);
+}
+
+async function jsonOrError<T>(response: Response, fallback: string): Promise<T> {
+  if (!response.ok) throw await apiError(response, fallback);
+  return response.json();
+}
+
+function requiredString(input: Record<string, unknown>, key: string): string {
+  const value = input[key];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Legacy targeted-edit compatibility input is missing ${key}`);
+  }
+  return value.trim();
+}
+
+async function executeLegacyTargetedAction<TResult>(
+  projectId: string,
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<WorkflowActionResponse<TResult>> {
+  const encodedProjectId = encodeURIComponent(projectId);
+
+  if (actionId === 'select_target_range') {
+    const response = await fetch(`/api/uv/projects/${encodedProjectId}/editor/commands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'select_range', ...input }),
+    });
+    const result = await jsonOrError<TResult>(response, 'Не удалось подготовить выбранный диапазон');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'review_replacement') {
+    const response = await fetch(`/api/uv/projects/${encodedProjectId}/replacement-reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await jsonOrError<TResult>(response, 'Не удалось сохранить проверку варианта');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'accept_replacement') {
+    const reviewId = requiredString(input, 'review_id');
+    const response = await fetch(
+      `/api/uv/projects/${encodedProjectId}/replacement-reviews/${encodeURIComponent(reviewId)}/accept`,
+      { method: 'POST' },
+    );
+    const result = await jsonOrError<TResult>(response, 'Не удалось принять проверенную замену');
+    return { schema_version: 1, action_id: actionId, result };
+  }
+
+  if (actionId === 'render_accepted_edits') {
+    const response = await fetch(
+      `/api/uv/projects/${encodedProjectId}/capabilities/video.render_edits/execute`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input }),
+      },
+    );
+    const execution = await jsonOrError<TResult>(response, 'Не удалось собрать мастер-рендер');
+    return { schema_version: 1, action_id: actionId, execution };
+  }
+
+  throw new Error(`Legacy targeted-edit compatibility does not support ${actionId}`);
 }
 
 export async function getProjectWorkflow(projectId: string): Promise<ProjectWorkflowState> {
@@ -102,34 +191,64 @@ export async function getProjectWorkflow(projectId: string): Promise<ProjectWork
   return response.json();
 }
 
-export async function executeComposePhotosAction(
+async function isExplicitlyUnmigratedTargetedSurface(projectId: string): Promise<boolean> {
+  const state = await getProjectWorkflow(projectId);
+  const hasTargetedWorkspace = state.relevant_workspaces.some(
+    workspace => workspace.workspace_id === 'targeted_edit',
+  );
+  const explicitlyUnmigrated = state.diagnostics.some(
+    diagnostic => diagnostic.code === 'workflow_not_migrated',
+  );
+  return !hasTargetedWorkspace && explicitlyUnmigrated;
+}
+
+export async function executeProjectWorkflowAction<TResult = Record<string, unknown>>(
   projectId: string,
-  input: ComposePhotosActionInput,
-): Promise<ComposePhotosActionResponse> {
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<WorkflowActionResponse<TResult>> {
   const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/compose_photos`,
+    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/${encodeURIComponent(actionId)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     },
   );
-  if (!response.ok) throw await apiError(response, 'Не удалось собрать видео из фотографий');
-  return response.json();
+  if (response.ok) return response.json();
+
+  // Migration-only compatibility is intentionally limited to one-to-one established operations.
+  // Composite replacement preparation stays explicit on non-migrated pages instead of pretending
+  // multiple old mutations are one atomic semantic action. A migrated targeted workflow always
+  // fails closed here, so a broken/missing Orchestrator action cannot be hidden by legacy behavior.
+  if (
+    response.status === 404
+    && TARGETED_EDIT_COMPAT_ACTIONS.has(actionId)
+    && await isExplicitlyUnmigratedTargetedSurface(projectId)
+  ) {
+    return executeLegacyTargetedAction<TResult>(projectId, actionId, input);
+  }
+  throw await apiError(response, 'Не удалось выполнить следующее действие проекта');
+}
+
+export async function executeComposePhotosAction(
+  projectId: string,
+  input: ComposePhotosActionInput,
+): Promise<ComposePhotosActionResponse> {
+  return executeProjectWorkflowAction<CapabilityVideoEnvelope<PhotoToVideoResult>>(
+    projectId,
+    'compose_photos',
+    input as unknown as Record<string, unknown>,
+  ) as Promise<ComposePhotosActionResponse>;
 }
 
 export async function executeRenderVisualizerAction(
   projectId: string,
   input: RenderVisualizerActionInput,
 ): Promise<RenderVisualizerActionResponse> {
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/render_visualizer`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    },
-  );
-  if (!response.ok) throw await apiError(response, 'Не удалось собрать аудиовизуализатор');
-  return response.json();
+  return executeProjectWorkflowAction<CapabilityVideoEnvelope<VisualizerResult>>(
+    projectId,
+    'render_visualizer',
+    input as unknown as Record<string, unknown>,
+  ) as Promise<RenderVisualizerActionResponse>;
 }

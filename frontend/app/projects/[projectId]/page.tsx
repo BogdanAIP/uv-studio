@@ -120,6 +120,14 @@ export default function ProjectPage() {
               />
             )}
 
+            {projectedWorkspaceIds.has('targeted_edit') && (
+              <ProjectEditor
+                projectId={project.project_id}
+                onProjectChanged={refreshProjectWorkflow}
+                orchestrated
+              />
+            )}
+
             <section className="grid gap-4 py-8 sm:grid-cols-2 lg:grid-cols-4">
               <ProjectStat label="Источники" value={project.sources.length} />
               <ProjectStat label="Артефакты" value={project.artifacts.length} />
@@ -127,7 +135,7 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
-            {(project.recipe_id === 'story_video' || project.recipe_id === 'commercial_product' || project.recipe_id === 'free_project') && (
+            {(project.recipe_id === 'story_video' || project.recipe_id === 'commercial_product') && (
               <Stage8CompositionPanel
                 projectId={project.project_id}
                 recipeId={project.recipe_id}

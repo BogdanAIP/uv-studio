@@ -1,3 +1,4 @@
+import { executeProjectWorkflowAction } from './productWorkflowApi';
 import type { ProjectReference } from './projectsApi';
 
 export interface ContinuityEvidence {
@@ -265,21 +266,17 @@ export async function selectProjectRange(
   projectId: string,
   input: SelectRangeInput,
 ): Promise<SelectRangeResult> {
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/editor/commands`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'select_range',
-        ...input,
-      }),
-    },
+  const response = await executeProjectWorkflowAction<SelectRangeResult>(
+    projectId,
+    'select_target_range',
+    input as unknown as Record<string, unknown>,
   );
-  if (!response.ok) throw await apiError(response, 'Не удалось подготовить выбранный диапазон');
-  return response.json();
+  if ('result' in response) return response.result;
+  throw new Error('Product Orchestrator вернул capability-ответ для select_target_range.');
 }
 
+// Compatibility helpers retained for non-orchestrated callers while Product Truth Recovery
+// migrates remaining surfaces. The targeted-edit product panel no longer uses these mutation paths.
 export async function approveReplacementPlan(
   projectId: string,
   proposal: ReplacementPlanProposal,

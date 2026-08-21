@@ -8,16 +8,14 @@ The recovery does not delete or devalue existing tests. It assigns them the corr
 
 ## Existing browser E2E strengths
 
-The Stage 4C/5/6 suite:
+The Stage 4C/5/6 browser suite now deliberately separates two product truths instead of forcing unrelated domains into one project:
 
-- runs a real built Next.js frontend;
-- runs the real UV-owned FastAPI server;
-- uses real FFmpeg/FFprobe fixtures;
-- uses Playwright against real browser controls;
-- executes targeted edit Review/Accept/render through production UI;
-- exercises dubbing state/review/render through production UI after prerequisite fixture setup;
-- exercises optional sequence continuity commands/review through production UI;
-- validates real project/domain state and artifacts.
+- a dedicated `free_project` targeted-edit journey runs the real built Next.js frontend against the real UV-owned FastAPI server, imports real FFmpeg media fixtures and completes range selection, replacement preparation, evidence-based Review/Accept and final render through the Product Orchestrator semantic actions;
+- the targeted project asserts that Dubbing, Sequence Continuity and the historical Stage 8 Free workspace are not mounted alongside the targeted editor;
+- a separate non-migrated `general_video` compatibility project keeps the existing Dubbing and Sequence Continuity browser regressions alive until those domains receive their own Product Orchestrator migrations;
+- real project/domain state and real media artifacts are validated rather than replacing execution with frontend mocks.
+
+The Story/Commercial composition suite keeps the real round-trip tests for those preparation workspaces and now treats `free_project` as targeted-edit routing rather than as the old catch-all Stage 8 workspace.
 
 The Music Video suite similarly drives Music Map, Direction, Assembly and render controls against the real application.
 
@@ -25,59 +23,44 @@ These tests are useful and should remain permanent regressions.
 
 ## Why they do not prove first-time usability
 
-### 1. Tests know the exact hidden workflow sequence
+### 1. Targeted-edit E2E still knows the intended interaction sequence
 
-Targeted-edit E2E explicitly knows to perform:
+The targeted path is now simpler than the historical `Brief -> Plan -> Candidate -> Review -> Accept` UI. The separate technical Plan step is hidden behind one semantic `prepare_replacement` action. However, the test still knows to perform:
 
 ```text
-select source
+import source + replacement videos
+-> select source
 -> drag exact timeline range
--> fill change request
--> Prepare change
--> approve prepared-asset plan
--> prepare full candidate
--> mark every ReviewTarget pass
+-> describe the requested change
+-> prepare replacement variant
+-> mark every ReviewTarget using the shown candidate artifact
 -> approve Review
 -> accept into timeline
 -> render master
 ```
 
-This proves that the state machine is executable. It does not prove that a user can discover that state machine.
+This proves the orchestrated product path is executable and that the removed Plan step is not required from the user. It still does not prove that a first-time user discovers every action without test-author knowledge.
 
-### 2. Dubbing test seeds prerequisite state through backend API
+### 2. Dubbing compatibility test seeds prerequisite state through backend API
 
-The Stage 5 path directly calls the real UV API to insert a reviewed transcript before continuing through browser controls:
+The Stage 5 compatibility path directly calls the real UV API to insert a reviewed transcript before continuing through browser controls:
 
 ```text
 POST /api/uv/projects/{id}/editor/commands
 command=import_dubbing_transcript
 ```
 
-The test source itself explains that optional ASR/provider execution is not a browser-test precondition and provider-independent fixture setup uses UV-owned semantic APIs.
+That remains legitimate deterministic Class B setup. It does not answer the cold-start question of what a normal user sees when ASR/runtime is not configured. The dedicated Dubbing Product Orchestrator slice must make that prerequisite visible before a Class C journey can be claimed.
 
-That is legitimate deterministic regression setup, but it bypasses the exact cold-start question:
+### 3. Some browser tests create projects by direct API
 
-> What does a normal user see and do when ASR/runtime is not configured yet?
+The targeted routing and Music Video regressions may create a project directly with a known `recipe_id` and navigate to `/projects/{id}`. This isolates the workflow under test, but it does not test recipe discoverability/readiness on the project creation screen.
 
-### 3. Music Video test creates the project by direct API
+### 4. Existing E2E is still informed by domain vocabulary
 
-The Stage 7 E2E begins with:
+Stable regression anchors include concepts such as:
 
-```text
-POST /api/uv/projects
-recipe_id=music_video
-```
-
-and navigates directly to `/projects/{id}`. It therefore does not test recipe discoverability/readiness on the project creation screen.
-
-The test then manually authors exact excerpt times, section boundaries, cut markers and shot/source mappings. This proves the Music domain/editor path, not an intent-first product journey.
-
-### 4. Existing E2E is informed by implementation vocabulary
-
-Tests use exact labels and concepts such as:
-
-- Brief;
-- full candidate;
+- exact timeline range;
 - ReviewTarget;
 - Accept;
 - Music Map;
@@ -85,15 +68,15 @@ Tests use exact labels and concepts such as:
 - Assembly Plan;
 - bounded TimelineContext.
 
-Those concepts are excellent stable regression anchors for domain behavior. They should not automatically define the default end-user mental model.
+Those concepts are valuable domain contracts. They should not automatically define the default end-user mental model.
 
-### 5. Existing tests do not fail on unrelated globally visible workspaces
+### 5. Workspace isolation is now tested only for migrated journeys
 
-A Photo -> Video mode can still render its expected artifact even if unrelated targeted-edit/dubbing/continuity panels are present on the page. Outcome assertion succeeds while the page remains confusing.
+Photo -> Video, Visualizer and targeted `free_project` now fail their browser evidence when unrelated generic specialist workspaces are mounted. Non-migrated recipes still require their own migration and isolation tests.
 
-### 6. Existing tests do not treat misleading navigation as a product failure
+### 6. Recipe discovery/readiness remains outside these informed regressions
 
-A test focused on targeted edit or Stage 8 media does not need to click every top-level CTA. Therefore navigation loops such as `Производственный интерфейс -> / -> /projects` can survive a green suite.
+A workflow-specific test that begins from an already selected recipe does not prove that `/projects` presents unavailable, setup-required and ready tasks truthfully before project creation.
 
 ## Evidence classes from D-062 onward
 
@@ -106,9 +89,24 @@ Prove:
 - commands;
 - authorization;
 - adapter execution;
-- persistence/recovery.
+- persistence/recovery;
+- projected action contracts and fail-closed input validation.
 
 Keep extensive coverage.
+
+The targeted-edit slice adds Class A proof that:
+
+- verified project-owned video controls readiness;
+- tampered media fails closed;
+- readiness follows the current product stage instead of merely the presence of any source: a saved Brief without replacement material is `setup_required`, a missing required local render runtime is not reported as ready, and an exact matching master is reported as the current outcome;
+- replacement source must be distinct and one of the currently projected allowed pairs;
+- semantic domain actions preserve existing Brief/Plan/Candidate/Review/Accepted stores rather than adding orchestration persistence;
+- already consumed approved Reviews are not advertised as repeatable Accept actions;
+- stale render artifacts are not exposed as `current_outcome` after Accepted state changes;
+- a failed combined Plan + Candidate operation restores the exact previous Plan and removes partial artifact registration when no concurrent canonical mutation superseded the action;
+- if another Plan is approved while Candidate preparation is in flight, the action fails closed and rollback preserves that concurrent Plan instead of overwriting it;
+- Candidate registration remains bound to the exact Plan installed by the semantic action, so a concurrent Plan change cannot silently rebind copied media to a different decision;
+- final render remains capability-backed through `video.render_edits` and its existing local/free execution boundary.
 
 ### Class B — Informed browser regression
 
@@ -116,10 +114,7 @@ May use deterministic fixture/API setup when necessary. Proves that a known prod
 
 Existing E2E belongs here.
 
-The Photo -> Video informed regression additionally verifies that the visible
-action calls `/workflow/actions/compose_photos`, that the normal shell contains
-no legacy pipeline/sandbox entry points and that unrelated generic
-editor/continuity/dubbing workspaces are not mounted for that recipe.
+The migrated reference journeys additionally verify workspace isolation and semantic Orchestrator calls. The targeted-edit journey is isolated from Dubbing/Continuity, while those older domains retain a separate compatibility regression until migrated.
 
 ### Class C — Cold-start product journey
 
@@ -129,7 +124,7 @@ Rules:
 
 - empty Project Store unless importing is the scenario;
 - default machine config except explicitly documented installed baseline;
-- no direct HTTP seeding of transcript, plan, review, Music Map, accepted edit or other workflow state;
+- no direct HTTP seeding of transcript, plan, review, Music Map, accepted edit or other workflow decision state;
 - no direct API project creation when project discoverability/readiness is under test;
 - setup-required capabilities must be represented through visible setup/prerequisite UX;
 - fail on unexplained disabled primary actions;
@@ -219,16 +214,16 @@ No backend transcript seeding in Class C.
 
 ```text
 choose targeted edit
--> import source
+-> import source video
 -> product guides range selection
 -> describe change
--> prepare/obtain replacement
--> preview
--> accept/reject
--> export
+-> import or obtain replacement material
+-> prepare and preview a variant
+-> review / accept / reject
+-> export current Accepted state
 ```
 
-The durable Brief/Plan/Candidate/Review implementation can remain underneath.
+The durable Brief/Plan/Candidate/Review implementation remains underneath. Class C must not require the user to understand the hidden Plan object or internal IDs.
 
 ## CI policy direction
 

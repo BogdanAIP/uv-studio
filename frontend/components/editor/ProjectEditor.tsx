@@ -22,6 +22,7 @@ import { ReplacementWorkflowPanel } from './ReplacementWorkflowPanel';
 interface ProjectEditorProps {
   projectId: string;
   onProjectChanged?: () => void | Promise<void>;
+  orchestrated?: boolean;
 }
 
 function metadataNumber(source: ProjectReference | null, key: string): number | null {
@@ -35,7 +36,7 @@ function metadataText(source: ProjectReference, key: string): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProps) {
+export function ProjectEditor({ projectId, onProjectChanged, orchestrated = false }: ProjectEditorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editorState, setEditorState] = useState<Awaited<ReturnType<typeof getEditorState>> | null>(null);
@@ -64,6 +65,12 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
     );
     return next;
   }, [projectId]);
+
+  const refreshStateAndProject = useCallback(async () => {
+    const next = await refreshState();
+    await onProjectChanged?.();
+    return next;
+  }, [onProjectChanged, refreshState]);
 
   useEffect(() => {
     let active = true;
@@ -165,7 +172,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
         context_after_us: Math.round(contextAfterSeconds * 1_000_000),
       });
       setLatestResult(result);
-      await refreshState();
+      await refreshStateAndProject();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить задачу изменения');
     } finally {
@@ -372,6 +379,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 briefs={activeBriefs}
                 acceptedCount={activeAccepted.length}
                 latestResult={latestResult}
+                orchestrated={orchestrated}
               />
             </aside>
           </div>
@@ -401,7 +409,8 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 editorState={editorState}
                 sourcePath={activeSource.path}
                 preferredEditId={latestResult?.edit_id}
-                onStateChanged={refreshState}
+                onStateChanged={refreshStateAndProject}
+                orchestrated={orchestrated}
               />
             </div>
           )}
@@ -452,10 +461,12 @@ function WorkflowSummary({
   briefs,
   acceptedCount,
   latestResult,
+  orchestrated,
 }: {
   briefs: RangeContinuityBrief[];
   acceptedCount: number;
   latestResult: SelectRangeResult | null;
+  orchestrated: boolean;
 }) {
   const latestBrief = latestResult?.brief ?? briefs[briefs.length - 1] ?? null;
   const requestedChange = latestBrief?.constraints.find(item => item.constraint_id === 'requested_change');
@@ -484,7 +495,9 @@ function WorkflowSummary({
             ))}
           </div>
           <p className="mt-3 text-[10px] leading-4 text-slate-600">
-            Следующие Plan → Candidate → Review используют этот же edit_id; принятие кандидата остаётся только через D-032 gate.
+            {orchestrated
+              ? 'Следующие действия используют этот же edit_id; технические Plan/Candidate остаются внутренними объектами проекта, а принятие — отдельным D-032 gate.'
+              : 'Следующие действия используют этот же edit_id; до миграции этого сценария Plan и Candidate остаются отдельными явными шагами, а принятие — отдельным D-032 gate.'}
           </p>
         </div>
       ) : (

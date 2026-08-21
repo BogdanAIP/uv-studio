@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -24,6 +24,10 @@ from uv_studio.api.projects import get_project_store
 from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
 from uv_studio.capabilities.registry import CapabilityRegistry
+from uv_studio.editor.targeted_edit_workflow import (
+    TargetedEditWorkflowError,
+    TargetedEditWorkflowService,
+)
 from uv_studio.orchestration import WORKFLOW_SCHEMA_VERSION, project_workflow_state
 from uv_studio.projects.models import ProjectDocument, ProjectValidationError
 from uv_studio.projects.source_media import ProjectSourceMediaStore
@@ -33,9 +37,11 @@ from uv_studio.recipes import RecipeRegistry, UnknownRecipe
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Product Orchestrator"])
 
 
-class ComposePhotosActionRequest(BaseModel):
+class _StrictActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+
+class ComposePhotosActionRequest(_StrictActionRequest):
     image_source_ids: list[str] = Field(min_length=1, max_length=100)
     duration_per_image_us: int = Field(default=2_000_000, ge=250_000, le=30_000_000)
     audio_source_id: str | None = Field(default=None, min_length=1, max_length=128)
@@ -61,9 +67,7 @@ class ComposePhotosActionRequest(BaseModel):
         return normalized
 
 
-class RenderVisualizerActionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class RenderVisualizerActionRequest(_StrictActionRequest):
     audio_source_id: str = Field(min_length=1, max_length=128)
     artwork_source_id: str | None = Field(default=None, min_length=1, max_length=128)
 
@@ -78,7 +82,63 @@ class RenderVisualizerActionRequest(BaseModel):
         return normalized
 
 
-WorkflowActionRequest = ComposePhotosActionRequest | RenderVisualizerActionRequest
+class SelectTargetRangeActionRequest(_StrictActionRequest):
+    source_id: str = Field(min_length=1, max_length=128)
+    start_us: int = Field(ge=0)
+    end_us: int = Field(gt=0)
+    change_request: str = Field(min_length=1, max_length=4000)
+    context_before_us: int = Field(default=5_000_000, ge=0, le=30_000_000)
+    context_after_us: int = Field(default=5_000_000, ge=0, le=30_000_000)
+
+
+class PrepareReplacementActionRequest(_StrictActionRequest):
+    edit_id: str = Field(min_length=1, max_length=128)
+    replacement_source_id: str = Field(min_length=1, max_length=128)
+
+
+class ReviewEvidenceActionRequest(_StrictActionRequest):
+    kind: Literal["brief_evidence", "candidate_artifact"]
+    ref_id: str = Field(min_length=1, max_length=128)
+
+
+class ReviewObservationActionRequest(_StrictActionRequest):
+    observation_id: str = Field(min_length=1, max_length=128)
+    kind: Literal["observation", "inference"]
+    statement: str = Field(min_length=1, max_length=4000)
+    confidence: Literal["low", "medium", "high"]
+    evidence: list[ReviewEvidenceActionRequest] = Field(min_length=1, max_length=256)
+
+
+class ReviewAssessmentActionRequest(_StrictActionRequest):
+    target_id: str = Field(min_length=1, max_length=128)
+    outcome: Literal["pass", "fail", "uncertain"]
+    observation_ids: list[str] = Field(min_length=1, max_length=256)
+
+
+class ReviewReplacementActionRequest(_StrictActionRequest):
+    candidate_id: str = Field(min_length=1, max_length=128)
+    verdict: Literal["approved", "rejected", "needs_revision"]
+    observations: list[ReviewObservationActionRequest] = Field(min_length=1, max_length=256)
+    assessments: list[ReviewAssessmentActionRequest] = Field(min_length=1, max_length=256)
+
+
+class AcceptReplacementActionRequest(_StrictActionRequest):
+    review_id: str = Field(min_length=1, max_length=128)
+
+
+class RenderAcceptedEditsActionRequest(_StrictActionRequest):
+    source_path: str = Field(min_length=1, max_length=512)
+
+
+WorkflowActionRequest = (
+    ComposePhotosActionRequest
+    | RenderVisualizerActionRequest
+    | SelectTargetRangeActionRequest
+    | PrepareReplacementActionRequest
+    | ReviewReplacementActionRequest
+    | AcceptReplacementActionRequest
+    | RenderAcceptedEditsActionRequest
+)
 
 
 def _load_project(store: ProjectStore, project_id: str) -> ProjectDocument:
@@ -113,6 +173,20 @@ def _state(
     ).to_dict()
 
 
+def _request_payload(
+    request: WorkflowActionRequest,
+    expected_type: type[_StrictActionRequest],
+    *,
+    action_id: str,
+) -> dict[str, Any]:
+    if not isinstance(request, expected_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Workflow action input does not match {action_id} contract",
+        )
+    return request.model_dump(exclude_none=True)
+
+
 def _validated_action_input(
     *,
     state: dict[str, Any],
@@ -120,19 +194,20 @@ def _validated_action_input(
     request: WorkflowActionRequest,
 ) -> dict[str, Any]:
     if state["recipe_id"] == "photo_to_video" and action_id == "compose_photos":
-        if not isinstance(request, ComposePhotosActionRequest):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Workflow action input does not match compose_photos contract",
-            )
-        return request.model_dump(exclude_none=True)
+        return _request_payload(request, ComposePhotosActionRequest, action_id=action_id)
     if state["recipe_id"] == "visualizer" and action_id == "render_visualizer":
-        if not isinstance(request, RenderVisualizerActionRequest):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Workflow action input does not match render_visualizer contract",
-            )
-        return request.model_dump(exclude_none=True)
+        return _request_payload(request, RenderVisualizerActionRequest, action_id=action_id)
+    if state["recipe_id"] == "free_project":
+        action_types: dict[str, type[_StrictActionRequest]] = {
+            "select_target_range": SelectTargetRangeActionRequest,
+            "prepare_replacement": PrepareReplacementActionRequest,
+            "review_replacement": ReviewReplacementActionRequest,
+            "accept_replacement": AcceptReplacementActionRequest,
+            "render_accepted_edits": RenderAcceptedEditsActionRequest,
+        }
+        expected = action_types.get(action_id)
+        if expected is not None:
+            return _request_payload(request, expected, action_id=action_id)
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Workflow action not found for this project",
@@ -171,6 +246,15 @@ def _enforce_projected_input_contract(
                 if invalid_items:
                     rejected[field_name] = invalid_items
 
+    allowed_pairs = schema.get("x-allowed-pairs")
+    if isinstance(allowed_pairs, (list, tuple)) and allowed_pairs:
+        normalized_pairs = [pair for pair in allowed_pairs if isinstance(pair, dict)]
+        if normalized_pairs:
+            pair_keys = tuple(normalized_pairs[0])
+            candidate_pair = {key: input_payload.get(key) for key in pair_keys}
+            if candidate_pair not in normalized_pairs:
+                rejected["combination"] = candidate_pair
+
     if rejected:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -180,6 +264,50 @@ def _enforce_projected_input_contract(
                 "fields": rejected,
             },
         )
+
+
+def _execute_targeted_domain_action(
+    *,
+    project_id: str,
+    action_id: str,
+    input_payload: dict[str, Any],
+    store: ProjectStore,
+) -> dict[str, Any]:
+    service = TargetedEditWorkflowService(store)
+    try:
+        if action_id == "select_target_range":
+            result = service.select_target_range(project_id, **input_payload)
+        elif action_id == "prepare_replacement":
+            result = service.prepare_replacement(project_id, **input_payload)
+        elif action_id == "review_replacement":
+            result = service.review_replacement(project_id, **input_payload)
+        elif action_id == "accept_replacement":
+            result = service.accept_replacement(project_id, **input_payload)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workflow domain action not found for this project",
+            )
+    except ProjectNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found") from exc
+    except TargetedEditWorkflowError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "workflow_action_state_conflict", "message": str(exc)},
+        ) from exc
+    except ProjectValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "workflow_action_state_conflict", "message": str(exc)},
+        ) from exc
+    except ProjectStoreError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return {
+        "schema_version": WORKFLOW_SCHEMA_VERSION,
+        "action_id": action_id,
+        "result": result,
+    }
 
 
 @router.get("/{project_id}/workflow")
@@ -246,9 +374,27 @@ async def execute_project_workflow_action(
         request=request,
     )
     _enforce_projected_input_contract(action, input_payload)
+
+    capability_id = action.get("capability_id")
+    if capability_id is None:
+        return _execute_targeted_domain_action(
+            project_id=project_id,
+            action_id=action_id,
+            input_payload=input_payload,
+            store=store,
+        )
+    if not isinstance(capability_id, str) or not capability_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "workflow_action_contract_invalid",
+                "message": "Executable capability action has no valid capability_id",
+            },
+        )
+
     execution = await execute_project_capability(
         project_id=project_id,
-        capability_id=action["capability_id"],
+        capability_id=capability_id,
         request={"selection_policy": "local_free_first", "input": input_payload},
         store=store,
         registry=registry,

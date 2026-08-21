@@ -1,25 +1,24 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-targeted-edit-orchestration -->
+<!-- uv-next-slice: product-recovery-dubbing-orchestration -->
 
 ## Goal
 
-Make the existing targeted existing-video edit journey understandable and product-driven by projecting its durable domain state through Product Orchestrator prerequisites and semantic next actions without weakening the accepted review/acceptance chain.
+Project the existing dubbing production chain through Product Orchestrator readiness, prerequisites, relevant workspaces and outcome-oriented semantic next actions without replacing its durable transcript, translation, prepared-speech, alignment, review and render domains.
 
 ## Required direction
 
-- preserve D-028/D-032/D-033 canonical edit, replacement and review state;
-- keep `EditorCommandService`, Project Store, Capability Registry and D-017 as existing authorities;
-- project user-facing steps such as source import, range selection, requested change, replacement preparation, preview/review, acceptance and export instead of exposing raw internal state-machine names as the primary UX;
-- keep Brief → Plan → Candidate → Review → Accept durable underneath where it protects correctness and provenance;
-- do not create a second workflow persistence engine;
-- keep raw MLT/XML and direct canonical-state mutation unavailable to GUI/scripts/AI/MCP;
-- reuse the current targeted-edit implementation and D-033 foundation rather than rebuilding a generic editor.
+- preserve the existing D-034–D-037 dubbing domain boundaries and D-017 authorization/provider rules;
+- derive readiness and prerequisites from current project-owned media, runtime availability and canonical dubbing state;
+- expose understandable user outcomes such as import, transcribe, translate when requested, prepare speech, review, accept and export rather than making internal state-machine objects the primary UX;
+- keep transcript/translation/prepared-audio/alignment/review state canonical in their existing stores;
+- route the project page from Product Orchestrator `relevant_workspaces` rather than globally mounting dubbing panels;
+- do not create a second dubbing workflow store or silently add remote/paid fallbacks.
 
 ## Completion proof
 
-The slice is complete when a targeted-edit project has truthful Orchestrator readiness/prerequisites/next actions derived from canonical edit state, the frontend follows those actions without bypassing domain review gates, and focused API/browser tests prove blocked, ready, review and accepted/exportable states.
+The slice is complete when a dubbing project has truthful Product Orchestrator readiness/prerequisites/next actions derived from canonical domain state, the frontend exposes only the relevant dubbing workspace and follows those actions without bypassing review/authorization boundaries, and focused API/browser tests prove setup-gated, transcribed, prepared/reviewed and exportable states.
 
 ## Entry gate
 
-Do not begin until `product-recovery-workspace-routing` is reviewed and merged, its lifecycle is closed to `idle`, and Photo → Video plus Visualizer both use authoritative Product Orchestrator workspace routing with required tests green.
+Do not begin until `product-recovery-targeted-edit-orchestration` is reviewed and merged, its lifecycle is closed to `idle`, and targeted existing-video editing is routed through Product Orchestrator without weakening D-028/D-032/D-033 invariants.

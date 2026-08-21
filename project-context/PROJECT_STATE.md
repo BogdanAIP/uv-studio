@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: product-recovery-workspace-routing -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: product-recovery-targeted-edit-orchestration -->
 
 **Updated:** 2026-08-21
 
@@ -9,92 +9,110 @@
 
 ## Current lifecycle
 
-`product-recovery-workspace-routing` completed in PR #45. The repository is back in explicit `idle` state and the next authorized handoff is `product-recovery-targeted-edit-orchestration`.
+`product-recovery-targeted-edit-orchestration` is the active **Review** slice on branch `fix/product-recovery-targeted-edit-orchestration`, based on unchanged `main` after PR #45.
 
-PR #45 migrated Visualizer to Product Orchestrator, made projected workspaces authoritative for both deterministic reference journeys, enforced projected source choices before capability dispatch, and preserved the existing Project Store/Capability Registry/D-017 authority boundaries.
+The final Draft head passed every permanent repository check on Ubuntu and Windows, including API integration, real-media, frontend build and browser user-outcome suites. PR #46 is no longer Draft; the repository context is now in `review` and requires the exact Review head to pass the same permanent checks before merge.
 
-PR #44 remains the completed D-033 conformance baseline. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
+The complete PR diff has been self-reviewed, the write scope matches all changed files, and there are zero unresolved review threads. PR #45 remains the last completed slice until #46 is actually merged.
 
-## Product definition
+Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
-UV Studio remains a desktop/local-first video **production and editing workspace** with task-specific workflows:
+## Current product truth
 
-- Project Store/domain state is canonical;
-- Product Orchestrator projects readiness, prerequisites, relevant workspaces and semantic next actions;
-- UV semantic/domain commands own mutations;
-- Capability Registry owns provider/runtime offers and D-017 authorization;
-- FFmpeg, MLT, local ML, MCP and remote providers remain bounded implementations behind those contracts.
+Three journeys now have authoritative Product Orchestrator workspace projection:
 
-## Accepted editor foundation — D-033
+- `photo_to_video` -> `photo_composition`;
+- `visualizer` -> `audio_visualizer`;
+- `free_project` -> `targeted_edit`.
 
-D-033 remains binding:
+Photo -> Video and Visualizer remain deterministic local/free reference journeys. Targeted edit is the first migrated journey whose semantic next actions span durable domain decisions as well as a capability-backed final media operation.
 
-- UV Studio owns canonical project/edit/domain state and semantic mutations;
-- MLT remains the bounded timeline/editing engine representation where mapped;
-- OpenCut Classic remains a selective MIT editor-UX/component donor;
-- current FFmpeg accepted-edit export remains authoritative until parity evidence promotes another renderer;
-- meaningful editor mutations converge on UV-owned semantic/domain command boundaries.
+Non-migrated recipes remain fail-closed as `partial`/unavailable at the Product Orchestrator boundary. Their old UV-owned domain panels may remain temporarily reachable as compatibility surfaces, but they are not alternate workflow authority.
 
-## Product Orchestrator — current migrated journeys
+## Targeted edit — implemented orchestration
 
-### Photo -> Video
+The migrated product chain is:
 
-Photo -> Video is the first deterministic reference journey:
+```text
+project-owned source video
+ -> ProductWorkflowState targeted_edit workspace
+ -> select_target_range
+ -> EditorCommandService / RangeContinuityBrief
+ -> prepare_replacement
+ -> durable ReplacementPlan + full ReplacementCandidate
+ -> review_replacement
+ -> evidence-based ReplacementReview
+ -> accept_replacement
+ -> AcceptedRangeEdit
+ -> render_accepted_edits
+ -> video.render_edits / local FFmpeg
+ -> project video artifact
+```
 
-- verified project-owned images satisfy the source prerequisite;
-- local/free `video.compose_photos` availability determines executable readiness;
-- `compose_photos` delegates through the existing capability execution boundary;
-- `photo_composition` is projected through `relevant_workspaces`;
-- damaged or substituted source bytes fail closed.
+The Product Orchestrator owns no persistent workflow state. `Project Store` and the existing domain stores remain canonical.
 
-### Visualizer
+The UI no longer requires a user-visible technical Plan step. `prepare_replacement` combines Plan approval and Candidate preparation as one semantic operation while retaining the Plan object underneath for correctness/provenance. Previous-Plan capture and installation of the action Plan occur under one short Project Store lock; the expensive media copy remains outside that lock. If Candidate preparation fails, partial artifact registration is removed and the exact previous Plan is restored only when the current valid Plan is still exactly the one installed by this action. A concurrent Plan or Brief mutation is never overwritten by rollback.
 
-Visualizer is the second deterministic Product Orchestrator journey:
+Approved Reviews already represented in Accepted state are not re-advertised as executable Accept actions. A previous render remains historical evidence but is `current_outcome` only when its source and exact `edit_ids` still match the current Accepted state.
 
-- verified project-owned master audio is required;
-- verified project-owned artwork is optional;
-- local/free `audio.visualize` availability determines executable readiness;
-- `audio_visualizer` is projected through `relevant_workspaces`;
-- semantic action `render_visualizer` delegates through the existing capability/D-017 execution boundary;
-- the product panel does not call the raw capability execution endpoint directly;
-- the action input schema exposes only verified project-owned source choices;
-- the HTTP Product Orchestrator boundary revalidates submitted source IDs against the fresh projected action contract before dispatch;
-- `suggested_input` remains executable action input rather than a UI-only side channel;
-- missing, damaged or substituted audio fails closed and blocks execution.
+Product-level readiness follows the current stage rather than merely the presence of an input video. Missing source, required replacement material or required render runtime produces truthful `setup_required`/`unavailable` state. When the exact current Accepted revision already has a matching master, that artifact is reported as the current outcome instead of presenting the project as if another render were still required.
 
-## Authoritative workspace routing
+## Workspace isolation and migration compatibility
 
-For Photo -> Video and Visualizer, the project page renders the workspace declared by `workflow.relevant_workspaces` instead of reconstructing the choice from `recipe_id`.
+`free_project` is now authoritative targeted-edit routing. Its normal project page does not also mount:
 
-When a dedicated migrated workspace is present, the page does not also mount unrelated `ProjectEditor`, Sequence Continuity or Dubbing panels.
+- the historical Stage 8 Free workspace;
+- Dubbing;
+- Sequence Continuity.
 
-Non-migrated recipes remain fail-closed as `partial` at the Product Orchestrator boundary and preserve their existing domain implementations until later bounded migrations.
+The compatibility path for old ProjectEditor surfaces is deliberately narrow. Only established one-to-one actions such as range selection, Review, Accept and final render may fall back after a recipe-level 404, and only after a fresh workflow projection explicitly reports `workflow_not_migrated` and contains no `targeted_edit` workspace. A migrated `free_project` cannot hide an Orchestrator failure behind legacy compatibility.
 
-## Verification evidence
+Composite replacement preparation is intentionally **not** part of that fallback. On non-migrated pages the historical Plan approval and Candidate preparation remain two explicit steps until that recipe receives its own Product Orchestrator migration. This avoids pretending multiple old mutations are one atomic semantic action.
 
-The maintained regression suite covers:
+This compatibility exists to avoid breaking still-unmigrated domain regressions while Product Truth Recovery proceeds. It is not a second architecture.
 
-- Visualizer `setup_required` without verified master audio;
-- `ready` state with verified audio and projected `audio_visualizer` workspace;
-- strict action input and local/free `audio.visualize` dispatch;
-- executable `suggested_input` semantics;
-- rejection of source IDs excluded by the freshly projected action schema before capability execution;
-- source-integrity failure after audio tampering;
-- browser execution through `/workflow/actions/render_visualizer`;
-- real `audio_visualizer_render` artifact creation;
-- absence of unrelated Editor/Continuity/Dubbing panels for both deterministic migrated journeys;
-- non-migrated recipe projection remaining `partial` with no fabricated actions/workspaces.
+## Verification implemented in this slice
 
-Existing browser suites remain Class B informed-regression evidence, not Class C cold-start proof.
+Focused API/domain evidence covers:
 
-## Remaining product gaps
+- empty/source-ready targeted workflow projection;
+- verified source identity and tamper fail-closed behavior;
+- stage-accurate readiness for missing replacement material, missing render runtime and an already-current master;
+- exact allowed edit/replacement pairs;
+- semantic range selection;
+- combined replacement Plan + Candidate preparation;
+- evidence-based Review and explicit Accept;
+- capability-backed final render input bounding;
+- consumed approved Reviews not being exposed for duplicate Accept;
+- stale renders not becoming `current_outcome` after Accepted state changes;
+- exact restoration of a real previous Plan when Candidate preparation fails without a concurrent mutation;
+- preservation of a concurrent Plan change when Candidate preparation fails, rather than rolling it back.
 
-- targeted existing-video edit, dubbing and music video still need product-level Orchestrator journeys that progressively disclose their existing durable domain state;
-- Narrated and General Video do not yet have complete current user journeys;
-- recipe selection on `/projects` remains readiness-blind before creation;
-- legacy pipeline/workflow source remains compiled migration debt even though normal navigation no longer exposes it;
-- Class C cold-start UI-only evidence and installed Windows human acceptance remain Product Truth Gate requirements.
+Browser evidence now separates product responsibilities:
+
+- dedicated `free_project` targeted-edit journey performs import -> range -> replacement -> review -> accept -> render through the real UI and Product Orchestrator semantic actions;
+- that targeted journey asserts Dubbing/Continuity/old Free workspace are absent;
+- Story/Commercial retain their existing Stage 8 preparation round-trip regression;
+- Dubbing + Sequence Continuity retain a separate temporary compatibility regression on non-migrated `general_video` instead of being forced into the targeted-edit project.
+
+These remain Class B informed-regression tests. They do not replace future Class C cold-start product evidence or installed Windows human acceptance.
+
+## Architecture invariants preserved
+
+- no second orchestration persistence or competing Project Store authority;
+- no direct raw project/timeline file mutation from Product Orchestrator;
+- no remounting of historical VideoClaw backend routes;
+- D-017 Capability Registry/authorization boundaries remain in force for capability-backed operations;
+- domain actions may have `capability_id = null` only when they delegate to bounded UV-owned semantic/domain services;
+- accepted edit state remains non-destructive and evidence-based Review remains mandatory before acceptance;
+- no generic NLE expansion or new editor ownership decision is introduced by this slice.
+
+## Remaining recovery work
+
+Targeted edit is now `working_orchestrated` at Class A/B evidence level, but it is not a release-ready claim. Remaining product-wide gaps include readiness-blind recipe creation, non-migrated workspace leakage, missing/partial General/Narrated/Music journeys, Dubbing setup/orchestration, later Class C cold-start journeys and installed-app acceptance.
+
+The next planned slice is `product-recovery-dubbing-orchestration`.
 
 ## Next handoff
 
-Continue with `product-recovery-targeted-edit-orchestration` from `project-context/NEXT_TASK.md`: project the existing targeted-edit domain chain into understandable prerequisites and next actions without replacing the accepted Brief -> Plan -> Candidate -> Review -> Accept invariants or creating a second workflow engine.
+If the exact Review head passes all permanent checks with zero unresolved blocking findings and the base remains unchanged, merge PR #46, close the lifecycle to `idle`, and continue with `product-recovery-dubbing-orchestration`: project the existing dubbing domains into truthful prerequisites and outcome-oriented next actions while preserving transcript/translation/prepared-speech/alignment/review/render authority boundaries.
