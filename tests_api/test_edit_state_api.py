@@ -60,7 +60,7 @@ class EditStateApiTests(unittest.TestCase):
 
         self._accept_internal_edit()
         deleted = self.client.delete(f"{self._url()}/edit_1")
-        self.assertEqual(deleted.status_code, 405, deleted.text)
+        self.assertEqual(deleted.status_code, 404, deleted.text)
 
         fetched = self.client.get(self._url())
         self.assertEqual(fetched.status_code, 200, fetched.text)
