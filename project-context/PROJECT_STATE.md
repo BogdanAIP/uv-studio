@@ -11,7 +11,7 @@
 
 `product-recovery-editor-ownership-resolution` is active in Draft PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on `main@f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
 
-This is a **D-033 implementation conformance slice**, not a product-identity redesign and not a new choice between UV Studio, OpenCut and MLT. D-033 remains the accepted baseline unless reproducible evidence proves one of its ownership boundaries technically invalid.
+This is a **D-033 implementation conformance slice**, not a product-identity redesign and not a new choice between UV Studio, OpenCut and MLT. The audit has reaffirmed D-033 and recorded a non-breaking 2026-08-21 clarification in the decision itself.
 
 The previous slice `product-recovery-orchestrator-foundation` completed in PR #43 and merged as `297556a76484e3445feb93e6f22f512e212d8360`; its lifecycle was then closed to `idle` by `f7ba7e8d4a9e41294ba8f4104c4330d24e80a93f`.
 
@@ -38,9 +38,9 @@ D-033 remains binding:
 - **MLT owns behind a UV adapter** reusable timeline/editing mechanics and engine representation where mapped by UV contracts;
 - **OpenCut Classic** is a selective MIT editor-UX/component donor, not a second application shell or canonical store;
 - **FFmpeg accepted-edit export** remains authoritative until preview/render parity evidence explicitly promotes another renderer;
-- GUI, scripts, AI and MCP must converge on the same product-owned mutation contracts rather than receiving raw-state bypasses.
+- GUI, scripts, AI and MCP converge incrementally on the same UV-owned semantic/domain mutation contracts rather than receiving raw-state bypasses.
 
-The current slice audits implementation against this map. It may clarify D-033 or record bounded incomplete work. A fundamental ownership change requires separate reproducible evidence and explicit approval.
+The clarification distinguishes conforming transient UI state, incomplete implementation, concrete conformance defects and evidence-backed amendment candidates. A fundamental ownership change still requires reproducible evidence and separate approval.
 
 ## Current Product Truth state
 
@@ -54,49 +54,67 @@ PR #43 implemented the first real Product Orchestrator journey for **Photo → V
 - only the `photo_composition` workspace is mounted for that orchestrated project;
 - damaged/unverified image references do not falsely satisfy readiness.
 
-**Visualizer is not yet migrated to Product Orchestrator.** Its local deterministic `audio.visualize` capability path is real, but `project_workflow_state()` currently returns the generic `partial/workflow_not_migrated` projection for it. Any older documentation saying Visualizer is “the same” as the Photo orchestration flow is stale.
+**Visualizer is not yet migrated to Product Orchestrator.** Its local deterministic `audio.visualize` capability path is real, but `project_workflow_state()` currently returns the generic `partial/workflow_not_migrated` projection for it. Older documentation that described Visualizer as already equivalent to the Photo orchestration flow has been corrected in this slice.
 
 ### Frontend shell
 
-The normal `AppShell` is now UV-owned and exposes Projects and Settings. It no longer imports/polls the old VideoClaw session/task/sandbox runtime or advertises `/pipelines/*` in normal navigation.
+The normal `AppShell` is UV-owned and exposes Projects and Settings. It no longer imports/polls the old VideoClaw session/task/sandbox runtime or advertises `/pipelines/*` in normal navigation.
 
 Legacy `workflowApi.ts`, HomePage/WorkflowPanel/PipelinePage and `/pipelines/*` source remain compiled migration debt. Their historical backend contracts are intentionally not remounted.
 
 ### Remaining cross-workflow leakage
 
-Photo → Video is isolated, but the generic project page still mounts `ProjectEditor`, Sequence Continuity and all three dubbing panels for every **non-photo** recipe. Recipe-specific workspaces are then appended. Therefore task isolation is not solved application-wide yet.
+Photo → Video is isolated, but the generic project page still mounts `ProjectEditor`, Sequence Continuity and all three dubbing panels for every **non-photo** recipe. Recipe-specific workspaces are then appended. Task isolation is therefore not solved application-wide yet.
 
 Recipe cards on `/projects` also remain readiness-blind before project creation.
 
-## D-033 conformance audit findings so far
+## D-033 conformance audit result
 
 ### Conforming / valuable
 
-- `uv_studio/editor/commands.py` provides a real product-owned semantic editor command service;
+- `uv_studio/editor/commands.py` is a real product-owned semantic editor command service;
 - range selection creates canonical `RangeContinuityBrief` state instead of frontend-only JSON;
 - `RangeTimeline.tsx` and `timelineMath.ts` explicitly reuse/adapt pinned OpenCut Classic interaction/ruler ideas while keeping UV integer-microsecond identity;
 - `MLTTimelineAdapter` creates an ephemeral derived MLT representation from canonical accepted edits; raw MLT XML is not a public mutation channel;
 - browser playhead/selection/form state is transient UI state and is not itself canonical timeline ownership;
-- accepted edit/replacement/review state remains durable and project-owned.
+- accepted edit/replacement/review state remains durable and project-owned;
+- current bounded FFmpeg accepted-edit export remains consistent with D-033 until parity evidence promotes another renderer.
 
-### Concrete bounded deviation
+### Concrete bounded deviation — repaired in PR #44
 
-`uv_studio/api/edit_state.py` exposes a direct mutating route:
+The historical `uv_studio/api/edit_state.py` exposed:
 
 `DELETE /api/uv/projects/{project_id}/edits/{edit_id}`
 
-which calls `RangeEditStateStore.remove(...)` directly. Because accepted range edits are canonical non-destructive timeline state under D-028, this bypasses the D-033 requirement that meaningful editor mutations pass through the product-owned Command API.
+which mutated canonical `RangeEditStateStore` directly. Accepted range edits are D-028 non-destructive timeline state, so this was a genuine D-033 command-boundary bypass.
 
-PR #44 will migrate accepted-edit removal to `EditorCommandService`/the editor command boundary, keep edit-state reads read-only, update API/domain tests, and remove the privileged direct mutation path after call-site evidence.
+The branch now:
 
-### Incomplete, not yet a reason to replace D-033
+- adds typed `RemoveAcceptedEditCommand` / result contracts to `EditorCommandService`;
+- exposes semantic `remove_accepted_edit` through `/editor/commands`;
+- validates edit identity and preserves project/edit not-found semantics;
+- removes the direct DELETE mutation route, leaving `/edits` read-only;
+- adds domain and API conformance tests;
+- confirms the current frontend had no production caller depending on the removed route.
+
+### Explicit incomplete work, not a reason to replace D-033
 
 - MLT currently serves mainly as a derived accepted-edit projection/render seam rather than owning every potential generic timeline primitive;
-- OpenCut reuse is selective, as D-033 permits, and should not be expanded merely to increase code reuse percentage;
-- generic transaction/undo-redo semantics are not yet proven as a complete shared product feature;
-- GUI/scripts/AI/MCP convergence is real for selected semantic paths but not yet proven for every editor/domain mutation.
+- OpenCut reuse is selective, as D-033 permits, and should expand only for concrete reusable primitives;
+- product-level transaction/undo-redo semantics are not yet proven as a complete shared feature;
+- GUI/scripts/AI/MCP convergence is real for selected paths but not yet proven for every meaningful editor/domain mutation;
+- MLT preview/render parity has not promoted it over the current authoritative export path.
 
-These are conformance/remediation items. They do not by themselves justify reopening product identity or selecting a different editor foundation.
+These are bounded follow-up concerns. Generic NLE growth must not outrun them, but the current evidence does not justify a new editor foundation.
+
+## Documentation truth repaired in this slice
+
+- `PRODUCT_RECOVERY_PLAN.md` now treats Phase 4 as D-033 conformance/clarification rather than product/editor re-selection;
+- `PRODUCT_TRUTH_MATRIX.md` separates historical Stage 8 findings from current Photo-only orchestration truth;
+- `PRODUCT_SURFACE_AUDIT.md` no longer claims Photo still receives generic specialist panels;
+- `FRONTEND_BACKEND_INTERACTION_MAP.md` records Product Orchestrator as the current product next-action owner where migrated and Visualizer as still unmigrated;
+- `EDITOR_FOUNDATION_CONFORMANCE.md` records the current ownership map and repaired mutation bypass;
+- D-033 itself now contains the accepted 2026-08-21 clarification.
 
 ## Strong foundations to preserve
 
@@ -112,7 +130,7 @@ These are conformance/remediation items. They do not by themselves justify reope
 
 Existing unit/API/real-media/browser suites remain required. They are strong engineering and informed-regression evidence, but they do not replace Class C cold-start journeys or installed Windows human acceptance.
 
-The final PR #44 review head must pass the repository-required checks on Ubuntu and Windows. The D-033 conformance claim must be backed by code/call-site tests, not documentation alone.
+The final PR #44 review head must pass the repository-required checks on Ubuntu and Windows. Intermediate CI already proved the new semantic accepted-edit removal path; one early API assertion incorrectly expected HTTP 405 for the removed DELETE route and was corrected to the actual absent-route 404. Exact final-head CI remains authoritative.
 
 ## Release status
 
