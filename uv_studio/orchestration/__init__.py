@@ -291,9 +291,37 @@ def _normalize_dubbing_projection(
         current_approved_ids = []
         pending_review_ids = ()
 
+    transcribe_action = next(
+        (item for item in state.next_actions if item.action_id == "transcribe_dubbing_source"),
+        None,
+    )
+    asr_available = bool(
+        transcribe_action is not None
+        and "capability.speech.transcribe" not in transcribe_action.blocked_by
+    )
+
     prerequisites: list[WorkflowPrerequisite] = []
+    inserted_asr = False
     inserted_audio = False
     for prerequisite in state.prerequisites:
+        if prerequisite.prerequisite_id == "dubbing.transcript" and not inserted_asr:
+            prerequisites.append(
+                WorkflowPrerequisite(
+                    prerequisite_id="capability.speech.transcribe",
+                    title="Локальное распознавание речи (необязательно)",
+                    explanation=(
+                        "ASR нужен только для автоматического черновика. Проверенный transcript можно "
+                        "ввести вручную без этого capability."
+                    ),
+                    satisfied=asr_available,
+                    resolution=(
+                        None
+                        if asr_available
+                        else "Настройте локальный whisper.cpp только если нужен автоматический ASR-черновик."
+                    ),
+                )
+            )
+            inserted_asr = True
         if prerequisite.prerequisite_id == "dubbing.prepared_speech" and not inserted_audio:
             prerequisites.append(
                 WorkflowPrerequisite(
@@ -330,6 +358,20 @@ def _normalize_dubbing_projection(
     actions: list[WorkflowAction] = []
     translation_inserted = False
     for action in state.next_actions:
+        if action.action_id == "transcribe_dubbing_source":
+            properties = dict(action.input_schema.get("properties", {}))
+            properties["start_us"] = {"type": "integer", "minimum": 0}
+            properties["end_us"] = {"type": "integer", "minimum": 1}
+            schema = dict(action.input_schema)
+            schema["properties"] = properties
+            actions.append(
+                replace(
+                    action,
+                    prerequisite_ids=("source.video", "capability.speech.transcribe"),
+                    input_schema=schema,
+                )
+            )
+            continue
         if action.action_id == "attach_prepared_speech":
             properties = dict(action.input_schema.get("properties", {}))
             properties["audio_id"] = {
