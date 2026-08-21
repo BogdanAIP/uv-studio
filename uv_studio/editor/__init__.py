@@ -3,6 +3,8 @@
 from .commands import (
     EditorCommandError,
     EditorCommandService,
+    RemoveAcceptedEditCommand,
+    RemoveAcceptedEditResult,
     SelectRangeCommand,
     SelectRangeResult,
 )
@@ -14,6 +16,8 @@ __all__ = [
     "MLTAdapterError",
     "MLTTimelineAdapter",
     "MLTTimelineProjection",
+    "RemoveAcceptedEditCommand",
+    "RemoveAcceptedEditResult",
     "SelectRangeCommand",
     "SelectRangeResult",
 ]
