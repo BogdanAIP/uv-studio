@@ -65,6 +65,12 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
     return next;
   }, [projectId]);
 
+  const refreshStateAndProject = useCallback(async () => {
+    const next = await refreshState();
+    await onProjectChanged?.();
+    return next;
+  }, [onProjectChanged, refreshState]);
+
   useEffect(() => {
     let active = true;
     getEditorState(projectId)
@@ -165,7 +171,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
         context_after_us: Math.round(contextAfterSeconds * 1_000_000),
       });
       setLatestResult(result);
-      await refreshState();
+      await refreshStateAndProject();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить задачу изменения');
     } finally {
@@ -401,7 +407,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 editorState={editorState}
                 sourcePath={activeSource.path}
                 preferredEditId={latestResult?.edit_id}
-                onStateChanged={refreshState}
+                onStateChanged={refreshStateAndProject}
               />
             </div>
           )}
@@ -484,7 +490,7 @@ function WorkflowSummary({
             ))}
           </div>
           <p className="mt-3 text-[10px] leading-4 text-slate-600">
-            Следующие Plan → Candidate → Review используют этот же edit_id; принятие кандидата остаётся только через D-032 gate.
+            Следующие действия используют этот же edit_id; технические Plan/Candidate остаются внутренними объектами проекта, а принятие — отдельным D-032 gate.
           </p>
         </div>
       ) : (
