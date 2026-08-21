@@ -1,25 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-workspace-routing -->
+<!-- uv-next-slice: product-recovery-targeted-edit-orchestration -->
 
 ## Goal
 
-Make Product Orchestrator workspace projection authoritative for a second real deterministic journey by migrating `visualizer` and removing recipe-specific frontend reconstruction from the orchestrated path.
+Make the existing targeted existing-video edit journey understandable and product-driven by projecting its durable domain state through Product Orchestrator prerequisites and semantic next actions without weakening the accepted review/acceptance chain.
 
 ## Required direction
 
-- keep Project Store, Recipe Registry, Capability Registry and D-017 as the existing authorities;
-- add truthful `visualizer` readiness, prerequisites, relevant workspace and semantic action without introducing orchestration persistence;
-- render orchestrated workspaces from `ProjectWorkflowState.relevant_workspaces` rather than from a parallel `recipe_id` decision tree;
-- keep `photo_to_video` as the first reference and prove both deterministic workflows use the same product contract;
-- do not expose generic editor, continuity, dubbing or music workspaces unless the Product Orchestrator explicitly declares them relevant;
-- keep non-migrated recipes fail-closed as `partial` at the Product Orchestrator boundary rather than inventing readiness from legacy execution metadata;
-- preserve the D-033 editor foundation and do not add generic NLE primitives in this slice.
+- preserve D-028/D-032/D-033 canonical edit, replacement and review state;
+- keep `EditorCommandService`, Project Store, Capability Registry and D-017 as existing authorities;
+- project user-facing steps such as source import, range selection, requested change, replacement preparation, preview/review, acceptance and export instead of exposing raw internal state-machine names as the primary UX;
+- keep Brief → Plan → Candidate → Review → Accept durable underneath where it protects correctness and provenance;
+- do not create a second workflow persistence engine;
+- keep raw MLT/XML and direct canonical-state mutation unavailable to GUI/scripts/AI/MCP;
+- reuse the current targeted-edit implementation and D-033 foundation rather than rebuilding a generic editor.
 
 ## Completion proof
 
-The slice is complete when Photo-to-Video and Visualizer both reach real local artifacts through Product Orchestrator semantic actions, their project pages are driven by projected workspaces instead of a duplicate recipe switch, irrelevant specialist panels are absent from both journeys, and focused API/browser tests prove blocked/setup/ready/result states.
+The slice is complete when a targeted-edit project has truthful Orchestrator readiness/prerequisites/next actions derived from canonical edit state, the frontend follows those actions without bypassing domain review gates, and focused API/browser tests prove blocked, ready, review and accepted/exportable states.
 
 ## Entry gate
 
-Do not begin until the D-033 conformance audit is reviewed and merged, its lifecycle is closed to `idle`, and any editor-foundation deviations discovered there are either corrected or explicitly recorded as bounded follow-up work.
+Do not begin until `product-recovery-workspace-routing` is reviewed and merged, its lifecycle is closed to `idle`, and Photo → Video plus Visualizer both use authoritative Product Orchestrator workspace routing with required tests green.
