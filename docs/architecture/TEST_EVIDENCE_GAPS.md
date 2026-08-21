@@ -98,11 +98,14 @@ The targeted-edit slice adds Class A proof that:
 
 - verified project-owned video controls readiness;
 - tampered media fails closed;
+- readiness follows the current product stage instead of merely the presence of any source: a saved Brief without replacement material is `setup_required`, a missing required local render runtime is not reported as ready, and an exact matching master is reported as the current outcome;
 - replacement source must be distinct and one of the currently projected allowed pairs;
 - semantic domain actions preserve existing Brief/Plan/Candidate/Review/Accepted stores rather than adding orchestration persistence;
 - already consumed approved Reviews are not advertised as repeatable Accept actions;
 - stale render artifacts are not exposed as `current_outcome` after Accepted state changes;
-- a failed combined Plan + Candidate operation rolls back the prior Plan state and partial artifact registration;
+- a failed combined Plan + Candidate operation restores the exact previous Plan and removes partial artifact registration when no concurrent canonical mutation superseded the action;
+- if another Plan is approved while Candidate preparation is in flight, the action fails closed and rollback preserves that concurrent Plan instead of overwriting it;
+- Candidate registration remains bound to the exact Plan installed by the semantic action, so a concurrent Plan change cannot silently rebind copied media to a different decision;
 - final render remains capability-backed through `video.render_edits` and its existing local/free execution boundary.
 
 ### Class B — Informed browser regression
