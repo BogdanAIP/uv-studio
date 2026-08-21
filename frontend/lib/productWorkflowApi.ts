@@ -28,7 +28,7 @@ export interface WorkflowAction {
   suggested_input: Record<string, unknown>;
   execution_class: string;
   authorization_class: string;
-  capability_id: string;
+  capability_id: string | null;
   expected_result: string;
 }
 
@@ -62,6 +62,22 @@ export interface ProjectWorkflowState {
   recent_artifacts: WorkflowArtifact[];
   diagnostics: WorkflowDiagnostic[];
 }
+
+export interface WorkflowDomainActionResponse<TResult = Record<string, unknown>> {
+  schema_version: number;
+  action_id: string;
+  result: TResult;
+}
+
+export interface WorkflowCapabilityActionResponse<TResult = Record<string, unknown>> {
+  schema_version: number;
+  action_id: string;
+  execution: TResult;
+}
+
+export type WorkflowActionResponse<TResult = Record<string, unknown>> =
+  | WorkflowDomainActionResponse<TResult>
+  | WorkflowCapabilityActionResponse<TResult>;
 
 export interface ComposePhotosActionInput {
   image_source_ids: string[];
@@ -102,34 +118,41 @@ export async function getProjectWorkflow(projectId: string): Promise<ProjectWork
   return response.json();
 }
 
-export async function executeComposePhotosAction(
+export async function executeProjectWorkflowAction<TResult = Record<string, unknown>>(
   projectId: string,
-  input: ComposePhotosActionInput,
-): Promise<ComposePhotosActionResponse> {
+  actionId: string,
+  input: Record<string, unknown>,
+): Promise<WorkflowActionResponse<TResult>> {
   const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/compose_photos`,
+    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/${encodeURIComponent(actionId)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     },
   );
-  if (!response.ok) throw await apiError(response, 'Не удалось собрать видео из фотографий');
+  if (!response.ok) throw await apiError(response, 'Не удалось выполнить следующее действие проекта');
   return response.json();
+}
+
+export async function executeComposePhotosAction(
+  projectId: string,
+  input: ComposePhotosActionInput,
+): Promise<ComposePhotosActionResponse> {
+  return executeProjectWorkflowAction<CapabilityVideoEnvelope<PhotoToVideoResult>>(
+    projectId,
+    'compose_photos',
+    input as unknown as Record<string, unknown>,
+  ) as Promise<ComposePhotosActionResponse>;
 }
 
 export async function executeRenderVisualizerAction(
   projectId: string,
   input: RenderVisualizerActionInput,
 ): Promise<RenderVisualizerActionResponse> {
-  const response = await fetch(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/workflow/actions/render_visualizer`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    },
-  );
-  if (!response.ok) throw await apiError(response, 'Не удалось собрать аудиовизуализатор');
-  return response.json();
+  return executeProjectWorkflowAction<CapabilityVideoEnvelope<VisualizerResult>>(
+    projectId,
+    'render_visualizer',
+    input as unknown as Record<string, unknown>,
+  ) as Promise<RenderVisualizerActionResponse>;
 }
