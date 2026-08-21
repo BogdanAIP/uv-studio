@@ -1,6 +1,7 @@
 # Project State
 
 <!-- uv-context-state: draft -->
+<!-- uv-active-slice: product-recovery-editor-ownership-resolution -->
 <!-- uv-last-completed: product-recovery-orchestrator-foundation -->
 
 **Updated:** 2026-08-21
@@ -87,7 +88,7 @@ Recipe cards on `/projects` also remain readiness-blind before project creation.
 
 which calls `RangeEditStateStore.remove(...)` directly. Because accepted range edits are canonical non-destructive timeline state under D-028, this bypasses the D-033 requirement that meaningful editor mutations pass through the product-owned Command API.
 
-PR #44 will migrate accepted-edit removal to `EditorCommandService`/`/editor/commands`, keep edit-state reads read-only, update API/domain tests, and remove the privileged direct mutation route if call-site evidence confirms no required external dependency.
+PR #44 will migrate accepted-edit removal to `EditorCommandService`/the editor command boundary, keep edit-state reads read-only, update API/domain tests, and remove the privileged direct mutation path after call-site evidence.
 
 ### Incomplete, not yet a reason to replace D-033
 
