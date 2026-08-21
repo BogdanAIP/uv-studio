@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-workspace-routing -->
 
 **Updated:** 2026-08-21
@@ -9,9 +9,9 @@
 
 ## Current lifecycle
 
-`product-recovery-workspace-routing` is the active Draft slice on branch `fix/product-recovery-workspace-routing`, created from the explicit idle `main` after PR #44.
+`product-recovery-workspace-routing` is the active review slice on branch `fix/product-recovery-workspace-routing`, created from the explicit idle `main` after PR #44.
 
-The implementation is now functionally complete enough to prepare for review: Visualizer is migrated to the existing Product Orchestrator contract, and `relevant_workspaces` is authoritative for both deterministic reference journeys. The slice adds no second workflow store, does not remount legacy VideoClaw runtime and does not grow generic NLE functionality.
+The implementation is complete for review: Visualizer is migrated to the existing Product Orchestrator contract, and `relevant_workspaces` is authoritative for both deterministic reference journeys. The slice adds no second workflow store, does not remount legacy VideoClaw runtime and does not grow generic NLE functionality.
 
 PR #44 completed the D-033 conformance audit, reaffirmed the accepted editor foundation and repaired the accepted-edit mutation bypass. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
