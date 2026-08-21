@@ -1,31 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "product-recovery-editor-ownership-resolution",
-    "kind": "research",
-    "roadmap_stage": "product-recovery",
-    "goal": "Audit the current editor implementation against accepted D-033, correct contradictory recovery documentation, and apply only bounded conformance fixes that preserve the existing UV Project Store, Command API, MLT and OpenCut ownership model.",
-    "base_branch": "main",
-    "branch": "research/product-recovery-editor-ownership-resolution",
-    "pull_request": 44,
-    "write_scope": [
-      "ROADMAP.md",
-      "docs/architecture/**",
-      "frontend/components/editor/**",
-      "frontend/lib/**",
-      "project-context/**",
-      "tests/**",
-      "tests_api/**",
-      "uv_studio/editor/**",
-      "uv_studio/api/edit_state.py",
-      "uv_studio/api/editor_commands.py"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "product-recovery-orchestrator-foundation",
-    "pull_request": 43,
-    "merge_commit": "297556a76484e3445feb93e6f22f512e212d8360"
+    "id": "product-recovery-editor-ownership-resolution",
+    "pull_request": 44,
+    "merge_commit": "04a4b63409ac9d4b33ca317754ecc715ba5c4daf"
   },
   "handoff": {
     "next_slice_id": "product-recovery-workspace-routing",

@@ -25,3 +25,5 @@ Compact record of completed development slices. Detailed rationale remains in th
 | 7 | PR #36, `523424bf` | Optional Music Video Mode: exact-song Music Map, Music Director, rhythm audit, sample-first generated assets, SHA-bound Assembly, master-audio FFmpeg render, Analysis Assist, evidence-bound Final Review and cross-platform browser/real-media proof | D-041 |
 | 8 | PR #37, `5eb8f6c` | Additional compositional recipes plus deterministic Photo-to-Video, Visualizer and setup-gated Performance/Lip-sync user outcomes | D-042, D-043 |
 | Product recovery | PR #42, `0a759f6` | Product truth inventory, fail-closed stale execution/binding contracts and explicit dual-frontend recovery boundary | D-062 |
+| Product recovery | PR #43, `297556a` | Product Orchestrator foundation for Photo-to-Video plus UV-owned normal shell isolation | D-062 |
+| Product recovery | PR #44, `04a4b63` | D-033 implementation conformance audit, accepted-edit semantic-command repair and synchronized recovery truth | D-033, D-062 |

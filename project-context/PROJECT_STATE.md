@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-editor-ownership-resolution -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: product-recovery-editor-ownership-resolution -->
 
 **Updated:** 2026-08-21
 
@@ -9,11 +9,11 @@
 
 ## Current lifecycle
 
-`product-recovery-editor-ownership-resolution` is in review for PR #44 on branch `research/product-recovery-editor-ownership-resolution`, based on the idle `main` that followed `product-recovery-orchestrator-foundation`.
+`product-recovery-editor-ownership-resolution` completed in PR #44. The repository is back in explicit `idle` state and the next authorized handoff is `product-recovery-workspace-routing`.
 
-This is a **D-033 implementation conformance slice**, not a product-identity redesign and not a new choice between UV Studio, OpenCut and MLT. The audit has reaffirmed D-033 and recorded a non-breaking 2026-08-21 clarification in the decision itself.
+PR #44 reaffirmed D-033 as the accepted editor foundation, synchronized recovery documentation with the live implementation, and repaired the accepted-edit mutation bypass without changing UV Studio product identity.
 
-The previous slice `product-recovery-orchestrator-foundation` completed in PR #43. Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference for Windows packaging/native-shell work. Product Truth Recovery remains release-blocking.
+Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference for Windows packaging/native-shell work. Product Truth Recovery remains release-blocking.
 
 ## Product definition
 
@@ -38,7 +38,7 @@ D-033 remains binding:
 - **FFmpeg accepted-edit export** remains authoritative until preview/render parity evidence explicitly promotes another renderer;
 - GUI, scripts, AI and MCP converge incrementally on the same UV-owned semantic/domain mutation contracts rather than receiving raw-state bypasses.
 
-The clarification distinguishes conforming transient UI state, incomplete implementation, concrete conformance defects and evidence-backed amendment candidates. A fundamental ownership change still requires reproducible evidence and separate approval.
+The 2026-08-21 clarification distinguishes conforming transient UI state, incomplete implementation, concrete conformance defects and evidence-backed amendment candidates. A fundamental ownership change still requires reproducible evidence and separate approval.
 
 ## Current Product Truth state
 
@@ -52,7 +52,7 @@ PR #43 implemented the first real Product Orchestrator journey for **Photo → V
 - only the `photo_composition` workspace is mounted for that orchestrated project;
 - damaged/unverified image references do not falsely satisfy readiness.
 
-**Visualizer is not yet migrated to Product Orchestrator.** Its local deterministic `audio.visualize` capability path is real, but `project_workflow_state()` currently returns the generic `partial/workflow_not_migrated` projection for it. Older documentation that described Visualizer as already equivalent to the Photo orchestration flow has been corrected in this slice.
+**Visualizer is not yet migrated to Product Orchestrator.** Its local deterministic `audio.visualize` capability path is real, but `project_workflow_state()` currently returns the generic `partial/workflow_not_migrated` projection for it. Older documentation that described Visualizer as already equivalent to the Photo orchestration flow has been corrected.
 
 ### Frontend shell
 
@@ -66,7 +66,7 @@ Photo → Video is isolated, but the generic project page still mounts `ProjectE
 
 Recipe cards on `/projects` also remain readiness-blind before project creation.
 
-## D-033 conformance audit result
+## D-033 conformance result
 
 ### Conforming / valuable
 
@@ -86,14 +86,14 @@ The historical `uv_studio/api/edit_state.py` exposed:
 
 which mutated canonical `RangeEditStateStore` directly. Accepted range edits are D-028 non-destructive timeline state, so this was a genuine D-033 command-boundary bypass.
 
-The branch now:
+The maintained implementation now:
 
-- adds typed `RemoveAcceptedEditCommand` / result contracts to `EditorCommandService`;
+- provides typed `RemoveAcceptedEditCommand` / result contracts through `EditorCommandService`;
 - exposes semantic `remove_accepted_edit` through `/editor/commands`;
 - validates edit identity and preserves project/edit not-found semantics;
-- removes the direct DELETE mutation route, leaving `/edits` read-only;
-- adds domain and API conformance tests;
-- confirms the current frontend had no production caller depending on the removed route.
+- leaves `/edits` as a read-only HTTP surface;
+- has domain and API conformance tests for the semantic mutation path;
+- has no production frontend caller depending on the removed direct DELETE route.
 
 ### Explicit incomplete work, not a reason to replace D-033
 
@@ -105,14 +105,14 @@ The branch now:
 
 These are bounded follow-up concerns. Generic NLE growth must not outrun them, but the current evidence does not justify a new editor foundation.
 
-## Documentation truth repaired in this slice
+## Documentation truth repaired by PR #44
 
-- `PRODUCT_RECOVERY_PLAN.md` now treats Phase 4 as D-033 conformance/clarification rather than product/editor re-selection;
+- `PRODUCT_RECOVERY_PLAN.md` treats Phase 4 as D-033 conformance/clarification rather than product/editor re-selection;
 - `PRODUCT_TRUTH_MATRIX.md` separates historical Stage 8 findings from current Photo-only orchestration truth;
 - `PRODUCT_SURFACE_AUDIT.md` no longer claims Photo still receives generic specialist panels;
 - `FRONTEND_BACKEND_INTERACTION_MAP.md` records Product Orchestrator as the current product next-action owner where migrated and Visualizer as still unmigrated;
 - `EDITOR_FOUNDATION_CONFORMANCE.md` records the current ownership map and repaired mutation bypass;
-- D-033 itself now contains the accepted 2026-08-21 clarification.
+- D-033 itself contains the accepted 2026-08-21 clarification.
 
 ## Strong foundations to preserve
 
@@ -128,7 +128,7 @@ These are bounded follow-up concerns. Generic NLE growth must not outrun them, b
 
 Existing unit/API/real-media/browser suites remain required. They are strong engineering and informed-regression evidence, but they do not replace Class C cold-start journeys or installed Windows human acceptance.
 
-The final review head must pass every repository-required Ubuntu/Windows check and have no unresolved review threads before merge. Exact active-head SHAs and check conclusions remain live GitHub facts rather than durable project-state content.
+Every review head must pass the repository-required Ubuntu/Windows checks and have no unresolved review threads before merge. Exact active-head SHAs and check conclusions remain live GitHub facts rather than durable project-state content.
 
 ## Release status
 
@@ -136,4 +136,4 @@ Release/signing remains downstream of Product Truth Recovery. Stage 9 may resume
 
 ## Next handoff
 
-After PR #44 is reviewed, merged and lifecycle returns to `idle`, continue with `product-recovery-workspace-routing` from `project-context/NEXT_TASK.md`: migrate Visualizer as the second deterministic Product Orchestrator journey and make projected relevant workspaces authoritative for those orchestrated project pages without adding generic NLE primitives.
+`product-recovery-workspace-routing` is the single next slice from `project-context/NEXT_TASK.md`: migrate Visualizer as the second deterministic Product Orchestrator journey and make projected relevant workspaces authoritative for the migrated project pages without adding generic NLE primitives.
