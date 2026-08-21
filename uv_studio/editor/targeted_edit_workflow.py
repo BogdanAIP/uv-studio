@@ -86,7 +86,9 @@ class TargetedEditWorkflowService:
             raise TargetedEditWorkflowError("replacement source must be different from the edited source")
 
         change = _requested_change(brief)
-        plan_state = ReplacementPlanStore(self.project_store).approve(
+        plans = ReplacementPlanStore(self.project_store)
+        previous_plan_state = plans.load(project_id)
+        plan_state = plans.approve(
             project_id,
             ReplacementPlanProposal(
                 edit_id=brief.edit_id,
@@ -100,31 +102,32 @@ class TargetedEditWorkflowService:
         )
         plan = plan_state.get(brief.edit_id)
 
-        suffix = replacement_path.suffix.lower()
-        if suffix not in _SAFE_VIDEO_SUFFIXES:
-            raise TargetedEditWorkflowError("replacement source uses an unsupported video extension")
-
+        artifact_path = None
         artifact_id = f"art_{uuid.uuid4().hex}"
         candidate_id = f"cand_{uuid.uuid4().hex}"
-        relative_path = f"artifacts/{artifact_id}{suffix}"
-        artifact_path = self.project_store.resolve_project_file(
-            project_id,
-            relative_path,
-            allowed_roots=("artifacts",),
-        )
-        reference = ProjectReference(
-            id=artifact_id,
-            kind="video",
-            path=relative_path,
-            metadata={
-                "lifecycle": "replacement_candidate",
-                "method_class": "prepared_asset",
-                "source_asset_path": replacement_reference.path,
-            },
-        )
-
         registered = False
         try:
+            suffix = replacement_path.suffix.lower()
+            if suffix not in _SAFE_VIDEO_SUFFIXES:
+                raise TargetedEditWorkflowError("replacement source uses an unsupported video extension")
+
+            relative_path = f"artifacts/{artifact_id}{suffix}"
+            artifact_path = self.project_store.resolve_project_file(
+                project_id,
+                relative_path,
+                allowed_roots=("artifacts",),
+            )
+            reference = ProjectReference(
+                id=artifact_id,
+                kind="video",
+                path=relative_path,
+                metadata={
+                    "lifecycle": "replacement_candidate",
+                    "method_class": "prepared_asset",
+                    "source_asset_path": replacement_reference.path,
+                },
+            )
+
             if artifact_path.exists() or artifact_path.is_symlink():
                 raise TargetedEditWorkflowError("allocated replacement candidate path already exists")
             shutil.copyfile(replacement_path, artifact_path)
@@ -164,10 +167,19 @@ class TargetedEditWorkflowService:
                 except Exception:
                     pass
             try:
-                if artifact_path.exists() and not artifact_path.is_symlink():
+                if artifact_path is not None and artifact_path.exists() and not artifact_path.is_symlink():
                     artifact_path.unlink()
             except OSError:
                 pass
+            try:
+                # Plan is hidden inside this composite user action. Restore the exact prior state
+                # so a failed Candidate preparation cannot invalidate an older valid candidate/review.
+                with self.project_store._lock:
+                    plans._write(project_id, previous_plan_state)
+            except Exception as rollback_exc:
+                raise TargetedEditWorkflowError(
+                    "replacement preparation failed and the previous plan state could not be restored"
+                ) from rollback_exc
             raise
 
     def review_replacement(
