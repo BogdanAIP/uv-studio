@@ -437,10 +437,7 @@ def _visualizer_workflow(
     if verified_artwork_ids:
         artwork_property["enum"] = tuple(verified_artwork_ids)
 
-    suggested_input: dict[str, object] = {
-        "audio_source_ids": tuple(verified_audio_ids),
-        "artwork_source_ids": tuple(verified_artwork_ids),
-    }
+    suggested_input: dict[str, object] = {}
     if verified_audio_ids:
         suggested_input["audio_source_id"] = verified_audio_ids[0]
 
