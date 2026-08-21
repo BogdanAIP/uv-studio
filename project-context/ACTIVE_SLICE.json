@@ -10,6 +10,7 @@
     "branch": "research/product-recovery-editor-ownership-resolution",
     "pull_request": 44,
     "write_scope": [
+      "ROADMAP.md",
       "docs/architecture/**",
       "frontend/components/editor/**",
       "frontend/lib/**",
