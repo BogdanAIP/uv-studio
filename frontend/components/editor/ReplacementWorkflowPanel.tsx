@@ -56,6 +56,12 @@ function requireDomainResult<TResult>(
   throw new Error('Product Orchestrator вернул capability-ответ для domain action.');
 }
 
+function reviewVerdictLabel(verdict: ReviewVerdict): string {
+  if (verdict === 'approved') return 'вариант одобрен';
+  if (verdict === 'rejected') return 'вариант отклонён';
+  return 'нужна доработка';
+}
+
 export function ReplacementWorkflowPanel({
   projectId,
   editorState,
@@ -98,16 +104,25 @@ export function ReplacementWorkflowPanel({
   const candidates = editorState.replacement_candidates.filter(
     item => item.edit_id === brief.edit_id && item.stage === 'full',
   );
+  const artifactOrder = new Map(
+    editorState.artifacts.map((artifact, index) => [artifact.id, index]),
+  );
+  const orderedCandidates = [...candidates].sort(
+    (left, right) =>
+      (artifactOrder.get(left.artifact_id) ?? -1) -
+      (artifactOrder.get(right.artifact_id) ?? -1),
+  );
   const candidate =
-    candidates.find(item => item.candidate_id === selectedCandidateId) ??
-    candidates[candidates.length - 1] ??
+    orderedCandidates.find(item => item.candidate_id === selectedCandidateId) ??
+    orderedCandidates[orderedCandidates.length - 1] ??
     null;
   const reviews = candidate
     ? editorState.replacement_reviews.filter(item => item.candidate_id === candidate.candidate_id)
     : [];
   const review =
     reviews.find(item => item.review_id === selectedReviewId) ??
-    reviews[reviews.length - 1] ??
+    reviews.find(item => item.verdict === 'approved') ??
+    reviews[0] ??
     null;
   const acceptedEdit = editorState.accepted_edits.find(item => item.edit_id === brief.edit_id) ?? null;
   const replacementOptions = editorState.sources.filter(item => item.path !== brief.source_path);
@@ -279,6 +294,26 @@ export function ReplacementWorkflowPanel({
           >
             {busy === 'prepare' ? 'Подготовка…' : candidate ? 'Подготовить новый вариант' : 'Подготовить вариант замены'}
           </button>
+          {orderedCandidates.length > 1 && (
+            <label className="mt-3 block text-[11px] text-slate-500">
+              Вариант
+              <select
+                aria-label="Выбрать вариант"
+                value={candidate?.candidate_id ?? ''}
+                onChange={event => {
+                  setSelectedCandidateId(event.target.value);
+                  setSelectedReviewId(null);
+                }}
+                className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"
+              >
+                {orderedCandidates.map((item, index) => (
+                  <option key={item.candidate_id} value={item.candidate_id}>
+                    Вариант {index + 1}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {candidate && <CandidatePreview projectId={projectId} candidate={candidate} />}
         </WorkflowCard>
 
@@ -343,11 +378,19 @@ export function ReplacementWorkflowPanel({
                   );
                 })}
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => void submitReview('rejected')}
+                  disabled={busy !== null || !allReviewStatementsPresent || !hasFail}
+                  className="rounded-lg border border-red-900 bg-red-950/30 px-3 py-2 text-xs text-red-200 disabled:opacity-40"
+                >
+                  Отклонить вариант
+                </button>
                 <button
                   type="button"
                   onClick={() => void submitReview('needs_revision')}
-                  disabled={busy !== null || !allReviewStatementsPresent}
+                  disabled={busy !== null || !allReviewStatementsPresent || !(hasFail || hasUncertain)}
                   className="rounded-lg border border-amber-800 bg-amber-950/30 px-3 py-2 text-xs text-amber-200 disabled:opacity-40"
                 >
                   Нужна доработка
@@ -361,9 +404,32 @@ export function ReplacementWorkflowPanel({
                   {busy === 'review-approved' ? 'Сохранение…' : 'Одобрить вариант'}
                 </button>
               </div>
+              {reviews.length > 1 && (
+                <label className="mt-3 block text-[11px] text-slate-500">
+                  Проверка
+                  <select
+                    aria-label="Выбрать проверку"
+                    value={review?.review_id ?? ''}
+                    onChange={event => setSelectedReviewId(event.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300"
+                  >
+                    {reviews.map((item, index) => (
+                      <option key={item.review_id} value={item.review_id}>
+                        Проверка {index + 1} · {reviewVerdictLabel(item.verdict)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {review && (
-                <p className={`mt-3 text-xs ${review.verdict === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  Проверка: {review.verdict === 'approved' ? 'вариант одобрен' : 'нужна доработка'}
+                <p className={`mt-3 text-xs ${
+                  review.verdict === 'approved'
+                    ? 'text-emerald-400'
+                    : review.verdict === 'rejected'
+                      ? 'text-red-400'
+                      : 'text-amber-400'
+                }`}>
+                  Проверка: {reviewVerdictLabel(review.verdict)}
                 </p>
               )}
             </>
