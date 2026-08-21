@@ -266,6 +266,17 @@ export async function getProjectWorkflow(projectId: string): Promise<ProjectWork
   return response.json();
 }
 
+async function isExplicitlyUnmigratedTargetedSurface(projectId: string): Promise<boolean> {
+  const state = await getProjectWorkflow(projectId);
+  const hasTargetedWorkspace = state.relevant_workspaces.some(
+    workspace => workspace.workspace_id === 'targeted_edit',
+  );
+  const explicitlyUnmigrated = state.diagnostics.some(
+    diagnostic => diagnostic.code === 'workflow_not_migrated',
+  );
+  return !hasTargetedWorkspace && explicitlyUnmigrated;
+}
+
 export async function executeProjectWorkflowAction<TResult = Record<string, unknown>>(
   projectId: string,
   actionId: string,
@@ -281,10 +292,14 @@ export async function executeProjectWorkflowAction<TResult = Record<string, unkn
   );
   if (response.ok) return response.json();
 
-  // Migration-only compatibility: old ProjectEditor surfaces can still exist on recipes whose
-  // ProductWorkflowState has not migrated yet. A recipe-level 404 must not turn those established
-  // UV-owned domain paths into dead controls. Migrated free_project never takes this fallback.
-  if (response.status === 404 && TARGETED_EDIT_COMPAT_ACTIONS.has(actionId)) {
+  // Migration-only compatibility: only an explicitly non-migrated recipe may fall back to the
+  // established UV-owned editor domains. A migrated targeted workflow always fails closed here,
+  // so a broken/missing Orchestrator action cannot be hidden by legacy behavior.
+  if (
+    response.status === 404
+    && TARGETED_EDIT_COMPAT_ACTIONS.has(actionId)
+    && await isExplicitlyUnmigratedTargetedSurface(projectId)
+  ) {
     return executeLegacyTargetedAction<TResult>(projectId, actionId, input);
   }
   throw await apiError(response, 'Не удалось выполнить следующее действие проекта');
