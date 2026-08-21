@@ -1,4 +1,4 @@
-"""Browser regressions for Story, Commercial/Product and Free Project workspaces."""
+"""Browser regressions for Story/Commercial workspaces and Free Project routing."""
 
 from __future__ import annotations
 
@@ -63,16 +63,6 @@ def _image_fixture(path: Path) -> None:
     )
 
 
-def _audio_fixture(path: Path) -> None:
-    _run(
-        [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "sine=frequency=770:sample_rate=48000:duration=2",
-            "-c:a", "pcm_s16le", str(path),
-        ]
-    )
-
-
 def _api_json(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -102,10 +92,8 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         cls.artifact_dir.mkdir(parents=True, exist_ok=True)
         cls.video = cls.temp_root / "story-scene.mp4"
         cls.image = cls.temp_root / "product.png"
-        cls.audio = cls.temp_root / "free-audio.wav"
         _video_fixture(cls.video)
         _image_fixture(cls.image)
-        _audio_fixture(cls.audio)
 
         env = os.environ.copy()
         env.update(
@@ -185,7 +173,7 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         self.assertEqual(workspace["sources"][0]["role"], role)
         self.assertEqual(len(workspace["sources"][0]["sha256"]), 64)
 
-    def test_story_commercial_and_free_workspaces_round_trip_through_ui(self) -> None:
+    def test_story_commercial_round_trip_and_free_routes_to_targeted_edit(self) -> None:
         page = self._new_page()
 
         _story_id, story_encoded = self._create_project("E2E Stage 8 Story", "story_video")
@@ -218,17 +206,16 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         expect(page.get_by_label("Stage 8 script")).to_have_value("Текст оффера без подмены продукта")
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
 
-        _free_id, free_encoded = self._create_project("E2E Stage 8 Free", "free_project")
+        _free_id, free_encoded = self._create_project("E2E Targeted Edit Routing", "free_project")
         page.goto(f"/projects/{free_encoded}")
-        expect(page.get_by_role("heading", name="Свободное рабочее пространство", exact=True)).to_be_visible()
-        page.locator('input[aria-label="Stage 8 workspace audio"]').set_input_files(str(self.audio))
-        expect(page.get_by_label(f"Использовать {self.audio.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
-        self._assert_workspace(free_encoded, "free_project", "audio", "audio")
-        page.reload()
-        expect(page.get_by_label("Stage 8 brief")).to_have_value("")
-        expect(page.get_by_label(f"Использовать {self.audio.name}")).to_be_checked(timeout=60_000)
+        expect(
+            page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)
+        ).to_be_visible()
+        expect(page.get_by_role("heading", name="Свободное рабочее пространство", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_have_count(0)
+        expect(page.locator('input[aria-label="Stage 8 workspace audio"]')).to_have_count(0)
+        expect(page.get_by_role("heading", name="Нужна подготовка", exact=True)).to_be_visible()
 
         page.screenshot(path=str(self.artifact_dir / "stage8-composition-workspaces.png"), full_page=True)
 
