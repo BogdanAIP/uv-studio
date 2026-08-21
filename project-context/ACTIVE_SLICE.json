@@ -8,7 +8,7 @@
     "goal": "Project the existing targeted existing-video edit journey through Product Orchestrator readiness, relevant workspace and semantic next actions while preserving D-028/D-032/D-033 canonical Brief, Plan, Candidate, Review and Accept state.",
     "base_branch": "main",
     "branch": "fix/product-recovery-targeted-edit-orchestration",
-    "pull_request": null,
+    "pull_request": 46,
     "write_scope": [
       "docs/architecture/**",
       "e2e/test_user_outcomes.py",
