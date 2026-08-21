@@ -9,8 +9,17 @@ from typing import Any
 
 from uv_studio.projects.continuity_brief import RangeContinuityBrief, RangeContinuityBriefStore
 from uv_studio.projects.models import ProjectReference
-from uv_studio.projects.replacement_candidate import ReplacementCandidateStore
-from uv_studio.projects.replacement_plan import ReplacementPlanProposal, ReplacementPlanStore
+from uv_studio.projects.replacement_candidate import (
+    ReplacementCandidate,
+    ReplacementCandidateStore,
+    replacement_plan_sha256,
+)
+from uv_studio.projects.replacement_plan import (
+    ReplacementPlan,
+    ReplacementPlanNotFound,
+    ReplacementPlanProposal,
+    ReplacementPlanStore,
+)
 from uv_studio.projects.replacement_review import (
     ReplacementReviewAssessment,
     ReplacementReviewObservation,
@@ -36,6 +45,18 @@ def _requested_change(brief: RangeContinuityBrief) -> str:
     if brief.constraints:
         return brief.constraints[0].requirement
     raise TargetedEditWorkflowError("current edit brief has no requested change constraint")
+
+
+def _proposal_from_plan(plan: ReplacementPlan) -> ReplacementPlanProposal:
+    return ReplacementPlanProposal(
+        edit_id=plan.edit_id,
+        method_class=plan.method_class,
+        goal=plan.goal,
+        required_changes=plan.required_changes,
+        allowed_changes=plan.allowed_changes,
+        forbidden_changes=plan.forbidden_changes,
+        audio_strategy=plan.audio_strategy,
+    )
 
 
 class TargetedEditWorkflowService:
@@ -88,6 +109,11 @@ class TargetedEditWorkflowService:
         change = _requested_change(brief)
         plans = ReplacementPlanStore(self.project_store)
         previous_plan_state = plans.load(project_id)
+        try:
+            previous_plan = previous_plan_state.get(brief.edit_id)
+        except ReplacementPlanNotFound:
+            previous_plan = None
+
         plan_state = plans.approve(
             project_id,
             ReplacementPlanProposal(
@@ -141,15 +167,22 @@ class TargetedEditWorkflowService:
             )
             registered = True
 
-            candidates = ReplacementCandidateStore(self.project_store)
-            candidate = candidates.make_candidate(
-                project_id,
+            # Bind to the exact plan created by this semantic action. CandidateStore.register
+            # validates this identity again under the Project Store lock, so a concurrent plan
+            # change fails closed instead of silently rebinding the copied media to another plan.
+            candidate = ReplacementCandidate(
                 candidate_id=candidate_id,
-                edit_id=brief.edit_id,
+                edit_id=plan.edit_id,
+                source_path=plan.source_path,
+                start_us=plan.start_us,
+                end_us=plan.end_us,
+                plan_sha256=replacement_plan_sha256(plan),
+                method_class=plan.method_class,
                 stage="full",
                 artifact_id=artifact_id,
                 artifact_path=relative_path,
             )
+            candidates = ReplacementCandidateStore(self.project_store)
             candidate_state = candidates.register(project_id, candidate)
             return {
                 "plan": plan.to_dict(),
@@ -171,14 +204,24 @@ class TargetedEditWorkflowService:
                     artifact_path.unlink()
             except OSError:
                 pass
+
             try:
-                # Plan is hidden inside this composite user action. Restore the exact prior state
-                # so a failed Candidate preparation cannot invalidate an older valid candidate/review.
+                # Do not roll back over a concurrent mutation. Restore only if the currently
+                # approved plan is still exactly the one this semantic action installed.
                 with self.project_store._lock:
-                    plans._write(project_id, previous_plan_state)
+                    current_state = plans.load(project_id)
+                    try:
+                        current_plan = current_state.get(brief.edit_id)
+                    except ReplacementPlanNotFound:
+                        current_plan = None
+                    if current_plan == plan:
+                        if previous_plan is None:
+                            plans.remove(project_id, brief.edit_id)
+                        else:
+                            plans.approve(project_id, _proposal_from_plan(previous_plan))
             except Exception as rollback_exc:
                 raise TargetedEditWorkflowError(
-                    "replacement preparation failed and the previous plan state could not be restored"
+                    "replacement preparation failed and the previous plan could not be restored"
                 ) from rollback_exc
             raise
 
