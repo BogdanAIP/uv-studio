@@ -22,6 +22,7 @@ import { ReplacementWorkflowPanel } from './ReplacementWorkflowPanel';
 interface ProjectEditorProps {
   projectId: string;
   onProjectChanged?: () => void | Promise<void>;
+  orchestrated?: boolean;
 }
 
 function metadataNumber(source: ProjectReference | null, key: string): number | null {
@@ -35,7 +36,7 @@ function metadataText(source: ProjectReference, key: string): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProps) {
+export function ProjectEditor({ projectId, onProjectChanged, orchestrated = false }: ProjectEditorProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editorState, setEditorState] = useState<Awaited<ReturnType<typeof getEditorState>> | null>(null);
@@ -408,6 +409,7 @@ export function ProjectEditor({ projectId, onProjectChanged }: ProjectEditorProp
                 sourcePath={activeSource.path}
                 preferredEditId={latestResult?.edit_id}
                 onStateChanged={refreshStateAndProject}
+                orchestrated={orchestrated}
               />
             </div>
           )}
@@ -447,7 +449,7 @@ function ContextInput({
         max={30}
         step={0.5}
         value={value}
-        onChange={event => onChange(Math.min(30, Math.max(0, Number(event.target.value) || 0)))}
+        onChange={event => onChange(Math.min(30, Math.max(0, Number(event.target.value) || 0))}
         className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 font-mono text-xs text-slate-200 outline-none focus:border-violet-500"
       />
     </label>
