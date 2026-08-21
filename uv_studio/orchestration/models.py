@@ -49,7 +49,7 @@ class WorkflowAction:
     suggested_input: dict[str, Any]
     execution_class: str
     authorization_class: str
-    capability_id: str
+    capability_id: str | None
     expected_result: str
 
 
