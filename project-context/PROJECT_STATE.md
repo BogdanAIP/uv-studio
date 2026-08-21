@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-targeted-edit-orchestration -->
 
 **Updated:** 2026-08-21
@@ -9,11 +9,11 @@
 
 ## Current lifecycle
 
-`product-recovery-targeted-edit-orchestration` remains the active Draft slice on branch `fix/product-recovery-targeted-edit-orchestration`, based on explicit idle `main` after PR #45.
+`product-recovery-targeted-edit-orchestration` is the active **Review** slice on branch `fix/product-recovery-targeted-edit-orchestration`, based on unchanged `main` after PR #45.
 
-Implementation is complete enough for final self-review and exact-head CI. The slice has migrated targeted existing-video editing into Product Orchestrator while preserving D-028 non-destructive accepted edits, D-032 evidence-based Review/Accept and D-033 semantic editor ownership.
+The final Draft head passed every permanent repository check on Ubuntu and Windows, including API integration, real-media, frontend build and browser user-outcome suites. PR #46 is no longer Draft; the repository context is now in `review` and requires the exact Review head to pass the same permanent checks before merge.
 
-The lifecycle must not move to `review` until the final documentation/context head has passed every required check and the complete PR diff has been reviewed again. PR #45 remains the last completed slice until #46 is actually merged.
+The complete PR diff has been self-reviewed, the write scope matches all changed files, and there are zero unresolved review threads. PR #45 remains the last completed slice until #46 is actually merged.
 
 Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
@@ -115,4 +115,4 @@ The next planned slice is `product-recovery-dubbing-orchestration`.
 
 ## Next handoff
 
-After this PR passes final exact-head CI, receives final self-review with zero unresolved blocking findings, transitions to `review`, merges, and closes lifecycle to `idle`, continue with `product-recovery-dubbing-orchestration`: project the existing dubbing domains into truthful prerequisites and outcome-oriented next actions while preserving transcript/translation/prepared-speech/alignment/review/render authority boundaries.
+If the exact Review head passes all permanent checks with zero unresolved blocking findings and the base remains unchanged, merge PR #46, close the lifecycle to `idle`, and continue with `product-recovery-dubbing-orchestration`: project the existing dubbing domains into truthful prerequisites and outcome-oriented next actions while preserving transcript/translation/prepared-speech/alignment/review/render authority boundaries.
