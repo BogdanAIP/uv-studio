@@ -104,7 +104,6 @@ export interface RenderVisualizerActionResponse {
 
 const TARGETED_EDIT_COMPAT_ACTIONS = new Set([
   'select_target_range',
-  'prepare_replacement',
   'review_replacement',
   'accept_replacement',
   'render_accepted_edits',
@@ -131,22 +130,6 @@ function requiredString(input: Record<string, unknown>, key: string): string {
   return value.trim();
 }
 
-function recordArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-    : [];
-}
-
-function requestedChangeFromBrief(brief: Record<string, unknown>): string {
-  const constraints = recordArray(brief.constraints);
-  const requested = constraints.find(item => item.constraint_id === 'requested_change') ?? constraints[0];
-  const requirement = requested?.requirement;
-  if (typeof requirement !== 'string' || !requirement.trim()) {
-    throw new Error('Legacy targeted-edit compatibility could not resolve the requested change');
-  }
-  return requirement.trim();
-}
-
 async function executeLegacyTargetedAction<TResult>(
   projectId: string,
   actionId: string,
@@ -162,64 +145,6 @@ async function executeLegacyTargetedAction<TResult>(
     });
     const result = await jsonOrError<TResult>(response, 'Не удалось подготовить выбранный диапазон');
     return { schema_version: 1, action_id: actionId, result };
-  }
-
-  if (actionId === 'prepare_replacement') {
-    const editId = requiredString(input, 'edit_id');
-    const replacementSourceId = requiredString(input, 'replacement_source_id');
-    const editorState = await jsonOrError<Record<string, unknown>>(
-      await fetch(`/api/uv/projects/${encodedProjectId}/editor/state`, { cache: 'no-store' }),
-      'Не удалось прочитать текущее состояние редактора',
-    );
-    const brief = recordArray(editorState.briefs).find(item => item.edit_id === editId);
-    const replacement = recordArray(editorState.sources).find(item => item.id === replacementSourceId);
-    if (!brief || !replacement) {
-      throw new Error('Текущий Brief или выбранный клип больше не существует в проекте');
-    }
-    const sourcePath = replacement.path;
-    if (typeof sourcePath !== 'string' || !sourcePath) {
-      throw new Error('Выбранный клип не имеет project-owned source path');
-    }
-    const change = requestedChangeFromBrief(brief);
-    const planState = await jsonOrError<Record<string, unknown>>(
-      await fetch(
-        `/api/uv/projects/${encodedProjectId}/replacement-plans/${encodeURIComponent(editId)}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            edit_id: editId,
-            method_class: 'prepared_asset',
-            goal: change,
-            required_changes: [change],
-            allowed_changes: [],
-            forbidden_changes: ['Не изменять исходное видео вне выбранного диапазона.'],
-            audio_strategy: 'preserve_source',
-          }),
-        },
-      ),
-      'Не удалось утвердить план замены',
-    );
-    const plan = recordArray(planState.plans).find(item => item.edit_id === editId);
-    if (!plan) throw new Error('Утверждённый план не найден в текущем состоянии проекта');
-
-    const candidateEnvelope = await jsonOrError<Record<string, unknown>>(
-      await fetch(`/api/uv/projects/${encodedProjectId}/replacement-candidates/prepared-asset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ edit_id: editId, source_path: sourcePath }),
-      }),
-      'Не удалось подготовить вариант замены',
-    );
-    const candidate = candidateEnvelope.candidate;
-    if (!candidate || typeof candidate !== 'object') {
-      throw new Error('Подготовка замены завершилась без candidate');
-    }
-    return {
-      schema_version: 1,
-      action_id: actionId,
-      result: { plan, candidate } as TResult,
-    };
   }
 
   if (actionId === 'review_replacement') {
@@ -292,9 +217,10 @@ export async function executeProjectWorkflowAction<TResult = Record<string, unkn
   );
   if (response.ok) return response.json();
 
-  // Migration-only compatibility: only an explicitly non-migrated recipe may fall back to the
-  // established UV-owned editor domains. A migrated targeted workflow always fails closed here,
-  // so a broken/missing Orchestrator action cannot be hidden by legacy behavior.
+  // Migration-only compatibility is intentionally limited to one-to-one established operations.
+  // Composite replacement preparation stays explicit on non-migrated pages instead of pretending
+  // multiple old mutations are one atomic semantic action. A migrated targeted workflow always
+  // fails closed here, so a broken/missing Orchestrator action cannot be hidden by legacy behavior.
   if (
     response.status === 404
     && TARGETED_EDIT_COMPAT_ACTIONS.has(actionId)
