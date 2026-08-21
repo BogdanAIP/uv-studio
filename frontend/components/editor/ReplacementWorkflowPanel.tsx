@@ -2,7 +2,11 @@
 
 import { CheckCircle2, CircleAlert, FileVideo2, ListChecks, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { projectArtifactMediaUrl } from '@/lib/editorApi';
+import {
+  approveReplacementPlan,
+  prepareAssetReplacementCandidate,
+  projectArtifactMediaUrl,
+} from '@/lib/editorApi';
 import type {
   EditorState,
   RangeContinuityBrief,
@@ -22,6 +26,7 @@ interface ReplacementWorkflowPanelProps {
   sourcePath: string;
   preferredEditId?: string | null;
   onStateChanged: () => Promise<EditorState>;
+  orchestrated?: boolean;
 }
 
 type ReviewDraft = {
@@ -68,6 +73,7 @@ export function ReplacementWorkflowPanel({
   sourcePath,
   preferredEditId,
   onStateChanged,
+  orchestrated = false,
 }: ReplacementWorkflowPanelProps) {
   const [selectedEditId, setSelectedEditId] = useState<string | null>(null);
   const [replacementSourceId, setReplacementSourceId] = useState<string | null>(null);
@@ -101,6 +107,7 @@ export function ReplacementWorkflowPanel({
     );
   }
 
+  const plan = editorState.replacement_plans.find(item => item.edit_id === brief.edit_id) ?? null;
   const candidates = editorState.replacement_candidates.filter(
     item => item.edit_id === brief.edit_id && item.stage === 'full',
   );
@@ -155,6 +162,7 @@ export function ReplacementWorkflowPanel({
   };
 
   const prepareReplacement = () => withBusy('prepare', async () => {
+    if (!orchestrated) throw new Error('Составная подготовка доступна только в оркестрированном режиме.');
     if (!replacementSource) throw new Error('Импортируйте отдельный видеоклип для замены.');
     const response = await executeProjectWorkflowAction<{
       plan: Record<string, unknown>;
@@ -164,6 +172,33 @@ export function ReplacementWorkflowPanel({
       replacement_source_id: replacementSource.id,
     });
     const result = requireDomainResult(response);
+    setSelectedCandidateId(result.candidate.candidate_id);
+    setSelectedReviewId(null);
+    await onStateChanged();
+  });
+
+  const approvePreparedPlan = () => withBusy('plan', async () => {
+    await approveReplacementPlan(projectId, {
+      edit_id: brief.edit_id,
+      method_class: 'prepared_asset',
+      goal: change,
+      required_changes: [change],
+      allowed_changes: [],
+      forbidden_changes: ['Не изменять исходное видео вне выбранного диапазона.'],
+      audio_strategy: 'preserve_source',
+    });
+    setSelectedCandidateId(null);
+    setSelectedReviewId(null);
+    await onStateChanged();
+  });
+
+  const prepareLegacyCandidate = () => withBusy('candidate', async () => {
+    if (!replacementSource) throw new Error('Импортируйте отдельный видеоклип для замены.');
+    const result = await prepareAssetReplacementCandidate(
+      projectId,
+      brief.edit_id,
+      replacementSource.path,
+    );
     setSelectedCandidateId(result.candidate.candidate_id);
     setSelectedReviewId(null);
     await onStateChanged();
@@ -231,7 +266,9 @@ export function ReplacementWorkflowPanel({
           <p className="text-xs uppercase tracking-[0.18em] text-violet-400">Точечное изменение</p>
           <h3 className="mt-1 text-lg font-medium text-slate-100">Вариант → проверка → принять</h3>
           <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
-            UV Studio сохраняет Brief, Plan, Candidate и Review внутри проекта, но показывает только действия, которые нужны для результата.
+            {orchestrated
+              ? 'UV Studio сохраняет Brief, Plan, Candidate и Review внутри проекта, но показывает только действия, которые нужны для результата.'
+              : 'Этот сценарий ещё не перенесён в Product Orchestrator: технический Plan и подготовка Candidate временно остаются отдельными явными шагами.'}
           </p>
         </div>
         {briefs.length > 1 && (
@@ -265,7 +302,11 @@ export function ReplacementWorkflowPanel({
           step="01"
           title="Подготовить вариант"
           done={Boolean(candidate)}
-          description="Выберите второй project-owned клип. Технический план и отдельный candidate создаются одним семантическим действием."
+          description={
+            orchestrated
+              ? 'Выберите второй project-owned клип. Технический план и отдельный candidate создаются одним семантическим действием.'
+              : 'Переходный режим сохраняет старую честную границу: сначала утвердить Plan, затем отдельно подготовить Candidate.'
+          }
         >
           <p className="rounded-lg bg-slate-900/70 p-3 text-xs leading-5 text-slate-400">{change}</p>
           {replacementOptions.length > 0 ? (
@@ -286,14 +327,37 @@ export function ReplacementWorkflowPanel({
               Импортируйте второе видео. Исходник не может быть заменой самому себе.
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => void prepareReplacement()}
-            disabled={busy !== null || !replacementSource}
-            className="mt-3 w-full rounded-lg border border-violet-700/70 bg-violet-950/40 px-3 py-2 text-xs font-medium text-violet-200 hover:border-violet-500 disabled:opacity-40"
-          >
-            {busy === 'prepare' ? 'Подготовка…' : candidate ? 'Подготовить новый вариант' : 'Подготовить вариант замены'}
-          </button>
+
+          {orchestrated ? (
+            <button
+              type="button"
+              onClick={() => void prepareReplacement()}
+              disabled={busy !== null || !replacementSource}
+              className="mt-3 w-full rounded-lg border border-violet-700/70 bg-violet-950/40 px-3 py-2 text-xs font-medium text-violet-200 hover:border-violet-500 disabled:opacity-40"
+            >
+              {busy === 'prepare' ? 'Подготовка…' : candidate ? 'Подготовить новый вариант' : 'Подготовить вариант замены'}
+            </button>
+          ) : (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void approvePreparedPlan()}
+                disabled={busy !== null}
+                className="rounded-lg border border-violet-700/70 bg-violet-950/40 px-3 py-2 text-xs font-medium text-violet-200 hover:border-violet-500 disabled:opacity-40"
+              >
+                {busy === 'plan' ? 'Фиксация…' : plan?.method_class === 'prepared_asset' ? 'Переутвердить Plan' : 'Утвердить Plan'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void prepareLegacyCandidate()}
+                disabled={busy !== null || plan?.method_class !== 'prepared_asset' || !replacementSource}
+                className="rounded-lg border border-sky-700/70 bg-sky-950/40 px-3 py-2 text-xs font-medium text-sky-200 hover:border-sky-500 disabled:opacity-40"
+              >
+                {busy === 'candidate' ? 'Подготовка…' : 'Подготовить Candidate'}
+              </button>
+            </div>
+          )}
+
           {orderedCandidates.length > 1 && (
             <label className="mt-3 block text-[11px] text-slate-500">
               Вариант
