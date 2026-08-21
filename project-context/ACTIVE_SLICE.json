@@ -8,7 +8,7 @@
     "goal": "Migrate Visualizer to Product Orchestrator and make relevant_workspaces authoritative for the two migrated deterministic project journeys without introducing new orchestration persistence or generic NLE functionality.",
     "base_branch": "main",
     "branch": "fix/product-recovery-workspace-routing",
-    "pull_request": null,
+    "pull_request": 45,
     "write_scope": [
       "docs/architecture/**",
       "e2e/test_stage8_outcomes.py",
