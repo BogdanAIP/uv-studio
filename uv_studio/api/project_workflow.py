@@ -61,6 +61,26 @@ class ComposePhotosActionRequest(BaseModel):
         return normalized
 
 
+class RenderVisualizerActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    audio_source_id: str = Field(min_length=1, max_length=128)
+    artwork_source_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+    @field_validator("audio_source_id", "artwork_source_id")
+    @classmethod
+    def validate_source_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source id must be non-empty")
+        return normalized
+
+
+WorkflowActionRequest = ComposePhotosActionRequest | RenderVisualizerActionRequest
+
+
 def _load_project(store: ProjectStore, project_id: str) -> ProjectDocument:
     try:
         return store.load_project(project_id)
@@ -93,6 +113,32 @@ def _state(
     ).to_dict()
 
 
+def _validated_action_input(
+    *,
+    state: dict[str, Any],
+    action_id: str,
+    request: WorkflowActionRequest,
+) -> dict[str, Any]:
+    if state["recipe_id"] == "photo_to_video" and action_id == "compose_photos":
+        if not isinstance(request, ComposePhotosActionRequest):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Workflow action input does not match compose_photos contract",
+            )
+        return request.model_dump(exclude_none=True)
+    if state["recipe_id"] == "visualizer" and action_id == "render_visualizer":
+        if not isinstance(request, RenderVisualizerActionRequest):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Workflow action input does not match render_visualizer contract",
+            )
+        return request.model_dump(exclude_none=True)
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Workflow action not found for this project",
+    )
+
+
 @router.get("/{project_id}/workflow")
 def get_project_workflow(
     project_id: str,
@@ -112,7 +158,7 @@ def get_project_workflow(
 async def execute_project_workflow_action(
     project_id: str,
     action_id: str,
-    request: ComposePhotosActionRequest,
+    request: WorkflowActionRequest,
     store: ProjectStore = Depends(get_project_store),
     registry: CapabilityRegistry = Depends(get_capability_registry),
     recipe_registry: RecipeRegistry = Depends(get_recipe_registry),
@@ -132,12 +178,15 @@ async def execute_project_workflow_action(
         capability_registry=registry,
         recipe_registry=recipe_registry,
     )
-    if state["recipe_id"] != "photo_to_video" or action_id != "compose_photos":
+    action = next(
+        (item for item in state["next_actions"] if item["action_id"] == action_id),
+        None,
+    )
+    if action is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workflow action not found for this project",
         )
-    action = next(item for item in state["next_actions"] if item["action_id"] == action_id)
     if not action["enabled"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -148,7 +197,11 @@ async def execute_project_workflow_action(
             },
         )
 
-    input_payload = request.model_dump(exclude_none=True)
+    input_payload = _validated_action_input(
+        state=state,
+        action_id=action_id,
+        request=request,
+    )
     execution = await execute_project_capability(
         project_id=project_id,
         capability_id=action["capability_id"],
