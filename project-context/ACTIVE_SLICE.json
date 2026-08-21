@@ -8,7 +8,7 @@
     "goal": "Project the existing dubbing production chain through Product Orchestrator readiness, prerequisites, relevant workspace and semantic next actions while preserving D-034-D-037 canonical transcript, translation, prepared-speech, alignment, Review, Accept and render boundaries.",
     "base_branch": "main",
     "branch": "fix/product-recovery-dubbing-orchestration",
-    "pull_request": null,
+    "pull_request": 47,
     "write_scope": [
       "docs/architecture/**",
       "e2e/test_user_outcomes.py",
