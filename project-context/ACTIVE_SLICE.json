@@ -1,14 +1,40 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "product-recovery-dubbing-orchestration",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Project the existing dubbing production chain through Product Orchestrator readiness, prerequisites, relevant workspace and semantic next actions while preserving D-034-D-037 canonical transcript, translation, prepared-speech, alignment, Review, Accept and render boundaries.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-dubbing-orchestration",
+    "pull_request": null,
+    "write_scope": [
+      "docs/architecture/**",
+      "e2e/test_user_outcomes.py",
+      "frontend/app/projects/**",
+      "frontend/components/editor/DubbingWorkflowPanel.tsx",
+      "frontend/components/editor/DubbingPrecisionPanel.tsx",
+      "frontend/components/editor/DubbingSubtitleExportPanel.tsx",
+      "frontend/components/editor/ProjectEditor.tsx",
+      "frontend/lib/dubbingApi.ts",
+      "frontend/lib/productWorkflowApi.ts",
+      "project-context/**",
+      "tests/**",
+      "tests_api/**",
+      "uv_studio/api/project_workflow.py",
+      "uv_studio/editor/**",
+      "uv_studio/orchestration/**",
+      "uv_studio/recipes/**"
+    ]
+  },
   "last_completed": {
     "id": "product-recovery-targeted-edit-orchestration",
     "pull_request": 46,
     "merge_commit": "440c85f54c83e7a9a650250c52ed9b7d4fd1b18f"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-dubbing-orchestration",
+    "next_slice_id": "product-recovery-music-orchestration",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
