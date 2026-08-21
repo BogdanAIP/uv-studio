@@ -5,6 +5,7 @@ from dataclasses import replace
 from uv_studio.projects.replacement_review import ReplacementReviewError, ReplacementReviewStore
 from uv_studio.projects.store import ProjectStoreError
 
+from .dubbing import DUBBING_RECIPE_ID, dubbing_workflow_state
 from .models import (
     WORKFLOW_SCHEMA_VERSION,
     ProjectWorkflowState,
@@ -172,10 +173,13 @@ def project_workflow_state(project, recipe, registry, source_media) -> ProjectWo
     if recipe is not None and project.recipe_id == TARGETED_EDIT_RECIPE_ID:
         state = targeted_edit_workflow_state(project, recipe, registry, source_media)
         return _normalize_targeted_projection(state, source_media)
+    if recipe is not None and project.recipe_id == DUBBING_RECIPE_ID:
+        return dubbing_workflow_state(project, recipe, registry, source_media)
     return _base_project_workflow_state(project, recipe, registry, source_media)
 
 
 __all__ = [
+    "DUBBING_RECIPE_ID",
     "ProjectWorkflowState",
     "TARGETED_EDIT_RECIPE_ID",
     "WORKFLOW_SCHEMA_VERSION",
@@ -185,6 +189,7 @@ __all__ = [
     "WorkflowPrerequisite",
     "WorkflowReadiness",
     "WorkflowWorkspace",
+    "dubbing_workflow_state",
     "project_workflow_state",
     "targeted_edit_workflow_state",
 ]
