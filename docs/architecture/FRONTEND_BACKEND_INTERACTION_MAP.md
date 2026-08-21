@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This is the current interaction/ownership map after Product Truth Inventory (#42) and the first Product Orchestrator foundation (#43). Historical Stage 8 coupling is retained only where it explains migration debt.
+This is the current interaction/ownership map after Product Truth Inventory, Product Orchestrator foundation, D-033 conformance and the deterministic workspace-routing recovery.
 
 ## Supported product path
 
@@ -29,7 +29,7 @@ UV-owned AppShell
        FFmpeg / MLT / local ML / MCP / providers
 ```
 
-The frontend renders product state, collects bounded inputs and invokes semantic/domain actions. It is not the canonical workflow/timeline store.
+The frontend renders projected product state, collects bounded input and invokes semantic/domain actions. It is not the canonical workflow or timeline store.
 
 ## Canonical authorities
 
@@ -46,66 +46,77 @@ The frontend renders product state, collects bounded inputs and invokes semantic
 | reusable editor interaction UI | selective OpenCut Classic-derived components/helpers | reuse where valuable |
 | accepted-edit final export | current bounded FFmpeg path | preserve until parity evidence changes ownership |
 
-## Product Orchestrator status
-
-Implemented HTTP seam:
+## Product Orchestrator HTTP seam
 
 ```text
 GET  /api/uv/projects/{project_id}/workflow
 POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
 ```
 
-`ProjectWorkflowState` is a read projection over canonical project/domain state plus runtime capability availability. It does not create a second workflow database.
+`ProjectWorkflowState` is a read projection over canonical project/domain state plus runtime capability availability. It creates no second workflow database.
+
+## Migrated deterministic journeys
 
 ### Photo -> Video
 
-Current first migrated journey:
-
 ```text
-project images
- -> verify project-owned bytes
- -> Product Orchestrator readiness/prerequisites
+verified project images
+ -> readiness/prerequisites
  -> relevant workspace: photo_composition
  -> semantic action: compose_photos
  -> video.compose_photos
- -> local FFmpeg adapter
+ -> local/free FFmpeg adapter
  -> project video artifact
- -> refreshed current_outcome/recent_artifacts
 ```
-
-This is `working_orchestrated`.
 
 ### Visualizer
 
-Current execution path is real:
-
 ```text
-project audio + optional artwork
+verified project audio
+ + optional verified artwork
+ -> readiness/prerequisites
+ -> relevant workspace: audio_visualizer
+ -> semantic action: render_visualizer
  -> audio.visualize
- -> local FFmpeg adapter
- -> project artifact
+ -> local/free FFmpeg adapter
+ -> project video artifact
 ```
 
-But Visualizer is **not yet Product-Orchestrator-migrated**. `project_workflow_state()` currently returns the generic not-migrated/partial projection for it. It is the next deterministic reference candidate.
+Both flows use the same product contract and source-integrity rule. Visualizer no longer invokes the raw capability execution endpoint from its product panel. The action schema exposes only verified project source IDs, and `suggested_input` remains an executable action payload rather than UI-only metadata.
 
 ## Current project-page routing
 
-Photo-to-Video uses Product Orchestrator `relevant_workspaces` to decide its primary workspace and avoids unrelated generic panels.
-
-The remaining recipes still use a parallel frontend `recipe_id` decision tree and, for every non-photo project, mount generic `ProjectEditor`, Sequence Continuity and three Dubbing panels before/alongside specialist panels.
-
-Target direction:
+For a migrated journey, `ProjectWorkflowState.relevant_workspaces` is authoritative:
 
 ```text
 ProjectWorkflowState.relevant_workspaces
         |
         v
-workspace registry / renderer
+project-page workspace renderer
         |
-        +--> only declared task workspaces
+        +--> photo_composition
+        +--> audio_visualizer
 ```
 
-Do not replace this with another universal page that appends every specialist tool.
+When a dedicated Product Orchestrator workspace is projected, the page does not also mount generic Project Editor, Sequence Continuity or Dubbing panels. This removes the duplicate recipe-driven workspace decision path for Photo and Visualizer.
+
+Non-migrated recipes still return no authoritative workspace projection and retain their current domain panels until their own bounded migration. The next such migration is targeted existing-video edit.
+
+## Targeted edit path — current backend truth
+
+```text
+source upload/probe
+ -> project source registration
+ -> select range + requested change
+ -> EditorCommandService / RangeContinuityBrief
+ -> replacement plan
+ -> candidate preparation/capability
+ -> evidence-based review
+ -> accepted edit
+ -> bounded render/export
+```
+
+This chain is real. Recovery should project it as understandable prerequisites and next actions rather than replacing its durable Brief -> Plan -> Candidate -> Review -> Accept invariants.
 
 ## Editor path and D-033 ownership
 
@@ -125,29 +136,9 @@ canonical Project Store/domain state
         +--> bounded FFmpeg/render adapters
 ```
 
-`RangeTimeline.tsx` and `timelineMath.ts` selectively adapt OpenCut Classic ruler/playhead/snap interaction ideas. UV integer-microsecond identity remains canonical.
+`RangeTimeline.tsx` and `timelineMath.ts` selectively adapt OpenCut Classic interaction ideas while UV integer-microsecond identity remains canonical. `MLTTimelineAdapter` derives an engine representation from accepted UV edit state; raw MLT state is not a public mutation authority.
 
-`MLTTimelineAdapter` derives ephemeral engine XML from accepted UV edit state. Raw MLT XML is not exposed as a public mutation surface.
-
-PR #44 repairs one concrete D-033 bypass: accepted-edit removal moves from direct `DELETE /edits/{edit_id}` store mutation to semantic `remove_accepted_edit` on `/editor/commands`; `/edits` becomes read-only inspection.
-
-This does not imply all coherent domains must collapse into one endpoint. Replacement Review, Dubbing Review and Music domains may keep dedicated UV-owned contracts when those contracts themselves are the semantic/domain mutation boundary.
-
-## Targeted edit path
-
-```text
-source upload/probe
- -> project source registration
- -> select range + change request
- -> EditorCommandService / RangeContinuityBrief
- -> replacement plan
- -> candidate preparation/capability
- -> evidence-based review
- -> accepted edit
- -> bounded render/export
-```
-
-The backend chain is real. Recovery work is primarily next-action/prerequisite projection and reducing implementation vocabulary exposed to ordinary users.
+PR #44 repaired the concrete accepted-edit removal bypass by moving mutation to semantic `remove_accepted_edit` under `/editor/commands` and leaving `/edits` read-only.
 
 ## Dubbing path
 
@@ -163,7 +154,7 @@ project video
  -> artifact/subtitles
 ```
 
-This is substantial real functionality. Remaining product gaps are setup visibility, workflow isolation and intent-first orchestration.
+Substantial real functionality exists. Product gaps are setup visibility, workflow isolation and intent-first orchestration.
 
 ## Music Video path
 
@@ -177,19 +168,19 @@ song
  -> render artifact
 ```
 
-The domain model is real. Product recovery should propose/populate plans and expose decisions, not delete the durable Music Map/Direction/Review state.
+The domain model is real. Recovery should propose/populate structure and surface decisions without deleting durable Music Map/Direction/Review state.
 
 ## Story / Commercial / Free
 
-Stage 8 workspace APIs persist useful brief/script/material choices. They are preparation state, not complete production engines. Product Orchestrator must expose truthful next actions before these modes can be called complete journeys.
+Stage 8 workspace APIs persist useful brief/script/material choices. They are preparation state, not complete production journeys. Product Orchestrator must expose truthful next actions before these modes can be called complete.
 
 ## Performance lip-sync
 
-Verified MuseTalk-backed `video.digital_human` execution is real when optional runtime/model/CUDA preflight succeeds. Product readiness should project that setup requirement before the user enters the workflow.
+MuseTalk-backed `video.digital_human` execution is real when the optional runtime/model/CUDA preflight succeeds. Product readiness should project that setup requirement before the user enters the workflow.
 
 ## Legacy VideoClaw migration debt
 
-The Stage 8 baseline had a root AppShell that linked/polled the old VideoClaw runtime through `workflowApi.ts`. PR #43 removed that authority from the supported shell.
+The Stage 8 baseline had a root shell that linked and polled the old VideoClaw runtime through `workflowApi.ts`. The supported AppShell no longer gives that runtime product authority.
 
 Still-present legacy source includes:
 
@@ -198,17 +189,7 @@ Still-present legacy source includes:
 - PipelinePage and `/pipelines/*` routes;
 - related old sandbox/session/task helpers.
 
-These call historical families such as `/api/pipelines/*`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/upload_media` and old `/api/project/*` routes. The UV-owned server intentionally does not restore those families.
-
-Migration rule:
-
-```text
-wanted outcome?
-  yes -> rebuild on Product Orchestrator + current UV semantic/domain/capability path
-  no  -> remove after call-site/dependency proof
-```
-
-Never use a broken legacy page as justification to remount the complete old backend.
+The UV-owned server intentionally does not restore their historical endpoint families. Wanted outcomes must be rebuilt on current UV semantic/domain/capability paths; unwanted surfaces should be removed after dependency proof.
 
 ## Capability architecture to preserve
 
@@ -233,13 +214,13 @@ Product Orchestrator consumes this layer; it does not replace it.
 
 ## Current major gaps
 
-1. Product Orchestrator coverage is still only one recipe.
-2. Non-photo project pages still reconstruct workspace relevance in React and overexpose unrelated domains.
+1. Product Orchestrator currently covers two deterministic recipes, not the core production journeys.
+2. Non-migrated pages can still expose unrelated domain surfaces because they have no authoritative projected workspace set yet.
 3. Recipe creation does not show readiness before project creation.
-4. Core journeys (targeted edit, dubbing, music, narrated, general) still need intent-first Product Orchestrator projections.
-5. D-033 conformance is incomplete in areas such as shared undo/redo and full GUI/scripts/AI/MCP mutation equivalence; these are bounded follow-up problems, not a reason to redefine the product/editor foundation.
+4. Targeted edit, dubbing, music, narrated and general journeys still need intent-first Product Orchestrator projections.
+5. D-033 follow-up such as shared undo/redo and full GUI/scripts/AI/MCP mutation equivalence remains bounded work, not a reason to redefine the editor foundation.
 6. Legacy frontend route source still needs dependency-proven retirement.
 
 ## Next interaction-layer slice
 
-After the D-033 conformance PR closes, migrate Visualizer to Product Orchestrator and introduce/strengthen a workspace renderer driven by `relevant_workspaces` for the orchestrated deterministic journeys. Photo and Visualizer should then prove one product contract can isolate two different local intent-to-artifact workflows without generic NLE growth.
+Migrate targeted existing-video edit to Product Orchestrator without replacing its accepted domain model. The product surface should expose source/range/change/review/export as understandable next actions while the durable Brief -> Plan -> Candidate -> Review -> Accept chain remains underneath.

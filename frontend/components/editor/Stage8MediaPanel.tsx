@@ -4,12 +4,12 @@ import { useMemo, useState } from 'react';
 import type { ProjectReference } from '@/lib/projectsApi';
 import {
   executeComposePhotosAction,
+  executeRenderVisualizerAction,
   type WorkflowAction,
   type WorkflowPrerequisite,
 } from '@/lib/productWorkflowApi';
 import {
   projectStage8ArtifactUrl,
-  renderAudioVisualizer,
   uploadProjectImageSource,
   uploadStage8AudioSource,
 } from '@/lib/stage8MediaApi';
@@ -17,6 +17,17 @@ import {
 function sourceName(source: ProjectReference): string {
   const original = source.metadata.original_name;
   return typeof original === 'string' && original ? original : source.path.split('/').pop() || source.id;
+}
+
+function actionSourceIds(action: WorkflowAction | undefined, propertyName: string): Set<string> | null {
+  if (!action) return null;
+  const properties = action.input_schema.properties;
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return null;
+  const property = (properties as Record<string, unknown>)[propertyName];
+  if (!property || typeof property !== 'object' || Array.isArray(property)) return null;
+  const values = (property as Record<string, unknown>).enum;
+  if (!Array.isArray(values)) return null;
+  return new Set(values.filter((value): value is string => typeof value === 'string'));
 }
 
 interface Stage8MediaPanelProps {
@@ -38,10 +49,29 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
     const verifiedIds = new Set(suggestedIds.filter((value): value is string => typeof value === 'string'));
     return images.filter(source => verifiedIds.has(source.id));
   }, [images, recipeId, workflowAction]);
+  const visualizerAudios = useMemo(() => {
+    if (recipeId !== 'visualizer') return audios;
+    const allowedIds = actionSourceIds(workflowAction, 'audio_source_id');
+    if (allowedIds === null) return [];
+    return audios.filter(source => allowedIds.has(source.id));
+  }, [audios, recipeId, workflowAction]);
+  const visualizerArtworks = useMemo(() => {
+    if (recipeId !== 'visualizer') return images;
+    const allowedIds = actionSourceIds(workflowAction, 'artwork_source_id');
+    if (allowedIds === null) return [];
+    return images.filter(source => allowedIds.has(source.id));
+  }, [images, recipeId, workflowAction]);
+  const suggestedVisualizerAudioId =
+    typeof workflowAction?.suggested_input.audio_source_id === 'string'
+      ? workflowAction.suggested_input.audio_source_id
+      : '';
+
   const [imageOrder, setImageOrder] = useState(() => composableImages.map(source => source.id));
   const [photoAudioId, setPhotoAudioId] = useState('');
   const [durationSeconds, setDurationSeconds] = useState('2');
-  const [visualizerAudioId, setVisualizerAudioId] = useState(() => audios[0]?.id ?? '');
+  const [visualizerAudioId, setVisualizerAudioId] = useState(
+    () => suggestedVisualizerAudioId || visualizerAudios[0]?.id || '',
+  );
   const [artworkId, setArtworkId] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,10 +88,13 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
     return [...preserved, ...appended];
   }, [imageOrder, composableImages]);
   const selectedPhotoAudioId = audios.some(source => source.id === photoAudioId) ? photoAudioId : '';
-  const selectedVisualizerAudioId = audios.some(source => source.id === visualizerAudioId)
+  const selectedVisualizerAudioId = visualizerAudios.some(source => source.id === visualizerAudioId)
     ? visualizerAudioId
-    : audios[0]?.id ?? '';
-  const selectedArtworkId = images.some(source => source.id === artworkId) ? artworkId : '';
+    : visualizerAudios[0]?.id ?? '';
+  const selectedArtworkId = visualizerArtworks.some(source => source.id === artworkId) ? artworkId : '';
+  const unsatisfiedPrerequisites = (workflowPrerequisites ?? []).filter(
+    prerequisite => !prerequisite.satisfied,
+  );
 
   const uploadImages = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -133,21 +166,24 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
   };
 
   const renderVisualizer = async () => {
+    if (!workflowAction || workflowAction.action_id !== 'render_visualizer') {
+      setError('Product Orchestrator не предоставил действие визуализатора.');
+      return;
+    }
     if (!selectedVisualizerAudioId) {
-      setError('Сначала выберите master-аудио.');
+      setError('Сначала выберите проверенное master-аудио.');
       return;
     }
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const response = await renderAudioVisualizer(
-        projectId,
-        selectedVisualizerAudioId,
-        selectedArtworkId || undefined,
-      );
-      setArtifactId(response.result.artifact.id);
-      setMessage('Аудиовизуализатор собран локальным FFmpeg capability.');
+      const response = await executeRenderVisualizerAction(projectId, {
+        audio_source_id: selectedVisualizerAudioId,
+        ...(selectedArtworkId ? { artwork_source_id: selectedArtworkId } : {}),
+      });
+      setArtifactId(response.execution.result.artifact.id);
+      setMessage('Аудиовизуализатор собран через Product Orchestrator и локальный FFmpeg capability.');
       await onProjectChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось собрать визуализатор');
@@ -158,9 +194,7 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-indigo-900/60 bg-indigo-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-indigo-400">
-        {recipeId === 'photo_to_video' ? 'Product workflow · локальная сборка' : 'Локальная сборка'}
-      </p>
+      <p className="text-xs uppercase tracking-wider text-indigo-400">Product workflow · локальная сборка</p>
       <h2 className="mt-2 text-xl font-medium">
         {recipeId === 'photo_to_video' ? 'Фотографии → видео' : 'Аудио → визуализатор'}
       </h2>
@@ -236,15 +270,13 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
               </select>
             </label>
           </div>
-          {workflowAction && !workflowAction.enabled && (
+          {workflowAction && !workflowAction.enabled && unsatisfiedPrerequisites.length > 0 && (
             <div className="space-y-1 text-sm text-amber-300">
-              {(workflowPrerequisites ?? [])
-                .filter(prerequisite => !prerequisite.satisfied)
-                .map(prerequisite => (
-                  <p key={prerequisite.prerequisite_id}>
-                    {prerequisite.resolution ?? prerequisite.explanation}
-                  </p>
-                ))}
+              {unsatisfiedPrerequisites.map(prerequisite => (
+                <p key={prerequisite.prerequisite_id}>
+                  {prerequisite.resolution ?? prerequisite.explanation}
+                </p>
+              ))}
             </div>
           )}
           <button type="button" disabled={busy || orderedImageIds.length === 0 || workflowAction?.enabled === false} onClick={() => void renderPhotos()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
@@ -258,18 +290,27 @@ export function Stage8MediaPanel({ projectId, recipeId, sources, workflowAction,
               Master-аудио
               <select aria-label="Master-аудио визуализатора" value={selectedVisualizerAudioId} onChange={event => setVisualizerAudioId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
                 <option value="">Выберите аудио</option>
-                {audios.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
+                {visualizerAudios.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
               </select>
             </label>
             <label className="text-sm text-slate-300">
               Обложка (необязательно)
               <select aria-label="Обложка визуализатора" value={selectedArtworkId} onChange={event => setArtworkId(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
                 <option value="">Только waveform</option>
-                {images.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
+                {visualizerArtworks.map(source => <option key={source.id} value={source.id}>{sourceName(source)}</option>)}
               </select>
             </label>
           </div>
-          <button type="button" disabled={busy || !selectedVisualizerAudioId} onClick={() => void renderVisualizer()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
+          {workflowAction && !workflowAction.enabled && unsatisfiedPrerequisites.length > 0 && (
+            <div className="space-y-1 text-sm text-amber-300">
+              {unsatisfiedPrerequisites.map(prerequisite => (
+                <p key={prerequisite.prerequisite_id}>
+                  {prerequisite.resolution ?? prerequisite.explanation}
+                </p>
+              ))}
+            </div>
+          )}
+          <button type="button" disabled={busy || !selectedVisualizerAudioId || workflowAction?.enabled !== true} onClick={() => void renderVisualizer()} className="rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40">
             Собрать аудиовизуализатор
           </button>
         </div>
