@@ -8,7 +8,7 @@
     "goal": "Reconcile every creatable recipe with truthful Product Orchestrator readiness and visible workspace ownership, removing irrelevant fallback editor/dubbing/continuity leakage without broadening free_project or promoting unsupported workflows.",
     "base_branch": "main",
     "branch": "fix/product-recovery-recipe-workspace-reconciliation",
-    "pull_request": null,
+    "pull_request": 56,
     "write_scope": [
       "project-context/**",
       "uv_studio/api/**",
