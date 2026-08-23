@@ -1,6 +1,7 @@
 'use client';
 
 export type Stage8CompositionRecipeId =
+  | 'general_video'
   | 'story_video'
   | 'commercial_product'
   | 'free_project'
