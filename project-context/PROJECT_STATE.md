@@ -35,7 +35,9 @@ The exact Draft head `0adb90a91a0beaaec84747ab66f14bf0e283fba3` passed CI run `3
 
 Both app-baseline jobs passed the full browser user-outcome suite, including the visible Story path that creates a Story project, enters brief/script, imports project-owned media, saves the SHA-bound Stage 8 workspace and reaches preparation-ready state without advertising a final render action.
 
-Focused tests cover absent workspace, exact saved preparation state, stale/tampered Story source bytes, API projection and the browser-visible preparation outcome. Review-head verification must now pass the same five permanent checks before merge.
+Focused tests cover absent workspace, exact saved preparation state, stale/tampered Story source bytes, API projection and the browser-visible preparation outcome.
+
+PR #54 is now marked ready for review. This commit is the Review lifecycle checkpoint; its exact head must pass the same five permanent checks before merge.
 
 Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
