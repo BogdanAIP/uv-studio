@@ -7,6 +7,7 @@ carry film/music/continuity fields.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -71,12 +72,80 @@ def validate_project_relative_path(value: str) -> str:
     return path.as_posix()
 
 
+def _json_value(
+    value: Any,
+    *,
+    field_name: str,
+    _containers: set[int] | None = None,
+) -> Any:
+    """Return a detached, portable-JSON representation or reject the value.
+
+    Python's json module accepts non-finite floats by default and can stringify
+    non-string mapping keys. Canonical project state must not rely on either
+    behavior because exported/imported state needs to remain portable JSON.
+    """
+
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ProjectValidationError(f"{field_name} must not contain NaN or Infinity")
+        return value
+
+    containers = _containers if _containers is not None else set()
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in containers:
+            raise ProjectValidationError(f"{field_name} must not contain recursive containers")
+        containers.add(marker)
+        try:
+            result: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise ProjectValidationError(
+                        f"{field_name} JSON object keys must be strings; got {key!r}"
+                    )
+                child_name = f"{field_name}.{key}" if key else field_name
+                result[key] = _json_value(
+                    item,
+                    field_name=child_name,
+                    _containers=containers,
+                )
+            return result
+        finally:
+            containers.remove(marker)
+
+    if isinstance(value, (list, tuple)):
+        marker = id(value)
+        if marker in containers:
+            raise ProjectValidationError(f"{field_name} must not contain recursive containers")
+        containers.add(marker)
+        try:
+            return [
+                _json_value(
+                    item,
+                    field_name=f"{field_name}[{index}]",
+                    _containers=containers,
+                )
+                for index, item in enumerate(value)
+            ]
+        finally:
+            containers.remove(marker)
+
+    raise ProjectValidationError(
+        f"{field_name} contains non-JSON value of type {type(value).__name__}"
+    )
+
+
 def _json_object(value: Mapping[str, Any] | None, *, field_name: str) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
         raise ProjectValidationError(f"{field_name} must be a JSON object")
-    return dict(value)
+    validated = _json_value(value, field_name=field_name)
+    if not isinstance(validated, dict):
+        raise ProjectValidationError(f"{field_name} must be a JSON object")
+    return validated
 
 
 @dataclass(frozen=True)
