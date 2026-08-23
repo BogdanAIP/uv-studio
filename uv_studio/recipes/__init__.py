@@ -1,6 +1,10 @@
 """UV Studio task recipe definitions, registry and execution planning."""
 
-from .builtin import BUILTIN_RECIPES, VIDEOCLAW_PIPELINE_BINDINGS, build_builtin_registry
+from .builtin import (
+    BUILTIN_RECIPES as _LEGACY_BUILTIN_RECIPES,
+    VIDEOCLAW_PIPELINE_BINDINGS,
+)
+from .dubbing import DUBBING
 from .execution import (
     EXECUTION_PLAN_SCHEMA_VERSION,
     CompatibilityTarget,
@@ -23,8 +27,18 @@ from .models import (
 )
 from .registry import DuplicateRecipe, RecipeRegistry, RecipeRegistryError, UnknownRecipe
 
+BUILTIN_RECIPES = (*_LEGACY_BUILTIN_RECIPES, DUBBING)
+
+
+def build_builtin_registry() -> RecipeRegistry:
+    """Return the supported UV task catalog, including Product Recovery recipes."""
+
+    return RecipeRegistry(BUILTIN_RECIPES)
+
+
 __all__ = [
     "BUILTIN_RECIPES",
+    "DUBBING",
     "VIDEOCLAW_PIPELINE_BINDINGS",
     "EXECUTION_PLAN_SCHEMA_VERSION",
     "RECIPE_SCHEMA_VERSION",
