@@ -372,12 +372,14 @@ class DubbingWorkflowApiTests(unittest.TestCase):
         )
         self.assertEqual(forbidden_policy.status_code, 422, forbidden_policy.text)
 
+        accepted_id = "accepted_explicit_contract_id"
         accepted = self.client.post(
             self._url("workflow/actions/accept_dubbing_review"),
-            json={"review_id": approved["review_id"]},
+            json={"review_id": approved["review_id"], "accepted_id": accepted_id},
         )
         self.assertEqual(accepted.status_code, 200, accepted.text)
         decision = accepted.json()["result"]["payload"]["accepted_dubbing"]
+        self.assertEqual(decision["accepted_id"], accepted_id)
         self.assertEqual(decision["composition_policy"], "replace_source_audio_range")
 
         render_state = self.client.get(self._url()).json()

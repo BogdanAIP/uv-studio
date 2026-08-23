@@ -277,12 +277,15 @@ def _request_payload(
     *,
     action_id: str,
 ) -> dict[str, Any]:
-    if not isinstance(request, expected_type):
+    payload = request.model_dump(exclude_none=True)
+    try:
+        validated = expected_type.model_validate(payload)
+    except ValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Workflow action input does not match {action_id} contract",
-        )
-    return request.model_dump(exclude_none=True)
+        ) from exc
+    return validated.model_dump(exclude_none=True)
 
 
 def _validated_action_input(
@@ -314,7 +317,7 @@ def _validated_action_input(
             "save_dubbing_translation": SaveDubbingTranslationActionRequest,
             "attach_prepared_speech": AttachPreparedSpeechActionRequest,
             "review_prepared_speech": ReviewPreparedSpeechActionRequest,
-            "accept_dubbing_review": AcceptReplacementActionRequest,
+            "accept_dubbing_review": AcceptDubbingReviewActionRequest,
             "render_accepted_dubbing": DubbingSourceActionRequest,
         }
         expected = action_types.get(action_id)

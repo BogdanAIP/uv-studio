@@ -2,63 +2,58 @@
 
 ## Purpose
 
-This document separates the historical D-062 Stage 8 failure baseline from the current Product Truth Recovery implementation. Historical findings explain why the installed product felt broken; they are not allowed to masquerade as current behavior after the recovery slices.
+This document records the current product truth after Product Truth Recovery through Music PR #48. Historical Stage 8/9 findings remain useful engineering evidence, but they must not be presented as current product behavior after a journey has been recovered.
 
-A feature is `working` only when a user-visible action reaches a current UV-owned execution path and produces the expected state or artifact.
+A feature is `working` only when a visible action reaches a current UV-owned semantic/domain or capability boundary and produces current canonical state or a verified artifact.
 
 Status values:
 
-- `working` — current UI -> current API/domain path -> result;
-- `working_orchestrated` — `working` plus truthful Product Orchestrator readiness, prerequisites, relevant workspace and semantic next action;
-- `working_with_setup` — complete path exists after an explicit optional runtime/config prerequisite;
-- `partial` — valuable implementation exists but the product journey is incomplete;
+- `working_orchestrated` — visible UI, truthful Product Orchestrator projection and current execution path are connected;
+- `working_with_setup` — the complete path exists after an explicit runtime/configuration prerequisite;
+- `partial` — useful implementation exists, but the normal product journey is incomplete;
 - `unavailable` — intentionally fail-closed at the current product boundary;
-- `legacy_isolated` — legacy source remains but is not part of supported normal navigation.
+- `legacy_isolated` — retained source/history that is not addressable from the supported product shell.
 
 ## Current top-level architecture
 
 ```text
 /projects
  -> UV-owned AppShell
- -> Project Store / Recipe Registry
- -> Product Orchestrator where migrated
- -> UV semantic/domain APIs
- -> Capability Registry / D-017
- -> FFmpeg / MLT / local ML / MCP / provider adapters
+ -> Project Store / canonical domain stores
+ -> Product Orchestrator projection + semantic actions
+ -> Capability Registry / D-017 where execution is provider/runtime-backed
+ -> local FFmpeg / MLT / local ML / MCP / provider adapters
 ```
 
-The supported shell exposes Projects and Settings. It does not poll the historical VideoClaw session/task/sandbox runtime and does not advertise `/pipelines/*` as primary product navigation.
+Product Orchestrator is not a durable workflow database. Project Store and the dedicated domain stores remain canonical. Capability Registry and D-017 remain the provider/runtime selection, authorization and dispatch boundary.
 
-## Current project-page composition
+## Recovered authoritative journeys
 
-Product Orchestrator workspace projection is authoritative for three migrated journeys:
+Five visible Class A/B journeys are now authoritative through Product Orchestrator:
 
-- `photo_to_video` -> `photo_composition`;
-- `visualizer` -> `audio_visualizer`;
-- `free_project` -> `targeted_edit`.
+1. `photo_to_video -> photo_composition`;
+2. `visualizer -> audio_visualizer`;
+3. `free_project -> targeted_edit`;
+4. `dubbing -> dubbing`;
+5. `music_video -> music_video`.
 
-For those projects the page mounts only the workspace declared by `ProjectWorkflowState.relevant_workspaces`. Photo/Visualizer do not inherit generic editor, dubbing or continuity panels. `free_project` now enters the targeted existing-video editor and no longer mounts the historical Stage 8 Free workspace, dubbing or sequence-continuity panels alongside it.
-
-Non-migrated recipes still return an empty authoritative workspace projection and temporarily keep their existing domain panels until dedicated Product Orchestrator migrations replace that presentation. A bounded frontend compatibility adapter may call existing UV-owned targeted-edit domain/capability endpoints only when a fresh `ProjectWorkflowState` explicitly reports `workflow_not_migrated` and has no `targeted_edit` workspace. A migrated recipe cannot silently fall back around an Orchestrator failure.
+For these recipes, `ProjectWorkflowState.relevant_workspaces` controls the supported project-page surface. A migrated recipe must not silently fall back to a legacy workspace when its orchestrator projection fails.
 
 ## Core frontend -> backend truth
 
-| User area | Current UI/API | Backend authority | Current truth |
-|---|---|---|---|
-| project create/open/archive | project pages + `projectsApi` | Project Store | **strong foundation** |
-| Photo -> Video | Product Orchestrator -> `Stage8MediaPanel` | `compose_photos` -> `video.compose_photos` -> local FFmpeg | **working_orchestrated** |
-| Visualizer | Product Orchestrator -> `Stage8MediaPanel` | `render_visualizer` -> `audio.visualize` -> local FFmpeg | **working_orchestrated** |
-| targeted existing-video edit | Product Orchestrator -> `ProjectEditor` / replacement UI | semantic actions over existing Brief/Plan/Candidate/Review/Accepted stores | **working_orchestrated** |
-| targeted range selection | `select_target_range` | `EditorCommandService` + Continuity Brief | **working_orchestrated** |
-| replacement preparation | `prepare_replacement` | existing ReplacementPlan + ReplacementCandidate stores | **working_orchestrated**; hidden Plan remains durable domain state |
-| replacement review/accept | `review_replacement`, `accept_replacement` | evidence-based ReplacementReview + AcceptedRangeEdit | **working_orchestrated** |
-| accepted edit render | `render_accepted_edits` | `video.render_edits` capability + bounded local FFmpeg | **working_orchestrated** |
-| sequence continuity | continuity panel/APIs | sequence domain | **working optional domain**, still exposed only on non-migrated compatible pages |
-| dubbing | dubbing panels/APIs | ASR/translation/speech/alignment/review/render domains | **substantial working path**, setup/UX partial |
-| music map/direction/assembly/review | music UI/APIs | Music domains + render | **working domains**, product orchestration partial |
-| Story/Commercial preparation | `Stage8CompositionPanel` | Stage 8 composition state | **partial production journey** |
-| Performance lip-sync | dedicated panel | optional MuseTalk capability path | **working_with_setup** |
-| product workflow readiness | Product Orchestrator | Project Store + verified source/domain state + Recipe/Capability Registry | **Photo + Visualizer + Targeted Edit migrated**; others fail closed as partial/unavailable projection |
+| User area | Current authority | Current truth |
+|---|---|---|
+| project create/open/archive | Project Store | **strong foundation** |
+| Photo -> Video | Product Orchestrator -> `video.compose_photos` -> local FFmpeg | **working_orchestrated** |
+| Visualizer | Product Orchestrator -> `audio.visualize` -> local FFmpeg | **working_orchestrated** |
+| targeted existing-video edit | Product Orchestrator -> editor/replacement domain stores -> `video.render_edits` | **working_orchestrated** |
+| Dubbing | Product Orchestrator -> Dubbing/PreparedSpeech/Review/Accepted state -> `video.render_dubbing` | **working_orchestrated** |
+| Music Video | Product Orchestrator -> Music Map/Direction/Assembly/rhythm Review -> `video.render_music_video` | **working_orchestrated** |
+| sequence continuity | sequence domain | **working optional domain**, not a recovered top-level journey |
+| Story/Commercial preparation | Stage 8 composition state | **partial** |
+| Performance lip-sync | optional MuseTalk capability path | **working_with_setup** |
+| Narrated Video | incomplete replacement journey | **unavailable/partial** |
+| General Video | incomplete general production journey | **partial** |
 
 ## Deterministic reference journeys
 
@@ -66,106 +61,135 @@ Non-migrated recipes still return an empty authoritative workspace projection an
 
 ```text
 verified project-owned images
- -> readiness/prerequisites
  -> photo_composition workspace
  -> compose_photos
  -> video.compose_photos
- -> local/free FFmpeg offer
- -> project video artifact
+ -> local/free FFmpeg
+ -> verified project video artifact
 ```
 
-Damaged/substituted image bytes do not satisfy readiness. The semantic action remains capability-backed and bounded by Project Store source IDs.
+Source references are not sufficient evidence by themselves. Current project-owned bytes must match registered integrity metadata.
 
 ### Visualizer
 
 ```text
 verified project-owned master audio
  + optional verified artwork
- -> readiness/prerequisites
  -> audio_visualizer workspace
  -> render_visualizer
  -> audio.visualize
- -> local/free FFmpeg offer
- -> project video artifact
+ -> local/free FFmpeg
+ -> verified project video artifact
 ```
 
-Visualizer does not call the capability execution endpoint directly from the product panel. The UI invokes `/workflow/actions/render_visualizer`, and allowed source IDs are projected through the action schema from verified project-owned media. Tampered audio disables the action and removes the invalid source from usable choices.
+The product UI invokes the semantic workflow action rather than calling capability execution directly.
 
 ### Targeted existing-video edit
 
 ```text
-verified project-owned source video
- -> targeted_edit workspace
+verified source video
  -> select_target_range
- -> canonical RangeContinuityBrief
+ -> RangeContinuityBrief
  -> prepare_replacement
- -> hidden durable ReplacementPlan + full ReplacementCandidate
+ -> ReplacementPlan + ReplacementCandidate
  -> review_replacement
- -> evidence-based ReplacementReview
+ -> ReplacementReview
  -> accept_replacement
- -> canonical AcceptedRangeEdit
+ -> AcceptedRangeEdit
  -> render_accepted_edits
  -> video.render_edits / local FFmpeg
- -> project video artifact
+ -> current artifact
 ```
 
-The Product Orchestrator owns only the read projection and semantic action contract. It does not persist a second workflow state. The existing domain stores remain authoritative.
+The Product Orchestrator projects current state and allowed semantic actions; the existing editor/replacement stores remain canonical.
 
-`prepare_replacement` deliberately combines the technical Plan + Candidate steps into one user-facing action. The operation restores the exact prior plan state and removes any partially registered artifact if candidate preparation fails, so a failed semantic action cannot leave a hidden half-commit.
+### Dubbing
 
-Approved reviews already represented by Accepted state are not advertised as repeatable Accept actions. A render artifact is `current_outcome` only when its `source_path` and `edit_ids` exactly match the current Accepted state for that source; an older successful render is retained in recent artifacts but cannot masquerade as the current result.
+```text
+verified source video
+ -> verified transcript or explicit local-ASR draft acceptance
+ -> optional accepted translation
+ -> prepared project-owned speech
+ -> current evidence-bound Review
+ -> accept_dubbing_review
+ -> AcceptedDubbing
+ -> render_accepted_dubbing
+ -> video.render_dubbing / local FFmpeg
+ -> current artifact
+```
 
-`WorkflowAction.suggested_input` is executable action input, not a side channel for UI-only option lists. Allowed choices and allowed edit/replacement pairs belong to the bounded `input_schema` and are revalidated immediately before mutation or provider dispatch.
+Prepared speech and source media fail closed when registered bytes no longer match metadata. Review acceptance is explicit-current; consumed or superseded reviews are not advertised as repeatable decisions. Composition policy remains server-owned.
+
+### Music Video
+
+```text
+verified master song
+ -> Music Map
+ -> Music Direction
+ -> deterministic rhythm audit
+ -> Music Assembly bound to verified project-owned video
+ -> render_music_master
+ -> evidence-bound Music Video Review
+ -> approved current outcome
+```
+
+`MusicMapStore`, `MusicDirectionStore`, `MusicAssemblyStore` and `MusicVideoReviewStore` are canonical. Rhythm audit remains `MusicDirectionStore.rhythm_audit()`; there is no duplicate `MusicAuditStore`. A render is current only when source bytes and exact Map/Direction/Assembly revisions match current canonical state.
 
 ## Recipe matrix — current recovery truth
 
-| Recipe | Intended outcome | Current UV-owned path | Status | Required recovery |
-|---|---|---|---|---|
-| `general_video` | brief -> general video | no complete brief -> plan -> assets -> assembly -> export journey | `partial` | build orchestrated current path |
-| `narrated_video` | topic/script -> narration -> visuals -> video | stale pipeline target removed; replacement full journey absent | `unavailable` product execution | implement current semantic path |
-| `music_video` | song-driven clip | real Music Map/Direction/Assembly/Review domains | `partial` UX | intent-first orchestration over existing domains |
-| `action_transfer` | motion source + target -> result | semantic capability exists; stale pipeline target removed | `unavailable` product journey | build authorized current workflow or keep unavailable |
-| `digital_human` | portrait + speech -> talking video | capability/domain pieces exist; no complete baseline journey | `partial` | truthful capability-gated workflow |
-| `story_video` | story -> video | brief/script/material workspace | `partial` | extend preparation to orchestrated production |
-| `commercial_product` | brief/materials -> ad video | preparation workspace | `partial` | orchestrated production path |
-| `photo_to_video` | photos + optional audio -> video | Product Orchestrator `compose_photos` -> local FFmpeg | `working_orchestrated` | preserve reference journey |
-| `visualizer` | audio + optional artwork -> video | Product Orchestrator `render_visualizer` -> local FFmpeg | `working_orchestrated` | preserve reference journey |
-| `performance_lip_sync` | portrait + speech -> lip-sync | optional MuseTalk path | `working_with_setup` | project setup/readiness before use |
-| `free_project` | targeted flexible editing baseline | Product Orchestrator targeted-edit actions over existing canonical editor/replacement domains | `working_orchestrated` for targeted edit | later decide broader free-tool palette without remounting every specialist workflow |
-
-## Permanent release scenarios
-
-| Scenario | Current truth | Status | Blocking gap |
+| Recipe | Intended outcome | Status | Required recovery |
 |---|---|---|---|
-| A. General video | no complete UV-owned journey | `partial` | orchestration + execution baseline |
-| B. Narrated video | historical path fail-closed; replacement incomplete | `unavailable/partial` | current narrated workflow |
-| C. Music-video excerpt | strong domains, schema-heavy journey | `partial` | intent-first orchestration |
-| D. Dubbing | substantial real path with runtime/setup gates | `working_with_setup` / UX-partial | prerequisite projection + task isolation |
-| E. Targeted edit | orchestrated range/replacement/review/accept/render path | `working_orchestrated` | Class C cold-start evidence + later installed acceptance |
+| `general_video` | brief -> general video | `partial` | build authoritative orchestrated production path |
+| `narrated_video` | topic/script -> narration -> visuals -> video | `unavailable/partial` | recover current narrated journey after Project Store hardening |
+| `music_video` | song-driven clip | `working_orchestrated` | preserve; Class C/install evidence later |
+| `action_transfer` | motion source + target -> result | `unavailable` product journey | build authorized current workflow or keep unavailable |
+| `digital_human` | portrait + speech -> talking video | `partial` | truthful capability-gated workflow |
+| `story_video` | story -> video | `partial` | extend preparation to production |
+| `commercial_product` | brief/materials -> ad video | `partial` | extend preparation to production |
+| `photo_to_video` | photos + optional audio -> video | `working_orchestrated` | preserve |
+| `visualizer` | audio + optional artwork -> video | `working_orchestrated` | preserve |
+| `performance_lip_sync` | portrait + speech -> lip-sync | `working_with_setup` | setup/readiness refinement |
+| `free_project` | targeted flexible editing baseline | `working_orchestrated` for targeted edit | broader tool palette is a later decision |
+| `dubbing` | translated/replaced speech over source video | `working_orchestrated` | preserve; broader provider UX later |
 
-## Confirmed remaining defects
+## Legacy route truth
 
-### Non-migrated workspace leakage
+The supported shell is `/projects` plus `/settings`. The obsolete Next.js pages that made the old VideoClaw pipeline/sandbox UI directly addressable have been retired:
 
-Photo, Visualizer and targeted `free_project` are no longer evidence for this defect. Story, Music, Dubbing-related and other non-migrated recipes can still inherit generic specialist surfaces because their Product Orchestrator projection does not yet declare an authoritative workspace set.
+- `/pipelines/standard`;
+- `/pipelines/action-transfer`;
+- `/pipelines/digital-human`;
+- `/sandbox`.
+
+Historical legacy components may remain temporarily as isolated source until dependency-proven removal, but they are not supported product routes and the UV-owned backend does not remount the historical session/task/sandbox runtime.
+
+## Confirmed remaining product work
+
+### Project Store portable JSON and corruption isolation
+
+The repository-hygiene audit confirmed a foundation-level persistence gap that must be closed before Narrated recovery:
+
+- `settings`, `extensions` and reference `metadata` are only checked as top-level mappings, not recursively as portable JSON values;
+- canonical JSON writes still use Python's permissive non-finite-number behavior, so `NaN`, `Infinity` and `-Infinity` are not rejected by the write boundary;
+- one malformed/invalid project can interrupt healthy-project listing rather than being isolated for diagnosis/recovery.
+
+This is explicitly split into `project-store-portable-json-hardening`, with create/update/save/import/reopen/list tests. Corrupt project data must be preserved rather than silently deleted or rewritten.
+
+### Narrated and General orchestration
+
+After Project Store hardening, Narrated and General remain the next unrecovered top-level production journeys. They must reuse canonical Project/domain/capability boundaries and must not introduce a second workflow store.
 
 ### Recipe creation is readiness-blind
 
-`/projects` still shows recipe cards before project-level `ready | setup_required | partial | unavailable` truth is available. Working, setup-gated and incomplete tasks therefore look more equivalent than they are before creation.
+`/projects` still shows recipe cards before project-level `ready | setup_required | partial | unavailable` state exists. Incomplete and ready tasks therefore look more equivalent before creation than they should.
 
-### Targeted edit still needs cold-start product evidence
+### Class C and installed acceptance are still missing
 
-The ordinary targeted-edit panel now presents the main replacement path as `Вариант -> проверка -> принять` and hides the separate technical Plan step, while preserving candidate/review/accept trust boundaries underneath. This is a product improvement, not proof of first-time discoverability. Existing browser coverage remains Class B informed regression; Class C must still prove the journey from user-equivalent clean state without implementation knowledge.
+Current browser suites are Class B informed-regression evidence. Recovered journeys have real API/browser/media evidence, but that does not prove first-time discoverability from a user-equivalent clean state. Class C cold-start validation and installed Windows human acceptance remain release-blocking.
 
-### Legacy routes remain source debt
+### Repository branch protection is external P0
 
-Legacy `workflowApi.ts`, HomePage/WorkflowPanel/PipelinePage and `/pipelines/*` source still exists. The historical backend runtime remains intentionally absent. Correct recovery is dependency-proven migration/removal, not remounting it.
-
-## D-033 editor truth
-
-D-033 remains accepted. PR #44 repaired the concrete accepted-edit mutation bypass by routing removal through the semantic editor Command API and leaving `/edits` read-only. The targeted-edit migration preserves that direction: persistent edit decisions still flow through UV-owned semantic/domain boundaries; Product Orchestrator is a façade/projection, not editor ownership.
-
-MLT stays a bounded engine representation, OpenCut Classic a selective UX/component donor, and Project Store/domain state remains canonical. Incomplete generic undo/redo or full GUI/script/AI/MCP equivalence are bounded follow-up concerns, not grounds to replace the editor foundation.
+`main` currently has no branch protection. This is a repository-setting defect, not something application code can truthfully emulate. Required status checks should be enforced in GitHub settings when repository administration is available.
 
 ## Product Orchestrator contract
 
@@ -184,14 +208,16 @@ ProjectWorkflowState
 - diagnostics[]
 ```
 
-The contract is a projection over canonical state and runtime availability, not a second workflow database.
+Semantic actions do not map one-to-one to capabilities. Capability-backed media operations delegate through Capability Registry/D-017; review, accept and other deterministic decisions remain UV-owned domain commands. `capability_id = null` means a bounded domain action, not an authorization bypass.
 
-Semantic next actions do not need to map one-to-one to capabilities. Capability-backed media operations delegate through Capability Registry/D-017, while review/accept/decision actions remain UV-owned domain commands. `capability_id = null` means a bounded domain action, not an authorization bypass.
+## Release gate
 
-## Test evidence
+UV Studio is not release-ready. The current order is:
 
-Existing browser suites are Class B informed-regression evidence. The deterministic reference suite proves Photo and Visualizer through Product Orchestrator actions, workspace isolation, real local artifacts and source-integrity fail-closed behavior.
-
-Targeted-edit browser evidence now uses a dedicated `free_project` journey and verifies that Dubbing/Continuity/old Free Workspace surfaces are absent there. Dubbing and Sequence Continuity remain a separate compatibility regression on a non-migrated `general_video` project rather than being forced into the targeted-edit product journey. The targeted path uses the Product Orchestrator semantic actions for range selection, replacement preparation, review, accept and final render.
-
-Class C cold-start product tests must still start from user-equivalent state, avoid hidden workflow-decision seeding and prove a real result for any task advertised as ready. Installed Windows human acceptance remains release-blocking when release-candidate work resumes.
+1. repository truth/contract hygiene;
+2. Project Store portable-JSON/corruption hardening;
+3. Narrated orchestration;
+4. General orchestration;
+5. Class C cold-start validation;
+6. installed Windows human acceptance;
+7. only then resume Stage 9 packaging/release work.

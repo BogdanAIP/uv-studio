@@ -1,27 +1,27 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-repository-hygiene -->
+<!-- uv-next-slice: project-store-portable-json-hardening -->
 
 ## Goal
 
-Close repository-truth and semantic-contract debt exposed by the post-recovery audit before beginning `narrated_video` orchestration. Keep Product Orchestrator architecture consistent with the completed Photo, Visualizer, Targeted Edit, Dubbing and Music journeys without broad platform rewrites.
+Harden the canonical Project Store before Narrated recovery so persisted project state is strict portable JSON and one damaged project cannot make unrelated healthy projects disappear from listing. Keep the change bounded to Project Store/model/import/list semantics; do not mix in Narrated orchestration or Stage 9 packaging.
 
 ## Required direction
 
-- synchronize `PROJECT_STATE.md`, Product Truth Matrix, Product Orchestrator architecture docs and backlog text so they describe Dubbing and Music as completed recovered journeys;
-- remove or redirect legacy frontend routes under `/pipelines/standard`, `/pipelines/action-transfer`, `/pipelines/digital-human` and `/sandbox` so obsolete VideoClaw workspaces are not presented as current product routes;
-- fix the Dubbing `accept_dubbing_review` semantic action contract so optional `accepted_id` is preserved end-to-end instead of being narrowed to an incompatible request model;
-- remove dead/non-operative Music projector code only where behavior is provably unchanged;
-- assess strict recursive JSON rejection for `NaN`/`Infinity` and per-project corruption quarantine, implementing only the portion that fits a reviewable narrow slice or explicitly splitting the remainder into the following hardening slice;
-- record missing `main` branch protection as an external repository-setting P0; do not pretend code changes can enable it through an unavailable repository-setting API;
+- recursively validate `ProjectDocument.settings`, `ProjectDocument.extensions` and `ProjectReference.metadata` as JSON-safe values at canonical model boundaries;
+- reject `NaN`, `Infinity` and `-Infinity` rather than relying on Python's permissive JSON encoder;
+- make canonical writes strict (`allow_nan=False` or equivalent) while preserving atomic-write behavior;
+- cover project creation, update/save, archive/import and reopen paths so non-portable nested values cannot enter through another seam;
+- isolate malformed/invalid projects during `list_projects()` so healthy projects remain visible;
+- preserve corrupt project data for diagnosis/recovery and expose bounded diagnostics/errors instead of silently deleting or rewriting it;
+- preserve project ID/path/symlink escape protections and existing migration semantics;
+- add focused tests for nested non-JSON/non-finite values plus one-corrupt-project/multiple-healthy-project listing behavior;
 - preserve all five recovered Product Orchestrator journeys and all permanent CI checks.
 
 ## Completion proof
 
-The slice is complete when repository architecture/product-truth docs agree with the actual recovered routes, obsolete frontend routes no longer expose legacy product surfaces, the Dubbing acceptance request contract is coherent and tested, Music projector cleanup has no behavior regression, and all exact-head permanent Ubuntu/Windows checks pass.
-
-Any strict-JSON/corruption-quarantine work not safely completed in this slice must leave an explicit next hardening contract rather than being silently deferred.
+The slice is complete when canonical project state cannot persist non-portable JSON values, strict save/import/reopen behavior is covered, one corrupt project no longer blocks healthy-project discovery, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
 
 ## Entry gate
 
-Begin only from idle `main` after PR #48 Music orchestration is merged and lifecycle closure records Music as authoritative through Product Orchestrator. Do not begin Narrated or Stage 9 packaging until this hygiene slice is reviewed and merged.
+Begin only from idle `main` after repository-hygiene PR #49 is reviewed, merged and lifecycle closure records its truth/contract cleanup as complete. After this hardening slice merges and returns to idle, `product-recovery-narrated-orchestration` becomes the next product-recovery journey.

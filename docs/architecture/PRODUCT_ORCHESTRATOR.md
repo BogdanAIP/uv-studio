@@ -1,49 +1,25 @@
-# Product Orchestrator foundation
+# Product Orchestrator
 
 ## Purpose
 
-Product Orchestrator is the product-facing projection between user intent and the
-existing UV Studio domain/capability architecture. It explains what the project
-can do now, what is missing and which semantic action should happen next.
+Product Orchestrator is the product-facing projection between user intent and the existing UV Studio project/domain/capability architecture. It explains what a project can do now, what is missing, which workspace is relevant and which semantic action is valid next.
 
 It is not a second workflow database and it is not a generic execution engine.
-Project Store remains canonical, domain modules retain their own durable state,
-Capability Registry owns runtime offers, and the D-017 execution boundary owns
-selection, consent and adapter dispatch.
 
-Readiness must use the same offer-eligibility policy as execution. For the first
-journey, both projection and action execution use strict `local_free_first`;
-an available remote, hybrid or non-free offer therefore cannot enable the local
-Photo-to-Video action.
+Canonical ownership remains:
 
-## First supported journey
+| Concern | Owner |
+|---|---|
+| project identity, sources, artifacts | Project Store |
+| current source bytes/integrity | Project Source Media Store / registered media integrity |
+| recipe intent/policy | Recipe Registry |
+| durable domain state | dedicated domain stores |
+| readiness/prerequisites/workspaces/next actions | Product Orchestrator |
+| runtime offers | Capability Registry |
+| provider/runtime selection, authorization and dispatch | D-017 execution boundary |
+| deterministic local media execution | bounded local adapters such as FFmpeg / MLT |
 
-```text
-Photo -> Video intent
-  -> GET ProjectWorkflowState
-  -> verify every registered image through ProjectSourceMediaStore
-  -> readiness + structured prerequisites
-  -> relevant workspace: photo_composition
-  -> action: compose_photos
-  -> POST workflow/actions/compose_photos
-  -> existing video.compose_photos execution boundary
-  -> local_ffmpeg offer
-  -> Project Store video artifact
-  -> refreshed current_outcome/recent_artifacts projection
-```
-
-The action accepts only registered source IDs, an optional registered audio ID
-and a bounded per-image duration. It cannot pass filesystem paths or arbitrary
-FFmpeg arguments.
-
-A source reference alone is not readiness evidence. The Photo-to-Video
-projection uses the existing `ProjectSourceMediaStore.resolve_verified()` trust
-boundary and publishes only verified image IDs as the action's
-`suggested_input`. Missing files or bytes that no longer match canonical
-`sha256`/`size_bytes` metadata are excluded. If none remain, the image
-prerequisite is blocked; a fresh verified upload supplies a new ID and recovers
-the workflow without inventing a second store or a source-mutation API in this
-slice.
+No orchestration state file, duplicate task/session database or second durable workflow store is introduced.
 
 ## HTTP contract
 
@@ -52,49 +28,132 @@ GET  /api/uv/projects/{project_id}/workflow
 POST /api/uv/projects/{project_id}/workflow/actions/{action_id}
 ```
 
-`ProjectWorkflowState` schema version 1 contains:
+`ProjectWorkflowState` contains:
 
 - project/recipe identity and truthful `readiness`;
-- a user-facing summary;
-- structured prerequisites and their resolution hints;
+- user-facing summary;
+- structured prerequisites and resolution hints;
 - relevant workspaces only;
-- stable next-action IDs with bounded input schemas, verified suggested inputs and execution metadata;
+- stable semantic action IDs with bounded input schemas and verified suggested inputs;
 - current/recent result artifacts;
-- separate jobs, decisions and diagnostics collections.
+- active jobs, user decisions and diagnostics.
 
-Recipes not migrated to Product Orchestrator fail closed as `partial` with no
-advertised action or workspace. Unknown imported recipe IDs remain recoverable
-but project as `unavailable` with a `recipe_unknown` diagnostic.
+A source reference alone is not readiness evidence. Project-owned media used by an action must pass the existing byte-integrity boundary. Missing or substituted bytes are excluded from projected choices and fail closed before mutation/provider dispatch.
 
-## Ownership boundary
+## Authoritative recovered journeys
 
-| Concern | Owner |
-|---|---|
-| project identity, sources, artifacts | Project Store |
-| current source bytes/integrity | Project Source Media Store |
-| recipe intent/policy | Recipe Registry |
-| runtime availability | Capability Registry |
-| readiness/prerequisites/relevant workspace/next action | Product Orchestrator |
-| selection, exact authorization, adapter dispatch | existing capability execution boundary |
-| deterministic photo composition | existing local FFmpeg adapter |
+The orchestrator currently owns five product journeys:
 
-No orchestration state file or duplicate task/session record is introduced.
+### Photo -> Video
+
+```text
+verified images
+ -> photo_composition
+ -> compose_photos
+ -> video.compose_photos
+ -> local/free FFmpeg
+ -> current project video artifact
+```
+
+### Visualizer
+
+```text
+verified master audio + optional verified artwork
+ -> audio_visualizer
+ -> render_visualizer
+ -> audio.visualize
+ -> local/free FFmpeg
+ -> current project video artifact
+```
+
+### Targeted Edit
+
+```text
+verified source video
+ -> targeted_edit
+ -> select_target_range
+ -> prepare_replacement
+ -> review_replacement
+ -> accept_replacement
+ -> render_accepted_edits
+ -> current artifact
+```
+
+Range/continuity brief, replacement plan/candidate/review and accepted edit remain canonical domain state. Product Orchestrator only composes those states into user-facing readiness and semantic actions.
+
+### Dubbing
+
+```text
+verified source
+ -> dubbing
+ -> transcript/import or local-ASR draft acceptance
+ -> optional translation
+ -> prepared speech
+ -> current Review
+ -> accept_dubbing_review
+ -> render_accepted_dubbing
+ -> current artifact
+```
+
+Dubbing, PreparedSpeech, Review and AcceptedDubbing stores remain authoritative. The orchestrator rejects stale/tampered source and prepared-audio evidence and does not expose superseded/consumed Review as repeatable acceptance.
+
+### Music Video
+
+```text
+verified master song
+ -> music_video
+ -> save_music_map
+ -> save_music_direction
+ -> deterministic rhythm audit
+ -> save_music_assembly
+ -> render_music_master
+ -> review_music_master
+ -> approved current outcome
+```
+
+Music Map, Direction, Assembly and Music Video Review remain canonical. Rhythm audit is computed by `MusicDirectionStore.rhythm_audit()`; there is no duplicate audit store. Current render/review truth is bound to exact source bytes and exact current revisions.
+
+## Action contract rules
+
+`WorkflowAction.suggested_input` is executable input, not an untrusted UI side channel. Allowed choices belong to the projected input schema and are revalidated against freshly projected state immediately before dispatch.
+
+Semantic actions do not need to map one-to-one to capabilities:
+
+- capability-backed actions delegate through Capability Registry/D-017;
+- deterministic domain decisions such as Review/Accept remain UV-owned domain operations;
+- `capability_id = null` means a bounded domain action, not an authorization bypass.
+
+A migrated recipe cannot silently fall back around an orchestrator failure. Unknown recipes fail closed as unavailable; known unrecovered recipes project partial/unavailable truth until a dedicated recovery slice exists.
 
 ## UI boundary
 
-The normal shell exposes UV Studio projects and the current provider/runtime
-settings route. It no longer imports or polls the legacy `workflowApi`
-session/task/sandbox layer and no longer advertises `/pipelines/*` or `/sandbox`
-navigation. The settings route uses the UV shell rather than its historical
-Video-Claw header. Legacy route source remains isolated migration evidence until
-a later explicit retirement slice.
+The supported shell exposes `/projects`, project workspaces selected by `relevant_workspaces`, and `/settings`.
 
-For `photo_to_video`, the project page renders only the
-`photo_composition` workspace returned by Product Orchestrator; generic editor,
-continuity and dubbing panels are not mounted.
+The historical addressable VideoClaw routes have been retired:
 
-## Next architectural decision
+- `/pipelines/standard`;
+- `/pipelines/action-transfer`;
+- `/pipelines/digital-human`;
+- `/sandbox`.
 
-Broader editor ownership is intentionally not decided here. D-033 reuse and
-generic NLE ownership must be resolved in a separate ADR before expanding the
-orchestrated surface into a generic editor foundation.
+The UV-owned server does not remount their historical session/task/sandbox backend. Any remaining legacy component source is migration evidence only and must not become an implicit fallback product path.
+
+## Verification boundary
+
+For each recovered journey, exact Draft and Review heads are expected to pass the five permanent CI jobs:
+
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)`;
+- `app-baseline (windows-latest)`.
+
+The app-baseline jobs include API/HTTP verification, real-media execution, frontend lint/audit/build and browser user-outcome coverage. This is Class A/API plus Class B informed-browser evidence; it does not by itself establish Class C cold-start usability or installed Windows acceptance.
+
+## Remaining program
+
+Before adding more product-journey state, the next bounded slice is `project-store-portable-json-hardening`. The repository-hygiene audit confirmed that canonical project mappings are not recursively JSON-validated, Python JSON serialization still accepts non-finite numbers, and one corrupt project can interrupt healthy-project listing. Those persistence/listing semantics must be hardened together rather than hidden inside Narrated recovery.
+
+After that hardening slice, the next unrecovered production journeys are Narrated and General. They must reuse existing canonical state and capability boundaries.
+
+Repository settings such as `main` branch protection remain separate external P0 work. Stage 9 packaging/release work stays blocked until Product Truth Recovery, Class C cold-start validation and installed Windows human acceptance are complete.

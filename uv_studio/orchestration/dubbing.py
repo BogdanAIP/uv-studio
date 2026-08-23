@@ -483,7 +483,10 @@ def dubbing_workflow_state(
             "type": "object",
             "additionalProperties": False,
             "required": ["review_id"],
-            "properties": {"review_id": _enum_property(pending_review_ids)},
+            "properties": {
+                "review_id": _enum_property(pending_review_ids),
+                "accepted_id": {"type": "string", "minLength": 1, "maxLength": 128},
+            },
         },
         suggested_input={"review_id": pending_review_ids[0]} if pending_review_ids else {},
         execution_class="domain_command",
