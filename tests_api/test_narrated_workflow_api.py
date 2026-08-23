@@ -114,7 +114,7 @@ class NarratedWorkflowApiTests(unittest.TestCase):
         media = ProjectSourceMediaStore(self.store)
         allocation = media.allocate(self.project.project_id, "frame.png")
         allocation.absolute_path.write_bytes(body)
-        return media.register(
+        updated = media.register(
             self.project.project_id,
             allocation,
             media_kind="image",
@@ -123,6 +123,7 @@ class NarratedWorkflowApiTests(unittest.TestCase):
                 "size_bytes": len(body),
             },
         )
+        return next(item for item in updated.sources if item.id == allocation.source_id)
 
     def _save_workspace(self, source_id: str) -> dict:
         response = self.client.put(
