@@ -72,6 +72,15 @@ export function MusicAssemblyPanel({ projectId, onProjectChanged }: MusicAssembl
     }
     setAssembly(currentAssembly);
 
+    const currentRender = currentAssembly
+      ? project.artifacts.filter(reference => (
+          reference.kind === 'video'
+          && reference.metadata.lifecycle === 'music_video_render'
+          && reference.metadata.music_assembly_revision_sha256 === currentAssembly.revision_sha256
+        )).at(-1) ?? null
+      : null;
+    setRenderedArtifact(currentRender);
+
     if (currentDirection) {
       const byShot = new Map((currentAssembly?.bindings ?? []).map(binding => [binding.shot_id, binding]));
       setDrafts(current => Object.fromEntries(currentDirection.shots.map(shot => {
