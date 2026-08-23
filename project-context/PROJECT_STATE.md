@@ -30,4 +30,4 @@ Stage 9 remains blocked until remaining Product Truth, Class C cold-start and in
 
 ## Handoff after this slice
 
-`product-recovery-free-project-orchestration`, as defined by `project-context/NEXT_TASK.md`.
+`product-recovery-recipe-workspace-reconciliation`, as defined by `project-context/NEXT_TASK.md`. This follows the P0 backlog requirement to reconcile remaining recipe/workspace leakage and readiness-blind creation; broader `free_project`, Action Transfer and Digital Human work stays explicitly outside this handoff.
