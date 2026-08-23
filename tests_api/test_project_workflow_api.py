@@ -28,6 +28,7 @@ from uv_studio.capabilities import (
 )
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
 from uv_studio.projects.source_media import ProjectSourceMediaStore
+from uv_studio.projects.stage8_workspace import save_stage8_workspace
 from uv_studio.projects.store import ProjectStore
 from uv_studio.server import app
 
@@ -429,10 +430,45 @@ class ProjectWorkflowApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(self.executor.calls, [])
 
-    def test_non_migrated_recipe_remains_partial_without_workspaces_or_actions(self) -> None:
+    def test_story_projection_exposes_only_verified_preparation_state(self) -> None:
         project_id = self.store.create_project(
             title="Story video",
             recipe_id="story_video",
+        ).project_id
+        initial = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(initial.status_code, 200, initial.text)
+        initial_state = initial.json()
+        self.assertEqual(initial_state["readiness"], "setup_required")
+        self.assertEqual(
+            [workspace["workspace_id"] for workspace in initial_state["relevant_workspaces"]],
+            ["story_video"],
+        )
+        self.assertEqual(initial_state["next_actions"], [])
+        self.assertIsNone(initial_state["current_outcome"])
+
+        image_id = self._add_image(project_id=project_id, body=b"story-api-image")
+        save_stage8_workspace(
+            self.store,
+            project_id,
+            brief="Story API brief",
+            script="Story API script",
+            source_ids=[image_id],
+        )
+        ready = self.client.get(self._url(project_id=project_id))
+        self.assertEqual(ready.status_code, 200, ready.text)
+        ready_state = ready.json()
+        self.assertEqual(ready_state["readiness"], "ready")
+        self.assertEqual(ready_state["next_actions"], [])
+        self.assertIsNone(ready_state["current_outcome"])
+        self.assertNotIn(
+            "workflow_not_migrated",
+            {item["code"] for item in ready_state["diagnostics"]},
+        )
+
+    def test_non_migrated_recipe_remains_partial_without_workspaces_or_actions(self) -> None:
+        project_id = self.store.create_project(
+            title="Commercial product",
+            recipe_id="commercial_product",
         ).project_id
         response = self.client.get(self._url(project_id=project_id))
         self.assertEqual(response.status_code, 200, response.text)
