@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { uploadPreparedAudio } from '@/lib/dubbingApi';
 import {
   executeProjectWorkflowAction,
@@ -56,18 +56,17 @@ export function NarratedVideoPanel({
   );
   const workspaceRevision = suggestedString(workflowAction, 'workspace_revision_sha256');
   const suggestedAudioId = suggestedString(workflowAction, 'audio_id');
-  const [selectedAudioId, setSelectedAudioId] = useState('');
+  const [requestedAudioId, setRequestedAudioId] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSelectedAudioId(current => {
-      if (current && allowedAudioIds.includes(current)) return current;
-      if (suggestedAudioId && allowedAudioIds.includes(suggestedAudioId)) return suggestedAudioId;
-      return allowedAudioIds[0] ?? '';
-    });
-  }, [allowedAudioIds, suggestedAudioId]);
+  const selectedAudioId = (
+    requestedAudioId && allowedAudioIds.includes(requestedAudioId)
+      ? requestedAudioId
+      : suggestedAudioId && allowedAudioIds.includes(suggestedAudioId)
+        ? suggestedAudioId
+        : allowedAudioIds[0] ?? ''
+  );
 
   const uploadNarration = async (file: File | undefined) => {
     if (!file) return;
@@ -77,7 +76,7 @@ export function NarratedVideoPanel({
     try {
       const reference = await uploadPreparedAudio(projectId, file, 'imported');
       await onProjectChanged();
-      setSelectedAudioId(reference.id);
+      setRequestedAudioId(reference.id);
       setMessage('Дикторская дорожка импортирована как проверяемый PreparedAudio проекта.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось импортировать дикторскую дорожку');
@@ -148,7 +147,7 @@ export function NarratedVideoPanel({
             aria-label="Narrated prepared audio"
             value={selectedAudioId}
             disabled={busy || allowedAudio.length === 0}
-            onChange={event => setSelectedAudioId(event.target.value)}
+            onChange={event => setRequestedAudioId(event.target.value)}
             className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
           >
             {allowedAudio.length === 0 ? (
