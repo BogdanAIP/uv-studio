@@ -1,4 +1,4 @@
-"""Real browser outcomes for Stage 8 local media modes and optional lip-sync gating."""
+"""Real browser outcomes for Stage 8 local Photo-to-Video and Visualizer modes."""
 
 from __future__ import annotations
 
@@ -192,7 +192,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         project_id = created["project_id"]
         return project_id, urllib.parse.quote(project_id, safe="")
 
-    def test_photo_visualizer_and_optional_lipsync_user_paths(self) -> None:
+    def test_photo_and_visualizer_user_paths(self) -> None:
         page = self._new_page()
 
         photo_id, photo_encoded = self._create_project("E2E Stage 8 Photo", "photo_to_video")
@@ -348,38 +348,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         ).to_be_visible(timeout=60_000)
         expect(page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)).to_be_disabled()
 
-        performance_id, performance_encoded = self._create_project(
-            "E2E Stage 8 Performance", "performance_lip_sync"
-        )
-        page.goto(f"/projects/{performance_encoded}")
-        expect(
-            page.get_by_role("heading", name="Портрет + готовая речь → lip-sync", exact=True)
-        ).to_be_visible()
-        expect(page.get_by_text("configuration_required", exact=True)).to_be_visible(timeout=60_000)
-        page.locator('input[aria-label="Портрет lip-sync"]').set_input_files(str(self.red_image))
-        performance_portrait = page.get_by_label("Выбранный портрет lip-sync")
-        _select_option_containing(performance_portrait, self.red_image.name)
-        page.locator('input[aria-label="Готовая речь lip-sync"]').set_input_files(str(self.audio))
-        performance_speech = page.get_by_label("Выбранная речь lip-sync")
-        _select_option_containing(performance_speech, self.audio.name)
-        expect(page.get_by_text("configuration_required", exact=True)).to_be_visible(timeout=60_000)
-        expect(page.get_by_role("button", name="Выполнить lip-sync", exact=True)).to_be_disabled()
-
-        performance_project = _api_json("GET", f"/api/uv/projects/{performance_encoded}")
-        self.assertEqual(
-            sorted(item["kind"] for item in performance_project["sources"]),
-            ["audio", "image"],
-        )
-        self.assertEqual(
-            [
-                item
-                for item in performance_project["artifacts"]
-                if item.get("metadata", {}).get("lifecycle") == "performance_lip_sync_render"
-            ],
-            [],
-        )
-
-        page.screenshot(path=str(self.artifact_dir / "stage8-additional-recipes-final.png"), full_page=True)
+        page.screenshot(path=str(self.artifact_dir / "stage8-local-media-final.png"), full_page=True)
 
 
 if __name__ == "__main__":

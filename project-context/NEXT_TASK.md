@@ -1,27 +1,27 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-recipe-workspace-reconciliation -->
+<!-- uv-next-slice: product-usability-class-c-cold-start -->
 
 ## Goal
 
-Reconcile the remaining recipe/workspace leakage and readiness-blind project creation behavior after Commercial Product recovery, without broadening `free_project` into a second generic editor or prematurely promoting Action Transfer / Digital Human into authoritative workflows.
+Prove UV Studio from a user-equivalent clean state after Product Truth recovery, without implementation knowledge, hidden workflow-decision seeding, direct Project Store fixtures, or developer-only shortcuts.
 
 ## Required direction
 
-- inventory every currently advertised recipe against Product Orchestrator projection, visible workspace routing and actual executable/current outcome support;
-- identify any remaining recipe that can be created while exposing irrelevant fallback workspaces, misleading readiness or a surface not owned by its current product journey;
-- keep `free_project` aligned with its existing Targeted Edit ownership (`TARGETED_EDIT_RECIPE_ID = "free_project"`) unless a separate product decision explicitly redefines that contract;
-- keep broader Free Project tool-palette expansion, Action Transfer and Digital Human as P2 follow-ups until a complete authorized current workflow exists;
-- remove remaining recipe/workspace leakage by routing only truthful projected workspaces and failing closed where no authoritative workflow exists;
-- preserve Project Store/domain stores as canonical and D-033 editor-command ownership;
-- do not remount retired legacy pipeline routes or infer readiness from recipe declarations alone;
-- add focused API/browser regression proof for recipe creation and workspace routing and preserve all five permanent CI checks;
-- synchronize `ENGINEERING_BACKLOG.md` with the actual completed Product Truth recovery state if its historical queue is still stale.
+- start from a clean user-equivalent configuration/projects state and the normal UV Studio application entry path;
+- use only currently advertised recipes and visible product controls for the acceptance journey;
+- verify that catalog discovery, project creation, prerequisite guidance, workspace routing and at least representative ready outcomes are understandable without repository knowledge;
+- distinguish genuine product defects from missing optional runtimes/providers and report those states truthfully;
+- do not bypass Product Orchestrator with direct domain-store writes, hidden API setup, retired pipeline routes or test-only readiness seeding;
+- preserve the fail-closed creation catalog established by Product Truth recovery;
+- include recovery behavior for an existing/imported project where useful, but do not turn compatibility preservation into a new-workflow claim;
+- collect durable browser/user-outcome evidence suitable for comparing a clean-state user journey on Ubuntu/CI with the later installed Windows human-acceptance gate;
+- keep all five permanent CI checks green on exact Draft and Review heads.
 
 ## Completion proof
 
-The slice is complete when every currently creatable recipe has a truthful creation/readiness/workspace result: authoritative journeys route only to their owned surfaces, unsupported recipes fail closed without irrelevant editor leakage, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
+The slice is complete when a clean-state user can discover an advertised task, create a project, understand what is required, reach representative supported outcomes through visible controls only, and receive truthful guidance for unavailable/configuration-required cases. Exact Draft and Review heads must pass all five permanent Ubuntu/Windows CI jobs.
 
 ## Entry gate
 
-Begin only from idle `main` after Commercial Product recovery is reviewed, merged and lifecycle closure records the Commercial journey as authoritative.
+Begin only from idle `main` after `product-recovery-recipe-workspace-reconciliation` is reviewed, merged and lifecycle-closed. Installed Windows human acceptance remains a separate gate and must not be claimed by this CI-oriented cold-start slice.

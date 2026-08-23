@@ -31,6 +31,11 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()["project_id"]
 
+    def _create_preserved(self, recipe_id: str) -> str:
+        """Create a recovered-project fixture without reopening public creation."""
+
+        return self.store.create_project(title=recipe_id, recipe_id=recipe_id).project_id
+
     @staticmethod
     def _assert_capability_projection(plan: dict, capability_id: str) -> None:
         runtime = plan["runtime_config_slots"]
@@ -74,7 +79,7 @@ class ProjectExecutionApiTests(unittest.TestCase):
             )
 
     def test_action_transfer_fails_closed_and_preserves_required_production_gates(self) -> None:
-        project_id = self._create("action_transfer")
+        project_id = self._create_preserved("action_transfer")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
         self.assertEqual(plan["compatibility"], "unavailable")
         self.assertFalse(plan["can_prepare_native_execution"])
@@ -88,7 +93,7 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertEqual(runtime["capability_status"]["offer_summary"]["configuration_required"], 1)
 
     def test_digital_human_reports_partial_instead_of_false_compatibility(self) -> None:
-        project_id = self._create("digital_human")
+        project_id = self._create_preserved("digital_human")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
         self.assertEqual(plan["compatibility"], "partial")
         self.assertFalse(plan["can_prepare_native_execution"])
@@ -144,7 +149,7 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.assertIn("Visualizer", plan["reason"])
 
     def test_stage8_performance_projects_verified_lipsync_capability_without_fake_target(self) -> None:
-        project_id = self._create("performance_lip_sync")
+        project_id = self._create_preserved("performance_lip_sync")
         plan = self.client.get(f"/api/uv/projects/{project_id}/execution-plan").json()
         self._assert_capability_projection(plan, "video.digital_human")
         slots = {slot["slot_id"]: slot for slot in plan["input_slots"]}

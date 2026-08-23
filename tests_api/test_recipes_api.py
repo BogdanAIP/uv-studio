@@ -14,7 +14,7 @@ class RecipesApiTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.client.close()
 
-    def test_list_recipes_is_stable_and_provider_neutral(self) -> None:
+    def test_list_recipes_is_stable_provider_neutral_and_creatable(self) -> None:
         response = self.client.get("/api/uv/recipes")
         self.assertEqual(response.status_code, 200, response.text)
         recipes = response.json()
@@ -24,13 +24,10 @@ class RecipesApiTests(unittest.TestCase):
                 "general_video",
                 "narrated_video",
                 "music_video",
-                "action_transfer",
-                "digital_human",
                 "story_video",
                 "commercial_product",
                 "photo_to_video",
                 "visualizer",
-                "performance_lip_sync",
                 "free_project",
                 "dubbing",
             ],
