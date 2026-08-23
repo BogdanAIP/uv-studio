@@ -8,7 +8,7 @@
     "goal": "Project the existing local/free Music Map -> Music Direction -> Music Assembly -> Rhythm Audit -> Review -> final render chain through Product Orchestrator while preserving the canonical project-owned Music stores, capability execution and artifact provenance boundaries.",
     "base_branch": "main",
     "branch": "fix/product-recovery-music-orchestration",
-    "pull_request": null,
+    "pull_request": 48,
     "write_scope": [
       ".github/workflows/ci.yml",
       "project-context/**",
