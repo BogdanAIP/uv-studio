@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: product-recovery-general-video-orchestration -->
 
 **Updated:** 2026-08-23
 
@@ -8,27 +9,25 @@
 
 ## Current lifecycle
 
-The repository is **idle** on `main` after Narrated recovery PR #52 merged at `e926bd97d9a5e644bd316f79ec9b9d7ff0f79853`.
+General Video recovery is active in Draft PR #53 on `fix/product-recovery-general-video-orchestration`, based on idle `main` closure `85ccc3b795df6cf255ebf5f22c870919ff17e367` after Narrated PR #52.
 
-Product Orchestrator now owns six authoritative Class A/B journeys:
-- Photo -> Video
-- Visualizer
-- Targeted Edit
-- Dubbing
-- Music Video
-- Narrated Video
+The slice is recovering `general_video` as the seventh authoritative Product Orchestrator journey without adding a second workflow store or reopening generic editor ownership. Canonical inputs remain the existing Stage 8 workspace and Project Store media bindings.
 
-Narrated reuses the existing Stage 8 workspace for brief/script/SHA-bound visual inputs, ProjectPreparedAudioStore for verified narration, ProjectSourceMediaStore for visual identity and a narrow local/free `video.render_narrated` capability. The first render path is intentionally image-led; workspace video bindings are preserved but not falsely claimed as rendered.
+## Current General Video boundary
 
-## Verification evidence
+- Stage 8 stores the required brief, optional script and ordered SHA-bound project-owned image/video/audio sources;
+- the first deterministic path requires at least one image/video and allows zero or one explicit audio source;
+- `video.render_general` normalizes visuals to H.264 1280×720/30fps, uses images for a fixed 2 seconds and video clips whole;
+- embedded audio in source video is deliberately not mixed into the master; an explicit workspace audio source is the only soundtrack for this bounded path;
+- Product Orchestrator owns readiness, prerequisites, current outcome and the `render_general` semantic action while Capability Registry remains the execution boundary;
+- current outcome fails closed on stale workspace/source identity or substituted output bytes.
 
-- exact Draft head `a374c6411bbcf35b7f21b6598d417143ef7c6239`: CI `32644620113` (#2518), all five permanent checks green;
-- exact Review head `603c61f7e1dad28e610469043e8c1e74238cd75f`: CI `32644996053` (#2521), all five permanent checks green;
-- real Narrated UI -> PreparedAudio -> FFmpeg master browser outcome passed on Ubuntu and Windows in both final gates;
-- stale/tampered workspace, visual, narration and output bytes invalidate readiness/current outcome as designed.
+## Draft verification
+
+Focused renderer and Product Orchestrator API integrity tests are present. Exact Draft-head verification still requires all five permanent Ubuntu/Windows CI jobs plus the real browser outcome before transition to Review.
 
 Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
-## Next authorized slice
+## Handoff after this slice
 
-`product-recovery-general-video-orchestration`, as defined by `project-context/NEXT_TASK.md`.
+`product-recovery-story-orchestration`, as defined by `project-context/NEXT_TASK.md`.

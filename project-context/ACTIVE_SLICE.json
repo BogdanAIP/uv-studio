@@ -1,14 +1,37 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "product-recovery-general-video-orchestration",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Recover general_video through Product Orchestrator using the existing Stage 8 workspace, verified project-owned media and a bounded local General Video render capability without introducing another workflow store or generic editor authority.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-general-video-orchestration",
+    "pull_request": 53,
+    "write_scope": [
+      "project-context/**",
+      "docs/architecture/**",
+      "uv_studio/orchestration/**",
+      "uv_studio/capabilities/**",
+      "uv_studio/projects/stage8_workspace.py",
+      "uv_studio/api/project_workflow.py",
+      "frontend/app/projects/**",
+      "frontend/components/editor/**",
+      "frontend/lib/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_browser/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "product-recovery-narrated-orchestration",
     "pull_request": 52,
     "merge_commit": "e926bd97d9a5e644bd316f79ec9b9d7ff0f79853"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-general-video-orchestration",
+    "next_slice_id": "product-recovery-story-orchestration",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
