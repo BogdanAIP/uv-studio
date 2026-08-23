@@ -27,7 +27,7 @@ PR #54 is the active review surface. The slice is recovering `story_video` throu
 
 Draft implementation now includes focused Product Orchestrator unit tests, API projection tests and a visible browser outcome that saves Story brief/script/media through production UI and verifies that readiness becomes preparation-ready without advertising a final render action.
 
-CI run #2575 on Draft head `9d8855954f6d31b72d4df9a71d6355064933dbe5` exposed a context-only failure because PR #54 initially lacked the required `uv-active-slice` marker; the PR body has been corrected. Ubuntu bootstrap, including unit tests, passed on that run. A fresh exact-head CI run is required before transition to Review.
+CI run #2575 on Draft head `9d8855954f6d31b72d4df9a71d6355064933dbe5` exposed a context-only failure because PR #54 initially lacked the required lifecycle journal contract. Ubuntu bootstrap, including unit tests, passed on that run. PR #54 now carries exactly one active-slice marker, exactly one next-slice marker and all six required journal sections in validator order. A fresh exact-head CI run is required before transition to Review.
 
 Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
