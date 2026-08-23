@@ -7,6 +7,7 @@ carry film/music/continuity fields.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -71,12 +72,81 @@ def validate_project_relative_path(value: str) -> str:
     return path.as_posix()
 
 
+def _json_value(
+    value: Any,
+    *,
+    field_name: str,
+    _containers: set[int] | None = None,
+) -> Any:
+    """Return a detached, portable-JSON value or reject it.
+
+    Canonical project state accepts only the value types JSON itself supports:
+    objects with string keys, arrays, strings, booleans, null, integers and
+    finite floating-point numbers. Python-only containers/objects are rejected
+    rather than silently rewritten into a different value.
+    """
+
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ProjectValidationError(f"{field_name} must not contain NaN or Infinity")
+        return value
+
+    containers = _containers if _containers is not None else set()
+    if isinstance(value, Mapping):
+        marker = id(value)
+        if marker in containers:
+            raise ProjectValidationError(f"{field_name} must not contain recursive containers")
+        containers.add(marker)
+        try:
+            result: dict[str, Any] = {}
+            for key, item in value.items():
+                if not isinstance(key, str):
+                    raise ProjectValidationError(
+                        f"{field_name} JSON object keys must be strings; got {key!r}"
+                    )
+                child_name = f"{field_name}.{key}" if key else field_name
+                result[key] = _json_value(
+                    item,
+                    field_name=child_name,
+                    _containers=containers,
+                )
+            return result
+        finally:
+            containers.remove(marker)
+
+    if isinstance(value, list):
+        marker = id(value)
+        if marker in containers:
+            raise ProjectValidationError(f"{field_name} must not contain recursive containers")
+        containers.add(marker)
+        try:
+            return [
+                _json_value(
+                    item,
+                    field_name=f"{field_name}[{index}]",
+                    _containers=containers,
+                )
+                for index, item in enumerate(value)
+            ]
+        finally:
+            containers.remove(marker)
+
+    raise ProjectValidationError(
+        f"{field_name} contains non-JSON value of type {type(value).__name__}"
+    )
+
+
 def _json_object(value: Mapping[str, Any] | None, *, field_name: str) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
         raise ProjectValidationError(f"{field_name} must be a JSON object")
-    return dict(value)
+    validated = _json_value(value, field_name=field_name)
+    if not isinstance(validated, dict):
+        raise ProjectValidationError(f"{field_name} must be a JSON object")
+    return validated
 
 
 @dataclass(frozen=True)
@@ -98,7 +168,7 @@ class ProjectReference:
             "id": self.id,
             "kind": self.kind,
             "path": self.path,
-            "metadata": dict(self.metadata),
+            "metadata": _json_object(self.metadata, field_name="metadata"),
         }
 
     @classmethod
@@ -152,15 +222,31 @@ class ProjectDocument:
         )
         object.__setattr__(self, "settings", _json_object(self.settings, field_name="settings"))
         object.__setattr__(self, "extensions", _json_object(self.extensions, field_name="extensions"))
-        object.__setattr__(self, "sources", tuple(self.sources))
-        object.__setattr__(self, "artifacts", tuple(self.artifacts))
+        object.__setattr__(self, "sources", self._validated_references(self.sources))
+        object.__setattr__(self, "artifacts", self._validated_references(self.artifacts))
         self._validate_unique_reference_ids()
+
+    @staticmethod
+    def _validated_references(
+        values: tuple[ProjectReference, ...] | list[ProjectReference],
+    ) -> tuple[ProjectReference, ...]:
+        validated: list[ProjectReference] = []
+        for reference in values:
+            if not isinstance(reference, ProjectReference):
+                raise ProjectValidationError("sources/artifacts must contain ProjectReference values")
+            validated.append(
+                ProjectReference(
+                    id=reference.id,
+                    kind=reference.kind,
+                    path=reference.path,
+                    metadata=reference.metadata,
+                )
+            )
+        return tuple(validated)
 
     def _validate_unique_reference_ids(self) -> None:
         seen: set[str] = set()
         for reference in (*self.sources, *self.artifacts):
-            if not isinstance(reference, ProjectReference):
-                raise ProjectValidationError("sources/artifacts must contain ProjectReference values")
             if reference.id in seen:
                 raise ProjectValidationError(f"duplicate reference id: {reference.id}")
             seen.add(reference.id)
@@ -173,10 +259,10 @@ class ProjectDocument:
             "recipe_id": self.recipe_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "settings": dict(self.settings),
+            "settings": _json_object(self.settings, field_name="settings"),
             "sources": [item.to_dict() for item in self.sources],
             "artifacts": [item.to_dict() for item in self.artifacts],
-            "extensions": dict(self.extensions),
+            "extensions": _json_object(self.extensions, field_name="extensions"),
         }
 
     @classmethod
