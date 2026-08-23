@@ -69,6 +69,84 @@ class ProjectStoreTests(unittest.TestCase):
         loaded = ProjectStore(self.root).load_project("prj_update")
         self.assertEqual(loaded.title, "After")
 
+    def test_nested_nonportable_values_are_rejected_at_model_boundaries(self) -> None:
+        bad_project_id = "prj_bad_json"
+        with self.assertRaises(ProjectValidationError):
+            self.store.create_project(
+                title="Bad JSON",
+                project_id=bad_project_id,
+                settings={"nested": [{"value": float("nan")}]},
+            )
+        self.assertFalse((self.root / bad_project_id).exists())
+
+        with self.assertRaises(ProjectValidationError):
+            self.store.create_project(
+                title="Bad Key",
+                project_id="prj_bad_key",
+                extensions={"nested": {1: "not-portable"}},
+            )
+
+        with self.assertRaises(ProjectValidationError):
+            ProjectReference(
+                id="src_bad_json",
+                kind="source",
+                path="sources/input.mp4",
+                metadata={"nested": [object()]},
+            )
+
+        recursive: list[object] = []
+        recursive.append(recursive)
+        with self.assertRaises(ProjectValidationError):
+            self.store.create_project(
+                title="Recursive",
+                project_id="prj_recursive",
+                settings={"value": recursive},
+            )
+
+    def test_update_rejects_nonfinite_value_and_preserves_previous_document(self) -> None:
+        self.store.create_project(title="Stable", project_id="prj_update_json")
+        path = self.store.project_path("prj_update_json")
+        before = path.read_bytes()
+
+        with self.assertRaises(ProjectValidationError):
+            self.store.update_project(
+                "prj_update_json",
+                extensions={"nested": {"value": float("inf")}},
+            )
+
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.store.load_project("prj_update_json").title, "Stable")
+
+    def test_save_strict_writer_rejects_mutated_reference_metadata(self) -> None:
+        self.store.create_project(title="Stable", project_id="prj_save_json")
+        reference = ProjectReference(
+            id="src_mutable",
+            kind="source",
+            path="sources/input.mp4",
+            metadata={"score": 1.0},
+        )
+        document = self.store.update_project("prj_save_json", sources=[reference])
+        path = self.store.project_path("prj_save_json")
+        before = path.read_bytes()
+
+        document.sources[0].metadata["score"] = float("-inf")
+        with self.assertRaises(ProjectStoreError):
+            self.store.save_project(document)
+
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.store.load_project("prj_save_json").sources[0].metadata["score"], 1.0)
+
+    def test_reopen_rejects_nonfinite_json_constant(self) -> None:
+        self.store.create_project(title="Nonfinite", project_id="prj_nonfinite")
+        path = self.store.project_path("prj_nonfinite")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["settings"] = {"nested": {"value": float("nan")}}
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        with self.assertRaises(ProjectStoreError) as caught:
+            ProjectStore(self.root).load_project("prj_nonfinite")
+        self.assertIn("non-finite", str(caught.exception).lower())
+
     def test_duplicate_project_is_rejected(self) -> None:
         self.store.create_project(title="One", project_id="prj_duplicate")
         with self.assertRaises(ProjectAlreadyExists):
@@ -154,6 +232,31 @@ class ProjectStoreTests(unittest.TestCase):
         (self.root / "not-a-project").mkdir()
         projects = self.store.list_projects()
         self.assertEqual({item.project_id for item in projects}, {"prj_a", "prj_b"})
+
+    def test_list_projects_isolates_corrupt_project_and_preserves_its_bytes(self) -> None:
+        self.store.create_project(title="Healthy A", project_id="prj_healthy_a")
+        self.store.create_project(title="Broken", project_id="prj_corrupt")
+        self.store.create_project(title="Healthy B", project_id="prj_healthy_b")
+        corrupt_path = self.store.project_path("prj_corrupt")
+        corrupt_bytes = b"{not-json\n"
+        corrupt_path.write_bytes(corrupt_bytes)
+
+        projects, diagnostics = self.store.list_projects_with_diagnostics()
+
+        self.assertEqual(
+            {item.project_id for item in projects},
+            {"prj_healthy_a", "prj_healthy_b"},
+        )
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].project_id, "prj_corrupt")
+        self.assertEqual(diagnostics[0].path, str(corrupt_path))
+        self.assertIn("Malformed project JSON", diagnostics[0].error)
+        self.assertLessEqual(len(diagnostics[0].error), 500)
+        self.assertEqual(corrupt_path.read_bytes(), corrupt_bytes)
+        self.assertEqual(
+            {item.project_id for item in self.store.list_projects()},
+            {"prj_healthy_a", "prj_healthy_b"},
+        )
 
 
 if __name__ == "__main__":
