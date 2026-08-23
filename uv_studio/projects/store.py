@@ -6,9 +6,9 @@ import json
 import os
 import threading
 import uuid
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
-from typing import Iterable, Mapping, Any
+from typing import Any, Iterable, Mapping
 
 from .migrations import migrate_project_data
 from .models import (
@@ -42,6 +42,24 @@ class ProjectNotFound(ProjectStoreError):
 
 class ProjectAlreadyExists(ProjectStoreError):
     pass
+
+
+@dataclass(frozen=True)
+class ProjectListDiagnostic:
+    project_id: str
+    path: str
+    error: str
+
+
+def _reject_nonfinite_json_constant(value: str) -> None:
+    raise ValueError(f"non-finite JSON number {value!r} is not portable")
+
+
+def _bounded_error_message(exc: Exception, *, limit: int = 500) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    if len(message) <= limit:
+        return message
+    return message[: limit - 3] + "..."
 
 
 class ProjectStore:
@@ -194,9 +212,12 @@ class ProjectStore:
         if not path.is_file():
             raise ProjectNotFound(project_id)
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ProjectStoreError(f"Malformed project JSON: {path}") from exc
+            raw = json.loads(
+                path.read_text(encoding="utf-8"),
+                parse_constant=_reject_nonfinite_json_constant,
+            )
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ProjectStoreError(f"Malformed project JSON: {path}: {exc}") from exc
         except OSError as exc:
             raise ProjectStoreError(f"Could not read project: {path}") from exc
 
@@ -248,18 +269,37 @@ class ProjectStore:
             return updated
 
     def list_projects(self) -> list[ProjectDocument]:
+        projects, _diagnostics = self.list_projects_with_diagnostics()
+        return projects
+
+    def list_projects_with_diagnostics(
+        self,
+    ) -> tuple[list[ProjectDocument], list[ProjectListDiagnostic]]:
+        """Return healthy projects while isolating damaged project directories.
+
+        Corrupt project bytes are never rewritten or deleted. Callers that need
+        recovery information can inspect the bounded diagnostic list, while the
+        stable `list_projects()` contract continues to expose only healthy projects.
+        """
+
         projects: list[ProjectDocument] = []
+        diagnostics: list[ProjectListDiagnostic] = []
         for child in sorted(self.root.iterdir(), key=lambda item: item.name.lower()):
-            if not child.is_dir() or not (child / PROJECT_FILENAME).is_file():
+            project_path = child / PROJECT_FILENAME
+            if not child.is_dir() or not project_path.is_file():
                 continue
             try:
                 projects.append(self.load_project(child.name))
-            except ProjectValidationError as exc:
-                raise ProjectStoreError(
-                    f"Invalid project directory name for {child / PROJECT_FILENAME}: {exc}"
-                ) from exc
+            except (ProjectValidationError, ProjectStoreError) as exc:
+                diagnostics.append(
+                    ProjectListDiagnostic(
+                        project_id=child.name,
+                        path=str(project_path),
+                        error=_bounded_error_message(exc),
+                    )
+                )
         projects.sort(key=lambda item: item.updated_at, reverse=True)
-        return projects
+        return projects, diagnostics
 
     def commit_staged_project(self, staged_project: Path | str, project_id: str) -> Path:
         """Atomically move a fully validated staged project into the canonical store.
@@ -310,12 +350,18 @@ class ProjectStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
         try:
-            serialized = json.dumps(
-                dict(data),
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            ) + "\n"
+            try:
+                serialized = json.dumps(
+                    dict(data),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                    allow_nan=False,
+                ) + "\n"
+            except (TypeError, ValueError) as exc:
+                raise ProjectStoreError(
+                    f"Project data is not strict portable JSON: {_bounded_error_message(exc)}"
+                ) from exc
             with temp.open("w", encoding="utf-8", newline="\n") as handle:
                 handle.write(serialized)
                 handle.flush()
