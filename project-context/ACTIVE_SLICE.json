@@ -5,10 +5,10 @@
     "id": "product-recovery-story-orchestration",
     "kind": "fix",
     "roadmap_stage": "product-recovery",
-    "goal": "Recover story_video through Product Orchestrator using the existing Stage 8 story workspace, verified project-owned media, existing continuity primitives where actually applicable and bounded local assembly without creating another story workflow store or editor authority.",
+    "goal": "Recover story_video through Product Orchestrator using the existing Stage 8 story workspace, verified project-owned media and current continuity state without creating another story workflow store, editor authority or unsupported final render path.",
     "base_branch": "main",
     "branch": "fix/product-recovery-story-orchestration",
-    "pull_request": null,
+    "pull_request": 54,
     "write_scope": [
       "project-context/**",
       "docs/architecture/**",
