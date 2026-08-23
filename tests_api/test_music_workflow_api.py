@@ -252,7 +252,9 @@ class MusicWorkflowApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(tampered_assembly.status_code, 422, tampered_assembly.text)
-        self.assertIn("clip_a", str(tampered_assembly.json()["detail"]))
+        detail = str(tampered_assembly.json()["detail"])
+        self.assertIn("registered media", detail)
+        self.assertIn("no longer matches metadata", detail)
 
 
 if __name__ == "__main__":
