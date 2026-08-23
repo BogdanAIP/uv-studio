@@ -8,7 +8,7 @@
     "goal": "Reconcile repository product truth and semantic contracts after Dubbing/Music recovery before Narrated: update architecture/backlog docs, retire legacy frontend routes, fix Dubbing accepted_id action typing, remove dead Music projector code, and leave strict JSON/corruption quarantine as an explicit split if it does not fit this narrow reviewable slice.",
     "base_branch": "main",
     "branch": "fix/product-recovery-repository-hygiene",
-    "pull_request": null,
+    "pull_request": 49,
     "write_scope": [
       "project-context/**",
       "docs/**",
@@ -30,7 +30,7 @@
     "merge_commit": "55b87839f79fa639906c409c9e763d650eaf7c03"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-repository-hygiene",
+    "next_slice_id": "product-recovery-narrated-orchestration",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

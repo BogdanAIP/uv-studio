@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-The repository is **draft** on `product-recovery-repository-hygiene`, branched from idle `main` after Music orchestration PR #48 merged as `55b87839f79fa639906c409c9e763d650eaf7c03` and lifecycle closure commit `dc634f5b43eb89b3cbd5e5fa40f507a0f877ca76` returned the repository to idle.
+The repository is **draft** on `product-recovery-repository-hygiene` in PR #49, branched from idle `main` after Music orchestration PR #48 merged as `55b87839f79fa639906c409c9e763d650eaf7c03` and lifecycle closure commit `dc634f5b43eb89b3cbd5e5fa40f507a0f877ca76` returned the repository to idle.
 
 This slice is intentionally narrower than the next product journey. Its purpose is to reconcile repository truth and semantic contracts before Narrated recovery, not to redesign Product Orchestrator or resume Stage 9 packaging.
 
@@ -50,4 +50,4 @@ This slice does not claim Class C cold-start usability, installed Windows human 
 
 ## Next authorized slice
 
-`product-recovery-repository-hygiene` is active. `project-context/NEXT_TASK.md` is the entry/exit contract. After this slice merges and returns to idle, Narrated recovery may begin unless the strict-JSON/corruption-quarantine assessment requires one explicitly separated hardening slice first.
+`product-recovery-repository-hygiene` is active in PR #49. `project-context/NEXT_TASK.md` is the entry/exit contract. After this slice merges and returns to idle, Narrated recovery may begin unless the strict-JSON/corruption-quarantine assessment requires one explicitly separated hardening slice first.
