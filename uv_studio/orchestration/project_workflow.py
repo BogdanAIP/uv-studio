@@ -545,4 +545,8 @@ def project_workflow_state(
         return _photo_workflow(project, recipe, registry, source_media)
     if project.recipe_id == _VISUALIZER_RECIPE_ID:
         return _visualizer_workflow(project, recipe, registry, source_media)
+    if project.recipe_id == "music_video":
+        from .music import music_workflow_state
+
+        return music_workflow_state(project, recipe, registry, source_media)
     return _unsupported_recipe(project, recipe)

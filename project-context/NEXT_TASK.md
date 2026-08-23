@@ -1,24 +1,24 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-music-orchestration -->
+<!-- uv-next-slice: product-recovery-narrated-orchestration -->
 
 ## Goal
 
-Project the existing Music Video chain through Product Orchestrator readiness, prerequisites, relevant workspaces and semantic next actions without replacing its canonical Music Map, Direction, Assembly, Rhythm Audit or Review state.
+Project the existing `narrated_video` journey through Product Orchestrator readiness, prerequisites, relevant workspaces and semantic next actions after Music orchestration is reviewed, merged and closed to idle.
 
 ## Required direction
 
-- preserve existing music-domain authority and D-017 provider/runtime boundaries;
-- derive readiness from project-owned song and visual sources, runtime availability and canonical music state;
-- expose user outcomes such as add song, analyze structure, review direction, add visuals, assemble, rhythm-review and export;
-- keep Music Map, direction, assembly and review stores canonical;
-- route the project page from Product Orchestrator `relevant_workspaces` and remove unrelated workspace leakage from the dedicated Music Video journey;
-- do not add a second music workflow store.
+- reuse existing project/editor, prepared-audio/speech and capability boundaries rather than adding a second narrated workflow store;
+- make the narration/script -> speech -> visual plan/assets -> assembly journey explicit from canonical project state;
+- preserve D-017 authorization and provider/runtime selection for speech or generative capabilities;
+- treat imported/recorded project-owned speech as a valid path where the recipe allows it instead of silently requiring a remote provider;
+- route visible product UI from Product Orchestrator state and keep unrelated specialist workspaces out of the narrated journey;
+- preserve the recovered Photo, Visualizer, Targeted Edit, Dubbing and Music routes.
 
 ## Completion proof
 
-The slice is complete when `music_video` has truthful Product Orchestrator readiness, prerequisites and next actions derived from canonical state, its frontend follows those actions without bypassing review/provider boundaries, and focused API/browser evidence proves source/setup, direction/assembly, review and exportable states.
+The slice is complete when `narrated_video` has truthful Product Orchestrator readiness/prerequisites/actions, semantic actions reuse canonical project and capability state, the visible UI follows the projected journey, and focused API/browser evidence proves at least one local/project-owned narration outcome plus fail-closed stale/tampered input handling.
 
 ## Entry gate
 
-Do not begin until `product-recovery-dubbing-orchestration` is reviewed and merged, its lifecycle is closed to `idle`, and Dubbing is routed through Product Orchestrator without weakening D-034-D-037 or D-017.
+Do not begin until `product-recovery-music-orchestration` is reviewed and merged, its lifecycle is closed to `idle`, and Music Map -> Direction -> Assembly -> Review -> final outcome is authoritative through Product Orchestrator without a duplicate music state store.

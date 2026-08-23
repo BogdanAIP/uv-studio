@@ -53,11 +53,11 @@ def _video_fixture(path: Path, *, color: str, tone_hz: int) -> None:
             "-f",
             "lavfi",
             "-i",
-            f"color=c={color}:s=320x180:r=24:d=4",
+            f"color=c={color}:s=320x180:r=24:d=11",
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency={tone_hz}:sample_rate=48000:duration=4",
+            f"sine=frequency={tone_hz}:sample_rate=48000:duration=11",
             "-c:v",
             "libx264",
             "-preset",
@@ -83,7 +83,7 @@ def _song_fixture(path: Path) -> None:
             "-f",
             "lavfi",
             "-i",
-            "sine=frequency=880:sample_rate=48000:duration=6",
+            "sine=frequency=880:sample_rate=48000:duration=21",
             "-c:a",
             "pcm_s16le",
             str(path),
@@ -198,20 +198,27 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         encoded_id = urllib.parse.quote(project_id, safe="")
 
         page = self._new_page()
+        workflow_posts: list[str] = []
+
+        def capture_workflow_request(request: Any) -> None:
+            if request.method == "POST" and "/workflow/actions/" in request.url:
+                workflow_posts.append(request.url)
+
+        page.on("request", capture_workflow_request)
         page.goto(f"/projects/{encoded_id}")
         expect(page.get_by_role("heading", name="E2E Stage 7 Music Video", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Песня → Music Map → музыкальная режиссура → проверка ритма", exact=True)).to_be_visible()
 
         page.locator('input[aria-label="Файл песни"]').set_input_files(str(self.song))
         expect(page.get_by_role("combobox", name="Песня Music Video Mode")).to_be_visible(timeout=60_000)
-        page.get_by_label("Начало музыкального фрагмента").fill("1")
-        page.get_by_label("Конец музыкального фрагмента").fill("5")
+        page.get_by_label("Начало музыкального фрагмента").fill("0")
+        page.get_by_label("Конец музыкального фрагмента").fill("20")
         page.get_by_role("button", name="+ Добавить секцию", exact=True).click()
-        page.get_by_label("Начало музыкальной секции 1").fill("1")
-        page.get_by_label("Конец музыкальной секции 1").fill("5")
+        page.get_by_label("Начало музыкальной секции 1").fill("0")
+        page.get_by_label("Конец музыкальной секции 1").fill("20")
         page.get_by_role("button", name="+ Добавить маркер", exact=True).click()
         page.get_by_label("Тип музыкального маркера 1").select_option("cut_point")
-        page.get_by_label("Время музыкального маркера 1").fill("3")
+        page.get_by_label("Время музыкального маркера 1").fill("10")
         page.get_by_role("button", name="Сохранить Music Map", exact=True).click()
         expect(page.get_by_text("Music Map сохранён и привязан к точным байтам песни.", exact=True)).to_be_visible(timeout=60_000)
 
@@ -229,11 +236,17 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
 
         assembly.locator('input[aria-label="Видео для Music Assembly"]').set_input_files(str(self.red_video))
         expect(assembly.get_by_text("Доступно источников: 1", exact=True)).to_be_visible(timeout=60_000)
+        expect(
+            assembly.get_by_role("button", name="Загрузить видео", exact=True)
+        ).to_be_enabled(timeout=60_000)
         assembly = page.get_by_role(
             "heading", name="Визуальные материалы → Assembly Plan → master-render", exact=True
         ).locator("xpath=ancestor::section[1]")
         assembly.locator('input[aria-label="Видео для Music Assembly"]').set_input_files(str(self.blue_video))
         expect(assembly.get_by_text("Доступно источников: 2", exact=True)).to_be_visible(timeout=60_000)
+        expect(
+            assembly.get_by_role("button", name="Загрузить видео", exact=True)
+        ).to_be_enabled(timeout=60_000)
         assembly = page.get_by_role(
             "heading", name="Визуальные материалы → Assembly Plan → master-render", exact=True
         ).locator("xpath=ancestor::section[1]")
@@ -265,11 +278,46 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         ]
         self.assertEqual(len(rendered), 1)
         metadata = rendered[0]["metadata"]
-        self.assertEqual(metadata["song_excerpt"], {"start_us": 1_000_000, "end_us": 5_000_000})
+        self.assertEqual(metadata["song_excerpt"], {"start_us": 0, "end_us": 20_000_000})
         self.assertEqual(len(metadata["visual_bindings"]), 2)
         self.assertEqual(metadata["visual_bindings"][0]["shot_id"], "mv_shot_01")
         self.assertEqual(metadata["visual_bindings"][1]["shot_id"], "mv_shot_02")
         self.assertEqual(metadata["lifecycle"], "music_video_render")
+
+        review_heading = page.get_by_role(
+            "heading", name="Финальная проверка музыкального клипа", exact=True
+        )
+        expect(review_heading).to_be_visible(timeout=60_000)
+        review = review_heading.locator("xpath=ancestor::section[1]")
+        expect(review.get_by_text("20–30 с: pass", exact=True).first).to_be_visible(timeout=60_000)
+        review.get_by_role("button", name="Сохранить финальную проверку", exact=True).click()
+        expect(review.get_by_text("Текущий вердикт:", exact=False)).to_contain_text("approved", timeout=60_000)
+
+        workflow = _api_json("GET", f"/api/uv/projects/{encoded_id}/workflow")
+        self.assertEqual(workflow["readiness"], "ready")
+        self.assertIsNotNone(workflow["current_outcome"])
+        self.assertEqual(workflow["current_outcome"]["artifact_id"], rendered[0]["id"])
+        review_prerequisite = next(
+            item for item in workflow["prerequisites"] if item["prerequisite_id"] == "music.review"
+        )
+        self.assertTrue(review_prerequisite["satisfied"])
+
+        expected_actions = {
+            "save_music_map",
+            "save_music_direction",
+            "save_music_assembly",
+            "render_music_master",
+            "review_music_master",
+        }
+        observed_actions = {
+            url.rsplit("/", 1)[-1]
+            for url in workflow_posts
+            if "/workflow/actions/" in url
+        }
+        self.assertTrue(
+            expected_actions.issubset(observed_actions),
+            f"Music UI bypassed Product Orchestrator actions: observed={sorted(observed_actions)}",
+        )
 
         page.screenshot(path=str(self.artifact_dir / "stage7-music-video-final.png"), full_page=True)
 

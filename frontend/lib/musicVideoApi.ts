@@ -1,5 +1,6 @@
 'use client';
 
+import { executeProjectWorkflowAction } from '@/lib/productWorkflowApi';
 import type { ProjectReference } from '@/lib/projectsApi';
 import type { CapabilityVideoEnvelope, CapabilityVideoResult } from '@/lib/renderApi';
 
@@ -241,6 +242,12 @@ export async function executeMusicMapCommand(
   projectId: string,
   command: SetMusicMapCommand | ClearMusicMapCommand,
 ): Promise<{ command: string; payload: MusicMapState | null }> {
+  if (command.command === 'set_music_map') {
+    const { command: commandName, ...input } = command;
+    const response = await executeProjectWorkflowAction<MusicMapState>(projectId, 'save_music_map', input);
+    if (!('result' in response)) throw new Error('Music Map action returned an unexpected capability result');
+    return { command: commandName, payload: response.result };
+  }
   return requestJson(`/api/uv/projects/${encodeURIComponent(projectId)}/music-map/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -259,6 +266,16 @@ export async function executeMusicDirectionCommand(
   projectId: string,
   command: SetMusicDirectionCommand | ClearMusicDirectionCommand,
 ): Promise<{ command: string; payload: MusicDirectionState | null }> {
+  if (command.command === 'set_music_direction') {
+    const { command: commandName, ...input } = command;
+    const response = await executeProjectWorkflowAction<MusicDirectionState>(
+      projectId,
+      'save_music_direction',
+      input,
+    );
+    if (!('result' in response)) throw new Error('Music Direction action returned an unexpected capability result');
+    return { command: commandName, payload: response.result };
+  }
   return requestJson(`/api/uv/projects/${encodeURIComponent(projectId)}/music-direction/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -277,6 +294,16 @@ export async function executeMusicAssemblyCommand(
   projectId: string,
   command: SetMusicAssemblyCommand | ClearMusicAssemblyCommand,
 ): Promise<{ command: string; payload: MusicAssemblyState | null }> {
+  if (command.command === 'set_music_assembly') {
+    const { command: commandName, ...input } = command;
+    const response = await executeProjectWorkflowAction<MusicAssemblyState>(
+      projectId,
+      'save_music_assembly',
+      input,
+    );
+    if (!('result' in response)) throw new Error('Music Assembly action returned an unexpected capability result');
+    return { command: commandName, payload: response.result };
+  }
   return requestJson(`/api/uv/projects/${encodeURIComponent(projectId)}/music-assembly/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -294,15 +321,11 @@ export async function renderMusicVideo(
   projectId: string,
   assemblyRevisionSha256: string,
 ): Promise<CapabilityVideoEnvelope<RenderMusicVideoResult>> {
-  return requestJson(
-    `/api/uv/projects/${encodeURIComponent(projectId)}/capabilities/video.render_music_video/execute`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        selection_policy: 'local_free_first',
-        input: { assembly_revision_sha256: assemblyRevisionSha256 },
-      }),
-    },
+  const response = await executeProjectWorkflowAction<CapabilityVideoEnvelope<RenderMusicVideoResult>>(
+    projectId,
+    'render_music_master',
+    { assembly_revision_sha256: assemblyRevisionSha256 },
   );
+  if (!('execution' in response)) throw new Error('Music render action returned an unexpected domain result');
+  return response.execution;
 }

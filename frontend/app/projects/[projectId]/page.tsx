@@ -75,7 +75,7 @@ export default function ProjectPage() {
   };
 
   const refreshMusicPrerequisites = async () => {
-    await refreshProject();
+    await refreshProjectWorkflow();
     setWorkflowRefresh(current => current + 1);
   };
 
@@ -180,7 +180,7 @@ export default function ProjectPage() {
               />
             )}
 
-            {project.recipe_id === 'music_video' && (
+            {projectedWorkspaceIds.has('music_video') && (
               <>
                 <MusicVideoPanel
                   projectId={project.project_id}
@@ -189,13 +189,13 @@ export default function ProjectPage() {
                 <MusicAssemblyPanel
                   key={workflowRefresh}
                   projectId={project.project_id}
-                  onProjectChanged={refreshProject}
+                  onProjectChanged={refreshMusicPrerequisites}
                 />
                 <MusicVideoReviewPanel
                   key={`review-${project.artifacts.length}`}
                   projectId={project.project_id}
                   refreshRevision={project.artifacts.length}
-                  onProjectChanged={refreshProject}
+                  onProjectChanged={refreshMusicPrerequisites}
                 />
               </>
             )}
