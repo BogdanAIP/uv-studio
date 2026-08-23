@@ -1,26 +1,26 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-free-project-orchestration -->
+<!-- uv-next-slice: product-recovery-recipe-workspace-reconciliation -->
 
 ## Goal
 
-Recover the preparation-only `free_project` journey through the permanent Product Orchestrator after Commercial Product recovery is complete. Reuse its existing Stage 8 free workspace, Project Store media identity and current editor primitives; do not turn Free Project into a second generic editor authority or restore retired pipeline routes.
+Reconcile the remaining recipe/workspace leakage and readiness-blind project creation behavior after Commercial Product recovery, without broadening `free_project` into a second generic editor or prematurely promoting Action Transfer / Digital Human into authoritative workflows.
 
 ## Required direction
 
-- inventory the as-built free-project brief/notes, image/video/audio bindings, editor state and current visible surface before changing orchestration;
-- project truthful readiness, prerequisites, relevant workspaces, diagnostics, current outcome and only bounded semantic actions through Product Orchestrator;
-- keep Project Store and existing editor/domain state canonical; Product Orchestrator remains a current-state projection plus semantic-action boundary;
-- preserve verified project-owned media identity and fail closed where current bytes matter;
-- keep D-033 command/editor ownership intact and do not create a competing free-form timeline engine;
-- route optional provider/runtime execution through Capability Registry and D-017 boundaries;
-- preserve all already recovered Product Orchestrator journeys and strict Project Store behavior;
-- keep Action Transfer, Digital Human and broader Free Project tool-palette expansion as separate explicitly authorized follow-ups;
-- add focused orchestration/API/browser proof and preserve all five permanent CI checks.
+- inventory every currently advertised recipe against Product Orchestrator projection, visible workspace routing and actual executable/current outcome support;
+- identify any remaining recipe that can be created while exposing irrelevant fallback workspaces, misleading readiness or a surface not owned by its current product journey;
+- keep `free_project` aligned with its existing Targeted Edit ownership (`TARGETED_EDIT_RECIPE_ID = "free_project"`) unless a separate product decision explicitly redefines that contract;
+- keep broader Free Project tool-palette expansion, Action Transfer and Digital Human as P2 follow-ups until a complete authorized current workflow exists;
+- remove remaining recipe/workspace leakage by routing only truthful projected workspaces and failing closed where no authoritative workflow exists;
+- preserve Project Store/domain stores as canonical and D-033 editor-command ownership;
+- do not remount retired legacy pipeline routes or infer readiness from recipe declarations alone;
+- add focused API/browser regression proof for recipe creation and workspace routing and preserve all five permanent CI checks;
+- synchronize `ENGINEERING_BACKLOG.md` with the actual completed Product Truth recovery state if its historical queue is still stale.
 
 ## Completion proof
 
-The slice is complete when `free_project` has a truthful authoritative Product Orchestrator preparation journey over existing UV-owned state without claiming generic NLE or unsupported execution, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
+The slice is complete when every currently creatable recipe has a truthful creation/readiness/workspace result: authoritative journeys route only to their owned surfaces, unsupported recipes fail closed without irrelevant editor leakage, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
 
 ## Entry gate
 
