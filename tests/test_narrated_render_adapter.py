@@ -38,7 +38,7 @@ class NarratedRenderAdapterTests(unittest.TestCase):
         media = ProjectSourceMediaStore(self.store)
         image_allocation = media.allocate(self.project.project_id, "frame.png")
         image_allocation.absolute_path.write_bytes(self.image_body)
-        self.image = media.register(
+        updated = media.register(
             self.project.project_id,
             image_allocation,
             media_kind="image",
@@ -47,6 +47,7 @@ class NarratedRenderAdapterTests(unittest.TestCase):
                 "size_bytes": len(self.image_body),
             },
         )
+        self.image = next(item for item in updated.sources if item.id == image_allocation.source_id)
         self.workspace = save_stage8_workspace(
             self.store,
             self.project.project_id,
