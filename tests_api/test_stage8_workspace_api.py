@@ -69,6 +69,35 @@ class Stage8WorkspaceApiTests(unittest.TestCase):
         self.assertEqual(reopened.status_code, 200, reopened.text)
         self.assertEqual(reopened.json()["workspace"], workspace)
 
+    def test_narrated_workspace_binds_script_and_visual_bytes(self) -> None:
+        project = self._project("narrated_video")
+        image = self._source(project.project_id, "src_narrated", "image", "narrated.png", b"frame")
+        response = self.client.put(
+            f"/api/uv/projects/{project.project_id}/stage8/workspace",
+            json={
+                "brief": "Объяснить устройство",
+                "script": "Это точный текст диктора.",
+                "source_ids": [image.id],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        workspace = response.json()["workspace"]
+        self.assertEqual(workspace["recipe_id"], "narrated_video")
+        self.assertEqual(workspace["script"], "Это точный текст диктора.")
+        self.assertEqual(workspace["sources"][0]["role"], "narrated_image")
+        self.assertEqual(workspace["sources"][0]["sha256"], hashlib.sha256(b"frame").hexdigest())
+        self.assertEqual(len(workspace["revision_sha256"]), 64)
+
+        source_path = self.store.resolve_project_file(
+            project.project_id,
+            image.path,
+            must_exist=True,
+            allowed_roots=("sources",),
+        )
+        source_path.write_bytes(b"substituted-frame")
+        stale = self.client.get(f"/api/uv/projects/{project.project_id}/stage8/workspace")
+        self.assertEqual(stale.status_code, 422, stale.text)
+
     def test_free_workspace_allows_empty_brief_and_unsupported_recipe_is_rejected(self) -> None:
         free = self._project("free_project")
         response = self.client.put(
