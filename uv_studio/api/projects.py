@@ -15,6 +15,7 @@ from starlette.background import BackgroundTask
 
 from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.config import projects_root
+from uv_studio.orchestration.catalog import is_recipe_creatable
 from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
 from uv_studio.projects.models import ProjectDocument, ProjectValidationError
 from uv_studio.projects.store import (
@@ -97,6 +98,18 @@ def _require_known_recipe(recipe_id: str) -> None:
         ) from exc
 
 
+def _require_creatable_recipe(recipe_id: str) -> None:
+    _require_known_recipe(recipe_id)
+    if not is_recipe_creatable(recipe_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Recipe {recipe_id!r} is preserved for compatibility but is not currently "
+                "available for new project creation"
+            ),
+        )
+
+
 def _translate_store_error(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
@@ -134,7 +147,7 @@ def create_project(
     request: CreateProjectRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
-    _require_known_recipe(request.recipe_id)
+    _require_creatable_recipe(request.recipe_id)
     try:
         document = store.create_project(
             title=request.title,
@@ -154,9 +167,10 @@ async def import_project_archive(
 ) -> ProjectPayload:
     """Stream one `.uvproj.zip` request body to disk, validate it, then import atomically.
 
-    Import intentionally preserves archives whose recipe ID is not installed in
-    the current build. This keeps project recovery forward-compatible; execution
-    can later report the missing recipe instead of refusing to recover user data.
+    Import intentionally preserves archives whose recipe ID is not installed or
+    not currently creatable in this build. This keeps project recovery
+    forward-compatible; execution can report the missing/unsupported workflow
+    instead of refusing to recover user data.
     """
     content_length = request.headers.get("content-length")
     if content_length:
@@ -244,7 +258,7 @@ def update_project(
 ) -> ProjectPayload:
     changes = request.model_fields_set
     if "recipe_id" in changes and request.recipe_id is not None:
-        _require_known_recipe(request.recipe_id)
+        _require_creatable_recipe(request.recipe_id)
     try:
         document = store.update_project(
             project_id,
