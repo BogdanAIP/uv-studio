@@ -12,6 +12,7 @@ from .audio_loudness import measure_prepared_audio_loudness
 from .audio_visualizer import render_audio_visualizer
 from .dubbing_render import render_dubbing_state
 from .edit_render import render_edit_state
+from .general_video_render import render_general_workspace
 from .mcp import MCPBindingOfferAdapter
 from .musetalk import MuseTalkAdapter
 from .music_video_render import render_music_video_state
@@ -72,6 +73,14 @@ class LocalFFmpegAdapter:
         if offer.capability_id == "video.render_narrated":
             self._delegate._validate_offer(offer)
             return render_narrated_workspace(
+                self._delegate,
+                project_id=project_id,
+                offer=offer,
+                payload=payload,
+            )
+        if offer.capability_id == "video.render_general":
+            self._delegate._validate_offer(offer)
+            return render_general_workspace(
                 self._delegate,
                 project_id=project_id,
                 offer=offer,
