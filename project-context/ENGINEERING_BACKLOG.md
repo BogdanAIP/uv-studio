@@ -4,26 +4,17 @@ This is the durable queue behind the single handoff in `NEXT_TASK.md`. It does n
 
 ## P0 — Product Truth closure
 
-Current active slice: `product-recovery-recipe-workspace-reconciliation`.
+Completed through `product-recovery-recipe-workspace-reconciliation` (PR #56, merge `44c853f00766795399de9addf74ba79cef2c35c4`).
 
-Recovered Product Orchestrator journeys now include Photo-to-Video, Visualizer, Targeted Edit (`free_project`), Dubbing, Music Video, Narrated Video, General Video, Story Video preparation and Commercial Product preparation.
+Recovered Product Orchestrator journeys include Photo-to-Video, Visualizer, Targeted Edit (`free_project`), Dubbing, Music Video, Narrated Video, General Video, Story Video preparation and Commercial Product preparation. Preserved-only Action Transfer, Digital Human and Performance/lip-sync remain readable but are not advertised for new creation.
 
-Required closure for the active slice:
-
-- separate the durable provider-neutral Recipe Registry from the narrower set of recipes truthfully advertised for new project creation;
-- ensure every advertised recipe has an authoritative Product Orchestrator projection and owned visible workspace;
-- fail closed for preserved-only recipes instead of mounting generic Editor, Continuity, Dubbing or direct performance surfaces;
-- keep imported/recovered projects readable and exportable even when their workflow is not currently supported;
-- keep `free_project` aligned with existing Targeted Edit ownership rather than broadening it into a second generic editor;
-- keep Action Transfer, Digital Human and Performance/lip-sync outside the creation catalog until separately recovered through complete authorized workflows;
-- preserve Project Store/domain stores as canonical, D-033 editor-command ownership and D-017 execution authorization boundaries;
-- require exact Draft and Review heads to pass all five permanent CI jobs.
+The creation catalog, Product Orchestrator projections and visible workspace routing now fail closed rather than mounting generic Editor, Continuity, Dubbing or direct performance surfaces for unsupported recipes. Project Store/domain stores remain canonical; D-033 editor-command ownership and D-017 execution authorization boundaries are unchanged.
 
 `main` branch protection remains an external repository-setting P0 until enabled in GitHub settings.
 
 ## P0 — Product usability evidence
 
-Next planned slice after Product Truth closure: `product-usability-class-c-cold-start`.
+Current active slice: `product-usability-class-c-cold-start`.
 
 Required closure:
 
@@ -31,7 +22,8 @@ Required closure:
 - prove advertised task discovery, project creation, prerequisite guidance and representative supported outcomes through visible controls only;
 - distinguish product defects from optional runtime/provider configuration requirements;
 - preserve fail-closed behavior for unsupported recipes and missing capabilities;
-- collect durable evidence that can be compared with the later installed Windows human-acceptance gate.
+- collect durable evidence that can be compared with the later installed Windows human-acceptance gate;
+- require exact Draft and Review heads to pass all five permanent CI jobs.
 
 After Class C, installed Windows human acceptance on the packaged application remains a separate P0 gate before Stage 9 resumes.
 
