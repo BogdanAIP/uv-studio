@@ -11,18 +11,23 @@
 
 Story Video recovery is active in **Draft** on `fix/product-recovery-story-orchestration`, based on validated idle `main` `1a82db63c95b85b2eeb0838066b3f74be267bf72` after General Video PR #53.
 
-The slice is recovering `story_video` through Product Orchestrator without introducing a story-specific workflow database or reopening editor ownership.
+PR #54 is the active review surface. The slice is recovering `story_video` through Product Orchestrator without introducing a story-specific workflow database, reopening editor ownership, or claiming a final Story render that is not yet audited end to end.
 
 ## As-built boundary under recovery
 
-- Stage 8 already owns the required brief, optional script and ordered SHA-bound story image/video/audio bindings;
-- the existing `sequence_continuity` and review primitives are durable continuity tools, not a replacement story-plan authority, and should be projected only where linked-scene continuity is actually relevant;
-- Story already declares `timeline.assemble` as its deterministic assembly requirement, while provider-backed text/image/video generation remains optional/setup-dependent and must not be disguised as local execution;
-- General Video proved a bounded normalized local assembly pattern that can be reused internally, but Story needs its own semantic capability/current-outcome contract rather than silently invoking the General recipe.
+- Stage 8 already owns the required brief, optional script and ordered SHA-bound Story image/video/audio bindings;
+- Product Orchestrator now projects that verified Stage 8 state as the authoritative preparation outcome: invalid or stale project-owned bytes fail closed instead of advertising readiness;
+- existing `sequence_continuity` state is reused only as optional continuity evidence, and accepted takes are exposed only after their current media bytes validate;
+- the Story recipe declares `timeline.assemble`, but this slice does **not** treat that declaration as proof of an audited Story-specific final render/export path;
+- provider-backed text/image/video/speech generation remains optional and setup-dependent and is not exposed as local/free Story execution;
+- the visible Story project surface is the Stage 8 Story workspace plus Sequence Continuity, driven by the same Product Orchestrator readiness shown elsewhere in UV Studio;
+- no `render_story` action, provider bypass, hidden seed state, generic NLE authority or parallel Story workflow store is introduced.
 
 ## Verification status
 
-Focused implementation and tests are still being developed. Exact Draft-head verification requires all five permanent Ubuntu/Windows CI jobs plus a visible Story UI outcome before transition to Review.
+Draft implementation now includes focused Product Orchestrator unit tests, API projection tests and a visible browser outcome that saves Story brief/script/media through production UI and verifies that readiness becomes preparation-ready without advertising a final render action.
+
+CI run #2575 on Draft head `9d8855954f6d31b72d4df9a71d6355064933dbe5` exposed a context-only failure because PR #54 initially lacked the required `uv-active-slice` marker; the PR body has been corrected. Ubuntu bootstrap, including unit tests, passed on that run. A fresh exact-head CI run is required before transition to Review.
 
 Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
