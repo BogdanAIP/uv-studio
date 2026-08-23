@@ -23,13 +23,18 @@ class ProjectRecipeValidationTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
-    def test_known_specialized_recipe_can_create_project(self) -> None:
+    def test_known_preserved_recipe_is_not_publicly_creatable(self) -> None:
+        metadata = self.client.get("/api/uv/recipes/action_transfer")
+        self.assertEqual(metadata.status_code, 200, metadata.text)
+        self.assertEqual(metadata.json()["recipe_id"], "action_transfer")
+
         response = self.client.post(
             "/api/uv/projects",
             json={"title": "Motion Transfer", "recipe_id": "action_transfer"},
         )
-        self.assertEqual(response.status_code, 201, response.text)
-        self.assertEqual(response.json()["recipe_id"], "action_transfer")
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("not currently available for new project creation", response.json()["detail"])
+        self.assertEqual(self.store.list_projects(), [])
 
     def test_unknown_recipe_is_rejected_on_create(self) -> None:
         response = self.client.post(
