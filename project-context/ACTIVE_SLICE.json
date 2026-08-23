@@ -1,30 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "draft",
-  "active_slice": {
-    "id": "product-recovery-recipe-workspace-reconciliation",
-    "kind": "fix",
-    "roadmap_stage": "product-recovery",
-    "goal": "Reconcile every creatable recipe with truthful Product Orchestrator readiness and visible workspace ownership, removing irrelevant fallback editor/dubbing/continuity leakage without broadening free_project or promoting unsupported workflows.",
-    "base_branch": "main",
-    "branch": "fix/product-recovery-recipe-workspace-reconciliation",
-    "pull_request": 56,
-    "write_scope": [
-      "project-context/**",
-      "uv_studio/api/**",
-      "uv_studio/orchestration/**",
-      "uv_studio/recipes/**",
-      "frontend/app/projects/**",
-      "frontend/lib/**",
-      "tests/**",
-      "tests_api/**",
-      "e2e/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "product-recovery-commercial-product-orchestration",
-    "pull_request": 55,
-    "merge_commit": "614cf26f5d45d5e2feb5d627d559ea87bf095ee3"
+    "id": "product-recovery-recipe-workspace-reconciliation",
+    "pull_request": 56,
+    "merge_commit": "44c853f00766795399de9addf74ba79cef2c35c4"
   },
   "handoff": {
     "next_slice_id": "product-usability-class-c-cold-start",
