@@ -314,7 +314,7 @@ def _validated_action_input(
             "save_dubbing_translation": SaveDubbingTranslationActionRequest,
             "attach_prepared_speech": AttachPreparedSpeechActionRequest,
             "review_prepared_speech": ReviewPreparedSpeechActionRequest,
-            "accept_dubbing_review": AcceptReplacementActionRequest,
+            "accept_dubbing_review": AcceptDubbingReviewActionRequest,
             "render_accepted_dubbing": DubbingSourceActionRequest,
         }
         expected = action_types.get(action_id)
