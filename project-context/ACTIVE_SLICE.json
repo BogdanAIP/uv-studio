@@ -11,13 +11,13 @@
     "pull_request": null,
     "write_scope": [
       "project-context/**",
+      "uv_studio/api/**",
       "uv_studio/orchestration/**",
       "uv_studio/recipes/**",
       "frontend/app/projects/**",
       "frontend/lib/**",
       "tests/**",
       "tests_api/**",
-      "tests_browser/**",
       "e2e/**"
     ]
   },
