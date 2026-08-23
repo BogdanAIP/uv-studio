@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-dubbing-orchestration -->
+<!-- uv-context-state: idle -->
+<!-- uv-active-slice: none -->
 
 **Updated:** 2026-08-23
 
@@ -9,77 +9,63 @@
 
 ## Current lifecycle
 
-`product-recovery-dubbing-orchestration` is the active **Review** slice on branch `fix/product-recovery-dubbing-orchestration`, based on unchanged idle `main` after PR #46.
+The repository is **idle** after completion of `product-recovery-dubbing-orchestration` in PR #47.
 
-The final Draft head `e755fe0cfecf660cb6ddd0fd2158cf09bf4f9acc` passed every permanent repository check on Ubuntu and Windows, including API integration, real-media, frontend lint/build and browser user-outcome suites. The complete PR diff has been self-reviewed, all 17 changed paths are inside the declared write scope, there are zero unresolved review threads, and `main` remains at the expected base `7e5bebe33b43520cea7b92328be19c9fbaeca246`.
-
-PR #47 is now in `review`; the exact Review head must pass the same five permanent checks before merge. PR #46 remains the last completed slice until #47 is actually merged.
+PR #47 merged as `ab04757a668839427145f6910de28e83ba0889ae` after exact Review head `4142c958b200a2d60b6a37dbe1cd38f664234a3d` passed all five permanent checks on Ubuntu and Windows. The complete diff was self-reviewed, every changed path was inside declared write scope, unresolved review threads were zero, and the base `main` remained unchanged through the merge gate.
 
 Stage 9 PR #38 remains closed **without merge** and is retained only as an engineering reference. Product Truth Recovery remains release-blocking.
 
-## Dubbing — implemented orchestration
+## Completed Product Recovery journeys
 
-Dubbing is now a dedicated provider-neutral `dubbing` recipe with one authoritative `dubbing` Product Orchestrator workspace. The Product Orchestrator remains a read projection plus semantic actions over existing canonical state; it does not add another workflow store.
+The permanent Product Orchestrator now has authoritative Class A/B journeys for:
 
-The migrated product chain is:
+- `photo_to_video -> photo_composition`;
+- `visualizer -> audio_visualizer`;
+- `free_project -> targeted_edit`;
+- `dubbing -> dubbing`.
+
+These journeys keep Project Store/domain stores canonical and use Product Orchestrator only as current-state projection plus allowed semantic actions.
+
+## Dubbing — completed in PR #47
+
+Dubbing is now a dedicated provider-neutral recipe and Product Orchestrator workspace rather than a specialist panel implicitly mounted inside unrelated projects.
+
+The authoritative product chain is:
 
 `verified source video -> verified transcript -> optional accepted translation -> prepared speech -> current Review -> Accept -> local final render`
 
-Canonical authority remains with the existing UV-owned domains:
+Canonical authority remains with the existing Dubbing, PreparedSpeech, CurrentReview/DubbingReview and AcceptedDubbing state. Product Orchestrator semantic actions cover manual transcript import, local ASR draft and explicit acceptance, translation save/update, prepared-speech attachment, Review, Accept and final render. Capability Registry / D-017 remains responsible for provider/runtime execution and authorization.
 
-- `DubbingStore` owns source-SHA-bound transcript and translation state;
-- `PreparedSpeechStore` owns speech takes over verified project-owned audio;
-- `CurrentReviewStore` / `DubbingReviewStore` own explicit-current Review and immutable AcceptedDubbingEdit;
-- `video.render_dubbing` remains the deterministic local FFmpeg/FFprobe capability;
-- ASR, translation, TTS and alignment providers remain behind Capability Registry / D-017 boundaries.
+Fail-closed product truth includes current project-owned byte verification, removal of tampered PreparedAudio from executable contracts, explicit-current Review semantics, consumed-Review suppression and current-outcome validation against exact accepted Dubbing IDs. Unsupported background-preserving composition policy remains unavailable; accepted Dubbing uses only the supported server-owned `replace_source_audio_range` policy.
 
-Semantic Product Orchestrator actions now cover manual transcript import, local ASR draft and explicit acceptance, translation save/update, prepared-speech attachment, Review, Accept and final render. Unsupported background-preserving composition policy remains fail-closed; Product Orchestrator pins only `replace_source_audio_range` for accepted Dubbing edits.
+## Verification completed
 
-## Product truth and fail-closed behavior
-
-The Dubbing projection derives availability from current verified bytes and current canonical domain state rather than stale UI state:
-
-- tampered or missing source video is excluded from executable actions;
-- tampered PreparedAudio is removed from the attachment contract;
-- local/free runtime availability is projected without widening to remote providers;
-- ASR is optional and remains a draft until explicit transcript acceptance;
-- only the explicit-current approved Review is eligible for Accept;
-- already consumed Reviews are not re-advertised;
-- a rendered master is `current_outcome` only when its accepted Dubbing IDs exactly match current accepted state.
-
-The normal dedicated Dubbing project page is routed from Product Orchestrator `relevant_workspaces`; generic targeted-edit and Sequence Continuity workspaces do not leak into this journey. Compatibility surfaces remain only for recipes that have not yet migrated and are not alternate workflow authority.
-
-## Verification completed for the Draft head
-
-The exact Draft head passed all permanent checks on both Ubuntu and Windows:
+The final Draft and exact Review heads both passed the permanent Ubuntu/Windows gates. Review evidence included:
 
 - development-context lifecycle validation;
 - Ubuntu and Windows bootstrap/unit suites;
-- Ubuntu and Windows API integration and real HTTP probes;
+- API integration and real HTTP probes;
 - real-media golden suites;
 - frontend dependency audit, lint and build;
 - Ubuntu and Windows browser user-outcome suites.
 
-Focused API evidence covers setup-gated state, local ASR draft/accept, translation round-trip through Product Orchestrator, verified-source and PreparedAudio tamper rejection, explicit-current Review semantics, server-owned composition policy, Accept and renderability.
+Focused API evidence covers setup gates, ASR draft/accept, translation round-trip through Product Orchestrator, stale/tampered source rejection, explicit-current Review, Accept and renderability. Dedicated browser evidence performs source import -> manual verified transcript -> translation -> prepared speech -> Review -> Accept -> final render through visible production UI controls and confirms the resulting master as current outcome.
 
-The dedicated browser journey starts with an empty `dubbing` project and performs visible production UI actions through source import -> manual verified transcript -> translation -> prepared speech -> Review -> Accept -> final render. The resulting master is projected as the current Dubbing outcome.
-
-This remains Class B informed regression evidence. PR #47 does **not** claim Class C cold-start product usability or installed Windows human acceptance.
-
-## Architecture invariants preserved
-
-- Project Store/domain stores remain canonical;
-- D-017 provider/runtime authorization remains binding;
-- D-034 ASR output remains draft evidence until explicit transcript acceptance;
-- D-035 Review -> Accept remains mandatory before final render;
-- D-036 unsupported background-preservation policies remain fail-closed;
-- D-037 translation/TTS/alignment acceptance boundaries remain explicit;
-- no generic NLE expansion, second Dubbing store or second editor authority is introduced.
+This is Class A/API plus Class B informed browser evidence. It does **not** claim Class C cold-start product usability or installed Windows human acceptance.
 
 ## Remaining recovery work
 
-Dubbing is now `working_orchestrated` at Class A/B evidence level, but UV Studio is not release-ready. Product Recovery still needs Music, Narrated and General orchestration, followed by Class C cold-start validation and installed Windows acceptance before Stage 9/release can resume.
+UV Studio is not release-ready. Product Recovery still requires:
 
-## Next handoff
+1. Music orchestration over existing Music Map / Direction / Assembly / Rhythm Audit / Review domains;
+2. Narrated orchestration;
+3. General orchestration;
+4. Class C cold-start validation;
+5. installed Windows human acceptance;
+6. only then resumption of Stage 9 packaging/release work.
 
-If the exact Review head passes all five permanent checks with zero unresolved blocking findings and `main` remains unchanged, merge PR #47, close the lifecycle to `idle`, and continue with `product-recovery-music-orchestration` over the existing Music Map / Direction / Assembly / Rhythm Audit / Review domains without creating a second music workflow store.
+## Next authorized slice
+
+`product-recovery-music-orchestration`
+
+Use `project-context/NEXT_TASK.md` as the entry contract. Reuse the existing canonical Music domains and capability boundaries; do not create a second music workflow store or begin Stage 9 packaging.
