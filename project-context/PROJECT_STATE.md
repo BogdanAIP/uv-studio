@@ -9,24 +9,25 @@
 
 ## Current lifecycle
 
-Class C cold-start usability evidence is active in **Draft** on `test/product-usability-class-c-cold-start`, based on idle `main` `c0cc0dea46205ac471dd5e7695d069df25216ad7` after recipe/workspace reconciliation PR #56.
+Class C cold-start usability evidence is active in **Draft** on `research/product-usability-class-c-cold-start` as PR #58, based on idle `main` `c0cc0dea46205ac471dd5e7695d069df25216ad7` after recipe/workspace reconciliation PR #56.
 
-This slice tests the product from a user-equivalent clean state. It must not rely on repository knowledge, direct Project Store fixtures, hidden API readiness seeding, retired pipeline routes or developer-only shortcuts.
+This slice tests the product from a user-equivalent clean state. It does not rely on repository knowledge, direct Project Store fixtures, hidden API readiness seeding, retired pipeline routes or developer-only shortcuts.
 
 ## Product boundary under test
 
-- discovery begins from the normal UV Studio application entry path;
+- discovery begins from the normal UV Studio application entry path `/` and proceeds to `/projects`;
 - only recipes currently advertised by the product creation catalog may be selected;
+- preserved-only Action Transfer, Digital Human and Performance/lip-sync must remain absent from clean-state discovery;
 - project creation, prerequisite guidance and workspace routing must be understandable through visible controls alone;
-- representative supported journeys must reach real outcomes through visible UI interactions;
-- optional local runtimes/providers may be absent, but the product must distinguish configuration/runtime requirements from product defects;
-- unsupported/preserved-only recipes remain fail-closed and must not reappear as new-project choices;
+- the new Class C browser outcome creates Photo-to-Video and Visualizer projects through visible recipe cards and the standard project form;
+- both representative paths use visible media controls and deterministic local FFmpeg-backed actions to reach rendered outcomes;
+- optional provider/runtime-specific journeys are intentionally not claimed by this evidence;
 - compatibility recovery may be observed only through normal user-facing import/recovery behavior, never by direct store writes;
-- evidence must be durable and comparable with the later packaged Windows human-acceptance gate.
+- evidence is written as durable JSON plus a final screenshot for comparison with the later packaged Windows human-acceptance gate.
 
 ## Verification status
 
-Implementation and browser evidence are pending. The slice requires exact Draft and Review heads to pass all five permanent CI jobs, including full browser user-outcome coverage on Ubuntu and Windows.
+The dedicated Class C browser outcome is now in the permanent E2E discovery set. Exact Draft-head CI is pending on the synchronized PR/context head; all five permanent jobs on Ubuntu/Windows are required before transition to Review.
 
 Stage 9 remains blocked until this Class C cold-start slice and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
 
