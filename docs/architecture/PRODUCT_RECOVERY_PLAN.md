@@ -6,7 +6,7 @@ This is a release-blocking recovery plan discovered after the Stage 9 Windows in
 
 The recovery does **not** restart UV Studio from scratch. It preserves Project Store, capability authorization, deterministic media adapters, portable workflow state and the archived Stage 9 packaging/native-shell work while repairing product truth and orchestration.
 
-Project Store portable-JSON/corruption hardening was completed in PR #50. Product Orchestrator recovery now covers Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video. General Video is the next core production journey.
+Project Store portable-JSON/corruption hardening was completed in PR #50. Product Orchestrator recovery covers Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video on `main`; General Video is the active seventh authoritative journey in PR #53. Story Video is the next preparation-only recovery path after General Video closes.
 
 ## Product identity is not under recovery
 
@@ -158,7 +158,7 @@ Each next action has a stable semantic ID, user-facing explanation, enabled stat
 
 Orchestration is a projection over canonical domain state plus runtime availability, not a second canonical store.
 
-**Foundation status:** the authoritative projection/action pattern now covers six visible Class A/B journeys: Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video. Each migrated project page is routed by `relevant_workspaces`; capability-backed semantic actions continue through the existing Capability Registry/D-017 boundary. Other recipes remain explicitly partial/unavailable until migrated.
+**Foundation status:** the authoritative projection/action pattern covers six merged visible Class A/B journeys — Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video — and General Video is the active seventh in PR #53. Each migrated project page is routed by `relevant_workspaces`; capability-backed semantic actions continue through the existing Capability Registry/D-017 boundary. Other recipes remain explicitly partial/unavailable until migrated.
 
 `WorkflowAction.suggested_input` must itself satisfy the action contract when present. Lists of available project-owned choices belong in the bounded action schema/projection rather than an undocumented side channel.
 
@@ -200,18 +200,19 @@ D-033 is the accepted ownership map. This phase does **not** choose between “U
 ### E. General video
 `brief -> proposed visual plan -> assets/generation -> assembly -> preview -> export`
 
-**Status:** next core recovery slice.
+**Status:** active recovery in PR #53 as a truthful bounded deterministic path over the existing Stage 8 workspace. The first authoritative path uses an ordered list of SHA-verified project-owned images/videos, gives images a fixed two-second duration, uses videos whole, normalizes all visuals to H.264 1280×720/30fps and supports zero or one explicit project-owned soundtrack. Embedded video audio is intentionally ignored. Arbitrary timing, transitions, multi-track mixing and provider-backed generation remain later scope rather than hidden readiness claims.
 
 Internal Brief/Plan/Candidate/Review state remains durable where valuable, but ordinary users should see it only when a decision is required.
 
 Workspace presentation should come from Product Orchestrator `relevant_workspaces` as each journey is migrated rather than from a parallel frontend recipe switch.
 
-**Next core migration:** General Video, reusing current Project Store/editor/Stage 8/capability boundaries and D-033 ownership rather than creating a generic workflow engine.
+**Next core migration after PR #53:** Story Video, reusing its existing Stage 8 workspace and current continuity/planning/editor/capability boundaries. Commercial Product remains a separate follow-up recovery path.
 
 ## Phase 6 — Additional recipes
 
 - preserve Photo -> Video and Visualizer as deterministic orchestrated reference flows;
 - preserve Targeted Edit, Dubbing, Music Video and Narrated Video as recovered orchestrated journeys;
+- preserve General Video's bounded deterministic path after PR #53 without overstating it as a generic NLE;
 - turn Story/Commercial from preparation-only workspaces into orchestrated paths;
 - keep Performance/Lip-sync visibly setup-gated;
 - give Action Transfer/Digital Human real current paths or keep them unavailable/partial;
