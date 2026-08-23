@@ -1,14 +1,37 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "product-recovery-narrated-orchestration",
+    "kind": "feature",
+    "roadmap_stage": "product-recovery",
+    "goal": "Recover narrated_video through Product Orchestrator using the existing Stage 8 input workspace, verified prepared narration, verified project-owned visuals and a bounded local Narrated render capability without introducing another workflow store.",
+    "base_branch": "main",
+    "branch": "feat/product-recovery-narrated-orchestration",
+    "pull_request": 51,
+    "write_scope": [
+      "project-context/**",
+      "docs/architecture/**",
+      "uv_studio/orchestration/**",
+      "uv_studio/capabilities/**",
+      "uv_studio/projects/stage8_workspace.py",
+      "uv_studio/api/project_workflow.py",
+      "frontend/app/projects/**",
+      "frontend/components/editor/**",
+      "frontend/lib/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_browser/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "project-store-portable-json-hardening",
     "pull_request": 50,
     "merge_commit": "99979737cfddc542481158c147306bda0c7fea24"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-narrated-orchestration",
+    "next_slice_id": "product-recovery-general-video-orchestration",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
