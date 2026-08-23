@@ -18,7 +18,7 @@ from .store import ProjectNotFound, ProjectStore, ProjectStoreError
 STAGE8_WORKSPACE_SCHEMA_VERSION = 1
 _STAGE8_WORKSPACES_EXTENSION = "stage8_recipe_workspaces"
 _SUPPORTED_RECIPES = frozenset(
-    {"story_video", "commercial_product", "free_project", "narrated_video"}
+    {"general_video", "story_video", "commercial_product", "free_project", "narrated_video"}
 )
 _ALLOWED_SOURCE_KINDS = frozenset({"image", "video", "audio"})
 _MAX_SOURCE_BINDINGS = 200
@@ -58,6 +58,12 @@ def _sha256(value: Mapping[str, Any]) -> str:
 
 
 def _source_role(recipe_id: str, kind: str) -> str:
+    if recipe_id == "general_video":
+        return {
+            "image": "general_image",
+            "video": "general_video",
+            "audio": "general_audio",
+        }[kind]
     if recipe_id == "story_video":
         return {"image": "story_image", "video": "story_video", "audio": "story_audio"}[kind]
     if recipe_id == "commercial_product":
@@ -281,7 +287,7 @@ class Stage8RecipeWorkspace:
 def _current_recipe(project: ProjectDocument) -> str:
     if project.recipe_id not in _SUPPORTED_RECIPES:
         raise Stage8WorkspaceError(
-            "Stage 8 recipe workspace is available only for story_video, "
+            "Stage 8 recipe workspace is available only for general_video, story_video, "
             "commercial_product, free_project or narrated_video"
         )
     return project.recipe_id

@@ -19,6 +19,11 @@ function sourceName(source: ProjectReference): string {
 }
 
 const recipeCopy: Record<Stage8CompositionRecipeId, { title: string; description: string; briefLabel: string }> = {
+  general_video: {
+    title: 'Обычный видеоролик',
+    description: 'Зафиксируйте задачу и порядок визуальных материалов. Текущая локальная сборка последовательно нормализует выбранные изображения и видео; встроенный звук видеоклипов не переносится, а отдельная master-аудиодорожка может быть выбрана только одна.',
+    briefLabel: 'Что нужно показать в ролике?',
+  },
   story_video: {
     title: 'Сюжетное рабочее пространство',
     description: 'Зафиксируйте задачу, сценарий и материалы истории. Сцены, связность и генерация остаются отдельными существующими возможностями UV Studio.',
@@ -59,7 +64,12 @@ export function Stage8CompositionPanel({
     () => sources.filter(source => source.kind === 'image' || source.kind === 'video' || source.kind === 'audio'),
     [sources],
   );
+  const sourceById = useMemo(
+    () => new Map(mediaSources.map(source => [source.id, source])),
+    [mediaSources],
+  );
   const narrated = recipeId === 'narrated_video';
+  const general = recipeId === 'general_video';
   const [brief, setBrief] = useState('');
   const [script, setScript] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -159,6 +169,17 @@ export function Stage8CompositionPanel({
     );
   };
 
+  const moveSelected = (sourceId: string, offset: -1 | 1) => {
+    setSelectedIds(current => {
+      const index = current.indexOf(sourceId);
+      const target = index + offset;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const save = async () => {
     setBusy(true);
     setError(null);
@@ -187,6 +208,11 @@ export function Stage8CompositionPanel({
       </section>
     );
   }
+
+  const orderedVisualIds = selectedIds.filter(id => {
+    const kind = sourceById.get(id)?.kind;
+    return kind === 'image' || kind === 'video';
+  });
 
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-6">
@@ -237,6 +263,43 @@ export function Stage8CompositionPanel({
           </label>
         )}
       </div>
+
+      {general && orderedVisualIds.length > 0 && (
+        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+          <h3 className="text-sm font-medium text-slate-200">Порядок визуального ряда</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Изображение занимает 2 секунды; видео используется целиком. Стрелками задайте последовательность первого локального master.
+          </p>
+          <div className="mt-3 space-y-2">
+            {orderedVisualIds.map((sourceId, visualIndex) => {
+              const source = sourceById.get(sourceId);
+              if (!source) return null;
+              const selectedIndex = selectedIds.indexOf(sourceId);
+              return (
+                <div key={sourceId} className="flex items-center gap-3 rounded-lg border border-slate-800 px-3 py-2 text-sm text-slate-300">
+                  <span className="w-6 text-right font-mono text-xs text-slate-600">{visualIndex + 1}</span>
+                  <span className="min-w-0 flex-1 truncate">{sourceName(source)}</span>
+                  <span className="text-xs text-slate-600">{source.kind}</span>
+                  <button
+                    type="button"
+                    aria-label={`Поднять ${sourceName(source)}`}
+                    disabled={busy || selectedIndex <= 0}
+                    onClick={() => moveSelected(sourceId, -1)}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-30"
+                  >↑</button>
+                  <button
+                    type="button"
+                    aria-label={`Опустить ${sourceName(source)}`}
+                    disabled={busy || selectedIndex < 0 || selectedIndex >= selectedIds.length - 1}
+                    onClick={() => moveSelected(sourceId, 1)}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs disabled:opacity-30"
+                  >↓</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6">
         <div className="flex items-center justify-between gap-4">

@@ -42,7 +42,7 @@ A source reference alone is not readiness evidence. Project-owned media used by 
 
 ## Authoritative recovered journeys
 
-The orchestrator currently owns six product journeys:
+The orchestrator currently owns seven product journeys:
 
 ### Photo -> Video
 
@@ -129,6 +129,22 @@ Narrated recovery reuses the existing Stage 8 workspace as the canonical brief/s
 
 The first recovered Narrated master is intentionally image-led. Video bindings may remain in the canonical Stage 8 workspace, but this render does not silently claim to include them. Remote TTS remains an optional existing `speech.synthesize` route and continues to require the normal D-017 remote-consent boundary before its output can be promoted to PreparedAudio.
 
+### General Video
+
+```text
+verified Stage 8 brief + ordered project-owned images/videos
+ + zero or one explicit project-owned audio source
+ -> general_video
+ -> render_general
+ -> video.render_general
+ -> local/free FFmpeg
+ -> current SHA-bound general master
+```
+
+General Video recovery reuses the existing Stage 8 workspace as the canonical task text and ordered media binding. `video.render_general` normalizes each visual to H.264 1280×720 at 30 fps, uses images for a fixed two seconds, uses video clips for their full verified duration and then joins the normalized segments. The bounded path deliberately strips embedded clip audio; it either produces a silent master or muxes one explicitly selected workspace audio source as AAC.
+
+The semantic action accepts only the exact current workspace revision. More than one selected workspace audio source blocks readiness rather than choosing implicitly. Current outcome truth requires the exact workspace revision, ordered current visual fingerprints, optional audio fingerprint and registered output bytes to still match. Arbitrary clip timing, transitions, multi-track mixing, provider-backed generation and generic NLE mechanics are outside this first recovery path and are not implied by readiness.
+
 ## Action contract rules
 
 `WorkflowAction.suggested_input` is executable input, not an untrusted UI side channel. Allowed choices belong to the projected input schema and are revalidated against freshly projected state immediately before dispatch.
@@ -170,6 +186,6 @@ The app-baseline jobs include API/HTTP verification, real-media execution, front
 
 Project Store portable-JSON/listing hardening was completed in PR #50 before Narrated recovery, preserving the same canonical store rather than hiding persistence defects inside product orchestration.
 
-After Narrated, the next unrecovered core production journey is General Video. It must reuse existing Project Store/editor/Stage 8/capability boundaries and the D-033 ownership map rather than introducing a generic workflow database or a second editor authority.
+After General Video, the next preparation-only journey to recover is Story Video. It must reuse the current Stage 8 story workspace, existing continuity/planning/editor primitives, Project Store and Capability Registry/D-017 boundaries rather than introducing a story workflow database or a second editor authority. Commercial Product remains a separate follow-up recovery path.
 
 Repository settings such as `main` branch protection remain separate external P0 work. Stage 9 packaging/release work stays blocked until Product Truth Recovery, Class C cold-start validation and installed Windows human acceptance are complete.

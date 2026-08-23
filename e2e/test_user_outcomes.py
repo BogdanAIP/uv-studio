@@ -610,7 +610,7 @@ class BrowserUserOutcomes(unittest.TestCase):
             regression_project_id = self._create_project_via_api(
                 page,
                 title="E2E Dubbing + Continuity",
-                recipe_id="general_video",
+                recipe_id="action_transfer",
             )
             self._upload_editor_video(page, self.source_video)
             self._upload_editor_video(page, self.replacement_video)
