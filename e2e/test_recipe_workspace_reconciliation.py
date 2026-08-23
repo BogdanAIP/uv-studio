@@ -21,6 +21,14 @@ from test_user_outcomes import (
     _start_process,
     _wait_http,
 )
+
+# `python e2e/run_browser_e2e.py` puts the e2e directory, rather than the
+# repository root, first on sys.path on Windows. The reconciliation fixture
+# intentionally uses the canonical Project Store directly for preserved-only
+# recipes, so make that repository import explicit and cross-platform.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from uv_studio.projects.store import ProjectStore
 
 
