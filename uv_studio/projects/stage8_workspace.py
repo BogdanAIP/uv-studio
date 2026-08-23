@@ -17,7 +17,9 @@ from .store import ProjectNotFound, ProjectStore, ProjectStoreError
 
 STAGE8_WORKSPACE_SCHEMA_VERSION = 1
 _STAGE8_WORKSPACES_EXTENSION = "stage8_recipe_workspaces"
-_SUPPORTED_RECIPES = frozenset({"story_video", "commercial_product", "free_project"})
+_SUPPORTED_RECIPES = frozenset(
+    {"story_video", "commercial_product", "free_project", "narrated_video"}
+)
 _ALLOWED_SOURCE_KINDS = frozenset({"image", "video", "audio"})
 _MAX_SOURCE_BINDINGS = 200
 _MAX_BRIEF_LENGTH = 20_000
@@ -59,7 +61,17 @@ def _source_role(recipe_id: str, kind: str) -> str:
     if recipe_id == "story_video":
         return {"image": "story_image", "video": "story_video", "audio": "story_audio"}[kind]
     if recipe_id == "commercial_product":
-        return {"image": "product_image", "video": "product_video", "audio": "commercial_audio"}[kind]
+        return {
+            "image": "product_image",
+            "video": "product_video",
+            "audio": "commercial_audio",
+        }[kind]
+    if recipe_id == "narrated_video":
+        return {
+            "image": "narrated_image",
+            "video": "narrated_video",
+            "audio": "narrated_reference_audio",
+        }[kind]
     return kind
 
 
@@ -83,8 +95,14 @@ class Stage8SourceBinding:
             raise Stage8WorkspaceError("workspace source path must be project-owned source media")
         if not isinstance(self.sha256, str) or len(self.sha256) != 64:
             raise Stage8WorkspaceError("workspace source sha256 must be a 64-character digest")
-        if isinstance(self.size_bytes, bool) or not isinstance(self.size_bytes, int) or self.size_bytes <= 0:
-            raise Stage8WorkspaceError("workspace source size_bytes must be a positive integer")
+        if (
+            isinstance(self.size_bytes, bool)
+            or not isinstance(self.size_bytes, int)
+            or self.size_bytes <= 0
+        ):
+            raise Stage8WorkspaceError(
+                "workspace source size_bytes must be a positive integer"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,7 +121,9 @@ class Stage8SourceBinding:
         allowed = {"source_id", "kind", "role", "path", "sha256", "size_bytes"}
         unknown = set(value).difference(allowed)
         if unknown:
-            raise Stage8WorkspaceError(f"unsupported workspace source fields: {sorted(unknown)!r}")
+            raise Stage8WorkspaceError(
+                f"unsupported workspace source fields: {sorted(unknown)!r}"
+            )
         try:
             return cls(
                 source_id=value["source_id"],
@@ -114,7 +134,9 @@ class Stage8SourceBinding:
                 size_bytes=value["size_bytes"],
             )
         except KeyError as exc:
-            raise Stage8WorkspaceError(f"missing workspace source field: {exc.args[0]}") from exc
+            raise Stage8WorkspaceError(
+                f"missing workspace source field: {exc.args[0]}"
+            ) from exc
 
 
 @dataclass(frozen=True)
@@ -132,7 +154,9 @@ class Stage8RecipeWorkspace:
                 f"unsupported Stage 8 workspace schema_version: {self.schema_version!r}"
             )
         if self.recipe_id not in _SUPPORTED_RECIPES:
-            raise Stage8WorkspaceError(f"unsupported Stage 8 workspace recipe: {self.recipe_id!r}")
+            raise Stage8WorkspaceError(
+                f"unsupported Stage 8 workspace recipe: {self.recipe_id!r}"
+            )
         object.__setattr__(
             self,
             "brief",
@@ -163,7 +187,9 @@ class Stage8RecipeWorkspace:
             raise Stage8WorkspaceError("workspace source bindings must be unique")
         expected = self.compute_revision()
         if self.revision_sha256 != expected:
-            raise Stage8WorkspaceError("workspace revision_sha256 does not match canonical content")
+            raise Stage8WorkspaceError(
+                "workspace revision_sha256 does not match canonical content"
+            )
 
     def revision_payload(self) -> dict[str, Any]:
         return {
@@ -221,10 +247,19 @@ class Stage8RecipeWorkspace:
     def from_dict(cls, value: Mapping[str, Any]) -> "Stage8RecipeWorkspace":
         if not isinstance(value, Mapping):
             raise Stage8WorkspaceError("Stage 8 workspace must be an object")
-        allowed = {"schema_version", "recipe_id", "brief", "script", "sources", "revision_sha256"}
+        allowed = {
+            "schema_version",
+            "recipe_id",
+            "brief",
+            "script",
+            "sources",
+            "revision_sha256",
+        }
         unknown = set(value).difference(allowed)
         if unknown:
-            raise Stage8WorkspaceError(f"unsupported Stage 8 workspace fields: {sorted(unknown)!r}")
+            raise Stage8WorkspaceError(
+                f"unsupported Stage 8 workspace fields: {sorted(unknown)!r}"
+            )
         try:
             raw_sources = value["sources"]
             if not isinstance(raw_sources, list):
@@ -238,13 +273,16 @@ class Stage8RecipeWorkspace:
                 revision_sha256=value["revision_sha256"],
             )
         except KeyError as exc:
-            raise Stage8WorkspaceError(f"missing Stage 8 workspace field: {exc.args[0]}") from exc
+            raise Stage8WorkspaceError(
+                f"missing Stage 8 workspace field: {exc.args[0]}"
+            ) from exc
 
 
 def _current_recipe(project: ProjectDocument) -> str:
     if project.recipe_id not in _SUPPORTED_RECIPES:
         raise Stage8WorkspaceError(
-            "Stage 8 recipe workspace is available only for story_video, commercial_product or free_project"
+            "Stage 8 recipe workspace is available only for story_video, "
+            "commercial_product, free_project or narrated_video"
         )
     return project.recipe_id
 
@@ -256,7 +294,9 @@ def _workspace_map(project: ProjectDocument) -> dict[str, Any]:
     return dict(raw)
 
 
-def get_stage8_workspace(store: ProjectStore, project_id: str) -> Stage8RecipeWorkspace | None:
+def get_stage8_workspace(
+    store: ProjectStore, project_id: str
+) -> Stage8RecipeWorkspace | None:
     project = store.load_project(project_id)
     recipe_id = _current_recipe(project)
     raw = _workspace_map(project).get(recipe_id)
@@ -264,7 +304,9 @@ def get_stage8_workspace(store: ProjectStore, project_id: str) -> Stage8RecipeWo
         return None
     workspace = Stage8RecipeWorkspace.from_dict(raw)
     if workspace.recipe_id != recipe_id:
-        raise Stage8WorkspaceError("stored workspace recipe does not match current project recipe")
+        raise Stage8WorkspaceError(
+            "stored workspace recipe does not match current project recipe"
+        )
 
     media = ProjectSourceMediaStore(store)
     for binding in workspace.sources:
@@ -282,7 +324,9 @@ def get_stage8_workspace(store: ProjectStore, project_id: str) -> Stage8RecipeWo
             or reference.metadata.get("size_bytes") != binding.size_bytes
             or binding.role != _source_role(recipe_id, binding.kind)
         ):
-            raise Stage8WorkspaceError("stored Stage 8 source binding is stale or corrupted")
+            raise Stage8WorkspaceError(
+                "stored Stage 8 source binding is stale or corrupted"
+            )
     return workspace
 
 
@@ -299,7 +343,9 @@ def save_stage8_workspace(
     if not isinstance(source_ids, Sequence) or isinstance(source_ids, (str, bytes)):
         raise Stage8WorkspaceError("source_ids must be an array")
     if len(source_ids) > _MAX_SOURCE_BINDINGS:
-        raise Stage8WorkspaceError(f"source_ids supports at most {_MAX_SOURCE_BINDINGS} items")
+        raise Stage8WorkspaceError(
+            f"source_ids supports at most {_MAX_SOURCE_BINDINGS} items"
+        )
     if any(not isinstance(item, str) or not item for item in source_ids):
         raise Stage8WorkspaceError("every source_id must be a non-empty string")
     if len(set(source_ids)) != len(source_ids):
@@ -311,9 +357,13 @@ def save_stage8_workspace(
     for source_id in source_ids:
         reference = by_id.get(source_id)
         if reference is None:
-            raise Stage8WorkspaceError(f"source_id {source_id!r} is not registered in this project")
+            raise Stage8WorkspaceError(
+                f"source_id {source_id!r} is not registered in this project"
+            )
         if reference.kind not in _ALLOWED_SOURCE_KINDS:
-            raise Stage8WorkspaceError(f"source_id {source_id!r} is not image/video/audio media")
+            raise Stage8WorkspaceError(
+                f"source_id {source_id!r} is not image/video/audio media"
+            )
         try:
             verified, _ = media.resolve_verified(
                 project_id,
@@ -325,9 +375,17 @@ def save_stage8_workspace(
         sha256 = verified.metadata.get("sha256")
         size_bytes = verified.metadata.get("size_bytes")
         if not isinstance(sha256, str) or len(sha256) != 64:
-            raise Stage8WorkspaceError(f"source_id {source_id!r} has no trusted sha256")
-        if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes <= 0:
-            raise Stage8WorkspaceError(f"source_id {source_id!r} has no trusted size_bytes")
+            raise Stage8WorkspaceError(
+                f"source_id {source_id!r} has no trusted sha256"
+            )
+        if (
+            isinstance(size_bytes, bool)
+            or not isinstance(size_bytes, int)
+            or size_bytes <= 0
+        ):
+            raise Stage8WorkspaceError(
+                f"source_id {source_id!r} has no trusted size_bytes"
+            )
         bindings.append(
             Stage8SourceBinding(
                 source_id=verified.id,

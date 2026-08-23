@@ -21,6 +21,7 @@ from .models import (
     WorkflowReadiness,
     WorkflowWorkspace,
 )
+from .narrated import NARRATED_RECIPE_ID, narrated_workflow_state
 from .project_workflow import project_workflow_state as _base_project_workflow_state
 from .targeted_edit import TARGETED_EDIT_RECIPE_ID, targeted_edit_workflow_state
 
@@ -454,11 +455,14 @@ def project_workflow_state(project, recipe, registry, source_media) -> ProjectWo
     if recipe is not None and project.recipe_id == DUBBING_RECIPE_ID:
         state = dubbing_workflow_state(project, recipe, registry, source_media)
         return _normalize_dubbing_projection(state, source_media)
+    if recipe is not None and project.recipe_id == NARRATED_RECIPE_ID:
+        return narrated_workflow_state(project, recipe, registry, source_media)
     return _base_project_workflow_state(project, recipe, registry, source_media)
 
 
 __all__ = [
     "DUBBING_RECIPE_ID",
+    "NARRATED_RECIPE_ID",
     "ProjectWorkflowState",
     "TARGETED_EDIT_RECIPE_ID",
     "WORKFLOW_SCHEMA_VERSION",
@@ -469,6 +473,7 @@ __all__ = [
     "WorkflowReadiness",
     "WorkflowWorkspace",
     "dubbing_workflow_state",
+    "narrated_workflow_state",
     "project_workflow_state",
     "targeted_edit_workflow_state",
 ]

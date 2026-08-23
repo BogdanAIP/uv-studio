@@ -1,4 +1,4 @@
-"""Browser regressions for Story/Commercial workspaces and Free Project routing."""
+"""Browser regressions for Stage 8 composition workspaces and Product Orchestrator routing."""
 
 from __future__ import annotations
 
@@ -63,6 +63,16 @@ def _image_fixture(path: Path) -> None:
     )
 
 
+def _audio_fixture(path: Path) -> None:
+    _run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=660:sample_rate=48000:duration=3",
+            "-c:a", "pcm_s16le", str(path),
+        ]
+    )
+
+
 def _api_json(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -92,8 +102,10 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         cls.artifact_dir.mkdir(parents=True, exist_ok=True)
         cls.video = cls.temp_root / "story-scene.mp4"
         cls.image = cls.temp_root / "product.png"
+        cls.audio = cls.temp_root / "narration.wav"
         _video_fixture(cls.video)
         _image_fixture(cls.image)
+        _audio_fixture(cls.audio)
 
         env = os.environ.copy()
         env.update(
@@ -173,7 +185,7 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         self.assertEqual(workspace["sources"][0]["role"], role)
         self.assertEqual(len(workspace["sources"][0]["sha256"]), 64)
 
-    def test_story_commercial_round_trip_and_free_routes_to_targeted_edit(self) -> None:
+    def test_story_commercial_narrated_round_trip_and_free_routes_to_targeted_edit(self) -> None:
         page = self._new_page()
 
         _story_id, story_encoded = self._create_project("E2E Stage 8 Story", "story_video")
@@ -205,6 +217,30 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         page.reload()
         expect(page.get_by_label("Stage 8 script")).to_have_value("Текст оффера без подмены продукта")
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
+
+        _narrated_id, narrated_encoded = self._create_project("E2E Narrated", "narrated_video")
+        page.goto(f"/projects/{narrated_encoded}")
+        expect(page.get_by_role("heading", name="Видео с дикторской дорожкой", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Подготовленная речь", exact=True)).to_be_visible()
+        expect(page.locator('input[aria-label="Stage 8 workspace audio"]')).to_have_count(0)
+        page.get_by_label("Stage 8 brief").fill("Коротко объяснить процесс")
+        page.get_by_label("Stage 8 script").fill("Три секунды проверенного текста диктора.")
+        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
+        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
+        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        self._assert_workspace(narrated_encoded, "narrated_video", "image", "narrated_image")
+
+        page.locator('input[aria-label="Narrated prepared audio upload"]').set_input_files(str(self.audio))
+        expect(page.get_by_text("Дикторская дорожка импортирована как проверяемый PreparedAudio проекта.", exact=True)).to_be_visible(timeout=60_000)
+        render_button = page.get_by_role("button", name="Собрать видео с дикторской дорожкой", exact=True)
+        expect(render_button).to_be_enabled(timeout=60_000)
+        render_button.click()
+        expect(page.get_by_text("Новый Narrated мастер собран и зарегистрирован в проекте.", exact=True)).to_be_visible(timeout=60_000)
+        narrated_workflow = _api_json("GET", f"/api/uv/projects/{narrated_encoded}/workflow")
+        self.assertEqual(narrated_workflow["readiness"], "ready")
+        self.assertIsNotNone(narrated_workflow["current_outcome"])
+        self.assertEqual(narrated_workflow["current_outcome"]["lifecycle"], "narrated_video_render")
 
         _free_id, free_encoded = self._create_project("E2E Targeted Edit Routing", "free_project")
         page.goto(f"/projects/{free_encoded}")

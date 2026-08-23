@@ -57,6 +57,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     from .adapters.edit_render import register_edit_render_capability
     from .adapters.musetalk_verified import register_musetalk_adapter
     from .adapters.music_video_render import register_music_video_render_capability
+    from .adapters.narrated_render import register_narrated_render_capability
     from .adapters.photo_slideshow import register_photo_slideshow_capability
     from .adapters.webvtt_subtitles import register_webvtt_subtitle_adapter
     from .adapters.whisperx_alignment import register_whisperx_alignment_adapter
@@ -67,6 +68,7 @@ def build_builtin_capability_registry() -> CapabilityRegistry:
     register_audio_loudness_capability(registry)
     register_dubbing_render_capability(registry)
     register_music_video_render_capability(registry)
+    register_narrated_render_capability(registry)
     register_photo_slideshow_capability(registry)
     register_audio_visualizer_capability(registry)
     register_music_analysis_capability(registry)

@@ -15,6 +15,7 @@ from .edit_render import render_edit_state
 from .mcp import MCPBindingOfferAdapter
 from .musetalk import MuseTalkAdapter
 from .music_video_render import render_music_video_state
+from .narrated_render import render_narrated_workspace
 from .native_videoclaw import NativeVideoClawAdapter
 from .photo_slideshow import compose_photo_slideshow
 from .range_reinsertion import LocalFFmpegRangeAdapter
@@ -63,6 +64,14 @@ class LocalFFmpegAdapter:
         if offer.capability_id == "video.render_music_video":
             self._delegate._validate_offer(offer)
             return render_music_video_state(
+                self._delegate,
+                project_id=project_id,
+                offer=offer,
+                payload=payload,
+            )
+        if offer.capability_id == "video.render_narrated":
+            self._delegate._validate_offer(offer)
+            return render_narrated_workspace(
                 self._delegate,
                 project_id=project_id,
                 offer=offer,

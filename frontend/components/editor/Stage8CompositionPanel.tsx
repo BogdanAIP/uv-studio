@@ -34,6 +34,11 @@ const recipeCopy: Record<Stage8CompositionRecipeId, { title: string; description
     description: 'Соберите исходные материалы и заметки без навязанного конвейера. Дальше используются только выбранные возможности UV Studio.',
     briefLabel: 'Задача / заметка (необязательно)',
   },
+  narrated_video: {
+    title: 'Видео с дикторской дорожкой',
+    description: 'Зафиксируйте задачу, точный текст диктора и визуальные материалы. Текущая локальная сборка использует изображения; выбранное видео сохраняется в workspace, но не включается в мастер молча. Дикторская дорожка добавляется отдельно как проверенный PreparedAudio.',
+    briefLabel: 'Тема / задача ролика',
+  },
 };
 
 interface Stage8CompositionPanelProps {
@@ -54,6 +59,7 @@ export function Stage8CompositionPanel({
     () => sources.filter(source => source.kind === 'image' || source.kind === 'video' || source.kind === 'audio'),
     [sources],
   );
+  const narrated = recipeId === 'narrated_video';
   const [brief, setBrief] = useState('');
   const [script, setScript] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -116,7 +122,11 @@ export function Stage8CompositionPanel({
       const source = await uploadProjectSource(projectId, file);
       selectNewSource(source.id);
       await onProjectChanged();
-      setMessage('Видео добавлено в материалы проекта.');
+      setMessage(
+        narrated
+          ? 'Видео добавлено в workspace. Текущий Narrated render его сохраняет как вход, но не включает в мастер.'
+          : 'Видео добавлено в материалы проекта.',
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить видео');
     } finally {
@@ -197,10 +207,11 @@ export function Stage8CompositionPanel({
           />
         </label>
         <label className="text-sm text-slate-300">
-          Сценарий / текст (необязательно)
+          {narrated ? 'Текст диктора (обязательно)' : 'Сценарий / текст (необязательно)'}
           <textarea
             aria-label="Stage 8 script"
             value={script}
+            required={narrated}
             onChange={event => setScript(event.target.value)}
             rows={6}
             className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2"
@@ -208,19 +219,23 @@ export function Stage8CompositionPanel({
         </label>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <div className={`mt-6 grid gap-3 ${narrated ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
           <span className="block font-medium">Добавить изображение</span>
           <input aria-label="Stage 8 workspace image" type="file" accept="image/*" disabled={busy} onChange={event => void uploadImage(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
         </label>
         <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
-          <span className="block font-medium">Добавить видео</span>
+          <span className="block font-medium">
+            {narrated ? 'Добавить видео (пока только сохранить)' : 'Добавить видео'}
+          </span>
           <input aria-label="Stage 8 workspace video" type="file" accept="video/*" disabled={busy} onChange={event => void uploadVideo(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
         </label>
-        <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
-          <span className="block font-medium">Добавить аудио</span>
-          <input aria-label="Stage 8 workspace audio" type="file" accept="audio/*" disabled={busy} onChange={event => void uploadAudio(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
-        </label>
+        {!narrated && (
+          <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
+            <span className="block font-medium">Добавить аудио</span>
+            <input aria-label="Stage 8 workspace audio" type="file" accept="audio/*" disabled={busy} onChange={event => void uploadAudio(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
+          </label>
+        )}
       </div>
 
       <div className="mt-6">
@@ -241,7 +256,9 @@ export function Stage8CompositionPanel({
                   onChange={() => toggleSource(source.id)}
                 />
                 <span className="min-w-0 flex-1 truncate">{sourceName(source)}</span>
-                <span className="text-xs text-slate-600">{source.kind}</span>
+                <span className="text-xs text-slate-600">
+                  {narrated && source.kind === 'audio' ? 'audio · reference only' : source.kind}
+                </span>
               </label>
             ))}
           </div>
@@ -250,7 +267,7 @@ export function Stage8CompositionPanel({
 
       <button
         type="button"
-        disabled={busy || (recipeId !== 'free_project' && !brief.trim())}
+        disabled={busy || (recipeId !== 'free_project' && !brief.trim()) || (narrated && !script.trim())}
         onClick={() => void save()}
         className="mt-6 rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40"
       >

@@ -42,7 +42,7 @@ A source reference alone is not readiness evidence. Project-owned media used by 
 
 ## Authoritative recovered journeys
 
-The orchestrator currently owns five product journeys:
+The orchestrator currently owns six product journeys:
 
 ### Photo -> Video
 
@@ -113,6 +113,22 @@ verified master song
 
 Music Map, Direction, Assembly and Music Video Review remain canonical. Rhythm audit is computed by `MusicDirectionStore.rhythm_audit()`; there is no duplicate audit store. Current render/review truth is bound to exact source bytes and exact current revisions.
 
+### Narrated Video
+
+```text
+verified Stage 8 brief + non-empty script + verified project-owned images
+ + verified PreparedAudio narration
+ -> narrated_video
+ -> render_narrated
+ -> video.render_narrated
+ -> local/free FFmpeg
+ -> current SHA-bound narrated master
+```
+
+Narrated recovery reuses the existing Stage 8 workspace as the canonical brief/script/visual binding and the existing PreparedAudio store for narration. The semantic action accepts only the exact current workspace revision and a currently verified PreparedAudio ID. The current outcome remains current only while its workspace revision, image bindings, narration fingerprint and registered output bytes still match.
+
+The first recovered Narrated master is intentionally image-led. Video bindings may remain in the canonical Stage 8 workspace, but this render does not silently claim to include them. Remote TTS remains an optional existing `speech.synthesize` route and continues to require the normal D-017 remote-consent boundary before its output can be promoted to PreparedAudio.
+
 ## Action contract rules
 
 `WorkflowAction.suggested_input` is executable input, not an untrusted UI side channel. Allowed choices belong to the projected input schema and are revalidated against freshly projected state immediately before dispatch.
@@ -152,8 +168,8 @@ The app-baseline jobs include API/HTTP verification, real-media execution, front
 
 ## Remaining program
 
-Before adding more product-journey state, the next bounded slice is `project-store-portable-json-hardening`. The repository-hygiene audit confirmed that canonical project mappings are not recursively JSON-validated, Python JSON serialization still accepts non-finite numbers, and one corrupt project can interrupt healthy-project listing. Those persistence/listing semantics must be hardened together rather than hidden inside Narrated recovery.
+Project Store portable-JSON/listing hardening was completed in PR #50 before Narrated recovery, preserving the same canonical store rather than hiding persistence defects inside product orchestration.
 
-After that hardening slice, the next unrecovered production journeys are Narrated and General. They must reuse existing canonical state and capability boundaries.
+After Narrated, the next unrecovered core production journey is General Video. It must reuse existing Project Store/editor/Stage 8/capability boundaries and the D-033 ownership map rather than introducing a generic workflow database or a second editor authority.
 
 Repository settings such as `main` branch protection remain separate external P0 work. Stage 9 packaging/release work stays blocked until Product Truth Recovery, Class C cold-start validation and installed Windows human acceptance are complete.

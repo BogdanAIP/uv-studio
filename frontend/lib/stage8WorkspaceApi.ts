@@ -1,6 +1,10 @@
 'use client';
 
-export type Stage8CompositionRecipeId = 'story_video' | 'commercial_product' | 'free_project';
+export type Stage8CompositionRecipeId =
+  | 'story_video'
+  | 'commercial_product'
+  | 'free_project'
+  | 'narrated_video';
 
 export interface Stage8WorkspaceSourceBinding {
   source_id: string;
