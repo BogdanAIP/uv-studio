@@ -1,7 +1,29 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "product-recovery-repository-hygiene",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Reconcile repository product truth and semantic contracts after Dubbing/Music recovery before Narrated: update architecture/backlog docs, retire legacy frontend routes, fix Dubbing accepted_id action typing, remove dead Music projector code, and leave strict JSON/corruption quarantine as an explicit split if it does not fit this narrow reviewable slice.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-repository-hygiene",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "frontend/app/pipelines/standard/**",
+      "frontend/app/pipelines/action-transfer/**",
+      "frontend/app/pipelines/digital-human/**",
+      "frontend/app/sandbox/**",
+      "uv_studio/api/project_workflow.py",
+      "uv_studio/orchestration/dubbing.py",
+      "uv_studio/orchestration/music.py",
+      "tests_api/**",
+      "tests_browser/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "product-recovery-music-orchestration",
     "pull_request": 48,
