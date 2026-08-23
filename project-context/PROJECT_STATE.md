@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: product-usability-class-c-cold-start -->
 
 **Updated:** 2026-08-23
 
@@ -8,32 +9,27 @@
 
 ## Current lifecycle
 
-Repository context is **idle** after recipe/workspace reconciliation PR #56 merged as `44c853f00766795399de9addf74ba79cef2c35c4`.
+Class C cold-start usability evidence is active in **Draft** on `test/product-usability-class-c-cold-start`, based on idle `main` `c0cc0dea46205ac471dd5e7695d069df25216ad7` after recipe/workspace reconciliation PR #56.
 
-Product Truth recovery now has one explicit boundary between durable recipe compatibility metadata and recipes that UV Studio can truthfully advertise for new project creation.
+This slice tests the product from a user-equivalent clean state. It must not rely on repository knowledge, direct Project Store fixtures, hidden API readiness seeding, retired pipeline routes or developer-only shortcuts.
 
-## Completed Product Truth reconciliation
+## Product boundary under test
 
-- the provider-neutral Recipe Registry remains the durable vocabulary for current and preserved/imported projects;
-- the creation catalog advertises only recipes with a current authoritative Product Orchestrator journey;
-- Action Transfer, Digital Human and Performance/lip-sync remain readable compatibility recipes but are not offered for new creation or recipe switching;
-- archive import/recovery remains permissive so preserved unsupported projects can still be opened and exported;
-- visible project workspaces are mounted only from `workflow.relevant_workspaces`;
-- the historical generic ProjectEditor + Sequence Continuity + Dubbing fallback is removed;
-- the direct `performance_lip_sync` page bypass is removed until that workflow is separately recovered;
-- `free_project` remains owned by Targeted Edit rather than becoming a second generic editor authority;
-- preserved unsupported projects fail closed with partial readiness, no next actions and no foreign workspaces.
+- discovery begins from the normal UV Studio application entry path;
+- only recipes currently advertised by the product creation catalog may be selected;
+- project creation, prerequisite guidance and workspace routing must be understandable through visible controls alone;
+- representative supported journeys must reach real outcomes through visible UI interactions;
+- optional local runtimes/providers may be absent, but the product must distinguish configuration/runtime requirements from product defects;
+- unsupported/preserved-only recipes remain fail-closed and must not reappear as new-project choices;
+- compatibility recovery may be observed only through normal user-facing import/recovery behavior, never by direct store writes;
+- evidence must be durable and comparable with the later packaged Windows human-acceptance gate.
 
 ## Verification status
 
-Recipe/workspace reconciliation exact Draft head `e49b64aef97011d7a7ebffae8f6db0b21f7ab506` passed all five permanent checks in CI run `32660321870` (#2667), including full browser user-outcome coverage on Ubuntu and Windows. The same head was reviewed for merge with no review threads or outstanding code changes, and PR #56 merged as `44c853f00766795399de9addf74ba79cef2c35c4`.
+Implementation and browser evidence are pending. The slice requires exact Draft and Review heads to pass all five permanent CI jobs, including full browser user-outcome coverage on Ubuntu and Windows.
 
-The browser evidence proves both sides of the product boundary: preserved-only recipes are absent from new-project discovery, while a preserved Action Transfer project remains readable without inheriting Targeted Edit, Sequence Continuity, Dubbing or Performance panels.
+Stage 9 remains blocked until this Class C cold-start slice and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
 
-Stage 9 remains blocked until Class C cold-start evidence and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
+## Handoff after this slice
 
-## Next authorized slice
-
-`product-usability-class-c-cold-start`, defined by `project-context/NEXT_TASK.md`.
-
-The next slice must start from a clean user-equivalent state, use only advertised recipes and visible product controls, distinguish genuine product defects from optional runtime/provider absence, and produce durable browser evidence without direct Project Store fixtures, hidden API readiness seeding or developer-only shortcuts.
+After Class C is reviewed, merged and lifecycle-closed, the next gate is `product-usability-installed-windows-human-acceptance` on the packaged application. That gate is intentionally separate from CI-oriented cold-start evidence and must not be claimed by this slice.
