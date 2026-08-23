@@ -151,7 +151,9 @@ class DubbingOrchestratorBrowserOutcome(unittest.TestCase):
         expect(page.get_by_text(f"Видео «{self.source_video.name}» добавлено в Project Store.", exact=True)).to_be_visible(
             timeout=45_000
         )
-        expect(page.get_by_text(self.source_video.name, exact=True).first).to_be_visible(timeout=45_000)
+        expect(
+            page.get_by_label("Видео для ручного transcript", exact=True).locator("option:checked")
+        ).to_have_text(self.source_video.name, timeout=45_000)
 
         expect(page.get_by_role("heading", name="Проверенный transcript без ASR", exact=True)).to_be_visible()
         page.get_by_label("Начало ручного transcript", exact=True).fill("1")
