@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: project-store-portable-json-hardening -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: project-store-portable-json-hardening -->
 
 **Updated:** 2026-08-23
 
@@ -9,39 +9,41 @@
 
 ## Current lifecycle
 
-The repository is **review** on `project-store-portable-json-hardening` in PR #50, branched from idle `main` commit `dd5871ad787cc14897de2dee8eb6af4292b7c1ed` after repository-hygiene PR #49 merged and its lifecycle closed.
+The repository is **idle** on `main` after Project Store hardening PR #50 merged as `99979737cfddc542481158c147306bda0c7fea24`.
 
-The exact Draft head `1406467ef152f3f0147aa3d6efb4e118917ec1a0` passed all five permanent Ubuntu/Windows CI checks. This slice hardens the existing canonical Project Store boundary before Narrated recovery; it does not introduce a new store, change Product Orchestrator ownership, or resume Stage 9 packaging.
+The hardening slice completed without changing Project Store ownership, Product Orchestrator ownership or Capability Registry/D-017 provider/runtime boundaries. Its exact Draft head and exact Review head each passed all five permanent Ubuntu/Windows CI checks, including API/HTTP, real-media, frontend and browser user-outcome coverage.
 
-## Contract being hardened
+## Project Store hardening completed
 
-Canonical project state must be portable JSON at every persistence seam:
+Canonical project state is now constrained to strict portable JSON at persistence boundaries:
 
-- `ProjectDocument.settings` and `ProjectDocument.extensions` are recursively validated;
-- `ProjectReference.metadata` is recursively validated and revalidated when references are carried through a document;
-- JSON objects require string keys and arrays require JSON array values rather than arbitrary Python containers;
-- `NaN`, `Infinity` and `-Infinity` are invalid;
-- non-JSON Python objects and recursive containers are invalid;
-- `project.json` reads reject non-standard non-finite constants and writes use strict serialization;
-- archive import must pass the same canonical `load_project()` validation before commit;
-- `list_projects()` keeps healthy projects visible when another project is malformed or invalid;
-- damaged project bytes are preserved for diagnosis/recovery rather than deleted or silently rewritten.
+- nested `settings`, `extensions` and reference `metadata` are recursively validated and detached;
+- non-string JSON-object keys, Python-only values, recursive containers and `NaN`/`Infinity`/`-Infinity` are rejected;
+- mutable nested reference metadata is revalidated before canonical document save;
+- `project.json` reads reject non-standard non-finite constants and canonical writes use strict serialization while retaining atomic replacement;
+- archive import reaches the same strict staged-project validation before canonical commit;
+- one malformed/invalid project no longer hides unrelated healthy projects during listing;
+- corrupt project bytes are preserved, with bounded Store diagnostics available for recovery tooling;
+- existing project ID/path/symlink protections and migrations remain intact.
 
-The public `/api/uv/projects` listing remains a list of healthy `ProjectPayload` values. Store callers that need recovery detail can use bounded per-project listing diagnostics without changing the stable API response shape.
+The public `/api/uv/projects` list response remains compatible: it returns healthy project payloads rather than changing response shape to include diagnostics.
 
-## Review proof target
+## Preserved product truth
 
-Before merge, the exact Review head must prove again that:
+The five authoritative Class A/B Product Orchestrator journeys remain:
 
-- create/update/save paths cannot persist nested non-portable values;
-- reopening rejects non-finite/non-standard JSON constants;
-- archive import with a valid manifest/hash still rejects non-portable `project.json` before canonical commit;
-- a corrupt project does not prevent healthy-project discovery and its bytes remain untouched;
-- existing path/symlink, migration, atomic-write, archive and API behavior remains intact;
-- all five permanent Ubuntu/Windows CI checks pass.
+- `photo_to_video -> photo_composition`;
+- `visualizer -> audio_visualizer`;
+- `free_project -> targeted_edit`;
+- `dubbing -> dubbing`;
+- `music_video -> music_video`.
 
-This slice does not claim repair of corrupt projects, Narrated recovery, Class C cold-start usability, installed Windows human acceptance or Stage 9 release readiness.
+`main` branch protection remains an external repository-setting P0 and is not represented as fixed in code.
+
+## Remaining release boundary
+
+This state does **not** claim Narrated recovery, Class C cold-start usability, installed Windows human acceptance or Stage 9 release readiness. Stage 9 packaging/release remains blocked until the remaining gates are complete.
 
 ## Next authorized slice
 
-`project-store-portable-json-hardening` is in Review in PR #50. After it is merged and lifecycle returns to idle, the next authorized slice is `product-recovery-narrated-orchestration` as defined by `project-context/NEXT_TASK.md`.
+The next authorized slice is `product-recovery-narrated-orchestration`, defined by `project-context/NEXT_TASK.md`.

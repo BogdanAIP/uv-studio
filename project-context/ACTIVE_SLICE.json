@@ -1,26 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "project-store-portable-json-hardening",
-    "kind": "fix",
-    "roadmap_stage": "product-recovery",
-    "goal": "Harden canonical Project Store persistence so nested project values are strict portable JSON, non-finite numbers cannot persist or import, and one damaged project cannot hide unrelated healthy projects before Narrated recovery.",
-    "base_branch": "main",
-    "branch": "fix/project-store-portable-json-hardening",
-    "pull_request": 50,
-    "write_scope": [
-      "project-context/**",
-      "uv_studio/projects/**",
-      "tests/test_project_store.py",
-      "tests/test_project_archive.py",
-      "tests_api/test_projects_api.py"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "product-recovery-repository-hygiene",
-    "pull_request": 49,
-    "merge_commit": "a92a232ed8fdcc50eb88b114452784348c3c994c"
+    "id": "project-store-portable-json-hardening",
+    "pull_request": 50,
+    "merge_commit": "99979737cfddc542481158c147306bda0c7fea24"
   },
   "handoff": {
     "next_slice_id": "product-recovery-narrated-orchestration",
