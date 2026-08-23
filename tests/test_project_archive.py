@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -58,6 +59,48 @@ class ProjectArchiveTests(unittest.TestCase):
                     replacement = data
                 dst.writestr(info, replacement)
 
+    def _rewrite_project_json_with_valid_manifest(
+        self,
+        source: Path,
+        target: Path,
+        mutator,
+    ) -> None:
+        project_name = "project/project.json"
+        with zipfile.ZipFile(source, "r") as src:
+            infos = src.infolist()
+            payloads = {
+                info.filename: (src.read(info) if not info.is_dir() else b"")
+                for info in infos
+            }
+
+        project_data = json.loads(payloads[project_name].decode("utf-8"))
+        mutator(project_data)
+        project_bytes = json.dumps(project_data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        payloads[project_name] = project_bytes
+
+        manifest = json.loads(payloads[ARCHIVE_MANIFEST].decode("utf-8"))
+        for record in manifest["files"]:
+            if record["path"] == project_name:
+                record["size"] = len(project_bytes)
+                record["sha256"] = hashlib.sha256(project_bytes).hexdigest()
+                break
+        else:
+            self.fail("archive manifest does not declare project/project.json")
+        payloads[ARCHIVE_MANIFEST] = json.dumps(
+            manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode("utf-8")
+
+        with zipfile.ZipFile(
+            target,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            allowZip64=True,
+        ) as dst:
+            for info in infos:
+                dst.writestr(info, payloads[info.filename])
+
     def test_round_trip_preserves_project_and_files(self) -> None:
         archive = self._export()
         imported = import_project(self.target_store, archive)
@@ -114,6 +157,20 @@ class ProjectArchiveTests(unittest.TestCase):
         with self.assertRaises(ProjectArchiveError) as caught:
             import_project(self.target_store, tampered)
         self.assertIn("mismatch", str(caught.exception).lower())
+        self.assertFalse((self.target_store.root / self.project.project_id).exists())
+
+    def test_import_rejects_nonportable_project_json_without_commit(self) -> None:
+        archive = self._export()
+        nonportable = self.base / "nonportable.uvproj.zip"
+
+        def inject_nan(project_data: dict) -> None:
+            project_data["extensions"] = {"nested": {"value": float("nan")}}
+
+        self._rewrite_project_json_with_valid_manifest(archive, nonportable, inject_nan)
+
+        with self.assertRaises(ProjectStoreError) as caught:
+            import_project(self.target_store, nonportable)
+        self.assertIn("non-finite", str(caught.exception).lower())
         self.assertFalse((self.target_store.root / self.project.project_id).exists())
 
     def test_failed_final_commit_leaves_no_partial_canonical_project(self) -> None:
