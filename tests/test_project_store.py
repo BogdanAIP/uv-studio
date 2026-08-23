@@ -87,6 +87,13 @@ class ProjectStoreTests(unittest.TestCase):
             )
 
         with self.assertRaises(ProjectValidationError):
+            self.store.create_project(
+                title="Bad Tuple",
+                project_id="prj_bad_tuple",
+                settings={"nested": ("python-only-array",)},
+            )
+
+        with self.assertRaises(ProjectValidationError):
             ProjectReference(
                 id="src_bad_json",
                 kind="source",
@@ -130,7 +137,7 @@ class ProjectStoreTests(unittest.TestCase):
         before = path.read_bytes()
 
         document.sources[0].metadata["score"] = float("-inf")
-        with self.assertRaises(ProjectStoreError):
+        with self.assertRaises(ProjectValidationError):
             self.store.save_project(document)
 
         self.assertEqual(path.read_bytes(), before)
