@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-music-orchestration -->
 
 **Updated:** 2026-08-23
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-The repository is **draft** on `product-recovery-music-orchestration`, branched from idle `main` after completion of Dubbing PR #47.
+The repository is **review** on `product-recovery-music-orchestration`, branched from idle `main` after completion of Dubbing PR #47.
 
 The slice projects the existing `music_video` production chain through Product Orchestrator. It must reuse the canonical Music Map, Music Direction, Music Assembly and Music Video Review state plus existing capability execution and artifact provenance. Product Orchestrator remains a read projection plus semantic action boundary and must not introduce a second durable music workflow store.
 
