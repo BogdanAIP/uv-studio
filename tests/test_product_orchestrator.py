@@ -209,10 +209,10 @@ class ProductOrchestratorTests(unittest.TestCase):
         )
 
     def test_unmigrated_recipe_fails_closed_without_irrelevant_workspaces(self) -> None:
-        project = _project(recipe_id="commercial_product")
+        project = _project(recipe_id="free_project")
         state = project_workflow_state(
             project,
-            self.recipes.get("commercial_product"),
+            self.recipes.get("free_project"),
             _registry(OfferAvailability.AVAILABLE),
             StubSourceMedia(),
         )
