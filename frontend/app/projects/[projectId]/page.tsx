@@ -7,6 +7,7 @@ import { DubbingPrecisionPanel } from '@/components/editor/DubbingPrecisionPanel
 import { DubbingSourceSetupPanel } from '@/components/editor/DubbingSourceSetupPanel';
 import { DubbingSubtitleExportPanel } from '@/components/editor/DubbingSubtitleExportPanel';
 import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
+import { GeneralVideoPanel } from '@/components/editor/GeneralVideoPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
@@ -153,6 +154,23 @@ export default function ProjectPage() {
                 />
                 <DubbingSubtitleExportPanel
                   projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+              </>
+            )}
+
+            {projectedWorkspaceIds.has('general_video') && (
+              <>
+                <Stage8CompositionPanel
+                  projectId={project.project_id}
+                  recipeId="general_video"
+                  sources={project.sources}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <GeneralVideoPanel
+                  projectId={project.project_id}
+                  workflowAction={workflow.next_actions.find(action => action.action_id === 'render_general')}
+                  currentOutcome={workflow.current_outcome}
                   onProjectChanged={refreshProjectWorkflow}
                 />
               </>
