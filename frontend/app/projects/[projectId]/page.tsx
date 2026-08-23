@@ -12,7 +12,6 @@ import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
 import { NarratedVideoPanel } from '@/components/editor/NarratedVideoPanel';
-import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
 import { Stage8CompositionPanel } from '@/components/editor/Stage8CompositionPanel';
@@ -45,7 +44,6 @@ export default function ProjectPage() {
     () => new Set((workflow?.relevant_workspaces ?? []).map(workspace => workspace.workspace_id)),
     [workflow],
   );
-  const hasProjectedWorkspace = projectedWorkspaceIds.size > 0;
 
   useEffect(() => {
     let active = true;
@@ -62,10 +60,6 @@ export default function ProjectPage() {
       active = false;
     };
   }, [projectId]);
-
-  const refreshProject = async () => {
-    setProject(await getUVProject(projectId));
-  };
 
   const refreshProjectWorkflow = async () => {
     const [projectValue, workflowValue] = await Promise.all([
@@ -225,13 +219,6 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
-            {!hasProjectedWorkspace && (
-              <ProjectEditor
-                projectId={project.project_id}
-                onProjectChanged={refreshProject}
-              />
-            )}
-
             {projectedWorkspaceIds.has('music_video') && (
               <>
                 <MusicVideoPanel
@@ -248,38 +235,6 @@ export default function ProjectPage() {
                   projectId={project.project_id}
                   refreshRevision={project.artifacts.length}
                   onProjectChanged={refreshMusicPrerequisites}
-                />
-              </>
-            )}
-
-            {project.recipe_id === 'performance_lip_sync' && (
-              <PerformanceLipSyncPanel
-                projectId={project.project_id}
-                sources={project.sources}
-                onProjectChanged={refreshProject}
-              />
-            )}
-
-            {!hasProjectedWorkspace && (
-              <>
-                <SequenceContinuityPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProject}
-                />
-
-                <DubbingWorkflowPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProject}
-                />
-
-                <DubbingPrecisionPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProject}
-                />
-
-                <DubbingSubtitleExportPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProject}
                 />
               </>
             )}
