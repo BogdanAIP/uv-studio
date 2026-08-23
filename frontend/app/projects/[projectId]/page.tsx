@@ -159,6 +159,21 @@ export default function ProjectPage() {
               </>
             )}
 
+            {projectedWorkspaceIds.has('story_video') && (
+              <>
+                <Stage8CompositionPanel
+                  projectId={project.project_id}
+                  recipeId="story_video"
+                  sources={project.sources}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <SequenceContinuityPanel
+                  projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+              </>
+            )}
+
             {projectedWorkspaceIds.has('general_video') && (
               <>
                 <Stage8CompositionPanel
@@ -201,7 +216,7 @@ export default function ProjectPage() {
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
 
-            {(project.recipe_id === 'story_video' || project.recipe_id === 'commercial_product') && (
+            {project.recipe_id === 'commercial_product' && (
               <Stage8CompositionPanel
                 projectId={project.project_id}
                 recipeId={project.recipe_id}
