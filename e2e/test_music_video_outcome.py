@@ -283,7 +283,7 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         )
         expect(review_heading).to_be_visible(timeout=60_000)
         review = review_heading.locator("xpath=ancestor::section[1]")
-        expect(review.get_by_text("20–30 с: pass", exact=True)).to_be_visible(timeout=60_000)
+        expect(review.get_by_text("20–30 с: pass", exact=True).first).to_be_visible(timeout=60_000)
         review.get_by_role("button", name="Сохранить финальную проверку", exact=True).click()
         expect(review.get_by_text("Текущий вердикт:", exact=False)).to_contain_text("approved", timeout=60_000)
 
