@@ -8,7 +8,7 @@
     "goal": "Recover commercial_product through Product Orchestrator using the existing Stage 8 product workspace and verified project-owned product media without inventing a parallel advertising workflow authority or unsupported final render path.",
     "base_branch": "main",
     "branch": "fix/product-recovery-commercial-product-orchestration",
-    "pull_request": null,
+    "pull_request": 55,
     "write_scope": [
       "project-context/**",
       "uv_studio/orchestration/**",
