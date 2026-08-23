@@ -10,15 +10,32 @@ Required closure:
 
 - keep Product Truth Matrix, Product Orchestrator docs and repository context aligned with the recovered Photo, Visualizer, Targeted Edit, Dubbing and Music journeys;
 - retire obsolete addressable `/pipelines/standard`, `/pipelines/action-transfer`, `/pipelines/digital-human` and `/sandbox` frontend routes rather than remounting their historical backend runtime;
-- fix semantic request-contract mismatches such as Dubbing `accepted_id` loss at the Product Orchestrator boundary;
-- remove dead projector code where behavior is already covered by current integrity checks;
+- fix the Dubbing `accept_dubbing_review` request contract so optional `accepted_id` survives the Product Orchestrator boundary;
+- remove dead Music projector code where behavior remains protected by the current integrity checks;
+- record the Project Store portable-JSON/corruption assessment as an explicit separate hardening contract;
 - keep `main` branch protection recorded as an external repository-setting P0 until it is enabled in GitHub settings.
 
 Do not restart Stage 9 from this slice.
 
+## P0 — Project Store portable JSON and corruption isolation
+
+Next slice after repository hygiene: `project-store-portable-json-hardening`.
+
+Required closure:
+
+- recursively validate `ProjectDocument.settings`, `ProjectDocument.extensions` and `ProjectReference.metadata` as portable JSON values rather than accepting arbitrary nested Python objects;
+- reject `NaN`, `Infinity` and `-Infinity` at canonical model/write/import boundaries and serialize with strict JSON semantics;
+- define stable errors for invalid nested values so callers cannot persist non-portable state through create/update/save/import paths;
+- isolate corrupt projects during listing so one malformed or invalid project does not hide healthy projects;
+- preserve the corrupt project on disk for diagnosis/recovery rather than silently deleting or rewriting it;
+- add focused tests for create, update, save, archive/import, reopen and list behavior, including nested non-finite values and one-corrupt-project/multiple-healthy-project cases;
+- keep project identity/path validation and existing atomic-write guarantees intact.
+
+This is foundation-level persistence work and must be completed before Narrated/General orchestration adds more canonical project state.
+
 ## P0 — Remaining Product Truth Recovery
 
-After repository hygiene:
+After Project Store hardening:
 
 1. `product-recovery-narrated-orchestration` — recover the canonical script/narration/visual/assembly journey without a duplicate workflow store;
 2. `product-recovery-general-orchestration` — establish a truthful general production journey rather than advertising incomplete legacy behavior;
@@ -26,10 +43,8 @@ After repository hygiene:
 
 All recovered journeys must preserve Project/domain stores as canonical and route provider/runtime execution through Capability Registry/D-017.
 
-## P1 — Portable-state and corruption hardening
+## P1 — Additional portable-state and runtime hardening
 
-- recursively reject non-finite and otherwise non-JSON values in portable `settings`, `extensions` and reference metadata before persistence;
-- quarantine corruption per project so one damaged project cannot make unrelated projects unavailable;
 - keep machine paths, secrets and runtime handles outside portable project state;
 - define a content-integrity strategy that avoids unnecessary full-file hashing while preserving Review/Accept/render/export trust;
 - keep the current single-backend-process assumption explicit until inter-process locking/state is deliberately introduced;
@@ -37,8 +52,6 @@ All recovered journeys must preserve Project/domain stores as canonical and rout
 - make dependency/runtime support claims match CI (Python 3.11 is the continuously verified baseline);
 - expand codec/container/device fixtures only when concrete compatibility risks justify them;
 - retire transitional `/api/stages` after no supported product surface depends on it.
-
-These items should be split into bounded hardening slices if they would broaden a product-recovery PR.
 
 ## P1 — Product usability evidence
 
