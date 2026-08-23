@@ -140,7 +140,7 @@ verified master song
 | Recipe | Intended outcome | Status | Required recovery |
 |---|---|---|---|
 | `general_video` | brief -> general video | `partial` | build authoritative orchestrated production path |
-| `narrated_video` | topic/script -> narration -> visuals -> video | `unavailable/partial` | recover current narrated journey |
+| `narrated_video` | topic/script -> narration -> visuals -> video | `unavailable/partial` | recover current narrated journey after Project Store hardening |
 | `music_video` | song-driven clip | `working_orchestrated` | preserve; Class C/install evidence later |
 | `action_transfer` | motion source + target -> result | `unavailable` product journey | build authorized current workflow or keep unavailable |
 | `digital_human` | portrait + speech -> talking video | `partial` | truthful capability-gated workflow |
@@ -165,9 +165,19 @@ Historical legacy components may remain temporarily as isolated source until dep
 
 ## Confirmed remaining product work
 
+### Project Store portable JSON and corruption isolation
+
+The repository-hygiene audit confirmed a foundation-level persistence gap that must be closed before Narrated recovery:
+
+- `settings`, `extensions` and reference `metadata` are only checked as top-level mappings, not recursively as portable JSON values;
+- canonical JSON writes still use Python's permissive non-finite-number behavior, so `NaN`, `Infinity` and `-Infinity` are not rejected by the write boundary;
+- one malformed/invalid project can interrupt healthy-project listing rather than being isolated for diagnosis/recovery.
+
+This is explicitly split into `project-store-portable-json-hardening`, with create/update/save/import/reopen/list tests. Corrupt project data must be preserved rather than silently deleted or rewritten.
+
 ### Narrated and General orchestration
 
-Narrated and General remain the next unrecovered top-level production journeys. They must reuse canonical Project/domain/capability boundaries and must not introduce a second workflow store.
+After Project Store hardening, Narrated and General remain the next unrecovered top-level production journeys. They must reuse canonical Project/domain/capability boundaries and must not introduce a second workflow store.
 
 ### Recipe creation is readiness-blind
 
@@ -176,10 +186,6 @@ Narrated and General remain the next unrecovered top-level production journeys. 
 ### Class C and installed acceptance are still missing
 
 Current browser suites are Class B informed-regression evidence. Recovered journeys have real API/browser/media evidence, but that does not prove first-time discoverability from a user-equivalent clean state. Class C cold-start validation and installed Windows human acceptance remain release-blocking.
-
-### Portable-state hardening remains open
-
-Recursive rejection of non-finite/non-JSON values and per-project corruption quarantine are not completed by the orchestration recovery. They remain explicit persistence hardening work and should be handled in bounded follow-up slices rather than hidden inside a product-journey migration.
 
 ### Repository branch protection is external P0
 
@@ -209,9 +215,9 @@ Semantic actions do not map one-to-one to capabilities. Capability-backed media 
 UV Studio is not release-ready. The current order is:
 
 1. repository truth/contract hygiene;
-2. Narrated orchestration;
-3. General orchestration;
-4. persistence/corruption hardening where still open;
+2. Project Store portable-JSON/corruption hardening;
+3. Narrated orchestration;
+4. General orchestration;
 5. Class C cold-start validation;
 6. installed Windows human acceptance;
 7. only then resume Stage 9 packaging/release work.
