@@ -56,7 +56,7 @@ class RecipeCreationCatalogApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422, response.text)
         self.assertIn("not currently available for new project creation", response.json()["detail"])
-        self.assertEqual(self.store.list_projects(), ())
+        self.assertEqual(self.store.list_projects(), [])
 
     def test_recipe_switch_rejects_preserved_only_recipe(self) -> None:
         created = self.client.post(
