@@ -152,6 +152,8 @@ The app-baseline jobs include API/HTTP verification, real-media execution, front
 
 ## Remaining program
 
-The next unrecovered production journeys are Narrated and General. They must reuse existing canonical state and capability boundaries.
+Before adding more product-journey state, the next bounded slice is `project-store-portable-json-hardening`. The repository-hygiene audit confirmed that canonical project mappings are not recursively JSON-validated, Python JSON serialization still accepts non-finite numbers, and one corrupt project can interrupt healthy-project listing. Those persistence/listing semantics must be hardened together rather than hidden inside Narrated recovery.
 
-Separate hardening work remains for portable JSON strictness/corruption quarantine and repository settings such as `main` branch protection. Stage 9 packaging/release work stays blocked until Product Truth Recovery, Class C cold-start validation and installed Windows human acceptance are complete.
+After that hardening slice, the next unrecovered production journeys are Narrated and General. They must reuse existing canonical state and capability boundaries.
+
+Repository settings such as `main` branch protection remain separate external P0 work. Stage 9 packaging/release work stays blocked until Product Truth Recovery, Class C cold-start validation and installed Windows human acceptance are complete.
