@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: product-recovery-recipe-workspace-reconciliation -->
 
 **Updated:** 2026-08-23
 
@@ -8,32 +9,27 @@
 
 ## Current lifecycle
 
-Repository context is **idle** after Commercial Product recovery PR #55 merged as `614cf26f5d45d5e2feb5d627d559ea87bf095ee3`.
+Recipe/workspace reconciliation is active in **Draft** on `fix/product-recovery-recipe-workspace-reconciliation`, based on idle `main` `2c53b50c847986c9a9486ed319d245e3d1944f21` after Commercial Product PR #55.
 
-Commercial Product now has a truthful preparation-only Product Orchestrator journey over the existing Stage 8 workspace and Project Store media references. It does not claim unsupported advertising generation, final assembly or approval gates.
+The slice closes the remaining Product Truth mismatch between the recipe catalog, Product Orchestrator projections and visible project workspaces. A recipe being registered or creatable must not by itself make unrelated editor, continuity or dubbing surfaces appear, and recipe capability declarations must not be treated as current executable readiness.
 
-## Completed Product Truth recovery
+## Current audit findings
 
-The permanent Product Orchestrator now owns the recovered product journeys for Photo to Video, Visualizer, Targeted Edit (`free_project`), Dubbing, Music Video, Narrated Video, General Video, Story Video preparation and Commercial Product preparation. Canonical state remains in Project Store and the existing domain stores; execution/provider boundaries remain governed by Capability Registry/D-017 and editor mutation ownership by D-033.
+- recovered authoritative journeys already route through Product Orchestrator-owned workspaces;
+- `free_project` is already the Targeted Edit recipe and must not be broadened into a second generic editor;
+- recipes with no projected workspace currently fall through to a generic `ProjectEditor` plus Sequence Continuity and multiple Dubbing panels;
+- `performance_lip_sync` has a direct setup-gated panel but, because it lacks a projected workspace, also inherits those unrelated fallback surfaces;
+- unsupported Action Transfer / Digital Human recipes remain advertised in the recipe catalog but do not yet have a complete authoritative Product Orchestrator workflow;
+- `ENGINEERING_BACKLOG.md` is stale and still describes Product Truth recovery steps that have already been completed.
 
-Commercial Product specifically:
+## Required boundary
 
-- stores brief/script and media bindings in the existing Stage 8 workspace;
-- requires a saved workspace plus at least one verified image/video product reference before preparation is ready;
-- verifies SHA-bound current bytes and fails closed when product media is stale or tampered;
-- exposes no `render_commercial`, hidden approval completion, provider bypass or parallel advertising workflow store;
-- keeps recipe-declared source-review, direction, sample-first, plan and final-review gates non-authoritative until a real audited state contract exists.
+This slice will make unsupported/incomplete recipes fail closed and expose only product-owned surfaces. It will not remount retired pipeline routes, invent provider-backed readiness, broaden `free_project`, or promote Action Transfer / Digital Human beyond their currently audited contracts.
 
-## Verification status
+## Verification target
 
-Commercial Draft exact head `3d520d5cf972f1988112b248abfcd6b41b65bf12` passed all five permanent checks in run `32655859437`; an isolated Ubuntu browser-suite failure passed on a same-SHA rerun without code changes.
+Add focused API and browser regression proof covering recipe creation, readiness and visible workspace routing, then require all five permanent CI jobs on exact Draft and Review heads before merge.
 
-Commercial Review exact head `3d63b5cad8acfc23ba11a0108d59a8ad34c57e52` independently passed all five permanent checks in post-ready run `32657250155` (#2626), including the full browser user-outcome suite on both Ubuntu and Windows, before merge.
+## Handoff after this slice
 
-Stage 9 remains blocked until the remaining Product Truth reconciliation, Class C cold-start evidence and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
-
-## Next authorized slice
-
-`product-recovery-recipe-workspace-reconciliation`, defined by `project-context/NEXT_TASK.md`.
-
-The next slice must inventory every creatable recipe against its Product Orchestrator projection and visible workspace routing, remove irrelevant fallback editor/dubbing/continuity leakage for unsupported recipes, keep `free_project` aligned with Targeted Edit, fail closed where no authoritative workflow exists, and synchronize the stale engineering backlog with the actual recovered state.
+If reconciliation closes the remaining P0 Product Truth mismatch, the next planned slice is `product-usability-class-c-cold-start` for user-equivalent clean-state evidence before Stage 9. Installed Windows human acceptance remains a separate required gate, and missing `main` branch protection remains an external repository-setting P0.
