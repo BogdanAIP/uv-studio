@@ -24,4 +24,4 @@ The slice is complete when `general_video` has a truthful authoritative Product 
 
 ## Entry gate
 
-Begin only from idle `main` after product-recovery-narrated-orchestration PR #51 is reviewed, merged and lifecycle closure records the Narrated journey as authoritative. Stage 9 remains blocked until the remaining Product Truth and human-acceptance gates are complete.
+Begin only from idle `main` after product-recovery-narrated-orchestration PR #52 is reviewed, merged and lifecycle closure records the Narrated journey as authoritative. Stage 9 remains blocked until the remaining Product Truth and human-acceptance gates are complete.

@@ -1,7 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-narrated-orchestration -->
+<!-- uv-context-state: idle -->
 
 **Updated:** 2026-08-23
 
@@ -9,44 +8,27 @@
 
 ## Current lifecycle
 
-The repository is **review** on `fix/product-recovery-narrated-orchestration` in PR #52, branched from idle `main` commit `971ff3c1ce5bba7ad82e09531a5152f1dffbdc25` after Project Store hardening PR #50 merged and closed.
+The repository is **idle** on `main` after Narrated recovery PR #52 merged at `e926bd97d9a5e644bd316f79ec9b9d7ff0f79853`.
 
-The exact Draft head `a374c6411bbcf35b7f21b6598d417143ef7c6239` passed all five permanent checks in CI run `32644620113` (#2518), including the real Ubuntu and Windows browser suites. The slice is therefore transitioning to Review without broadening scope.
+Product Orchestrator now owns six authoritative Class A/B journeys:
+- Photo -> Video
+- Visualizer
+- Targeted Edit
+- Dubbing
+- Music Video
+- Narrated Video
 
-This slice recovers the existing `narrated_video` intent through Product Orchestrator. It reuses UV-owned project state rather than introducing a Narrated workflow database or reviving legacy VideoClaw pipelines.
-
-## As-built Narrated boundary
-
-The recovered implementation uses these existing canonical pieces:
-
-- Stage 8 recipe workspace stores Narrated brief, required product-level script and SHA-bound project-owned visual inputs;
-- ProjectPreparedAudioStore owns imported/recorded/TTS-promoted prepared speech under project assets and verifies current bytes;
-- ProjectSourceMediaStore owns visual input identity and current-byte verification;
-- `speech.synthesize` remains an optional route behind Capability Registry/D-017 through the Edge TTS compatibility offer;
-- the generic `timeline.assemble` offer remains concat-copy only and is not falsely used for Narrated audio-over-visual composition;
-- the narrow local/free `video.render_narrated` capability renders the exact current Narrated workspace revision plus one verified PreparedAudio narration track;
-- Product Orchestrator projects `narrated_video`, prerequisites, diagnostics, the exact `render_narrated` action contract and current-outcome validity;
-- the project page renders the Narrated Stage 8 workspace plus a PreparedAudio/render panel selected by `relevant_workspaces` rather than a parallel frontend recipe state machine.
-
-The first bounded render path is intentionally image-led: verified workspace images are timed across one verified narration track. Video bindings may remain in the input workspace but are explicitly described as preserved/not rendered by this capability.
+Narrated reuses the existing Stage 8 workspace for brief/script/SHA-bound visual inputs, ProjectPreparedAudioStore for verified narration, ProjectSourceMediaStore for visual identity and a narrow local/free `video.render_narrated` capability. The first render path is intentionally image-led; workspace video bindings are preserved but not falsely claimed as rendered.
 
 ## Verification evidence
 
-The Draft gate proved on the exact Draft head:
+- exact Draft head `a374c6411bbcf35b7f21b6598d417143ef7c6239`: CI `32644620113` (#2518), all five permanent checks green;
+- exact Review head `603c61f7e1dad28e610469043e8c1e74238cd75f`: CI `32644996053` (#2521), all five permanent checks green;
+- real Narrated UI -> PreparedAudio -> FFmpeg master browser outcome passed on Ubuntu and Windows in both final gates;
+- stale/tampered workspace, visual, narration and output bytes invalidate readiness/current outcome as designed.
 
-- Narrated brief/script and visual bindings persist through the existing Stage 8 workspace and fail closed when bound source bytes change;
-- prepared narration bytes are verified before readiness/render;
-- Narrated render binds the exact workspace revision, image hashes and prepared-audio hash into artifact metadata;
-- a current master disappears from Product Orchestrator projection when workspace, narration, image or output bytes become stale/tampered;
-- the project page exposes the Narrated workspace and PreparedAudio/render action through Product Orchestrator;
-- real browser evidence reaches a local FFmpeg Narrated master from project UI inputs on Ubuntu and Windows without hidden workflow-state seeding after project creation;
-- the five previously recovered journeys and strict Project Store behavior remain intact;
-- all five permanent Ubuntu/Windows CI checks passed in Draft run `32644620113` (#2518).
-
-Review must now pass the same five permanent checks on the exact Review head before merge.
-
-This slice does not claim full mixed video-source Narrated assembly, General Video recovery, Class C cold-start acceptance, installed Windows human acceptance or Stage 9 release readiness. Missing `main` branch protection remains an external repository-setting P0.
+Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
 ## Next authorized slice
 
-`product-recovery-narrated-orchestration` is in Review in PR #52. After it is merged and lifecycle returns to idle, the next authorized slice is `product-recovery-general-video-orchestration` as defined by `project-context/NEXT_TASK.md`.
+`product-recovery-general-video-orchestration`, as defined by `project-context/NEXT_TASK.md`.
