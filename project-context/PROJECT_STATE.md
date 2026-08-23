@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: product-recovery-repository-hygiene -->
 
 **Updated:** 2026-08-23
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-The repository is **draft** on `product-recovery-repository-hygiene` in PR #49, branched from idle `main` after Music orchestration PR #48 merged as `55b87839f79fa639906c409c9e763d650eaf7c03` and lifecycle closure commit `dc634f5b43eb89b3cbd5e5fa40f507a0f877ca76` returned the repository to idle.
+The repository is **review** on `product-recovery-repository-hygiene` in PR #49, branched from idle `main` after Music orchestration PR #48 merged as `55b87839f79fa639906c409c9e763d650eaf7c03` and lifecycle closure commit `dc634f5b43eb89b3cbd5e5fa40f507a0f877ca76` returned the repository to idle.
 
 This slice is intentionally narrower than the next product journey. Its purpose is to reconcile repository truth and semantic contracts before further orchestration work, not to redesign Product Orchestrator or resume Stage 9 packaging.
 

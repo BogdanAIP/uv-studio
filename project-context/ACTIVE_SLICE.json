@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "draft",
+  "lifecycle_state": "review",
   "active_slice": {
     "id": "product-recovery-repository-hygiene",
     "kind": "fix",
