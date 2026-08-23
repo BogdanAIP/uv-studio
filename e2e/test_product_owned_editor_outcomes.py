@@ -17,6 +17,10 @@ import test_user_outcomes as legacy
 
 
 class ProductOwnedTargetedEditBrowserOutcome(legacy.BrowserUserOutcomes):
+    # Do not inherit the historical cross-workspace test; this class replaces
+    # it with the product-owned Targeted Edit outcome below.
+    test_targeted_edit_isolated_while_dubbing_and_sequence_regressions_remain_operable = None
+
     def test_targeted_edit_reaches_accepted_render_without_foreign_panels(self) -> None:
         page = self._new_page()
         try:
@@ -58,6 +62,10 @@ class ProductOwnedTargetedEditBrowserOutcome(legacy.BrowserUserOutcomes):
 
 
 class ProductOwnedSequenceContinuityBrowserOutcome(legacy.BrowserUserOutcomes):
+    # Do not inherit the historical cross-workspace test; this class replaces
+    # it with Story-owned Sequence Continuity coverage below.
+    test_targeted_edit_isolated_while_dubbing_and_sequence_regressions_remain_operable = None
+
     def test_story_owns_two_shot_sequence_review_accept_and_reanchor(self) -> None:
         page = self._new_page()
         try:
