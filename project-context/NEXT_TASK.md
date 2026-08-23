@@ -1,27 +1,27 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-commercial-product-orchestration -->
+<!-- uv-next-slice: product-recovery-recipe-workspace-reconciliation -->
 
 ## Goal
 
-Recover the preparation-only `commercial_product` journey through the permanent Product Orchestrator after Story Video recovery is complete. Reuse its existing Stage 8 product workspace, Project Store media identity, current review/editor primitives and Capability Registry boundaries; do not create a parallel advertising workflow database or restore retired pipeline routes.
+Reconcile the remaining recipe/workspace leakage and readiness-blind project creation behavior after Commercial Product recovery, without broadening `free_project` into a second generic editor or prematurely promoting Action Transfer / Digital Human into authoritative workflows.
 
 ## Required direction
 
-- inventory the as-built product brief/script, product image/video/audio bindings, source-review/direction requirements, assembly/render state and current user-visible surface before changing orchestration;
-- project truthful readiness, prerequisites, relevant workspaces, diagnostics, current outcome and bounded semantic actions through Product Orchestrator;
-- keep Project Store and existing accepted domain/editor state canonical; Product Orchestrator remains a current-state projection plus semantic-action boundary;
-- preserve product identity in verified project-owned inputs and fail closed when current bytes no longer match saved bindings;
-- reuse D-033 editor primitives and existing deterministic media adapters before adding commercial-specific mechanics;
-- route generation/provider/runtime work through Capability Registry and D-017 boundaries and keep setup-dependent generation visibly gated;
-- preserve all already recovered Product Orchestrator journeys and strict Project Store behavior;
-- keep retired legacy frontend/backend surfaces retired;
-- add focused orchestration/API/browser proof and preserve all five permanent CI checks.
+- inventory every currently advertised recipe against Product Orchestrator projection, visible workspace routing and actual executable/current outcome support;
+- identify any remaining recipe that can be created while exposing irrelevant fallback workspaces, misleading readiness or a surface not owned by its current product journey;
+- keep `free_project` aligned with its existing Targeted Edit ownership (`TARGETED_EDIT_RECIPE_ID = "free_project"`) unless a separate product decision explicitly redefines that contract;
+- keep broader Free Project tool-palette expansion, Action Transfer and Digital Human as P2 follow-ups until a complete authorized current workflow exists;
+- remove remaining recipe/workspace leakage by routing only truthful projected workspaces and failing closed where no authoritative workflow exists;
+- preserve Project Store/domain stores as canonical and D-033 editor-command ownership;
+- do not remount retired legacy pipeline routes or infer readiness from recipe declarations alone;
+- add focused API/browser regression proof for recipe creation and workspace routing and preserve all five permanent CI checks;
+- synchronize `ENGINEERING_BACKLOG.md` with the actual completed Product Truth recovery state if its historical queue is still stale.
 
 ## Completion proof
 
-The slice is complete when `commercial_product` has a truthful authoritative Product Orchestrator journey over existing UV-owned state, can reach the furthest currently supported project-owned result through bounded semantic actions without hidden state seeding, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
+The slice is complete when every currently creatable recipe has a truthful creation/readiness/workspace result: authoritative journeys route only to their owned surfaces, unsupported recipes fail closed without irrelevant editor leakage, and exact Draft and Review heads pass all five permanent Ubuntu/Windows CI jobs.
 
 ## Entry gate
 
-Begin only from idle `main` after Story Video recovery is reviewed, merged and lifecycle closure records the Story journey as authoritative. Class C cold-start verification remains a later release-blocking gate after the remaining visible product journeys are truthful.
+Begin only from idle `main` after Commercial Product recovery is reviewed, merged and lifecycle closure records the Commercial journey as authoritative.

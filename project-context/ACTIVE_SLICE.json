@@ -1,14 +1,31 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "product-recovery-commercial-product-orchestration",
+    "kind": "fix",
+    "roadmap_stage": "product-recovery",
+    "goal": "Recover commercial_product through Product Orchestrator using the existing Stage 8 product workspace and verified project-owned product media without inventing a parallel advertising workflow authority or unsupported final render path.",
+    "base_branch": "main",
+    "branch": "fix/product-recovery-commercial-product-orchestration",
+    "pull_request": 55,
+    "write_scope": [
+      "project-context/**",
+      "uv_studio/orchestration/**",
+      "frontend/app/projects/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_browser/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "product-recovery-story-orchestration",
     "pull_request": 54,
     "merge_commit": "755d38c5ef22bd66dd8c75c650df0ec0da00a536"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-commercial-product-orchestration",
+    "next_slice_id": "product-recovery-recipe-workspace-reconciliation",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

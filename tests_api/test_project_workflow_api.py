@@ -467,8 +467,8 @@ class ProjectWorkflowApiTests(unittest.TestCase):
 
     def test_non_migrated_recipe_remains_partial_without_workspaces_or_actions(self) -> None:
         project_id = self.store.create_project(
-            title="Commercial product",
-            recipe_id="commercial_product",
+            title="Action transfer",
+            recipe_id="action_transfer",
         ).project_id
         response = self.client.get(self._url(project_id=project_id))
         self.assertEqual(response.status_code, 200, response.text)

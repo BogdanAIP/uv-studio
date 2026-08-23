@@ -174,6 +174,15 @@ export default function ProjectPage() {
               </>
             )}
 
+            {projectedWorkspaceIds.has('commercial_product') && (
+              <Stage8CompositionPanel
+                projectId={project.project_id}
+                recipeId="commercial_product"
+                sources={project.sources}
+                onProjectChanged={refreshProjectWorkflow}
+              />
+            )}
+
             {projectedWorkspaceIds.has('general_video') && (
               <>
                 <Stage8CompositionPanel
@@ -215,15 +224,6 @@ export default function ProjectPage() {
               <ProjectStat label="Создан" value={new Date(project.created_at).toLocaleDateString()} />
               <ProjectStat label="Изменён" value={new Date(project.updated_at).toLocaleDateString()} />
             </section>
-
-            {project.recipe_id === 'commercial_product' && (
-              <Stage8CompositionPanel
-                projectId={project.project_id}
-                recipeId={project.recipe_id}
-                sources={project.sources}
-                onProjectChanged={refreshProject}
-              />
-            )}
 
             {!hasProjectedWorkspace && (
               <ProjectEditor
