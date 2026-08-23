@@ -1,7 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
-<!-- uv-active-slice: product-recovery-recipe-workspace-reconciliation -->
+<!-- uv-context-state: idle -->
 
 **Updated:** 2026-08-23
 
@@ -9,29 +8,32 @@
 
 ## Current lifecycle
 
-Recipe/workspace reconciliation is active in **Draft** on `fix/product-recovery-recipe-workspace-reconciliation` as PR #56, based on idle `main` `2c53b50c847986c9a9486ed319d245e3d1944f21` after Commercial Product PR #55.
+Repository context is **idle** after recipe/workspace reconciliation PR #56 merged as `44c853f00766795399de9addf74ba79cef2c35c4`.
 
-The slice closes the remaining Product Truth mismatch between the provider-neutral recipe registry, the set of recipes advertised for new project creation, Product Orchestrator projections and visible project workspaces.
+Product Truth recovery now has one explicit boundary between durable recipe compatibility metadata and recipes that UV Studio can truthfully advertise for new project creation.
 
-## Implemented Draft boundary
+## Completed Product Truth reconciliation
 
-- the full Recipe Registry remains durable compatibility/product vocabulary;
-- the creation catalog now advertises only recipes with a current authoritative Product Orchestrator journey;
-- Action Transfer, Digital Human and Performance/lip-sync recipe metadata remains addressable for preserved/imported projects but is not advertised for new creation;
-- public create/switch requests fail closed for preserved-only recipes, while archive import remains recovery-permissive;
-- visible project workspaces are now mounted only from `workflow.relevant_workspaces`;
-- the old generic ProjectEditor + Sequence Continuity + Dubbing fallback is removed;
-- the direct `performance_lip_sync` page bypass is removed until that journey is separately recovered;
-- `free_project` remains aligned with Targeted Edit ownership and is not broadened into a second generic editor.
+- the provider-neutral Recipe Registry remains the durable vocabulary for current and preserved/imported projects;
+- the creation catalog advertises only recipes with a current authoritative Product Orchestrator journey;
+- Action Transfer, Digital Human and Performance/lip-sync remain readable compatibility recipes but are not offered for new creation or recipe switching;
+- archive import/recovery remains permissive so preserved unsupported projects can still be opened and exported;
+- visible project workspaces are mounted only from `workflow.relevant_workspaces`;
+- the historical generic ProjectEditor + Sequence Continuity + Dubbing fallback is removed;
+- the direct `performance_lip_sync` page bypass is removed until that workflow is separately recovered;
+- `free_project` remains owned by Targeted Edit rather than becoming a second generic editor authority;
+- preserved unsupported projects fail closed with partial readiness, no next actions and no foreign workspaces.
 
 ## Verification status
 
-Focused API and browser regression proof has been added for creation catalog truth, direct creation rejection and preserved unsupported projects without foreign workspace leakage. Exact Draft-head CI is pending; all five permanent jobs on Ubuntu/Windows are required before transition to Review.
+Recipe/workspace reconciliation exact Draft head `e49b64aef97011d7a7ebffae8f6db0b21f7ab506` passed all five permanent checks in CI run `32660321870` (#2667), including full browser user-outcome coverage on Ubuntu and Windows. The same head was reviewed for merge with no review threads or outstanding code changes, and PR #56 merged as `44c853f00766795399de9addf74ba79cef2c35c4`.
 
-Any older Stage 8 regression that assumes `performance_lip_sync` is still a directly creatable Product-Orchestrator-bypassing surface must be updated to the new fail-closed product boundary rather than weakening creation truth.
+The browser evidence proves both sides of the product boundary: preserved-only recipes are absent from new-project discovery, while a preserved Action Transfer project remains readable without inheriting Targeted Edit, Sequence Continuity, Dubbing or Performance panels.
 
-Stage 9 remains blocked until Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
+Stage 9 remains blocked until Class C cold-start evidence and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
 
-## Handoff after this slice
+## Next authorized slice
 
-If exact Draft and Review evidence closes the remaining P0 Product Truth mismatch, the next slice is `product-usability-class-c-cold-start` for user-equivalent clean-state evidence. Installed Windows human acceptance remains a separate required gate before Stage 9.
+`product-usability-class-c-cold-start`, defined by `project-context/NEXT_TASK.md`.
+
+The next slice must start from a clean user-equivalent state, use only advertised recipes and visible product controls, distinguish genuine product defects from optional runtime/provider absence, and produce durable browser evidence without direct Project Store fixtures, hidden API readiness seeding or developer-only shortcuts.
