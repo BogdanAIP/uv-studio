@@ -10,6 +10,7 @@ from uv_studio.projects.prepared_speech import PreparedSpeechError, PreparedSpee
 from uv_studio.projects.replacement_review import ReplacementReviewError, ReplacementReviewStore
 from uv_studio.projects.store import ProjectStoreError
 
+from .commercial import COMMERCIAL_PRODUCT_RECIPE_ID, commercial_product_workflow_state
 from .dubbing import DUBBING_RECIPE_ID, dubbing_workflow_state
 from .general_video import GENERAL_VIDEO_RECIPE_ID, general_video_workflow_state
 from .models import (
@@ -463,10 +464,13 @@ def project_workflow_state(project, recipe, registry, source_media) -> ProjectWo
         return narrated_workflow_state(project, recipe, registry, source_media)
     if recipe is not None and project.recipe_id == STORY_RECIPE_ID:
         return story_workflow_state(project, recipe, registry, source_media)
+    if recipe is not None and project.recipe_id == COMMERCIAL_PRODUCT_RECIPE_ID:
+        return commercial_product_workflow_state(project, recipe, registry, source_media)
     return _base_project_workflow_state(project, recipe, registry, source_media)
 
 
 __all__ = [
+    "COMMERCIAL_PRODUCT_RECIPE_ID",
     "DUBBING_RECIPE_ID",
     "GENERAL_VIDEO_RECIPE_ID",
     "NARRATED_RECIPE_ID",
@@ -480,6 +484,7 @@ __all__ = [
     "WorkflowPrerequisite",
     "WorkflowReadiness",
     "WorkflowWorkspace",
+    "commercial_product_workflow_state",
     "dubbing_workflow_state",
     "general_video_workflow_state",
     "narrated_workflow_state",
