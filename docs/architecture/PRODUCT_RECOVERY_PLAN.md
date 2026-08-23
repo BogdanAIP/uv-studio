@@ -6,6 +6,8 @@ This is a release-blocking recovery plan discovered after the Stage 9 Windows in
 
 The recovery does **not** restart UV Studio from scratch. It preserves Project Store, capability authorization, deterministic media adapters, portable workflow state and the archived Stage 9 packaging/native-shell work while repairing product truth and orchestration.
 
+Project Store portable-JSON/corruption hardening was completed in PR #50. Product Orchestrator recovery now covers Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video. General Video is the next core production journey.
+
 ## Product identity is not under recovery
 
 UV Studio is already defined by `README.md` and `ROADMAP.md` as a desktop/local-first **video production and editing workspace** with task-specific workflows. Recovery must not turn the project into either a generic NLE clone or a workflow-only AI application.
@@ -156,7 +158,7 @@ Each next action has a stable semantic ID, user-facing explanation, enabled stat
 
 Orchestration is a projection over canonical domain state plus runtime availability, not a second canonical store.
 
-**Foundation status:** Photo -> Video was implemented first in PR #43. The workspace-routing recovery adds Visualizer as the second deterministic reference. Both now delegate semantic Product Orchestrator actions to existing local/free capability execution and use `relevant_workspaces` as the project-page workspace authority. Other recipes remain explicitly partial until migrated.
+**Foundation status:** the authoritative projection/action pattern now covers six visible Class A/B journeys: Photo -> Video, Visualizer, Targeted Edit, Dubbing, Music Video and Narrated Video. Each migrated project page is routed by `relevant_workspaces`; capability-backed semantic actions continue through the existing Capability Registry/D-017 boundary. Other recipes remain explicitly partial/unavailable until migrated.
 
 `WorkflowAction.suggested_input` must itself satisfy the action contract when present. Lists of available project-owned choices belong in the bounded action schema/projection rather than an undocumented side channel.
 
@@ -178,27 +180,38 @@ D-033 is the accepted ownership map. This phase does **not** choose between “U
 ### A. Targeted edit
 `import -> select range -> describe change -> obtain replacement -> preview -> accept -> export`
 
+**Status:** recovered through Product Orchestrator.
+
 ### B. Dubbing
 `import -> transcribe -> optional translate -> obtain speech -> preview -> accept -> export`
+
+**Status:** recovered through Product Orchestrator.
 
 ### C. Music video
 `song -> analyze/propose structure -> review direction -> assets -> assemble -> rhythm review -> export`
 
+**Status:** recovered through Product Orchestrator.
+
 ### D. Narrated video
 `topic/script -> narration -> visual plan -> assets -> assembly -> preview -> export`
 
+**Status:** recovered as a truthful image-led deterministic path. The existing Stage 8 workspace owns brief/script/visual bindings, PreparedAudio owns narration, and `video.render_narrated` produces the current SHA-bound master. Workspace video bindings are preserved but are not claimed as rendered by this first bounded capability; broader visual assembly remains later enhancement scope, not hidden product truth.
+
 ### E. General video
 `brief -> proposed visual plan -> assets/generation -> assembly -> preview -> export`
+
+**Status:** next core recovery slice.
 
 Internal Brief/Plan/Candidate/Review state remains durable where valuable, but ordinary users should see it only when a decision is required.
 
 Workspace presentation should come from Product Orchestrator `relevant_workspaces` as each journey is migrated rather than from a parallel frontend recipe switch.
 
-**Next core migration:** targeted existing-video edit, preserving its accepted Brief -> Plan -> Candidate -> Review -> Accept domain chain underneath user-facing next actions.
+**Next core migration:** General Video, reusing current Project Store/editor/Stage 8/capability boundaries and D-033 ownership rather than creating a generic workflow engine.
 
 ## Phase 6 — Additional recipes
 
-- preserve Photo -> Video and Visualizer as the two deterministic orchestrated reference flows;
+- preserve Photo -> Video and Visualizer as deterministic orchestrated reference flows;
+- preserve Targeted Edit, Dubbing, Music Video and Narrated Video as recovered orchestrated journeys;
 - turn Story/Commercial from preparation-only workspaces into orchestrated paths;
 - keep Performance/Lip-sync visibly setup-gated;
 - give Action Transfer/Digital Human real current paths or keep them unavailable/partial;
