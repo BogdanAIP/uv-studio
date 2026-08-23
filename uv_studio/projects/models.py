@@ -78,11 +78,12 @@ def _json_value(
     field_name: str,
     _containers: set[int] | None = None,
 ) -> Any:
-    """Return a detached, portable-JSON representation or reject the value.
+    """Return a detached, portable-JSON value or reject it.
 
-    Python's json module accepts non-finite floats by default and can stringify
-    non-string mapping keys. Canonical project state must not rely on either
-    behavior because exported/imported state needs to remain portable JSON.
+    Canonical project state accepts only the value types JSON itself supports:
+    objects with string keys, arrays, strings, booleans, null, integers and
+    finite floating-point numbers. Python-only containers/objects are rejected
+    rather than silently rewritten into a different value.
     """
 
     if value is None or isinstance(value, (str, bool, int)):
@@ -115,7 +116,7 @@ def _json_value(
         finally:
             containers.remove(marker)
 
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list):
         marker = id(value)
         if marker in containers:
             raise ProjectValidationError(f"{field_name} must not contain recursive containers")
@@ -167,7 +168,7 @@ class ProjectReference:
             "id": self.id,
             "kind": self.kind,
             "path": self.path,
-            "metadata": dict(self.metadata),
+            "metadata": _json_object(self.metadata, field_name="metadata"),
         }
 
     @classmethod
@@ -221,15 +222,31 @@ class ProjectDocument:
         )
         object.__setattr__(self, "settings", _json_object(self.settings, field_name="settings"))
         object.__setattr__(self, "extensions", _json_object(self.extensions, field_name="extensions"))
-        object.__setattr__(self, "sources", tuple(self.sources))
-        object.__setattr__(self, "artifacts", tuple(self.artifacts))
+        object.__setattr__(self, "sources", self._validated_references(self.sources))
+        object.__setattr__(self, "artifacts", self._validated_references(self.artifacts))
         self._validate_unique_reference_ids()
+
+    @staticmethod
+    def _validated_references(
+        values: tuple[ProjectReference, ...] | list[ProjectReference],
+    ) -> tuple[ProjectReference, ...]:
+        validated: list[ProjectReference] = []
+        for reference in values:
+            if not isinstance(reference, ProjectReference):
+                raise ProjectValidationError("sources/artifacts must contain ProjectReference values")
+            validated.append(
+                ProjectReference(
+                    id=reference.id,
+                    kind=reference.kind,
+                    path=reference.path,
+                    metadata=reference.metadata,
+                )
+            )
+        return tuple(validated)
 
     def _validate_unique_reference_ids(self) -> None:
         seen: set[str] = set()
         for reference in (*self.sources, *self.artifacts):
-            if not isinstance(reference, ProjectReference):
-                raise ProjectValidationError("sources/artifacts must contain ProjectReference values")
             if reference.id in seen:
                 raise ProjectValidationError(f"duplicate reference id: {reference.id}")
             seen.add(reference.id)
@@ -242,10 +259,10 @@ class ProjectDocument:
             "recipe_id": self.recipe_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "settings": dict(self.settings),
+            "settings": _json_object(self.settings, field_name="settings"),
             "sources": [item.to_dict() for item in self.sources],
             "artifacts": [item.to_dict() for item in self.artifacts],
-            "extensions": dict(self.extensions),
+            "extensions": _json_object(self.extensions, field_name="extensions"),
         }
 
     @classmethod
