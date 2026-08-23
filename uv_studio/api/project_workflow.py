@@ -202,6 +202,11 @@ class AcceptDubbingReviewActionRequest(_StrictActionRequest):
     accepted_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class RenderNarratedActionRequest(_StrictActionRequest):
+    workspace_revision_sha256: str = Field(min_length=64, max_length=64)
+    audio_id: str = Field(min_length=1, max_length=128)
+
+
 class MusicWorkflowActionRequest(_StrictActionRequest):
     """Top-level Music envelope; existing domain payloads validate nested structures."""
 
@@ -235,6 +240,7 @@ WorkflowActionRequest = (
     | AttachPreparedSpeechActionRequest
     | ReviewPreparedSpeechActionRequest
     | AcceptDubbingReviewActionRequest
+    | RenderNarratedActionRequest
     | MusicWorkflowActionRequest
 )
 
@@ -323,6 +329,8 @@ def _validated_action_input(
         expected = action_types.get(action_id)
         if expected is not None:
             return _request_payload(request, expected, action_id=action_id)
+    if state["recipe_id"] == "narrated_video" and action_id == "render_narrated":
+        return _request_payload(request, RenderNarratedActionRequest, action_id=action_id)
     if state["recipe_id"] == "music_video" and action_id in {
         "save_music_map",
         "save_music_direction",
