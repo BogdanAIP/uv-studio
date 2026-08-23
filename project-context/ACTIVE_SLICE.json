@@ -3,7 +3,7 @@
   "lifecycle_state": "draft",
   "active_slice": {
     "id": "product-usability-class-c-cold-start",
-    "kind": "test",
+    "kind": "research",
     "roadmap_stage": "product-usability",
     "goal": "Prove UV Studio from a user-equivalent clean state using only advertised recipes and visible product controls, without direct Project Store fixtures, hidden workflow seeding or developer-only shortcuts.",
     "base_branch": "main",
