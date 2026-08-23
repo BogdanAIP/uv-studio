@@ -1,7 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-general-video-orchestration -->
+<!-- uv-context-state: idle -->
 
 **Updated:** 2026-08-23
 
@@ -9,27 +8,27 @@
 
 ## Current lifecycle
 
-General Video recovery is in **Review** in PR #53 on `fix/product-recovery-general-video-orchestration`, based on idle `main` closure `85ccc3b795df6cf255ebf5f22c870919ff17e367` after Narrated PR #52.
+The repository is **idle** on `main` after General Video recovery PR #53 merged at `733ead42d19d0d0af54cd3046b3b357f7ea8fbce`.
 
-The slice recovers `general_video` as the seventh authoritative Product Orchestrator journey without adding a second workflow store or reopening generic editor ownership. Canonical inputs remain the existing Stage 8 workspace and Project Store media bindings.
+Product Orchestrator now owns seven authoritative Class A/B journeys:
+- Photo -> Video
+- Visualizer
+- Targeted Edit
+- Dubbing
+- Music Video
+- Narrated Video
+- General Video
 
-## Current General Video boundary
-
-- Stage 8 stores the required brief, optional script and ordered SHA-bound project-owned image/video/audio sources;
-- the first deterministic path requires at least one image/video and allows zero or one explicit audio source;
-- `video.render_general` normalizes visuals to H.264 1280×720/30fps, uses images for a fixed 2 seconds and video clips whole;
-- embedded audio in source video is deliberately not mixed into the master; an explicit workspace audio source is the only soundtrack for this bounded path;
-- Product Orchestrator owns readiness, prerequisites, current outcome and the `render_general` semantic action while Capability Registry remains the execution boundary;
-- current outcome fails closed on stale workspace/source identity or substituted output bytes.
+General Video reuses the existing Stage 8 workspace for required brief, optional script and ordered SHA-bound project-owned image/video/audio inputs. The bounded local/free `video.render_general` path requires at least one visual, allows zero or one explicit audio source, gives images a fixed two-second duration, uses verified video clips whole, normalizes visuals to H.264 1280x720/30fps and deliberately ignores embedded clip audio. Product Orchestrator owns readiness, exact semantic action input and current-outcome truth; stale/tampered workspace sources or output bytes fail closed.
 
 ## Verification evidence
 
-Exact Draft head `a7f6b56921d85cdbc66f0a2c596b93b06574e5f6` passed CI run `32649030821` (#2555), all five permanent checks green. The complete app-baseline jobs passed on Ubuntu and Windows, including the real General Video visible-UI -> ordered image/video -> FFmpeg master browser outcome.
-
-Review requires the exact Review lifecycle head to pass the same five permanent checks before merge.
+- exact Draft head `a7f6b56921d85cdbc66f0a2c596b93b06574e5f6`: CI `32649030821` (#2555), all five permanent checks green;
+- exact Review head `6a4c4bfef7615f3ffd25da2a3abb81f3b5085398`: CI `32650520289` (#2558), all five permanent checks green;
+- real General Video visible-UI -> ordered image/video workspace -> local FFmpeg master browser outcome passed on Ubuntu and Windows in both final gates.
 
 Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
 
-## Handoff after this slice
+## Next authorized slice
 
 `product-recovery-story-orchestration`, as defined by `project-context/NEXT_TASK.md`.
