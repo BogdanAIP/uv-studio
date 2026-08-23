@@ -1,27 +1,28 @@
 # Next Task
 
-<!-- uv-next-slice: product-recovery-repository-hygiene -->
+<!-- uv-next-slice: product-recovery-narrated-orchestration -->
 
 ## Goal
 
-Close repository-truth and semantic-contract debt exposed by the post-recovery audit before beginning `narrated_video` orchestration. Keep Product Orchestrator architecture consistent with the completed Photo, Visualizer, Targeted Edit, Dubbing and Music journeys without broad platform rewrites.
+Recover the existing `narrated_video` production journey through Product Orchestrator after repository hygiene is merged. Reuse canonical project/domain state and existing capability execution boundaries; do not create a second durable workflow store or revive retired legacy pipeline routes.
 
 ## Required direction
 
-- synchronize `PROJECT_STATE.md`, Product Truth Matrix, Product Orchestrator architecture docs and backlog text so they describe Dubbing and Music as completed recovered journeys;
-- remove or redirect legacy frontend routes under `/pipelines/standard`, `/pipelines/action-transfer`, `/pipelines/digital-human` and `/sandbox` so obsolete VideoClaw workspaces are not presented as current product routes;
-- fix the Dubbing `accept_dubbing_review` semantic action contract so optional `accepted_id` is preserved end-to-end instead of being narrowed to an incompatible request model;
-- remove dead/non-operative Music projector code only where behavior is provably unchanged;
-- assess strict recursive JSON rejection for `NaN`/`Infinity` and per-project corruption quarantine, implementing only the portion that fits a reviewable narrow slice or explicitly splitting the remainder into the following hardening slice;
-- record missing `main` branch protection as an external repository-setting P0; do not pretend code changes can enable it through an unavailable repository-setting API;
-- preserve all five recovered Product Orchestrator journeys and all permanent CI checks.
+- inventory the as-built Narrated path before changing it: script/narration state, prepared or generated audio, visual sources, assembly/render state and any current Review/acceptance evidence;
+- project truthful Narrated readiness, prerequisites, relevant workspace, diagnostics, current outcome and bounded semantic next actions from canonical state;
+- keep provider/runtime execution behind Capability Registry and the existing D-017 execution boundary;
+- require verified project-owned source/artifact bytes anywhere readiness, Review, acceptance or rendering depends on media identity;
+- fail closed on stale revisions, missing/tampered media and unavailable required local/free runtime rather than falling back to retired VideoClaw routes;
+- preserve the five already recovered Product Orchestrator journeys and the repository-hygiene guarantees from PR #49;
+- keep portable JSON/non-finite-value rejection and per-project corruption quarantine in their explicit bounded hardening queue unless Narrated exposes a concrete blocker that cannot be isolated;
+- do not resume Stage 9 packaging/release work.
 
 ## Completion proof
 
-The slice is complete when repository architecture/product-truth docs agree with the actual recovered routes, obsolete frontend routes no longer expose legacy product surfaces, the Dubbing acceptance request contract is coherent and tested, Music projector cleanup has no behavior regression, and all exact-head permanent Ubuntu/Windows checks pass.
+The slice is complete when the visible Narrated journey can progress through Product Orchestrator from truthful setup/readiness to its current canonical final outcome, with focused API/browser evidence for semantic actions, stale/tampered-state rejection and preservation of existing recovered routes. Exact Draft and Review heads must pass all five permanent Ubuntu/Windows CI checks.
 
-Any strict-JSON/corruption-quarantine work not safely completed in this slice must leave an explicit next hardening contract rather than being silently deferred.
+This proof remains Product Truth Recovery evidence only; it does not claim Class C cold-start usability, installed Windows human acceptance or release readiness.
 
 ## Entry gate
 
-Begin only from idle `main` after PR #48 Music orchestration is merged and lifecycle closure records Music as authoritative through Product Orchestrator. Do not begin Narrated or Stage 9 packaging until this hygiene slice is reviewed and merged.
+Begin only from idle `main` after repository-hygiene PR #49 is reviewed, merged and lifecycle closure records its contract/documentation cleanup as complete. If PR #49 discovers a hard blocker that requires a separate persistence-hardening slice before Narrated, update this handoff explicitly instead of silently broadening Narrated.
