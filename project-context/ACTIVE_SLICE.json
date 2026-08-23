@@ -43,7 +43,7 @@
     "merge_commit": "ab04757a668839427145f6910de28e83ba0889ae"
   },
   "handoff": {
-    "next_slice_id": "product-recovery-music-orchestration",
+    "next_slice_id": "product-recovery-narrated-orchestration",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
