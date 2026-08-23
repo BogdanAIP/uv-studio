@@ -39,6 +39,7 @@
       "frontend/lib/productWorkflowApi.ts",
       "frontend/lib/musicVideoApi.ts",
       "frontend/lib/musicVideoReviewApi.ts",
+      "e2e/**",
       "tests_api/**",
       "tests_browser/**",
       "tests_converters/**"
