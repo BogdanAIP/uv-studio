@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-store-portable-json-hardening -->
 
 **Updated:** 2026-08-23
@@ -9,9 +9,9 @@
 
 ## Current lifecycle
 
-The repository is **draft** on `project-store-portable-json-hardening` in PR #50, branched from idle `main` commit `dd5871ad787cc14897de2dee8eb6af4292b7c1ed` after repository-hygiene PR #49 merged and its lifecycle closed.
+The repository is **review** on `project-store-portable-json-hardening` in PR #50, branched from idle `main` commit `dd5871ad787cc14897de2dee8eb6af4292b7c1ed` after repository-hygiene PR #49 merged and its lifecycle closed.
 
-This slice hardens the existing canonical Project Store boundary before Narrated recovery. It does not introduce a new store, change Product Orchestrator ownership, or resume Stage 9 packaging.
+The exact Draft head `1406467ef152f3f0147aa3d6efb4e118917ec1a0` passed all five permanent Ubuntu/Windows CI checks. This slice hardens the existing canonical Project Store boundary before Narrated recovery; it does not introduce a new store, change Product Orchestrator ownership, or resume Stage 9 packaging.
 
 ## Contract being hardened
 
@@ -24,14 +24,14 @@ Canonical project state must be portable JSON at every persistence seam:
 - non-JSON Python objects and recursive containers are invalid;
 - `project.json` reads reject non-standard non-finite constants and writes use strict serialization;
 - archive import must pass the same canonical `load_project()` validation before commit;
-- `list_projects()` must keep healthy projects visible when another project is malformed or invalid;
+- `list_projects()` keeps healthy projects visible when another project is malformed or invalid;
 - damaged project bytes are preserved for diagnosis/recovery rather than deleted or silently rewritten.
 
 The public `/api/uv/projects` listing remains a list of healthy `ProjectPayload` values. Store callers that need recovery detail can use bounded per-project listing diagnostics without changing the stable API response shape.
 
-## Verification target
+## Review proof target
 
-Before Review, the exact Draft head must prove:
+Before merge, the exact Review head must prove again that:
 
 - create/update/save paths cannot persist nested non-portable values;
 - reopening rejects non-finite/non-standard JSON constants;
@@ -44,4 +44,4 @@ This slice does not claim repair of corrupt projects, Narrated recovery, Class C
 
 ## Next authorized slice
 
-`project-store-portable-json-hardening` is active in PR #50. After it is reviewed, merged and lifecycle returns to idle, the next authorized slice is `product-recovery-narrated-orchestration` as defined by `project-context/NEXT_TASK.md`.
+`project-store-portable-json-hardening` is in Review in PR #50. After it is merged and lifecycle returns to idle, the next authorized slice is `product-recovery-narrated-orchestration` as defined by `project-context/NEXT_TASK.md`.
