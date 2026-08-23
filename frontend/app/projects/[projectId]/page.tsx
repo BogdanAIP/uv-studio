@@ -10,6 +10,7 @@ import { DubbingWorkflowPanel } from '@/components/editor/DubbingWorkflowPanel';
 import { MusicAssemblyPanel } from '@/components/editor/MusicAssemblyPanel';
 import { MusicVideoPanel } from '@/components/editor/MusicVideoPanel';
 import { MusicVideoReviewPanel } from '@/components/editor/MusicVideoReviewPanel';
+import { NarratedVideoPanel } from '@/components/editor/NarratedVideoPanel';
 import { PerformanceLipSyncPanel } from '@/components/editor/PerformanceLipSyncPanel';
 import { ProjectEditor } from '@/components/editor/ProjectEditor';
 import { SequenceContinuityPanel } from '@/components/editor/SequenceContinuityPanel';
@@ -152,6 +153,24 @@ export default function ProjectPage() {
                 />
                 <DubbingSubtitleExportPanel
                   projectId={project.project_id}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+              </>
+            )}
+
+            {projectedWorkspaceIds.has('narrated_video') && (
+              <>
+                <Stage8CompositionPanel
+                  projectId={project.project_id}
+                  recipeId="narrated_video"
+                  sources={project.sources}
+                  onProjectChanged={refreshProjectWorkflow}
+                />
+                <NarratedVideoPanel
+                  projectId={project.project_id}
+                  artifacts={project.artifacts}
+                  workflowAction={workflow.next_actions.find(action => action.action_id === 'render_narrated')}
+                  currentOutcome={workflow.current_outcome}
                   onProjectChanged={refreshProjectWorkflow}
                 />
               </>
