@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the current product truth after Product Truth Recovery through Narrated PR #52. Historical Stage 8/9 findings remain useful engineering evidence, but they must not be presented as current product behavior after a journey has been recovered.
+This document records the current product truth after Product Truth Recovery through the active General Video PR #53. Historical Stage 8/9 findings remain useful engineering evidence, but they must not be presented as current product behavior after a journey has been recovered.
 
 A feature is `working` only when a visible action reaches a current UV-owned semantic/domain or capability boundary and produces current canonical state or a verified artifact.
 
@@ -29,14 +29,15 @@ Product Orchestrator is not a durable workflow database. Project Store and the d
 
 ## Recovered authoritative journeys
 
-Six visible Class A/B journeys are now authoritative through Product Orchestrator:
+Seven visible Class A/B journeys are authoritative through Product Orchestrator once General Video PR #53 completes its exact-head gates:
 
 1. `photo_to_video -> photo_composition`;
 2. `visualizer -> audio_visualizer`;
 3. `free_project -> targeted_edit`;
 4. `dubbing -> dubbing`;
 5. `music_video -> music_video`;
-6. `narrated_video -> narrated_video`.
+6. `narrated_video -> narrated_video`;
+7. `general_video -> general_video`.
 
 For these recipes, `ProjectWorkflowState.relevant_workspaces` controls the supported project-page surface. A migrated recipe must not silently fall back to a legacy workspace when its orchestrator projection fails.
 
@@ -51,10 +52,10 @@ For these recipes, `ProjectWorkflowState.relevant_workspaces` controls the suppo
 | Dubbing | Product Orchestrator -> Dubbing/PreparedSpeech/Review/Accepted state -> `video.render_dubbing` | **working_orchestrated** |
 | Music Video | Product Orchestrator -> Music Map/Direction/Assembly/rhythm Review -> `video.render_music_video` | **working_orchestrated** |
 | Narrated Video | Product Orchestrator -> Stage 8 workspace + PreparedAudio -> `video.render_narrated` | **working_orchestrated**, current master is image-led |
+| General Video | Product Orchestrator -> ordered Stage 8 workspace -> `video.render_general` | **working_orchestrated** on PR #53 after exact-head verification |
 | sequence continuity | sequence domain | **working optional domain**, not a recovered top-level journey |
 | Story/Commercial preparation | Stage 8 composition state | **partial** |
 | Performance lip-sync | optional MuseTalk capability path | **working_with_setup** |
-| General Video | incomplete general production journey | **partial** |
 
 ## Deterministic reference journeys
 
@@ -152,17 +153,33 @@ The existing Stage 8 workspace remains canonical for brief/script/visual binding
 
 The first recovered Narrated renderer is intentionally image-led. Stage 8 video bindings are preserved as canonical inputs but are not falsely presented as rendered by this capability. TTS is optional through the existing `speech.synthesize` capability and normal D-017 remote consent; TTS output must still become verified PreparedAudio before Narrated render can consume it.
 
+### General Video
+
+```text
+verified Stage 8 brief
+ + ordered verified project-owned images/videos
+ + zero or one explicit verified project-owned audio source
+ -> general_video workspace
+ -> render_general
+ -> video.render_general / local FFmpeg
+ -> current SHA-bound general master
+```
+
+The existing Stage 8 workspace remains canonical for task text and ordered media identity. The first bounded renderer normalizes every visual to H.264 1280×720/30fps, gives each image a fixed two-second duration, uses each video for its full verified duration and joins those normalized segments. Embedded video audio is deliberately stripped; the master is either silent or uses the single explicit workspace audio source. Selecting multiple audio sources blocks readiness rather than letting frontend or FFmpeg choose implicitly.
+
+The action schema exposes only the exact current workspace revision. Substituting any bound source or rendered output invalidates readiness/current outcome. This path does not claim arbitrary timing, transitions, multi-track audio, provider-backed generation or generic NLE behavior.
+
 ## Recipe matrix — current recovery truth
 
 | Recipe | Intended outcome | Status | Required recovery |
 |---|---|---|---|
-| `general_video` | brief -> general video | `partial` | next authoritative orchestrated production path |
+| `general_video` | brief -> ordered visuals -> optional master audio -> video | `working_orchestrated` on PR #53 | preserve bounded truth; broader editor/generation mechanics are later scope |
 | `narrated_video` | topic/script -> narration -> visuals -> video | `working_orchestrated` | preserve image-led truth; broader visual assembly is later scope |
 | `music_video` | song-driven clip | `working_orchestrated` | preserve; Class C/install evidence later |
 | `action_transfer` | motion source + target -> result | `unavailable` product journey | build authorized current workflow or keep unavailable |
 | `digital_human` | portrait + speech -> talking video | `partial` | truthful capability-gated workflow |
-| `story_video` | story -> video | `partial` | extend preparation to production |
-| `commercial_product` | brief/materials -> ad video | `partial` | extend preparation to production |
+| `story_video` | story -> video | `partial` | next: extend preparation through Product Orchestrator without parallel story state |
+| `commercial_product` | brief/materials -> ad video | `partial` | extend preparation to production after Story |
 | `photo_to_video` | photos + optional audio -> video | `working_orchestrated` | preserve |
 | `visualizer` | audio + optional artwork -> video | `working_orchestrated` | preserve |
 | `performance_lip_sync` | portrait + speech -> lip-sync | `working_with_setup` | setup/readiness refinement |
@@ -186,9 +203,9 @@ Historical legacy components may remain temporarily as isolated source until dep
 
 PR #50 closed the foundation-level portable-JSON/listing gap before Narrated recovery. Canonical project mappings are recursively constrained to portable JSON values, non-finite numbers are rejected, archive import reaches the same strict boundary, and malformed projects are isolated from healthy-project listing without deleting their damaged bytes.
 
-### General orchestration
+### Story orchestration
 
-General Video is the next unrecovered core top-level production journey. It must reuse canonical Project Store/editor/Stage 8/capability boundaries and the accepted D-033 editor ownership map; it must not introduce a generic workflow database or a second editing authority.
+After General Video PR #53, Story Video is the next preparation-only journey to recover. It must reuse its existing Stage 8 story workspace, current continuity/planning/editor primitives, canonical Project Store state and Capability Registry/D-017 boundaries. It must not introduce a story workflow database or a second editing authority. Commercial Product remains a separate follow-up path.
 
 ### Recipe creation is readiness-blind
 
@@ -225,8 +242,8 @@ Semantic actions do not map one-to-one to capabilities. Capability-backed media 
 
 UV Studio is not release-ready. The current order is:
 
-1. complete Narrated exact-head Draft/Review verification and merge;
-2. General orchestration;
+1. complete General Video exact-head Draft/Review verification and merge;
+2. recover Story, then remaining preparation-only/product-gated journeys;
 3. Class C cold-start validation;
 4. installed Windows human acceptance;
 5. only then resume Stage 9 packaging/release work.
