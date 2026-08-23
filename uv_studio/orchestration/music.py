@@ -109,17 +109,10 @@ def _current_render_artifacts(
     music_map,
     direction,
     assembly,
-    *,
-    diagnostics: list[WorkflowDiagnostic],
 ) -> tuple[ProjectReference, ...]:
     if music_map is None or direction is None or assembly is None:
         return ()
-    store = MusicMapStore.__annotations__ if False else None  # keep type checkers from widening Any below
-    del store
     valid: list[ProjectReference] = []
-    invalid_ids: list[str] = []
-    project_store = getattr(music_map, "_project_store", None)
-    del project_store
     for reference in project.artifacts:
         if reference.kind != "video" or reference.metadata.get("lifecycle") != _RENDER_LIFECYCLE:
             continue
@@ -137,14 +130,6 @@ def _current_render_artifacts(
         ):
             continue
         valid.append(reference)
-    if invalid_ids:
-        diagnostics.append(
-            WorkflowDiagnostic(
-                code="music_render_unverified",
-                severity="warning",
-                message="Music render исключён из текущего результата: " + ", ".join(invalid_ids),
-            )
-        )
     return tuple(valid)
 
 
@@ -162,7 +147,6 @@ def _verified_current_renders(
         music_map,
         direction,
         assembly,
-        diagnostics=diagnostics,
     )
     valid: list[ProjectReference] = []
     invalid: list[str] = []
