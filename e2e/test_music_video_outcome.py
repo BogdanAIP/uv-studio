@@ -236,11 +236,17 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
 
         assembly.locator('input[aria-label="Видео для Music Assembly"]').set_input_files(str(self.red_video))
         expect(assembly.get_by_text("Доступно источников: 1", exact=True)).to_be_visible(timeout=60_000)
+        expect(
+            assembly.get_by_role("button", name="Загрузить видео", exact=True)
+        ).to_be_enabled(timeout=60_000)
         assembly = page.get_by_role(
             "heading", name="Визуальные материалы → Assembly Plan → master-render", exact=True
         ).locator("xpath=ancestor::section[1]")
         assembly.locator('input[aria-label="Видео для Music Assembly"]').set_input_files(str(self.blue_video))
         expect(assembly.get_by_text("Доступно источников: 2", exact=True)).to_be_visible(timeout=60_000)
+        expect(
+            assembly.get_by_role("button", name="Загрузить видео", exact=True)
+        ).to_be_enabled(timeout=60_000)
         assembly = page.get_by_role(
             "heading", name="Визуальные материалы → Assembly Plan → master-render", exact=True
         ).locator("xpath=ancestor::section[1]")
