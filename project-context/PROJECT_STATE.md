@@ -1,7 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: product-recovery-commercial-product-orchestration -->
+<!-- uv-context-state: idle -->
 
 **Updated:** 2026-08-23
 
@@ -9,27 +8,32 @@
 
 ## Current lifecycle
 
-Commercial Product recovery is active in **Review** on `fix/product-recovery-commercial-product-orchestration`, based on idle `main` `98a8f475804aca2d58ee39b313db2973baedb70f` after Story Video PR #54.
+Repository context is **idle** after Commercial Product recovery PR #55 merged as `614cf26f5d45d5e2feb5d627d559ea87bf095ee3`.
 
-The slice recovers `commercial_product` through Product Orchestrator without creating a product-specific workflow database, reopening editor ownership, or treating recipe policy declarations as evidence that source review, direction, sample, plan or final-review gates have already been completed.
+Commercial Product now has a truthful preparation-only Product Orchestrator journey over the existing Stage 8 workspace and Project Store media references. It does not claim unsupported advertising generation, final assembly or approval gates.
 
-## As-built boundary under review
+## Completed Product Truth recovery
 
-- Stage 8 owns the Commercial brief, optional script and SHA-bound image/video/audio bindings;
-- verified image/video bindings are the current project-owned product references; stale or tampered bytes fail closed;
-- the Commercial recipe declares required source-review, direction, sample-first, plan and final-review policy gates, but there is no audited Commercial-specific approval store proving those gates today;
-- the recovered journey therefore exposes a truthful **product preparation state**, not a final advertising production workflow;
-- provider-backed generation and `timeline.assemble` remain outside this preparation-only recovery until a concrete end-to-end contract is audited;
-- no `render_commercial`, hidden approval seeding, generic NLE authority or parallel advertising workflow store is introduced.
+The permanent Product Orchestrator now owns the recovered product journeys for Photo to Video, Visualizer, Targeted Edit (`free_project`), Dubbing, Music Video, Narrated Video, General Video, Story Video preparation and Commercial Product preparation. Canonical state remains in Project Store and the existing domain stores; execution/provider boundaries remain governed by Capability Registry/D-017 and editor mutation ownership by D-033.
+
+Commercial Product specifically:
+
+- stores brief/script and media bindings in the existing Stage 8 workspace;
+- requires a saved workspace plus at least one verified image/video product reference before preparation is ready;
+- verifies SHA-bound current bytes and fails closed when product media is stale or tampered;
+- exposes no `render_commercial`, hidden approval completion, provider bypass or parallel advertising workflow store;
+- keeps recipe-declared source-review, direction, sample-first, plan and final-review gates non-authoritative until a real audited state contract exists.
 
 ## Verification status
 
-Exact Draft head `3d520d5cf972f1988112b248abfcd6b41b65bf12` passed all five permanent checks in run `32655859437` after re-running the isolated failed Ubuntu app-baseline job on the same SHA. The successful final attempt includes `development-context`, both bootstrap jobs, and both full app-baseline jobs with the browser user-outcome suite green on Ubuntu and Windows.
+Commercial Draft exact head `3d520d5cf972f1988112b248abfcd6b41b65bf12` passed all five permanent checks in run `32655859437`; an isolated Ubuntu browser-suite failure passed on a same-SHA rerun without code changes.
 
-Review-head verification must independently pass the same five permanent checks before merge.
+Commercial Review exact head `3d63b5cad8acfc23ba11a0108d59a8ad34c57e52` independently passed all five permanent checks in post-ready run `32657250155` (#2626), including the full browser user-outcome suite on both Ubuntu and Windows, before merge.
 
-Stage 9 remains blocked until remaining Product Truth, Class C cold-start and installed Windows human-acceptance gates are complete. Missing `main` branch protection remains an external repository-setting P0.
+Stage 9 remains blocked until the remaining Product Truth reconciliation, Class C cold-start evidence and installed Windows human acceptance are complete. Missing `main` branch protection remains an external repository-setting P0.
 
-## Handoff after this slice
+## Next authorized slice
 
-`product-recovery-recipe-workspace-reconciliation`, as defined by `project-context/NEXT_TASK.md`. This follows the P0 backlog requirement to reconcile remaining recipe/workspace leakage and readiness-blind creation; broader `free_project`, Action Transfer and Digital Human work stays explicitly outside this handoff.
+`product-recovery-recipe-workspace-reconciliation`, defined by `project-context/NEXT_TASK.md`.
+
+The next slice must inventory every creatable recipe against its Product Orchestrator projection and visible workspace routing, remove irrelevant fallback editor/dubbing/continuity leakage for unsupported recipes, keep `free_project` aligned with Targeted Edit, fail closed where no authoritative workflow exists, and synchronize the stale engineering backlog with the actual recovered state.
