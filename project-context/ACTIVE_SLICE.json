@@ -8,7 +8,7 @@
     "goal": "Prove UV Studio from a user-equivalent clean state using only advertised recipes and visible product controls, without direct Project Store fixtures, hidden workflow seeding or developer-only shortcuts.",
     "base_branch": "main",
     "branch": "research/product-usability-class-c-cold-start",
-    "pull_request": null,
+    "pull_request": 58,
     "write_scope": [
       "project-context/**",
       "frontend/**",
