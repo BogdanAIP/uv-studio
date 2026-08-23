@@ -26,8 +26,8 @@ class MusicWorkflowApiTests(unittest.TestCase):
         self.assertEqual(created.status_code, 201, created.text)
         self.project_id = created.json()["project_id"]
         self._source("song", "audio", b"music-workflow-song", 10_000_000, ".wav")
-        self._source("clip_a", "video", b"music-workflow-video-a", 8_000_000, ".mp4")
-        self._source("clip_b", "video", b"music-workflow-video-b", 8_000_000, ".mp4")
+        self._source("clip_a", "video", b"music-workflow-video-a", 12_000_000, ".mp4")
+        self._source("clip_b", "video", b"music-workflow-video-b", 12_000_000, ".mp4")
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
@@ -229,19 +229,30 @@ class MusicWorkflowApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(direction.status_code, 200, direction.text)
+        direction_revision = direction.json()["result"]["revision_sha256"]
 
         project = self.store.load_project(self.project_id)
         clip = next(item for item in project.sources if item.id == "clip_a")
         (self.store.project_directory(self.project_id) / clip.path).write_bytes(b"tampered")
+
         state = self._workflow()
         source_prerequisite = next(
             item for item in state["prerequisites"] if item["prerequisite_id"] == "source.video"
         )
         self.assertTrue(source_prerequisite["satisfied"])
-        save_assembly = self._action(state, "save_music_assembly")
-        source_enum = save_assembly["input_schema"].get("properties", {}).get("assignments", {})
-        self.assertNotIn("clip_a", str(source_enum))
         self.assertTrue(any(item["code"] == "music_video_source_unverified" for item in state["diagnostics"]))
+
+        tampered_assembly = self.client.post(
+            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_assembly",
+            json={
+                "music_direction_revision_sha256": direction_revision,
+                "assignments": [
+                    {"shot_id": "whole", "source_id": "clip_a", "source_start_us": 0},
+                ],
+            },
+        )
+        self.assertEqual(tampered_assembly.status_code, 422, tampered_assembly.text)
+        self.assertIn("clip_a", str(tampered_assembly.json()["detail"]))
 
 
 if __name__ == "__main__":
