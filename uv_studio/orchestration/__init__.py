@@ -24,6 +24,7 @@ from .models import (
 )
 from .narrated import NARRATED_RECIPE_ID, narrated_workflow_state
 from .project_workflow import project_workflow_state as _base_project_workflow_state
+from .story import STORY_RECIPE_ID, story_workflow_state
 from .targeted_edit import TARGETED_EDIT_RECIPE_ID, targeted_edit_workflow_state
 
 
@@ -460,6 +461,8 @@ def project_workflow_state(project, recipe, registry, source_media) -> ProjectWo
         return general_video_workflow_state(project, recipe, registry, source_media)
     if recipe is not None and project.recipe_id == NARRATED_RECIPE_ID:
         return narrated_workflow_state(project, recipe, registry, source_media)
+    if recipe is not None and project.recipe_id == STORY_RECIPE_ID:
+        return story_workflow_state(project, recipe, registry, source_media)
     return _base_project_workflow_state(project, recipe, registry, source_media)
 
 
@@ -468,6 +471,7 @@ __all__ = [
     "GENERAL_VIDEO_RECIPE_ID",
     "NARRATED_RECIPE_ID",
     "ProjectWorkflowState",
+    "STORY_RECIPE_ID",
     "TARGETED_EDIT_RECIPE_ID",
     "WORKFLOW_SCHEMA_VERSION",
     "WorkflowAction",
@@ -480,5 +484,6 @@ __all__ = [
     "general_video_workflow_state",
     "narrated_workflow_state",
     "project_workflow_state",
+    "story_workflow_state",
     "targeted_edit_workflow_state",
 ]
