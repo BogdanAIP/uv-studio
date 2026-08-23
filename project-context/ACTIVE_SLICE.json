@@ -3,7 +3,7 @@
   "lifecycle_state": "draft",
   "active_slice": {
     "id": "product-recovery-narrated-orchestration",
-    "kind": "feature",
+    "kind": "stage",
     "roadmap_stage": "product-recovery",
     "goal": "Recover narrated_video through Product Orchestrator using the existing Stage 8 input workspace, verified prepared narration, verified project-owned visuals and a bounded local Narrated render capability without introducing another workflow store.",
     "base_branch": "main",
