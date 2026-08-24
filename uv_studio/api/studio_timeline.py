@@ -7,8 +7,12 @@ from typing import Annotated, Literal, Union
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from uv_studio.api.projects import get_project_store
+from uv_studio.api.capability_execution import get_local_ffmpeg_adapter
+from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.execution import CapabilityToolFailed, CapabilityToolUnavailable
 from uv_studio.editor.studio_mlt import StudioMLTError, StudioMLTTimelineAdapter
+from uv_studio.editor.studio_render import StudioRenderError, StudioTimelineRenderService
 from uv_studio.editor.timeline_commands import (
     AddClipCommand,
     CreateTrackCommand,
@@ -141,11 +145,26 @@ class MLTProjectionPayload(_StrictModel):
     runtime_available: bool
 
 
+class StudioRenderPayload(_StrictModel):
+    artifact: ProjectReferencePayload
+    timeline_revision_sha256: str
+    video_track_id: str
+    audio_track_id: str | None
+    duration_us: int
+
+
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if isinstance(exc, (TimelineCommandError, TimelineError, StudioMLTError)):
+    if isinstance(exc, (TimelineCommandError, TimelineError, StudioMLTError, StudioRenderError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    if isinstance(exc, CapabilityToolUnavailable):
+        return HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local FFmpeg export tooling is unavailable in this installation",
+        )
+    if isinstance(exc, CapabilityToolFailed):
+        return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     if isinstance(exc, ProjectStoreError):
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     return HTTPException(
@@ -177,6 +196,29 @@ def get_studio_timeline_engine(
         summary = StudioMLTTimelineAdapter(store).project_summary(project_id)
         return MLTProjectionPayload.model_validate(summary)
     except (ProjectNotFound, TimelineError, StudioMLTError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+
+
+@router.post("/{project_id}/studio/timeline/render", response_model=StudioRenderPayload)
+def render_studio_timeline(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_store),
+    ffmpeg: LocalFFmpegAdapter = Depends(get_local_ffmpeg_adapter),
+) -> StudioRenderPayload:
+    """Render the bounded first Studio timeline path and register a project export."""
+
+    try:
+        result = StudioTimelineRenderService(store, ffmpeg).render(project_id)
+        return StudioRenderPayload.model_validate(result.to_dict())
+    except (
+        ProjectNotFound,
+        TimelineError,
+        StudioMLTError,
+        StudioRenderError,
+        CapabilityToolUnavailable,
+        CapabilityToolFailed,
+        ProjectStoreError,
+    ) as exc:
         raise _translate(exc) from exc
 
 
