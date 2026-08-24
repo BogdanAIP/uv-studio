@@ -1,14 +1,35 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "product-usability-installed-windows-human-acceptance",
+    "kind": "research",
+    "roadmap_stage": "product-usability",
+    "goal": "Restore the minimum packaged Windows product path around the current Product Truth, prove the exact packaged build automatically, then complete a real installed Windows human-acceptance run before closing the gate.",
+    "base_branch": "main",
+    "branch": "research/product-usability-installed-windows-human-acceptance",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      ".github/workflows/**",
+      "desktop-host/**",
+      "packaging/**",
+      "frontend/next.config.ts",
+      "requirements-uv-release*.txt",
+      "tools/**",
+      "uv_studio/**",
+      "tests/**",
+      "tests_api/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "product-usability-class-c-cold-start",
     "pull_request": 58,
     "merge_commit": "9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4"
   },
   "handoff": {
-    "next_slice_id": "product-usability-installed-windows-human-acceptance",
+    "next_slice_id": "architecture-hardening-execution-truth",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

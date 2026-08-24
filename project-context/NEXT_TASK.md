@@ -1,27 +1,25 @@
 # Next Task
 
-<!-- uv-next-slice: product-usability-installed-windows-human-acceptance -->
+<!-- uv-next-slice: architecture-hardening-execution-truth -->
 
 ## Goal
 
-Validate the packaged UV Studio application on an installed Windows environment as a real human-facing product gate after Product Truth recovery and Class C clean-state CI evidence.
+Remove the remaining parallel product truth around legacy project execution planning after installed Windows human acceptance is complete.
 
 ## Required direction
 
-- use the packaged/installed Windows application rather than the repository development server;
-- start from a clean or user-equivalent local application state and launch through the installed product entry point;
-- verify first-run startup, project discovery/creation, media import, visible prerequisite guidance, workspace routing and representative supported outcomes;
-- confirm that missing optional runtimes/providers are reported as configuration/runtime requirements rather than generic product failures;
-- verify recovery/import behavior for a portable project archive without direct Project Store manipulation;
-- exercise Windows-specific host, filesystem, path, media-toolchain and desktop-launch behavior that CI browser tests cannot prove;
-- collect durable human-acceptance evidence tied to the exact packaged build under test;
-- do not reopen unsupported Action Transfer, Digital Human or Performance/lip-sync creation merely to satisfy the acceptance script;
-- do not treat this gate as a substitute for later Stage 9 packaging/release hardening.
+- inventory real consumers of `/api/uv/projects/{project_id}/execution-plan` and `uv_studio/recipes/execution.py`;
+- treat Product Orchestrator `/workflow` as the current product-facing authority;
+- do not modernize two competing execution models in parallel;
+- if compatibility consumers still exist, derive the legacy response from Product Orchestrator/domain truth behind an explicit compatibility boundary;
+- otherwise retire the legacy endpoint and its obsolete contract/tests together;
+- preserve current Project Store, D-017 authorization, capability selection and editor command ownership;
+- add focused regression evidence that there is one modern product truth after the slice.
 
 ## Completion proof
 
-The gate is complete when the exact installed Windows build starts cleanly, a user can discover and create supported projects, complete representative local outcomes through visible controls, recover/import a portable project where applicable, and receive truthful guidance for unavailable/configuration-required capabilities. Evidence must identify the exact build/commit and Windows environment used.
+The slice is complete when supported product paths no longer depend on an independently maintained legacy execution truth, compatibility behavior is explicit where still required, and permanent CI passes on the exact Review head.
 
 ## Entry gate
 
-Begin only from idle `main` after `product-usability-class-c-cold-start` is reviewed, merged and lifecycle-closed. This is a human acceptance gate and cannot be completed solely by CI or repository-level browser automation.
+Begin only from idle `main` after `product-usability-installed-windows-human-acceptance` is reviewed, merged and lifecycle-closed.
