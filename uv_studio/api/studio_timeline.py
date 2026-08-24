@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.projects import get_project_store
+from uv_studio.editor.studio_mlt import StudioMLTError, StudioMLTTimelineAdapter
 from uv_studio.editor.timeline_commands import (
     AddClipCommand,
     CreateTrackCommand,
@@ -106,10 +107,44 @@ class TimelineCommandResultPayload(_StrictModel):
     timeline: TimelinePayload
 
 
+class MLTClipProjectionPayload(_StrictModel):
+    track_id: str
+    clip_id: str
+    reference_id: str
+    media_kind: str
+    timeline_start_frame: int
+    source_in_frame: int
+    source_out_frame: int
+    duration_frames: int
+    enabled: bool
+
+
+class MLTTrackProjectionPayload(_StrictModel):
+    track_id: str
+    kind: Literal["video", "audio"]
+    enabled: bool
+    muted: bool
+    clips: list[MLTClipProjectionPayload]
+
+
+class MLTProjectionPayload(_StrictModel):
+    adapter_id: Literal["mlt"]
+    timeline_id: str
+    frame_rate: str
+    width: int
+    height: int
+    duration_us: int
+    duration_frames: int
+    exact_boundaries: bool
+    max_boundary_error_us: int
+    tracks: list[MLTTrackProjectionPayload]
+    runtime_available: bool
+
+
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if isinstance(exc, (TimelineCommandError, TimelineError)):
+    if isinstance(exc, (TimelineCommandError, TimelineError, StudioMLTError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, ProjectStoreError):
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
@@ -128,6 +163,20 @@ def get_studio_timeline(
         timeline = TimelineStore(store).load(project_id, validate_references=True)
         return TimelinePayload.model_validate(timeline.to_dict())
     except (ProjectNotFound, TimelineError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/{project_id}/studio/timeline/engine", response_model=MLTProjectionPayload)
+def get_studio_timeline_engine(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> MLTProjectionPayload:
+    """Return a bounded MLT projection summary without exposing resolved host paths."""
+
+    try:
+        summary = StudioMLTTimelineAdapter(store).project_summary(project_id)
+        return MLTProjectionPayload.model_validate(summary)
+    except (ProjectNotFound, TimelineError, StudioMLTError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
 
 
