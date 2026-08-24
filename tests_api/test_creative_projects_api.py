@@ -27,7 +27,7 @@ class CreativeProjectsApiTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
-    def test_create_plan_and_update_creative_intent(self) -> None:
+    def test_create_plan_update_and_prepare_creative_project(self) -> None:
         created = self.client.post(
             "/api/uv/creative-projects",
             json={
@@ -44,6 +44,7 @@ class CreativeProjectsApiTests(unittest.TestCase):
             project["extensions"]["creative_project"]["goal"],
             "Сделай минутный ролик про мастерскую керамики",
         )
+        self.assertEqual(project["extensions"]["creative_project"]["material_source_ids"], [])
 
         plan_response = self.client.get(f"/api/uv/projects/{project_id}/creative-plan")
         self.assertEqual(plan_response.status_code, 200, plan_response.text)
@@ -64,6 +65,22 @@ class CreativeProjectsApiTests(unittest.TestCase):
             "Работа мастера",
             patched.json()["extensions"]["creative_project"]["script"],
         )
+
+        prepared = self.client.put(
+            f"/api/uv/projects/{project_id}/creative-preparation",
+            json={
+                "goal": "Сделай минутный ролик про мастерскую керамики",
+                "script": "Открытие мастерской. Работа мастера. Готовые изделия.",
+                "source_ids": [],
+            },
+        )
+        self.assertEqual(prepared.status_code, 200, prepared.text)
+        payload = prepared.json()
+        self.assertEqual(payload["workspace"]["recipe_id"], "general_video")
+        self.assertEqual(payload["workspace"]["brief"], "Сделай минутный ролик про мастерскую керамики")
+        self.assertEqual(payload["project"]["extensions"]["creative_project"]["material_source_ids"], [])
+        self.assertEqual(payload["plan"]["material_source_ids"], [])
+
         refreshed = self.client.get(f"/api/uv/projects/{project_id}/creative-plan").json()
         self.assertIn("Работа мастера", refreshed["script"])
         plan_phase = next(phase for phase in refreshed["phases"] if phase["phase_id"] == "plan")
