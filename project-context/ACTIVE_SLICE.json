@@ -27,6 +27,7 @@
       "uv_studio/api/projects.py",
       "uv_studio/api/studio_timeline.py",
       "uv_studio/server.py",
+      "tools/validate_development_context.py",
       "tests/**",
       "tests_api/**",
       "e2e/**"
