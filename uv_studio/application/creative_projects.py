@@ -8,6 +8,7 @@ older recipe model is retired.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailability
@@ -400,7 +401,7 @@ class CreativeProjectService:
                 "audio": audio_count,
                 "visuals": visual_count,
             },
-            "current_outcome": outcome.to_dict() if outcome is not None else None,
+            "current_outcome": asdict(outcome) if outcome is not None else None,
             "phases": phases,
         }
 
