@@ -19,9 +19,15 @@ class StudioTimelineApiTests(unittest.TestCase):
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
 
-        created = self.client.post("/api/uv/projects", json={"title": "Studio Timeline"})
+        created = self.client.post("/api/uv/projects/studio", json={"title": "Studio Timeline"})
         self.assertEqual(created.status_code, 201, created.text)
-        self.project_id = created.json()["project_id"]
+        created_payload = created.json()
+        self.assertEqual(created_payload["recipe_id"], "studio_v2")
+        self.assertEqual(
+            created_payload["extensions"]["studio"],
+            {"schema_version": 1, "product_model": "studio_first"},
+        )
+        self.project_id = created_payload["project_id"]
 
         media_path = self.store.resolve_project_file(
             self.project_id,
@@ -143,6 +149,51 @@ class StudioTimelineApiTests(unittest.TestCase):
         self.assertEqual(state.status_code, 200, state.text)
         clips = state.json()["tracks"][0]["clips"]
         self.assertEqual([clip["clip_id"] for clip in clips], ["clip_a"])
+
+    def test_registered_studio_export_streams_only_from_exports_root(self) -> None:
+        export_path = self.store.resolve_project_file(
+            self.project_id,
+            "exports/art_studio.mp4",
+            allowed_roots=("exports",),
+        )
+        export_path.write_bytes(b"studio-export-bytes")
+        project = self.store.load_project(self.project_id)
+        artifact = ProjectReference(
+            id="art_studio",
+            kind="video",
+            path="exports/art_studio.mp4",
+            metadata={"role": "studio-export", "content_type": "video/mp4"},
+        )
+        self.store.update_project(
+            self.project_id,
+            artifacts=(*project.artifacts, artifact),
+        )
+
+        response = self.client.get(
+            f"/api/uv/projects/{self.project_id}/studio/exports/{artifact.id}/media"
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, b"studio-export-bytes")
+        self.assertTrue(response.headers["content-type"].startswith("video/mp4"))
+
+        legacy_path = self.store.resolve_project_file(
+            self.project_id,
+            "artifacts/art_other.mp4",
+            allowed_roots=("artifacts",),
+        )
+        legacy_path.write_bytes(b"other")
+        project = self.store.load_project(self.project_id)
+        other = ProjectReference(
+            id="art_other",
+            kind="video",
+            path="artifacts/art_other.mp4",
+            metadata={"role": "other"},
+        )
+        self.store.update_project(self.project_id, artifacts=(*project.artifacts, other))
+        rejected = self.client.get(
+            f"/api/uv/projects/{self.project_id}/studio/exports/{other.id}/media"
+        )
+        self.assertEqual(rejected.status_code, 404, rejected.text)
 
 
 if __name__ == "__main__":
