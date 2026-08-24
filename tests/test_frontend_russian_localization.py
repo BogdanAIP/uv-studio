@@ -40,3 +40,34 @@ def test_current_product_surface_has_no_chinese_text() -> None:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{line_number}: {line.strip()}")
 
     assert not offenders, "Chinese text remains in current product surface:\n" + "\n".join(offenders)
+
+
+def test_blank_project_surface_explains_supported_and_preparation_only_journeys() -> None:
+    projects_page = (REPO_ROOT / "frontend" / "app" / "projects" / "page.tsx").read_text(encoding="utf-8")
+    project_page = (
+        REPO_ROOT / "frontend" / "app" / "projects" / "[projectId]" / "page.tsx"
+    ).read_text(encoding="utf-8")
+    composition = (
+        REPO_ROOT / "frontend" / "components" / "editor" / "Stage8CompositionPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "Для первого знакомства рекомендуем «Обычный видеоролик»" in projects_page
+    assert "Подготовительный режим" in projects_page
+    assert "Создать и открыть" in projects_page
+    assert "Сейчас это подготовка истории, а не генератор готового фильма" in project_page
+    assert "SequenceContinuityPanel" not in project_page
+    assert "Начать можно без файлов" in composition
+    assert "Добавить своё изображение" in composition
+    assert "Stage 8 ·" not in composition
+
+
+def test_settings_are_capability_first_not_legacy_model_picker() -> None:
+    settings = (REPO_ROOT / "frontend" / "app" / "settings" / "page.tsx").read_text(encoding="utf-8")
+
+    assert "fetch('/api/uv/capabilities')" in settings
+    assert "Как UV Studio выбирает инструменты" in settings
+    assert "Облако — только явно" in settings
+    assert "Подключить внешний ИИ-сервис · необязательно" in settings
+    assert "fetchModelGroupsByType" not in settings
+    assert "fetchVideoModelGroupsByAbility" not in settings
+    assert "Модели по умолчанию" not in settings
