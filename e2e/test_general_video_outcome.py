@@ -1,9 +1,7 @@
-"""Browser evidence for the Product Orchestrator General Video workspace.
+"""Browser evidence for the supported General Video journey.
 
-This is Class B informed regression evidence, not Class C cold-start acceptance: the
-General Video recipe itself is selected through a UV-owned setup API. From the empty
-project onward, brief entry, image/video import, workspace save and final render are
-driven only through visible production UI controls.
+From an empty project, task entry, image/video import, save and final render are
+driven through the same user-facing controls presented by the installed product.
 """
 
 from __future__ import annotations
@@ -125,16 +123,17 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
         encoded = urllib.parse.quote(project_id, safe="")
         page.goto(f"/projects/{encoded}")
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Как получить готовый ролик", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Обычный видеоролик", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Сборка текущего визуального ряда", exact=True)).to_be_visible()
-        page.get_by_label("Stage 8 brief").fill("Собрать короткий ролик из изображения и клипа")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        page.get_by_label("Описание задачи").fill("Собрать короткий ролик из изображения и клипа")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.locator('input[aria-label="Stage 8 workspace video"]').set_input_files(str(self.video))
+        page.get_by_label("Добавить своё видео").set_input_files(str(self.video))
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
         expect(page.get_by_text("Порядок визуального ряда", exact=True)).to_be_visible()
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
         render_button = page.get_by_role("button", name="Собрать обычный видеоролик", exact=True)
         expect(render_button).to_be_enabled(timeout=60_000)
         render_button.click()
