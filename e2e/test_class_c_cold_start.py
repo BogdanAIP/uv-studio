@@ -34,8 +34,9 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
             expect(page.get_by_role("button", name=hidden_title, exact=False)).to_have_count(0)
 
         recipe = page.get_by_role("button", name=recipe_title, exact=False)
-        if recipe.count() and not recipe.is_visible():
+        if recipe.count() == 0 or not recipe.is_visible():
             page.get_by_text("Другие и подготовительные режимы", exact=False).click()
+            recipe = page.get_by_role("button", name=recipe_title, exact=False)
         expect(recipe).to_be_visible()
         recipe.click()
         expect(recipe.get_by_text("Выбрано", exact=True)).to_be_visible()
