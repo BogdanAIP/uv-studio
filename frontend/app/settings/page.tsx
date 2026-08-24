@@ -1,44 +1,98 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, Loader2, Save, Settings, XCircle } from 'lucide-react';
-import { fetchModelGroupsByType, fetchVideoModelGroupsByAbility } from '@/lib/modelRegistry';
 import {
+  STYLES,
+  VIDEO_GENERATION_MODES,
   VIDEO_RATIOS,
   VIDEO_RESOLUTIONS,
-  VIDEO_GENERATION_MODES,
-  STYLES,
-  type ProviderGroup,
 } from '@/config/models';
 
 type ConfigTree = Record<string, unknown>;
 type SecretStatus = Record<string, boolean>;
 
-type Field = {
-  path: string;
-  label: string;
-  type?: 'text' | 'number' | 'boolean' | 'password' | 'select';
-  options?: Array<{ id: string; label: string }> | ProviderGroup[];
+type CapabilitySummary = {
+  capability_id: string;
+  title: string;
+  description: string;
+  offer_summary: {
+    total: number;
+    available: number;
+    configuration_required: number;
+    unavailable: number;
+  };
 };
 
-type ModelSelectKey =
-  | 'llm'
-  | 'vlm'
-  | 'image_it2i'
-  | 'image_t2i'
-  | 'video_first_frame'
-  | 'video_start_end'
-  | 'video_reference';
-
-const EMPTY_MODEL_SELECTS: Record<ModelSelectKey, ProviderGroup[]> = {
-  llm: [],
-  vlm: [],
-  image_it2i: [],
-  image_t2i: [],
-  video_first_frame: [],
-  video_start_end: [],
-  video_reference: [],
+type ProviderDefinition = {
+  id: string;
+  title: string;
+  description: string;
+  keyPath: string;
+  baseUrlPath: string;
+  proxyPath: string;
 };
+
+const PROVIDERS: ProviderDefinition[] = [
+  {
+    id: 'openai',
+    title: 'OpenAI',
+    description: 'Подключение к OpenAI или совместимому API. Само наличие ключа не разрешает автоматический платный вызов.',
+    keyPath: 'api_providers.openai.api_key',
+    baseUrlPath: 'api_providers.openai.base_url',
+    proxyPath: 'api_providers.openai.enable_proxy',
+  },
+  {
+    id: 'gemini',
+    title: 'Gemini',
+    description: 'Подключение к Google Gemini. Используется только там, где соответствующая возможность будет явно разрешена.',
+    keyPath: 'api_providers.gemini.api_key',
+    baseUrlPath: 'api_providers.gemini.base_url',
+    proxyPath: 'api_providers.gemini.enable_proxy',
+  },
+  {
+    id: 'deepseek',
+    title: 'DeepSeek',
+    description: 'Подключение к DeepSeek для совместимых текстовых задач.',
+    keyPath: 'api_providers.deepseek.api_key',
+    baseUrlPath: 'api_providers.deepseek.base_url',
+    proxyPath: 'api_providers.deepseek.enable_proxy',
+  },
+  {
+    id: 'dashscope',
+    title: 'DashScope',
+    description: 'Alibaba Cloud DashScope, включая совместимые Qwen/Wan возможности.',
+    keyPath: 'api_providers.dashscope.api_key',
+    baseUrlPath: 'api_providers.dashscope.base_url',
+    proxyPath: 'api_providers.dashscope.enable_proxy',
+  },
+  {
+    id: 'ark',
+    title: 'Volcengine ARK',
+    description: 'Совместимый слой для Seedream/Seedance и других ARK-моделей.',
+    keyPath: 'api_providers.ark.api_key',
+    baseUrlPath: 'api_providers.ark.base_url',
+    proxyPath: 'api_providers.ark.enable_proxy',
+  },
+  {
+    id: 'kling',
+    title: 'Kling',
+    description: 'Подключение к сервису генерации видео Kling.',
+    keyPath: 'api_providers.kling.api_key',
+    baseUrlPath: 'api_providers.kling.base_url',
+    proxyPath: 'api_providers.kling.enable_proxy',
+  },
+];
+
+const CAPABILITY_ORDER = [
+  'text.generate',
+  'image.generate',
+  'video.generate',
+  'speech.synthesize',
+  'speech.transcribe',
+  'media.understand',
+  'timeline.assemble',
+];
 
 const LOG_LEVEL_OPTIONS = [
   { id: 'DEBUG', label: 'DEBUG — максимально подробно' },
@@ -46,104 +100,6 @@ const LOG_LEVEL_OPTIONS = [
   { id: 'WARNING', label: 'WARNING — предупреждения и ошибки' },
   { id: 'ERROR', label: 'ERROR — только ошибки' },
   { id: 'CRITICAL', label: 'CRITICAL — только критические ошибки' },
-];
-
-const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
-  {
-    title: 'Сервер API',
-    description: 'Параметры запуска локального сервера и журналирования. Для безопасности сервер должен оставаться доступным только на этом компьютере.',
-    fields: [
-      { path: 'server.host', label: 'Адрес сервера (host)' },
-      { path: 'server.port', label: 'Порт', type: 'number' },
-      { path: 'server.log_level', label: 'Уровень журналирования', type: 'select', options: LOG_LEVEL_OPTIONS },
-      { path: 'server.access_log', label: 'Журнал запросов', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Общие настройки поставщиков ИИ',
-    description: 'Общие параметры вызова моделей и сетевого прокси.',
-    fields: [
-      { path: 'api_providers.common.print_model_input', label: 'Записывать входные данные моделей в журнал', type: 'boolean' },
-      { path: 'api_providers.common.proxy', label: 'Адрес прокси' },
-    ],
-  },
-  {
-    title: 'OpenAI',
-    description: 'Настройки OpenAI и совместимых с OpenAI интерфейсов. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.openai.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.openai.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.openai.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Gemini',
-    description: 'Настройки Gemini и совместимых интерфейсов. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.gemini.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.gemini.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.gemini.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'DeepSeek',
-    description: 'Настройки DeepSeek. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.deepseek.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.deepseek.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.deepseek.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'DashScope',
-    description: 'Настройки сервисов Alibaba Cloud DashScope, включая модели Qwen и Wan. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.dashscope.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.dashscope.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.dashscope.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'ARK',
-    description: 'Настройки Volcengine ARK для Seedream и Seedance. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.ark.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.ark.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.ark.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Kling',
-    description: 'Настройки сервиса генерации видео Kling. Ключ хранится отдельно и никогда не читается обратно в браузер.',
-    fields: [
-      { path: 'api_providers.kling.base_url', label: 'Адрес API (base_url)' },
-      { path: 'api_providers.kling.api_key', label: 'Ключ API', type: 'password' },
-      { path: 'api_providers.kling.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
-    ],
-  },
-  {
-    title: 'Модели по умолчанию',
-    description: 'Модели, которые основной рабочий процесс и разрешённые адаптеры поставщиков используют по умолчанию.',
-    fields: [
-      { path: 'models.llm', label: 'Текстовая модель (LLM)', type: 'select', options: [] },
-      { path: 'models.vlm', label: 'Визуально-языковая модель (VLM)', type: 'select', options: [] },
-      { path: 'models.image_it2i', label: 'Редактирование изображения по изображению', type: 'select', options: [] },
-      { path: 'models.image_t2i', label: 'Генерация изображения по тексту', type: 'select', options: [] },
-      { path: 'models.video_first_frame', label: 'Видео по первому кадру', type: 'select', options: [] },
-      { path: 'models.video_start_end', label: 'Видео по первому и последнему кадрам', type: 'select', options: [] },
-      { path: 'models.video_reference', label: 'Видео по референсному изображению', type: 'select', options: [] },
-    ],
-  },
-  {
-    title: 'Генерация видео',
-    description: 'Способ генерации по умолчанию, визуальный стиль, соотношение сторон и разрешение видео.',
-    fields: [
-      { path: 'generation.video_generation_mode', label: 'Способ генерации видео', type: 'select', options: VIDEO_GENERATION_MODES },
-      { path: 'generation.style', label: 'Визуальный стиль', type: 'select', options: STYLES },
-      { path: 'generation.video_ratio', label: 'Соотношение сторон', type: 'select', options: VIDEO_RATIOS },
-      { path: 'generation.video_resolution', label: 'Разрешение видео', type: 'select', options: VIDEO_RESOLUTIONS },
-    ],
-  },
 ];
 
 function isConfigTree(value: unknown): value is ConfigTree {
@@ -180,8 +136,14 @@ function formatConfigPath(path: string) {
   return (path || 'data/config/runtime.json').replace(/\\/g, '/');
 }
 
-function isProviderOptions(options: Field['options']): options is ProviderGroup[] {
-  return Array.isArray(options) && options.some(option => 'models' in option);
+function capabilityStatus(capability: CapabilitySummary) {
+  if (capability.offer_summary.available > 0) {
+    return { label: 'Доступно сейчас', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  }
+  if (capability.offer_summary.configuration_required > 0) {
+    return { label: 'Нужна настройка', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  }
+  return { label: 'Пока недоступно', className: 'bg-gray-50 text-gray-500 border-gray-200' };
 }
 
 export default function SettingsPage() {
@@ -194,16 +156,18 @@ export default function SettingsPage() {
   const [secretStatus, setSecretStatus] = useState<SecretStatus>({});
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({});
   const [secretClears, setSecretClears] = useState<Record<string, boolean>>({});
-  const [modelSelects, setModelSelects] = useState<Record<ModelSelectKey, ProviderGroup[]>>(EMPTY_MODEL_SELECTS);
+  const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
+  const [capabilitiesError, setCapabilitiesError] = useState('');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError('');
+      setCapabilitiesError('');
       try {
-        const resp = await fetch('/api/config');
-        if (!resp.ok) throw new Error('Не удалось загрузить настройки');
-        const data = await resp.json();
+        const configResponse = await fetch('/api/config');
+        if (!configResponse.ok) throw new Error('Не удалось загрузить настройки');
+        const data = await configResponse.json();
         setConfig(data.config || {});
         setSecretStatus(data.secrets || {});
         setPath(data.path || 'data/config/runtime.json');
@@ -211,6 +175,15 @@ export default function SettingsPage() {
         setSecretClears({});
       } catch (loadError: unknown) {
         setError(errorMessage(loadError, 'Не удалось загрузить настройки'));
+      }
+
+      try {
+        const capabilityResponse = await fetch('/api/uv/capabilities');
+        if (!capabilityResponse.ok) throw new Error('Каталог возможностей недоступен');
+        const capabilityData = await capabilityResponse.json();
+        setCapabilities(Array.isArray(capabilityData) ? capabilityData : []);
+      } catch (capabilityError: unknown) {
+        setCapabilitiesError(errorMessage(capabilityError, 'Не удалось определить доступные возможности'));
       } finally {
         setLoading(false);
       }
@@ -218,68 +191,23 @@ export default function SettingsPage() {
     void load();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchModelGroupsByType('llm'),
-      fetchModelGroupsByType('vlm'),
-      fetchModelGroupsByType('i2i'),
-      fetchModelGroupsByType('t2i'),
-      fetchVideoModelGroupsByAbility('first_frame_i2v'),
-      fetchVideoModelGroupsByAbility('start_end_frame_i2v'),
-      fetchVideoModelGroupsByAbility('reference_to_video'),
-    ])
-      .then(([llm, vlm, imageIt2i, imageT2i, firstFrameVideo, startEndVideo, referenceVideo]) => {
-        if (cancelled) return;
-        setModelSelects({
-          llm,
-          vlm,
-          image_it2i: imageIt2i,
-          image_t2i: imageT2i,
-          video_first_frame: firstFrameVideo,
-          video_start_end: startEndVideo,
-          video_reference: referenceVideo,
-        });
-      })
-      .catch(() => {
-        // Legacy /api/models intentionally remains unavailable while provider
-        // routes move behind the UV Studio capability/authorization layer.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const visibleCapabilities = useMemo(() => {
+    const byId = new Map(capabilities.map(item => [item.capability_id, item]));
+    return CAPABILITY_ORDER.map(id => byId.get(id)).filter((item): item is CapabilitySummary => Boolean(item));
+  }, [capabilities]);
 
-  const groups = GROUPS.map(group => {
-    if (group.title !== 'Модели по умолчанию') return group;
-    return {
-      ...group,
-      fields: group.fields.map(field => {
-        if (field.path === 'models.llm') return { ...field, options: modelSelects.llm };
-        if (field.path === 'models.vlm') return { ...field, options: modelSelects.vlm };
-        if (field.path === 'models.image_it2i') return { ...field, options: modelSelects.image_it2i };
-        if (field.path === 'models.image_t2i') return { ...field, options: modelSelects.image_t2i };
-        if (field.path === 'models.video_first_frame') return { ...field, options: modelSelects.video_first_frame };
-        if (field.path === 'models.video_start_end') return { ...field, options: modelSelects.video_start_end };
-        if (field.path === 'models.video_reference') return { ...field, options: modelSelects.video_reference };
-        return field;
-      }),
-    };
-  });
-
-  const updateField = (field: Field, raw: string | boolean) => {
-    const value = field.type === 'number' ? Number(raw) || 0 : raw;
-    setConfig(current => setValue(current, field.path, value));
+  const updateConfig = (fieldPath: string, value: unknown) => {
+    setConfig(current => setValue(current, fieldPath, value));
   };
 
-  const updateSecretField = (field: Field, raw: string) => {
-    setSecretDrafts(current => ({ ...current, [field.path]: raw }));
-    setSecretClears(current => ({ ...current, [field.path]: false }));
+  const updateSecret = (fieldPath: string, raw: string) => {
+    setSecretDrafts(current => ({ ...current, [fieldPath]: raw }));
+    setSecretClears(current => ({ ...current, [fieldPath]: false }));
   };
 
-  const toggleSecretClear = (field: Field) => {
-    setSecretClears(current => ({ ...current, [field.path]: !current[field.path] }));
-    setSecretDrafts(current => ({ ...current, [field.path]: '' }));
+  const toggleSecretClear = (fieldPath: string) => {
+    setSecretClears(current => ({ ...current, [fieldPath]: !current[fieldPath] }));
+    setSecretDrafts(current => ({ ...current, [fieldPath]: '' }));
   };
 
   const save = async () => {
@@ -296,16 +224,16 @@ export default function SettingsPage() {
         if (clear) secretUpdates[secretPath] = null;
       }
 
-      const resp = await fetch('/api/config', {
+      const response = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: config, secret_updates: secretUpdates }),
       });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || 'Не удалось сохранить настройки');
       }
-      const data = await resp.json();
+      const data = await response.json();
       setConfig(data.config || {});
       setSecretStatus(data.secrets || {});
       setPath(data.path || 'data/config/runtime.json');
@@ -321,129 +249,242 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <main className="w-full max-w-6xl mx-auto px-6 pt-10 pb-12">
+      <main className="mx-auto w-full max-w-6xl px-6 pb-12 pt-10">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 mb-3">
-            <Settings className="w-7 h-7 text-blue-500" />
+          <div className="mb-3 inline-flex items-center gap-2">
+            <Settings className="h-7 w-7 text-blue-500" />
             <h1 className="text-2xl font-bold text-gray-800">Настройки</h1>
           </div>
-          <p className="text-sm text-gray-500">
-            Обычные параметры сохраняются в <span className="font-mono">{formatConfigPath(path)}</span>. Ключи API хранятся отдельно и не возвращаются из локального сервера в интерфейс.
+          <p className="mx-auto max-w-3xl text-sm leading-6 text-gray-500">
+            Для локального монтажа и работы с уже готовыми материалами подключать облачный ИИ не обязательно. Внешние сервисы добавляются только для тех возможностей, которым действительно нужна модель.
           </p>
         </div>
 
         {loading ? (
-          <div className="h-56 rounded-2xl border border-gray-200 bg-white flex items-center justify-center text-sm text-gray-400">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          <div className="flex h-56 items-center justify-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-400">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Загрузка настроек…
           </div>
         ) : (
           <div className="space-y-5">
-            {groups.map(group => (
-              <section key={group.title} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-sm font-semibold text-gray-800">{group.title}</h2>
-                  <p className="mt-1 text-xs text-gray-500">{group.description}</p>
+            <section className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5">
+              <h2 className="text-base font-semibold text-gray-800">Как UV Studio выбирает инструменты</h2>
+              <div className="mt-3 grid gap-3 text-sm leading-6 text-gray-600 md:grid-cols-3">
+                <div className="rounded-xl border border-blue-100 bg-white/70 p-4">
+                  <span className="font-semibold text-gray-800">1. Сначала задача</span>
+                  <p className="mt-1">Проект запрашивает возможность: например, собрать видео, создать изображение или синтезировать речь.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {group.fields.map(field => {
-                    const value = getValue(config, field.path);
-                    const configuredSecret = Boolean(secretStatus[field.path]);
-                    const clearPending = Boolean(secretClears[field.path]);
-                    const secretDraft = secretDrafts[field.path] ?? '';
+                <div className="rounded-xl border border-blue-100 bg-white/70 p-4">
+                  <span className="font-semibold text-gray-800">2. Локальное и бесплатное — безопасный автоматический выбор</span>
+                  <p className="mt-1">Если есть подходящий локальный бесплатный инструмент, UV Studio может использовать его без перехода на платный облачный сервис.</p>
+                </div>
+                <div className="rounded-xl border border-blue-100 bg-white/70 p-4">
+                  <span className="font-semibold text-gray-800">3. Облако — только явно</span>
+                  <p className="mt-1">Сохранённый API-ключ лишь делает сервис доступным. Он не означает согласие на любой платный вызов и не должен молча становиться запасным вариантом.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-sm font-semibold text-gray-800">Возможности этой установки</h2>
+                <p className="mt-1 text-xs leading-5 text-gray-500">
+                  Это фактический каталог backend UV Studio. Он показывает возможности, а не заставляет заранее выбирать конкретные модели.
+                </p>
+              </div>
+              {capabilitiesError ? (
+                <p className="text-sm text-amber-700">{capabilitiesError}</p>
+              ) : visibleCapabilities.length === 0 ? (
+                <p className="text-sm text-gray-500">Каталог возможностей пока пуст.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {visibleCapabilities.map(capability => {
+                    const status = capabilityStatus(capability);
                     return (
-                      <label key={field.path} className="flex flex-col gap-1.5 min-w-0">
-                        <span className="text-xs font-medium text-gray-500">{field.label}</span>
-                        {field.type === 'boolean' ? (
-                          <select
-                            value={String(Boolean(value))}
-                            onChange={event => updateField(field, event.target.value === 'true')}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          >
-                            <option value="true">Включено</option>
-                            <option value="false">Выключено</option>
-                          </select>
-                        ) : field.type === 'select' ? (
-                          <select
-                            value={String(value ?? '')}
-                            onChange={event => updateField(field, event.target.value)}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          >
-                            {isProviderOptions(field.options) ? (
-                              field.options.map(providerGroup => (
-                                <optgroup key={providerGroup.provider} label={providerGroup.label}>
-                                  {providerGroup.models.map(model => (
-                                    <option key={model.id} value={model.id}>{model.label}</option>
-                                  ))}
-                                </optgroup>
-                              ))
-                            ) : (
-                              (field.options as Array<{ id: string; label: string }> | undefined || []).map(option => (
-                                <option key={option.id} value={option.id}>{option.label}</option>
-                              ))
-                            )}
-                          </select>
-                        ) : field.type === 'password' ? (
-                          <div className="flex gap-2">
-                            <input
-                              type="password"
-                              autoComplete="new-password"
-                              value={secretDraft}
-                              onChange={event => updateSecretField(field, event.target.value)}
-                              placeholder={
-                                clearPending
-                                  ? 'Ключ будет удалён после сохранения'
-                                  : configuredSecret
-                                    ? 'Ключ настроен — введите новый для замены'
-                                    : 'Введите новый ключ'
-                              }
-                              className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
-                            />
-                            {(configuredSecret || clearPending) && (
-                              <button
-                                type="button"
-                                onClick={() => toggleSecretClear(field)}
-                                className={`h-10 shrink-0 rounded-lg border px-3 text-xs transition ${
-                                  clearPending
-                                    ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                    : 'border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                                }`}
-                              >
-                                {clearPending ? 'Отменить удаление' : 'Удалить'}
-                              </button>
-                            )}
+                      <div key={capability.capability_id} className="rounded-xl border border-gray-200 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-800">{capability.title}</h3>
+                            <p className="mt-1 text-xs leading-5 text-gray-500">{capability.description}</p>
                           </div>
-                        ) : (
-                          <input
-                            type={field.type === 'number' ? 'number' : 'text'}
-                            value={String(value ?? '')}
-                            onChange={event => updateField(field, event.target.value)}
-                            className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
-                          />
-                        )}
-                        {field.type === 'password' && configuredSecret && !clearPending && !secretDraft && (
-                          <span className="text-[11px] text-green-600">Ключ настроен. Исходное значение не передаётся обратно в интерфейс.</span>
-                        )}
-                        {field.type === 'password' && clearPending && (
-                          <span className="text-[11px] text-amber-600">Ключ будет удалён после сохранения настроек.</span>
-                        )}
-                      </label>
+                          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] ${status.className}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-              </section>
-            ))}
+              )}
+            </section>
+
+            <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Подключить внешний ИИ-сервис · необязательно</summary>
+              <p className="mt-3 max-w-3xl text-xs leading-5 text-gray-500">
+                Не нужно подключать все сервисы. Эти подключения пока обслуживают совместимые генеративные адаптеры во время миграции на единый Capability Registry. Выбор конкретной платной модели не является глобальной настройкой по умолчанию и должен происходить в контексте нужной возможности.
+              </p>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                {PROVIDERS.map(provider => {
+                  const configured = Boolean(secretStatus[provider.keyPath]);
+                  const clearPending = Boolean(secretClears[provider.keyPath]);
+                  const draft = secretDrafts[provider.keyPath] ?? '';
+                  return (
+                    <div key={provider.id} className="rounded-xl border border-gray-200 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-800">{provider.title}</h3>
+                          <p className="mt-1 text-xs leading-5 text-gray-500">{provider.description}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${configured && !clearPending ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {configured && !clearPending ? 'Ключ сохранён' : 'Не подключён'}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <input
+                          aria-label={`Ключ API ${provider.title}`}
+                          type="password"
+                          autoComplete="new-password"
+                          value={draft}
+                          onChange={event => updateSecret(provider.keyPath, event.target.value)}
+                          placeholder={
+                            clearPending
+                              ? 'Ключ будет удалён после сохранения'
+                              : configured
+                                ? 'Введите новый ключ для замены'
+                                : 'Введите API-ключ'
+                          }
+                          className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
+                        />
+                        {(configured || clearPending) && (
+                          <button
+                            type="button"
+                            onClick={() => toggleSecretClear(provider.keyPath)}
+                            className={`h-10 shrink-0 rounded-lg border px-3 text-xs transition ${
+                              clearPending
+                                ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            }`}
+                          >
+                            {clearPending ? 'Отменить' : 'Удалить'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Расширенные параметры подключений</summary>
+              <p className="mt-3 text-xs leading-5 text-gray-500">
+                Эти поля нужны для совместимых endpoint-ов, прокси и нестандартной инфраструктуры. В обычной установке их менять не требуется.
+              </p>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <TextField
+                  label="Общий прокси"
+                  value={String(getValue(config, 'api_providers.common.proxy') ?? '')}
+                  onChange={value => updateConfig('api_providers.common.proxy', value)}
+                />
+                <BooleanField
+                  label="Записывать входные данные моделей в журнал"
+                  value={Boolean(getValue(config, 'api_providers.common.print_model_input'))}
+                  onChange={value => updateConfig('api_providers.common.print_model_input', value)}
+                />
+                {PROVIDERS.map(provider => (
+                  <div key={provider.id} className="rounded-xl border border-gray-200 p-4">
+                    <h3 className="text-sm font-semibold text-gray-800">{provider.title}</h3>
+                    <div className="mt-3 space-y-3">
+                      <TextField
+                        label="Адрес API"
+                        value={String(getValue(config, provider.baseUrlPath) ?? '')}
+                        onChange={value => updateConfig(provider.baseUrlPath, value)}
+                      />
+                      <BooleanField
+                        label="Использовать прокси"
+                        value={Boolean(getValue(config, provider.proxyPath))}
+                        onChange={value => updateConfig(provider.proxyPath, value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Параметры генеративных адаптеров</summary>
+              <p className="mt-3 text-xs leading-5 text-gray-500">
+                Эти значения сохранены для совместимых генеративных путей. Они не означают, что любой текущий проект уже умеет автоматически генерировать медиа из текста.
+              </p>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <SelectField
+                  label="Способ генерации видео"
+                  value={String(getValue(config, 'generation.video_generation_mode') ?? '')}
+                  options={VIDEO_GENERATION_MODES}
+                  onChange={value => updateConfig('generation.video_generation_mode', value)}
+                />
+                <SelectField
+                  label="Визуальный стиль"
+                  value={String(getValue(config, 'generation.style') ?? '')}
+                  options={STYLES}
+                  onChange={value => updateConfig('generation.style', value)}
+                />
+                <SelectField
+                  label="Соотношение сторон"
+                  value={String(getValue(config, 'generation.video_ratio') ?? '')}
+                  options={VIDEO_RATIOS}
+                  onChange={value => updateConfig('generation.video_ratio', value)}
+                />
+                <SelectField
+                  label="Разрешение видео"
+                  value={String(getValue(config, 'generation.video_resolution') ?? '')}
+                  options={VIDEO_RESOLUTIONS}
+                  onChange={value => updateConfig('generation.video_resolution', value)}
+                />
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Технические настройки локального сервера</summary>
+              <p className="mt-3 text-xs leading-5 text-gray-500">
+                В обычной установленной версии менять эти параметры не требуется. Локальный сервер должен оставаться доступным только на этом компьютере.
+              </p>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <TextField
+                  label="Адрес сервера"
+                  value={String(getValue(config, 'server.host') ?? '')}
+                  onChange={value => updateConfig('server.host', value)}
+                />
+                <NumberField
+                  label="Порт"
+                  value={Number(getValue(config, 'server.port') ?? 0)}
+                  onChange={value => updateConfig('server.port', value)}
+                />
+                <SelectField
+                  label="Уровень журналирования"
+                  value={String(getValue(config, 'server.log_level') ?? '')}
+                  options={LOG_LEVEL_OPTIONS}
+                  onChange={value => updateConfig('server.log_level', value)}
+                />
+                <BooleanField
+                  label="Журнал запросов"
+                  value={Boolean(getValue(config, 'server.access_log'))}
+                  onChange={value => updateConfig('server.access_log', value)}
+                />
+              </div>
+              <p className="mt-4 text-[11px] text-gray-400">Файл обычных настроек: <span className="font-mono">{formatConfigPath(path)}</span></p>
+            </details>
 
             <div className="sticky bottom-4 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
               {message && (
                 <span className="flex items-center gap-1.5 text-sm text-green-600">
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircle className="h-4 w-4" />
                   {message}
                 </span>
               )}
               {error && (
                 <span className="flex items-center gap-1.5 text-sm text-red-600">
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="h-4 w-4" />
                   {error}
                 </span>
               )}
@@ -452,7 +493,7 @@ export default function SettingsPage() {
                 disabled={saving}
                 className="ml-auto flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-200"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Сохранить настройки
               </button>
             </div>
@@ -460,5 +501,76 @@ export default function SettingsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
+      />
+    </label>
+  );
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <input
+        type="number"
+        value={Number.isFinite(value) ? value : 0}
+        onChange={event => onChange(Number(event.target.value) || 0)}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
+      />
+    </label>
+  );
+}
+
+function BooleanField({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <select
+        value={String(value)}
+        onChange={event => onChange(event.target.value === 'true')}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
+      >
+        <option value="true">Включено</option>
+        <option value="false">Выключено</option>
+      </select>
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ id: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium text-gray-500">{label}</span>
+      <select
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
+      >
+        {options.map(option => (
+          <option key={option.id} value={option.id}>{option.label}</option>
+        ))}
+      </select>
+    </label>
   );
 }
