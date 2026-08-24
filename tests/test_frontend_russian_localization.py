@@ -66,8 +66,11 @@ def test_settings_are_capability_first_not_legacy_model_picker() -> None:
 
     assert "fetch('/api/uv/capabilities')" in settings
     assert "Как UV Studio выбирает инструменты" in settings
+    assert "Локально и бесплатно" in settings
     assert "Облако — только явно" in settings
-    assert "Подключить внешний ИИ-сервис · необязательно" in settings
+    assert "Экспериментальные подключения провайдеров · не активируют генерацию" in settings
+    assert "Ключ сохранён · не активен" in settings
     assert "fetchModelGroupsByType" not in settings
     assert "fetchVideoModelGroupsByAbility" not in settings
     assert "Модели по умолчанию" not in settings
+    assert "Подключить внешний ИИ-сервис · необязательно" not in settings
