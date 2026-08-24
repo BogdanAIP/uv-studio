@@ -6,6 +6,7 @@ import {
   type WorkflowAction,
   type WorkflowArtifact,
 } from '@/lib/productWorkflowApi';
+import { projectStage8ArtifactUrl } from '@/lib/stage8MediaApi';
 
 interface GeneralVideoPanelProps {
   projectId: string;
@@ -42,12 +43,12 @@ export function GeneralVideoPanel({
         { workspace_revision_sha256: workspaceRevision },
       );
       if (!('execution' in response)) {
-        throw new Error('General Video render вернул неожиданный тип результата');
+        throw new Error('Локальная сборка вернула неожиданный тип результата');
       }
-      setMessage('Новый General Video мастер собран и зарегистрирован в проекте.');
+      setMessage('Новый ролик собран и сохранён в проекте.');
       await onProjectChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось собрать General Video мастер');
+      setError(err instanceof Error ? err.message : 'Не удалось собрать ролик');
     } finally {
       setBusy(false);
     }
@@ -57,12 +58,12 @@ export function GeneralVideoPanel({
 
   return (
     <section className="mb-6 rounded-2xl border border-indigo-900/60 bg-indigo-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-indigo-400">General Video · локальный мастер</p>
-      <h2 className="mt-2 text-xl font-medium">Сборка текущего визуального ряда</h2>
+      <p className="text-xs uppercase tracking-wider text-indigo-400">Локальная сборка · без платного API</p>
+      <h2 className="mt-2 text-xl font-medium">Собрать текущий черновик</h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-        Первый авторитетный General Video render намеренно ограничен: изображения показываются по 2 секунды,
-        видео используются целиком и нормализуются в 1280×720/30 fps. Встроенный звук видеоклипов не смешивается
-        скрыто; можно выбрать не более одной отдельной аудиодорожки в workspace или собрать ролик без звука.
+        UV Studio последовательно собирает выбранные изображения и видео в локальный H.264-файл. Изображения
+        пока показываются по 2 секунды, видео используются целиком и нормализуются в 1280×720/30 fps. Можно
+        добавить одну отдельную аудиодорожку или собрать ролик без звука. Эти ограничения видимы и не меняются скрыто.
       </p>
 
       <button
@@ -71,19 +72,26 @@ export function GeneralVideoPanel({
         onClick={() => void render()}
         className="mt-6 rounded-lg bg-indigo-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40"
       >
-        Собрать обычный видеоролик
+        {busy ? 'Собираю…' : 'Собрать ролик'}
       </button>
 
       {!workflowAction?.enabled && workflowAction && workflowAction.blocked_by.length > 0 && (
         <p className="mt-3 text-xs leading-5 text-amber-300">
-          Пока не готово: {workflowAction.blocked_by.join(', ')}
+          Сборка откроется после сохранения нужных материалов текущего проекта.
         </p>
       )}
 
       {currentOutcome && (
         <div className="mt-6 rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4">
-          <p className="text-sm font-medium text-emerald-300">Текущий мастер соответствует входам</p>
-          <p className="mt-2 break-all font-mono text-xs text-slate-500">{currentOutcome.path}</p>
+          <p className="text-sm font-medium text-emerald-300">Текущий ролик соответствует сохранённым материалам</p>
+          <a
+            href={projectStage8ArtifactUrl(projectId, currentOutcome.artifact_id)}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex text-sm text-sky-400 hover:text-sky-300"
+          >
+            Открыть готовый ролик →
+          </a>
         </div>
       )}
 
