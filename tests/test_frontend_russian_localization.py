@@ -10,6 +10,8 @@ CJK_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF]")
 # These paths feed the currently routed UV Studio product UI. Legacy donor
 # components that are no longer routed are intentionally excluded: they should
 # be retired with their compatibility surface rather than cosmetically maintained.
+# The pinned vendor snapshot is also intentionally excluded because its exact
+# bytes are provenance evidence and must not be translated in place.
 PRODUCT_UI_ROOTS = (
     REPO_ROOT / "frontend" / "app",
     REPO_ROOT / "frontend" / "config",
