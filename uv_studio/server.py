@@ -25,6 +25,7 @@ from uv_studio.api.capabilities import router as capabilities_router  # noqa: E4
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
 from uv_studio.api.continuity_brief import router as continuity_brief_router  # noqa: E402
+from uv_studio.api.diagnostics import router as diagnostics_router  # noqa: E402
 from uv_studio.api.dubbing_review_current import router as dubbing_review_current_router  # noqa: E402
 from uv_studio.api.edit_state import router as edit_state_router  # noqa: E402
 from uv_studio.api.editor_commands import router as editor_commands_router  # noqa: E402
@@ -75,6 +76,7 @@ async def enforce_trusted_browser_origin(request: Request, call_next):
 
 
 app.include_router(configuration_router)
+app.include_router(diagnostics_router)
 app.include_router(capabilities_router)
 app.include_router(capability_execution_router)
 app.include_router(mcp_router)
@@ -133,12 +135,12 @@ def root() -> dict[str, str]:
     }
 
 
-def main() -> None:
+def main(*, host_override: str | None = None, port_override: int | None = None) -> None:
     server = RuntimeConfigStore().public_config()["server"]
     uvicorn.run(
         app,
-        host=server["host"],
-        port=server["port"],
+        host=host_override or server["host"],
+        port=port_override if port_override is not None else server["port"],
         access_log=server["access_log"],
         log_level=str(server["log_level"]).lower(),
     )
