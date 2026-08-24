@@ -14,7 +14,7 @@
       ".github/workflows/**",
       "desktop-host/**",
       "packaging/**",
-      "frontend/next.config.ts",
+      "frontend/**",
       "requirements-uv-release*.txt",
       "tools/**",
       "uv_studio/**",
