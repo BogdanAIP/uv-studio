@@ -1,0 +1,198 @@
+!ifndef UV_RELEASE_ROOT
+  !error "UV_RELEASE_ROOT must point to the already verified portable release root"
+!endif
+!ifndef UV_RELEASE_ID
+  !error "UV_RELEASE_ID must be supplied by the release build"
+!endif
+!ifndef UV_PRODUCT_VERSION
+  !error "UV_PRODUCT_VERSION must be supplied by the release build"
+!endif
+!ifndef UV_OUTPUT_FILE
+  !error "UV_OUTPUT_FILE must be supplied by the release build"
+!endif
+
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
+
+Unicode true
+Name "UV Studio"
+OutFile "${UV_OUTPUT_FILE}"
+
+; Public-release signing is opt-in and provider-neutral. Ordinary PR/release
+; evidence does not define these commands and therefore remains unsigned.
+; When a real public signer is supplied, NSIS passes the generated executable
+; path as the final argument and fails the build if the signer fails.
+!ifdef UV_SIGN_INSTALLER_COMMAND
+  !finalize '${UV_SIGN_INSTALLER_COMMAND} "%1"' = 0
+!endif
+!ifdef UV_SIGN_UNINSTALLER_COMMAND
+  !uninstfinalize '${UV_SIGN_UNINSTALLER_COMMAND} "%1"' = 0
+!endif
+
+InstallDir "$LOCALAPPDATA\Programs\UV Studio"
+RequestExecutionLevel user
+SetCompressor zlib
+ShowInstDetails show
+ShowUninstDetails show
+BrandingText "UV Studio"
+
+Var VerifyExit
+Var VerifyOutput
+Var WebView2Exit
+Var WebView2Output
+Var WebView2Attempt
+
+!define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch UV Studio"
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
+
+Function VerifyInstalledRelease
+  nsExec::ExecToStack /TIMEOUT=300000 '"$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" --verify-release'
+  Pop $VerifyExit
+  Pop $VerifyOutput
+FunctionEnd
+
+Function RecordVerificationFailure
+  CreateDirectory "$LOCALAPPDATA\UV Studio"
+  CreateDirectory "$LOCALAPPDATA\UV Studio\logs"
+  FileOpen $1 "$LOCALAPPDATA\UV Studio\logs\installer-verification-error.txt" w
+  FileWrite $1 "release=${UV_RELEASE_ID}$\r$\n"
+  FileWrite $1 "verifier_exit=$VerifyExit$\r$\n"
+  FileWrite $1 "$VerifyOutput$\r$\n"
+  FileClose $1
+FunctionEnd
+
+Function RecordWebView2Failure
+  CreateDirectory "$LOCALAPPDATA\UV Studio"
+  CreateDirectory "$LOCALAPPDATA\UV Studio\logs"
+  FileOpen $1 "$LOCALAPPDATA\UV Studio\logs\webview2-prerequisite-error.txt" w
+  FileWrite $1 "release=${UV_RELEASE_ID}$\r$\n"
+  FileWrite $1 "webview2_exit=$WebView2Exit$\r$\n"
+  FileWrite $1 "webview2_attempt=$WebView2Attempt$\r$\n"
+  FileWrite $1 "$WebView2Output$\r$\n"
+  FileClose $1
+FunctionEnd
+
+Function EnsureWebView2Runtime
+  ; The Rust host is the source of truth for whether Evergreen WebView2 is usable.
+  nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\versions\${UV_RELEASE_ID}\desktop\uv-studio-desktop.exe" --runtime-check'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_ready
+
+  ; The bootstrapper bytes were fetched from Microsoft's official Evergreen fwlink,
+  ; Authenticode-validated during release staging, and then covered by D-044.
+  nsExec::ExecToStack /TIMEOUT=300000 '"$INSTDIR\versions\${UV_RELEASE_ID}\prerequisites\MicrosoftEdgeWebview2Setup.exe" /silent /install'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_recheck webview2_failed
+
+webview2_recheck:
+  ; Evergreen setup can return before registration is observable to a fresh host
+  ; process. Keep activation fail-closed, but allow a bounded readiness window.
+  StrCpy $WebView2Attempt 0
+
+webview2_retry:
+  IntOp $WebView2Attempt $WebView2Attempt + 1
+  nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\versions\${UV_RELEASE_ID}\desktop\uv-studio-desktop.exe" --runtime-check'
+  Pop $WebView2Exit
+  Pop $WebView2Output
+  StrCmp $WebView2Exit "0" webview2_ready
+  IntCmp $WebView2Attempt 12 webview2_failed webview2_wait webview2_failed
+
+webview2_wait:
+  Sleep 5000
+  Goto webview2_retry
+
+webview2_failed:
+  Call RecordWebView2Failure
+  MessageBox MB_ICONSTOP|MB_OK "UV Studio could not install or verify the Microsoft Edge WebView2 Runtime required for its desktop window. No shortcut was activated. See the UV Studio logs directory for diagnostics." /SD IDOK
+  SetErrorLevel 3
+  Quit
+
+webview2_ready:
+FunctionEnd
+
+Section "UV Studio" SEC_MAIN
+  SetShellVarContext current
+  SetOutPath "$INSTDIR"
+  CreateDirectory "$INSTDIR\versions"
+  ; Diagnostics belong only to the current installation attempt.
+  Delete "$LOCALAPPDATA\UV Studio\logs\installer-verification-error.txt"
+  Delete "$LOCALAPPDATA\UV Studio\logs\webview2-prerequisite-error.txt"
+
+  ; Exact reinstall: reuse only an already deep-verified identical release.
+  IfFileExists "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe" 0 install_release
+  Call VerifyInstalledRelease
+  StrCmp $VerifyExit "0" ensure_prerequisites
+  RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
+
+install_release:
+  SetOutPath "$INSTDIR\versions\${UV_RELEASE_ID}"
+  File /r "${UV_RELEASE_ROOT}\*"
+
+  ; The copied payload is not activated until its own D-044 deep verifier accepts it.
+  Call VerifyInstalledRelease
+  StrCmp $VerifyExit "0" ensure_prerequisites
+  Call RecordVerificationFailure
+  RMDir /r "$INSTDIR\versions\${UV_RELEASE_ID}"
+  ; /SD keeps /S installations fail-closed instead of waiting on an invisible dialog.
+  MessageBox MB_ICONSTOP|MB_OK "UV Studio installation failed integrity verification. No shortcut was activated. See the UV Studio logs directory for diagnostics." /SD IDOK
+  SetErrorLevel 2
+  Quit
+
+ensure_prerequisites:
+  ; Machine prerequisites are checked only after immutable release verification and
+  ; before current-release/shortcut activation.
+  Call EnsureWebView2Runtime
+
+activate_release:
+  FileOpen $0 "$INSTDIR\current-release.txt" w
+  FileWrite $0 "${UV_RELEASE_ID}$\r$\n"
+  FileClose $0
+
+  WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+  ; Shortcuts deliberately target the frozen supervisor, not the WebView2 host.
+  ; The supervisor owns backend/frontend startup and the lifetime of the native window.
+  ; Its PyInstaller console bootloader is built with hide-console=hide-early for
+  ; standalone user launches; private modes keep console behavior when invoked from
+  ; an existing console. The Rust host owns the visible application window.
+  CreateDirectory "$SMPROGRAMS\UV Studio"
+  CreateShortcut "$SMPROGRAMS\UV Studio\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
+  CreateShortcut "$SMPROGRAMS\UV Studio\Uninstall UV Studio.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortcut "$DESKTOP\UV Studio.lnk" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
+
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayName" "UV Studio"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayVersion" "${UV_PRODUCT_VERSION}"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "DisplayIcon" "$INSTDIR\versions\${UV_RELEASE_ID}\backend\uv-studio-backend.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "UninstallString" '"$INSTDIR\Uninstall.exe"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "NoModify" 1
+  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio" "NoRepair" 1
+SectionEnd
+
+Section "Uninstall"
+  SetShellVarContext current
+
+  Delete "$DESKTOP\UV Studio.lnk"
+  Delete "$SMPROGRAMS\UV Studio\UV Studio.lnk"
+  Delete "$SMPROGRAMS\UV Studio\Uninstall UV Studio.lnk"
+  RMDir "$SMPROGRAMS\UV Studio"
+
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UV Studio"
+
+  Delete "$INSTDIR\current-release.txt"
+  RMDir /r "$INSTDIR\versions"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
+
+  ; Deliberately do not touch $LOCALAPPDATA\UV Studio. D-045 user data survives uninstall.
+SectionEnd

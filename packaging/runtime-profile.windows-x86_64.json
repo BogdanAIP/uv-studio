@@ -1,0 +1,49 @@
+{
+  "schema_version": 7,
+  "target": {"os": "windows", "arch": "x86_64"},
+  "python": {
+    "version": "3.13.14",
+    "constraints": "requirements-uv-release-win-x86_64.txt"
+  },
+  "node": {
+    "version": "24.19.0",
+    "lock": "frontend/package-lock.json",
+    "download": {
+      "url": "https://nodejs.org/download/release/v24.19.0/node-v24.19.0-win-x64.zip",
+      "sha256": "57f71ab3652e797d84acddc79c81cc9ff1c6ddb2a1974cdb83f00fee9bff4c73"
+    }
+  },
+  "desktop": {
+    "rust_version": "1.97.1",
+    "cargo_lock": "desktop-host/Cargo.lock",
+    "webview2_com_version": "0.39.1"
+  },
+  "media": {
+    "distribution": "shotcut-portable",
+    "version": "26.4.30",
+    "download": {
+      "url": "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-win64-26.4.30.zip",
+      "sha256": "986e7a13ef5fcce00f98ae3fefd7bfc9d280c4ccb7a803a63d623caf0688cb6a"
+    },
+    "corresponding_source": {
+      "url": "https://github.com/mltframework/shotcut/releases/download/v26.4.30/shotcut-src-26.4.30.txz",
+      "sha256": "fa2efbab8c1510c2b5a9ea812e0690d128f891d2e2ff61540accb21abf4c7442"
+    }
+  },
+  "build_tools": {
+    "pyinstaller": "6.21.0",
+    "nsis": {
+      "version": "3.12",
+      "acquisition": {
+        "provider": "chocolatey",
+        "package": "nsis.install",
+        "package_version": "3.12.0",
+        "source": "https://community.chocolatey.org/api/v2/"
+      },
+      "corresponding_source": {
+        "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2",
+        "sha256": "f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186"
+      }
+    }
+  }
+}
