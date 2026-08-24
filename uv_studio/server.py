@@ -48,6 +48,7 @@ from uv_studio.api.replacement_review import router as replacement_review_router
 from uv_studio.api.sequence_continuity import router as sequence_continuity_router  # noqa: E402
 from uv_studio.api.sequence_review_assist import router as sequence_review_assist_router  # noqa: E402
 from uv_studio.api.stage8_workspace import router as stage8_workspace_router  # noqa: E402
+from uv_studio.api.studio_timeline import router as studio_timeline_router  # noqa: E402
 from uv_studio.config import allowed_frontend_origins  # noqa: E402
 from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
@@ -84,6 +85,7 @@ app.include_router(execution_router)
 app.include_router(projects_router)
 app.include_router(project_workflow_router)
 app.include_router(project_media_router)
+app.include_router(studio_timeline_router)
 app.include_router(stage8_workspace_router)
 app.include_router(prepared_audio_router)
 app.include_router(prepared_audio_promotion_router)
