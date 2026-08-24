@@ -37,7 +37,7 @@
     "merge_commit": "9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-model-registry",
+    "next_slice_id": "studio-v2-application-transactions",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
