@@ -40,6 +40,12 @@ filtered = unittest.TestSuite(
 buffer = io.StringIO()
 result = unittest.TextTestRunner(stream=buffer, verbosity=2).run(filtered)
 output = buffer.getvalue()
+
+# GitHub-hosted Windows runners can expose a legacy console encoding (for
+# example cp1252). Browser test names and failure diagnostics contain Russian
+# product copy, so force the evidence stream to UTF-8 before emitting it.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stdout.write(output)
 (artifact_dir / "test-output.log").write_text(output, encoding="utf-8", errors="replace")
 raise SystemExit(0 if result.wasSuccessful() else 1)
