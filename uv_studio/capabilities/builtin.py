@@ -349,10 +349,11 @@ def _native_model_offer(
         capability_id=capability_id,
         adapter_id="native_videoclaw",
         title=title,
-        availability=OfferAvailability.CONFIGURATION_REQUIRED,
+        availability=OfferAvailability.UNAVAILABLE,
         reason=(
-            "Pinned VideoClaw содержит совместимый model/pipeline слой, но конкретная модель и её "
-            "учётные данные ещё не выбраны через UV Studio Capability Registry."
+            "Pinned VideoClaw сохраняется как compatibility/provenance donor, но для этого model-layer "
+            "offer в текущей UV Studio нет авторитетного исполняемого транспорта. Подключите реальный "
+            "UV/MCP adapter для этой semantic capability."
         ),
         locality=LocalityClass.HYBRID,
         cost_class=CostClass.POTENTIALLY_PAID,
