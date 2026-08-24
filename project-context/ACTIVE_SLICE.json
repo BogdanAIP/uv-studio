@@ -1,26 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "product-usability-class-c-cold-start",
-    "kind": "research",
-    "roadmap_stage": "product-usability",
-    "goal": "Prove UV Studio from a user-equivalent clean state using only advertised recipes and visible product controls, without direct Project Store fixtures, hidden workflow seeding or developer-only shortcuts.",
-    "base_branch": "main",
-    "branch": "research/product-usability-class-c-cold-start",
-    "pull_request": 58,
-    "write_scope": [
-      "project-context/**",
-      "frontend/**",
-      "e2e/**",
-      "tests/**",
-      "tests_api/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "product-recovery-recipe-workspace-reconciliation",
-    "pull_request": 56,
-    "merge_commit": "44c853f00766795399de9addf74ba79cef2c35c4"
+    "id": "product-usability-class-c-cold-start",
+    "pull_request": 58,
+    "merge_commit": "9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4"
   },
   "handoff": {
     "next_slice_id": "product-usability-installed-windows-human-acceptance",

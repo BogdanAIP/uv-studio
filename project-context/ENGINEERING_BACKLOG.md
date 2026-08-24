@@ -14,21 +14,23 @@ The creation catalog, Product Orchestrator projections and visible workspace rou
 
 ## P0 — Product usability evidence
 
-Current active slice: `product-usability-class-c-cold-start`.
+Class C cold-start is completed through `product-usability-class-c-cold-start` (PR #58, merge `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`). Exact Draft and Review heads passed all five permanent CI jobs, including browser user-outcomes on Ubuntu and Windows.
 
-Required closure:
+The remaining P0 product-usability gate is `product-usability-installed-windows-human-acceptance`:
 
-- validate UV Studio from a user-equivalent clean state without repository knowledge, direct store writes or hidden readiness seeding;
-- prove advertised task discovery, project creation, prerequisite guidance and representative supported outcomes through visible controls only;
-- distinguish product defects from optional runtime/provider configuration requirements;
-- preserve fail-closed behavior for unsupported recipes and missing capabilities;
-- collect durable evidence that can be compared with the later installed Windows human-acceptance gate;
-- require exact Draft and Review heads to pass all five permanent CI jobs.
+- validate the packaged UV Studio application on an installed Windows system from first launch;
+- verify normal task discovery, project creation, media import, prerequisite guidance and representative product workflows through the installed host;
+- distinguish packaging/host failures from optional provider/runtime configuration requirements;
+- preserve the Class C evidence as the CI comparison baseline rather than treating browser CI as installed-app acceptance;
+- record durable human-acceptance evidence before Stage 9 resumes.
 
-After Class C, installed Windows human acceptance on the packaged application remains a separate P0 gate before Stage 9 resumes.
+## P1 — Architecture and portable-state hardening
 
-## P1 — Additional portable-state and runtime hardening
-
+- reconcile the legacy `/api/uv/projects/{project_id}/execution-plan` compatibility projection with Product Orchestrator so UV Studio does not maintain two modern product truths;
+- extract API-orchestrated use cases into a small `uv_studio/application/` layer without redesigning the domain core;
+- add executable AST dependency-boundary tests for `projects`, `capabilities`, `editor`, `orchestration` and API/application direction;
+- introduce a file-first `ProjectUnitOfWork` for multi-step project mutations and external-execution registration/rollback;
+- extend development-context validation so durable backlog state cannot drift from `ACTIVE_SLICE.json`/handoff state;
 - keep machine paths, secrets and runtime handles outside portable project state;
 - maintain strict portable-JSON and corrupt-project isolation guarantees as project state expands;
 - define a content-integrity strategy that avoids unnecessary full-file hashing while preserving Review/Accept/render/export trust;
@@ -38,8 +40,13 @@ After Class C, installed Windows human acceptance on the packaged application re
 - expand codec/container/device fixtures only when concrete compatibility risks justify them;
 - retire transitional `/api/stages` after no supported product surface depends on it.
 
-## P2 — Optional domain/product extensions
+## P2 — Runtime and product extensions
 
+- add a UV-owned Job Manager before long-running AI/provider work becomes a normal product path;
+- replace central execution switches with explicit transport/capability-handler registries as provider count grows;
+- generate frontend workflow/recipe contracts from backend OpenAPI/JSON Schema rather than maintaining manual duplicates;
+- move frontend workspaces incrementally into feature-owned modules plus a workspace-renderer registry;
+- remove legacy targeted-edit compatibility only after preserved unmigrated projects no longer require it;
 - sequence continuity remains optional typed/provider-neutral domain state; simple standalone clips must not inherit it automatically;
 - broader `free_project` tool palette only after an explicit ownership/product decision;
 - truthful Action Transfer / Digital Human journeys only when a complete authorized current workflow exists;
