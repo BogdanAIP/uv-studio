@@ -3,8 +3,8 @@
 The historical Stage 4C/5/6 browser test mounted Dubbing and Sequence Continuity
 inside an `action_transfer` project through the old generic frontend fallback.
 Product Truth reconciliation intentionally removes that leakage. These tests
-preserve the valuable outcome coverage while running each workflow only in a
-Product Orchestrator-owned workspace.
+preserve the valuable routing/isolation coverage while keeping advanced tools out
+of product workspaces that do not currently own a user-facing path for them.
 """
 
 from __future__ import annotations
@@ -61,57 +61,58 @@ class ProductOwnedTargetedEditBrowserOutcome(legacy.BrowserUserOutcomes):
             raise
 
 
-class ProductOwnedSequenceContinuityBrowserOutcome(legacy.BrowserUserOutcomes):
-    # Do not inherit the historical cross-workspace test; this class replaces
-    # it with Story-owned Sequence Continuity coverage below.
+class ProductOwnedStoryIsolationBrowserOutcome(legacy.BrowserUserOutcomes):
+    # Story is currently preparation-only. The primary Story route must not
+    # re-expose the old Stage 6 continuity UI just to preserve a historical
+    # browser regression; advanced continuity needs its own product-owned route
+    # before it can be advertised again.
     test_targeted_edit_isolated_while_dubbing_and_sequence_regressions_remain_operable = None
 
-    def test_story_owns_two_shot_sequence_review_accept_and_reanchor(self) -> None:
+    def test_story_primary_route_is_preparation_only_without_foreign_panels(self) -> None:
         page = self._new_page()
         try:
             project_id = self._create_project_via_api(
                 page,
-                title="E2E Product-owned Story Continuity",
+                title="E2E Product-owned Story Isolation",
                 recipe_id="story_video",
             )
             expect(
-                page.get_by_role("heading", name="Сюжетное рабочее пространство", exact=True)
+                page.get_by_role(
+                    "heading",
+                    name="Сейчас это подготовка истории, а не генератор готового фильма",
+                    exact=True,
+                )
             ).to_be_visible()
-            expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_be_visible()
+            expect(page.get_by_role("heading", name="Подготовка сюжетного видео", exact=True)).to_be_visible()
+
+            # The guided Story surface must not leak unrelated or not-yet-routed
+            # advanced workspaces into the first-run journey.
+            expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_have_count(0)
             expect(page.get_by_text("Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
             expect(
                 page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)
             ).to_have_count(0)
-
-            video_picker = page.get_by_label("Stage 8 workspace video", exact=True)
-            video_picker.set_input_files(str(self.source_video))
-            expect(page.get_by_text("Видео добавлено в материалы проекта.", exact=True)).to_be_visible(
-                timeout=45_000
-            )
-            video_picker.set_input_files(str(self.replacement_video))
-            expect(page.get_by_text(self.replacement_video.name, exact=True)).to_be_visible(
-                timeout=45_000
-            )
-
-            self._complete_sequence_continuity(page, project_id)
+            expect(page.get_by_text("Stage 6", exact=False)).to_have_count(0)
+            expect(page.get_by_text("Stage 8", exact=False)).to_have_count(0)
 
             report = {
                 "project_id": project_id,
-                "sequence_continuity": "two_linked_takes_accepted_and_reanchored",
-                "routing": "story_owned_continuity",
+                "story_route": "preparation_only",
+                "advanced_continuity_visible": False,
+                "foreign_workspace_leakage": False,
                 "frontend": legacy.FRONTEND_ORIGIN,
             }
-            (self.artifact_dir / "story-continuity-product-owned.json").write_text(
+            (self.artifact_dir / "story-product-owned-isolation.json").write_text(
                 json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
             page.screenshot(
-                path=str(self.artifact_dir / "story-continuity-product-owned.png"),
+                path=str(self.artifact_dir / "story-product-owned-isolation.png"),
                 full_page=True,
             )
         except Exception:
             page.screenshot(
-                path=str(self.artifact_dir / "story-continuity-product-owned-failure.png"),
+                path=str(self.artifact_dir / "story-product-owned-isolation-failure.png"),
                 full_page=True,
             )
             raise
