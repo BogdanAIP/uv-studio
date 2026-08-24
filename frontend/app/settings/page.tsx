@@ -22,6 +22,13 @@ type CapabilitySummary = {
     configuration_required: number;
     unavailable: number;
   };
+  execution_summary: {
+    local_free_available: number;
+    external_available: number;
+    paid_capable_available: number;
+    local_configuration_required: number;
+    external_configuration_required: number;
+  };
 };
 
 type ProviderDefinition = {
@@ -37,7 +44,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'openai',
     title: 'OpenAI',
-    description: 'Подключение к OpenAI или совместимому API. Само наличие ключа не разрешает автоматический платный вызов.',
+    description: 'Резервное поле совместимости для будущего UV-owned адаптера OpenAI/совместимого API. Сохранение ключа само по себе не включает генерацию.',
     keyPath: 'api_providers.openai.api_key',
     baseUrlPath: 'api_providers.openai.base_url',
     proxyPath: 'api_providers.openai.enable_proxy',
@@ -45,7 +52,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'gemini',
     title: 'Gemini',
-    description: 'Подключение к Google Gemini. Используется только там, где соответствующая возможность будет явно разрешена.',
+    description: 'Резервное поле для будущего адаптера Gemini. Текущая сборка не превращает сохранённый ключ в исполняемую генерацию изображений или видео.',
     keyPath: 'api_providers.gemini.api_key',
     baseUrlPath: 'api_providers.gemini.base_url',
     proxyPath: 'api_providers.gemini.enable_proxy',
@@ -53,7 +60,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'deepseek',
     title: 'DeepSeek',
-    description: 'Подключение к DeepSeek для совместимых текстовых задач.',
+    description: 'Резервное поле для будущего текстового адаптера. Сохранённый ключ пока не добавляет новый исполняемый offer.',
     keyPath: 'api_providers.deepseek.api_key',
     baseUrlPath: 'api_providers.deepseek.base_url',
     proxyPath: 'api_providers.deepseek.enable_proxy',
@@ -61,7 +68,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'dashscope',
     title: 'DashScope',
-    description: 'Alibaba Cloud DashScope, включая совместимые Qwen/Wan возможности.',
+    description: 'Поле совместимости с прежним Qwen/Wan-слоем. Оно сохраняется для миграции, но не считается готовым UV Studio adapter.',
     keyPath: 'api_providers.dashscope.api_key',
     baseUrlPath: 'api_providers.dashscope.base_url',
     proxyPath: 'api_providers.dashscope.enable_proxy',
@@ -69,7 +76,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'ark',
     title: 'Volcengine ARK',
-    description: 'Совместимый слой для Seedream/Seedance и других ARK-моделей.',
+    description: 'Поле совместимости с прежними Seedream/Seedance-настройками. Оно не активирует генерацию без отдельного UV-owned adapter.',
     keyPath: 'api_providers.ark.api_key',
     baseUrlPath: 'api_providers.ark.base_url',
     proxyPath: 'api_providers.ark.enable_proxy',
@@ -77,7 +84,7 @@ const PROVIDERS: ProviderDefinition[] = [
   {
     id: 'kling',
     title: 'Kling',
-    description: 'Подключение к сервису генерации видео Kling.',
+    description: 'Резервное поле для будущего видео-адаптера Kling. Сохранение ключа не делает video.generate доступным в текущей сборке.',
     keyPath: 'api_providers.kling.api_key',
     baseUrlPath: 'api_providers.kling.base_url',
     proxyPath: 'api_providers.kling.enable_proxy',
@@ -137,13 +144,42 @@ function formatConfigPath(path: string) {
 }
 
 function capabilityStatus(capability: CapabilitySummary) {
-  if (capability.offer_summary.available > 0) {
-    return { label: 'Доступно сейчас', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  const execution = capability.execution_summary;
+  if (execution.local_free_available > 0) {
+    return {
+      label: 'Локально и бесплатно',
+      note: 'Можно выполнить без внешнего ИИ-сервиса.',
+      className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    };
   }
-  if (capability.offer_summary.configuration_required > 0) {
-    return { label: 'Нужна настройка', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (execution.external_available > 0) {
+    return {
+      label: execution.paid_capable_available > 0 ? 'Внешний сервис' : 'Внешний сервис · бесплатно',
+      note: execution.paid_capable_available > 0
+        ? 'Требует сети, явного выбора offer и подтверждения возможных внешних расходов.'
+        : 'Требует сети и явного разрешения на удалённое выполнение.',
+      className: 'bg-blue-50 text-blue-700 border-blue-200',
+    };
   }
-  return { label: 'Пока недоступно', className: 'bg-gray-50 text-gray-500 border-gray-200' };
+  if (execution.local_configuration_required > 0) {
+    return {
+      label: 'Нужна локальная настройка',
+      note: 'Локальный бесплатный адаптер предусмотрен, но этой установке не хватает runtime или модели.',
+      className: 'bg-amber-50 text-amber-700 border-amber-200',
+    };
+  }
+  if (execution.external_configuration_required > 0) {
+    return {
+      label: 'Интеграция ещё не готова',
+      note: 'Есть слой совместимости, но текущая сборка не должна считать его готовым внешним адаптером.',
+      className: 'bg-amber-50 text-amber-700 border-amber-200',
+    };
+  }
+  return {
+    label: 'Пока недоступно',
+    note: 'В этой установке нет исполняемого offer для этой возможности.',
+    className: 'bg-gray-50 text-gray-500 border-gray-200',
+  };
 }
 
 export default function SettingsPage() {
@@ -256,7 +292,7 @@ export default function SettingsPage() {
             <h1 className="text-2xl font-bold text-gray-800">Настройки</h1>
           </div>
           <p className="mx-auto max-w-3xl text-sm leading-6 text-gray-500">
-            Для локального монтажа и работы с уже готовыми материалами подключать облачный ИИ не обязательно. Внешние сервисы добавляются только для тех возможностей, которым действительно нужна модель.
+            Для локального монтажа и работы с уже готовыми материалами подключать облачный ИИ не обязательно. Внешние сервисы появятся как отдельные адаптеры только после того, как UV Studio сможет действительно выполнить соответствующую возможность.
           </p>
         </div>
 
@@ -280,7 +316,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="rounded-xl border border-blue-100 bg-white/70 p-4">
                   <span className="font-semibold text-gray-800">3. Облако — только явно</span>
-                  <p className="mt-1">Сохранённый API-ключ лишь делает сервис доступным. Он не означает согласие на любой платный вызов и не должен молча становиться запасным вариантом.</p>
+                  <p className="mt-1">Удалённый offer требует явного выбора и разрешения. Один лишь сохранённый API-ключ не должен включать платную или сетевую генерацию.</p>
                 </div>
               </div>
             </section>
@@ -289,7 +325,7 @@ export default function SettingsPage() {
               <div className="mb-4">
                 <h2 className="text-sm font-semibold text-gray-800">Возможности этой установки</h2>
                 <p className="mt-1 text-xs leading-5 text-gray-500">
-                  Это фактический каталог backend UV Studio. Он показывает возможности, а не заставляет заранее выбирать конкретные модели.
+                  Это фактический каталог backend UV Studio. Статус различает локальный бесплатный инструмент и внешний сервис — это не список моделей «по умолчанию».
                 </p>
               </div>
               {capabilitiesError ? (
@@ -311,6 +347,7 @@ export default function SettingsPage() {
                             {status.label}
                           </span>
                         </div>
+                        <p className="mt-3 text-[11px] leading-5 text-gray-500">{status.note}</p>
                       </div>
                     );
                   })}
@@ -318,10 +355,10 @@ export default function SettingsPage() {
               )}
             </section>
 
-            <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Подключить внешний ИИ-сервис · необязательно</summary>
-              <p className="mt-3 max-w-3xl text-xs leading-5 text-gray-500">
-                Не нужно подключать все сервисы. Эти подключения пока обслуживают совместимые генеративные адаптеры во время миграции на единый Capability Registry. Выбор конкретной платной модели не является глобальной настройкой по умолчанию и должен происходить в контексте нужной возможности.
+            <details className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Экспериментальные подключения провайдеров · не активируют генерацию</summary>
+              <p className="mt-3 max-w-4xl text-xs leading-5 text-amber-800">
+                Для обычной работы эти ключи сейчас не нужны. Они сохранены как совместимые машинные настройки для миграции и будущих UV-owned adapters. В текущей сборке ввод ключа OpenAI, Gemini, DeepSeek, DashScope, ARK или Kling сам по себе не переводит `image.generate` или `video.generate` в состояние «доступно».
               </p>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 {PROVIDERS.map(provider => {
@@ -329,14 +366,14 @@ export default function SettingsPage() {
                   const clearPending = Boolean(secretClears[provider.keyPath]);
                   const draft = secretDrafts[provider.keyPath] ?? '';
                   return (
-                    <div key={provider.id} className="rounded-xl border border-gray-200 p-4">
+                    <div key={provider.id} className="rounded-xl border border-amber-100 bg-white p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-semibold text-gray-800">{provider.title}</h3>
                           <p className="mt-1 text-xs leading-5 text-gray-500">{provider.description}</p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${configured && !clearPending ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {configured && !clearPending ? 'Ключ сохранён' : 'Не подключён'}
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${configured && !clearPending ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {configured && !clearPending ? 'Ключ сохранён · не активен' : 'Ключ не задан'}
                         </span>
                       </div>
                       <div className="mt-4 flex gap-2">
@@ -351,7 +388,7 @@ export default function SettingsPage() {
                               ? 'Ключ будет удалён после сохранения'
                               : configured
                                 ? 'Введите новый ключ для замены'
-                                : 'Введите API-ключ'
+                                : 'Введите API-ключ только для эксперимента'
                           }
                           className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
                         />
@@ -376,9 +413,9 @@ export default function SettingsPage() {
             </details>
 
             <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Расширенные параметры подключений</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Расширенные параметры совместимости</summary>
               <p className="mt-3 text-xs leading-5 text-gray-500">
-                Эти поля нужны для совместимых endpoint-ов, прокси и нестандартной инфраструктуры. В обычной установке их менять не требуется.
+                Эти поля нужны только для будущих/совместимых endpoint-ов, прокси и нестандартной инфраструктуры. В обычной установке их менять не требуется.
               </p>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <TextField
@@ -412,9 +449,9 @@ export default function SettingsPage() {
             </details>
 
             <details className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Параметры генеративных адаптеров</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">Наследованные параметры генерации · не включают генерацию</summary>
               <p className="mt-3 text-xs leading-5 text-gray-500">
-                Эти значения сохранены для совместимых генеративных путей. Они не означают, что любой текущий проект уже умеет автоматически генерировать медиа из текста.
+                Эти значения сохранены для совместимых генеративных путей. Они не являются глобальным выбором лучшей модели и не означают, что текущий проект умеет автоматически генерировать медиа из текста.
               </p>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <SelectField
