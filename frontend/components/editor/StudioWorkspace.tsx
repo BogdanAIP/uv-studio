@@ -26,7 +26,6 @@ import {
   studioExportMediaUrl,
   studioSourceMediaUrl,
   type StudioMLTProjection,
-  type StudioMediaKind,
   type StudioRenderResult,
   type StudioTimeline,
   type StudioTimelineClip,
@@ -112,7 +111,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
   const [engineError, setEngineError] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const [targetTrackId, setTargetTrackId] = useState<string>('');
+  const [preferredTrackId, setPreferredTrackId] = useState('');
   const [moveStartSec, setMoveStartSec] = useState('0');
   const [trimSourceSec, setTrimSourceSec] = useState('0');
   const [trimDurationSec, setTrimDurationSec] = useState('1');
@@ -150,17 +149,18 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
-    refresh()
-      .catch(err => {
-        if (active) setError(err instanceof Error ? err.message : 'Не удалось открыть Studio');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      void refresh()
+        .catch(err => {
+          if (active) setError(err instanceof Error ? err.message : 'Не удалось открыть Studio');
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [refresh]);
 
@@ -172,23 +172,13 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     () => locateClip(timeline, selectedClipId),
     [timeline, selectedClipId],
   );
-  const selectedClipSource = useMemo(
-    () =>
-      locatedClip
-        ? project?.sources.find(source => source.id === locatedClip.clip.reference_id)
-          ?? project?.artifacts.find(artifact => artifact.id === locatedClip.clip.reference_id)
-          ?? null
-        : null,
-    [locatedClip, project],
-  );
-  const previewSource = selectedClipSource ?? selectedSource;
-
-  useEffect(() => {
-    if (!locatedClip) return;
-    setMoveStartSec(seconds(locatedClip.clip.timeline_start_us));
-    setTrimSourceSec(seconds(locatedClip.clip.source_start_us));
-    setTrimDurationSec(seconds(locatedClip.clip.duration_us));
-  }, [locatedClip]);
+  const selectedClipReference = useMemo(() => {
+    if (!project || !locatedClip) return null;
+    return project.sources.find(source => source.id === locatedClip.clip.reference_id)
+      ?? project.artifacts.find(artifact => artifact.id === locatedClip.clip.reference_id)
+      ?? null;
+  }, [locatedClip, project]);
+  const previewReference = selectedClipReference ?? selectedSource;
 
   const compatibleTracks = useMemo(() => {
     const kind = compatibleTrackKind(selectedSource);
@@ -196,13 +186,12 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     return timeline.tracks.filter(track => track.kind === kind);
   }, [selectedSource, timeline]);
 
-  useEffect(() => {
-    setTargetTrackId(current =>
-      current && compatibleTracks.some(track => track.track_id === current)
-        ? current
-        : compatibleTracks[0]?.track_id ?? '',
-    );
-  }, [compatibleTracks]);
+  const targetTrackId = useMemo(() => {
+    if (preferredTrackId && compatibleTracks.some(track => track.track_id === preferredTrackId)) {
+      return preferredTrackId;
+    }
+    return compatibleTracks[0]?.track_id ?? '';
+  }, [compatibleTracks, preferredTrackId]);
 
   const timelineDuration = useMemo(() => {
     if (!timeline) return 0;
@@ -212,12 +201,22 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
 
   const persistedStudioExport = useMemo(() => {
     if (!project) return null;
-    const exports = project.artifacts.filter(
-      artifact => artifact.kind === 'video' && artifact.metadata.role === 'studio-export',
-    );
-    return exports.at(-1) ?? null;
+    return project.artifacts
+      .filter(artifact => artifact.kind === 'video' && artifact.metadata.role === 'studio-export')
+      .at(-1) ?? null;
   }, [project]);
   const visibleExport = latestRender?.artifact ?? persistedStudioExport;
+
+  const previewUrl = useMemo(() => {
+    if (!project || !previewReference) return null;
+    if (project.sources.some(source => source.id === previewReference.id)) {
+      return studioSourceMediaUrl(projectId, previewReference);
+    }
+    if (previewReference.kind === 'video' && previewReference.metadata.role === 'studio-export') {
+      return studioExportMediaUrl(projectId, previewReference.id);
+    }
+    return null;
+  }, [previewReference, project, projectId]);
 
   async function mutate(operation: () => Promise<unknown>) {
     if (busy) return;
@@ -256,13 +255,24 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     }
   }
 
+  function chooseClip(track: StudioTimelineTrack, clip: StudioTimelineClip, reference: ProjectReference | null) {
+    setSelectedClipId(clip.clip_id);
+    if (reference && project?.sources.some(source => source.id === reference.id)) {
+      setSelectedSourceId(reference.id);
+    }
+    setMoveStartSec(seconds(clip.timeline_start_us));
+    setTrimSourceSec(seconds(clip.source_start_us));
+    setTrimDurationSec(seconds(clip.duration_us));
+    setPreferredTrackId(track.track_id);
+  }
+
   function createTrack(kind: 'video' | 'audio') {
     void mutate(async () => {
       const result = await executeStudioTimelineCommand(projectId, {
         command: 'create_track',
         kind,
       });
-      setTargetTrackId(result.track_id ?? '');
+      if (result.track_id) setPreferredTrackId(result.track_id);
     });
   }
 
@@ -275,16 +285,22 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     }
     const track = timeline.tracks.find(item => item.track_id === targetTrackId);
     if (!track) return;
+    const startUs = trackEnd(track);
     void mutate(async () => {
       const result = await executeStudioTimelineCommand(projectId, {
         command: 'add_clip',
         track_id: targetTrackId,
         reference_id: selectedSource.id,
-        timeline_start_us: trackEnd(track),
+        timeline_start_us: startUs,
         source_start_us: 0,
         duration_us: duration,
       });
-      setSelectedClipId(result.clip_id);
+      if (result.clip_id) {
+        setSelectedClipId(result.clip_id);
+        setMoveStartSec(seconds(startUs));
+        setTrimSourceSec('0');
+        setTrimDurationSec(seconds(duration));
+      }
     });
   }
 
@@ -309,7 +325,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     const start = Number(trimSourceSec);
     const duration = Number(trimDurationSec);
     if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) {
-      setError('Source start должен быть ≥ 0, а длительность — больше нуля.');
+      setError('Начало исходника должно быть ≥ 0, а длительность — больше нуля.');
       return;
     }
     void mutate(() =>
@@ -334,7 +350,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
   }
 
   async function renderTimeline() {
-    if (rendering) return;
+    if (rendering || busy) return;
     setRendering(true);
     setError(null);
     try {
@@ -352,8 +368,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100">
         <div className="flex min-h-screen items-center justify-center gap-3 text-slate-400">
-          <Loader2 className="animate-spin" size={20} />
-          Открываем Studio…
+          <Loader2 className="animate-spin" size={20} /> Открываем Studio…
         </div>
       </main>
     );
@@ -435,6 +450,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
               </button>
               <input
                 ref={fileInputRef}
+                aria-label="Импортировать медиа в Studio"
                 type="file"
                 accept="video/*,image/*,audio/*,.mkv,.mxf,.mts,.m2ts,.flac,.wav"
                 className="hidden"
@@ -490,45 +506,44 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
 
           <section className="min-w-0 rounded-2xl border border-slate-800 bg-black p-3">
             <div className="relative flex min-h-[440px] items-center justify-center overflow-hidden rounded-xl bg-black">
-              {!previewSource ? (
+              {!previewReference ? (
                 <div className="text-center text-slate-600">
                   <Film size={42} className="mx-auto" />
                   <p className="mt-3 text-sm">Выберите медиа или клип на timeline</p>
                 </div>
-              ) : previewSource.kind === 'image' ? (
+              ) : !previewUrl ? (
+                <div className="max-w-lg px-8 text-center text-sm leading-6 text-slate-500">
+                  Этот зарегистрированный артефакт пока не имеет безопасного Studio preview endpoint.
+                </div>
+              ) : previewReference.kind === 'image' ? (
                 <div className="relative h-[440px] w-full">
                   <Image
-                    src={studioSourceMediaUrl(projectId, previewSource)}
-                    alt={sourceLabel(previewSource)}
+                    src={previewUrl}
+                    alt={sourceLabel(previewReference)}
                     fill
                     unoptimized
                     className="object-contain"
                   />
                 </div>
-              ) : previewSource.kind === 'audio' ? (
+              ) : previewReference.kind === 'audio' ? (
                 <div className="w-full max-w-xl px-8 text-center">
                   <AudioLines size={48} className="mx-auto text-violet-400" />
-                  <p className="mt-4 truncate text-sm text-slate-300">{sourceLabel(previewSource)}</p>
-                  <audio
-                    key={previewSource.id}
-                    controls
-                    className="mt-6 w-full"
-                    src={studioSourceMediaUrl(projectId, previewSource)}
-                  />
+                  <p className="mt-4 truncate text-sm text-slate-300">{sourceLabel(previewReference)}</p>
+                  <audio key={previewReference.id} controls className="mt-6 w-full" src={previewUrl} />
                 </div>
               ) : (
                 <video
-                  key={previewSource.id}
+                  key={previewReference.id}
                   controls
                   playsInline
                   preload="metadata"
                   className="max-h-[440px] w-full object-contain"
-                  src={studioSourceMediaUrl(projectId, previewSource)}
+                  src={previewUrl}
                 />
               )}
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-slate-500">
-              <span>{previewSource ? sourceLabel(previewSource) : 'Preview'}</span>
+              <span>{previewReference ? sourceLabel(previewReference) : 'Preview'}</span>
               {locatedClip ? (
                 <span className="font-mono">
                   clip {clock(locatedClip.clip.timeline_start_us)} → {clock(locatedClip.clip.timeline_start_us + locatedClip.clip.duration_us)}
@@ -551,15 +566,18 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
             {locatedClip ? (
               <div className="mt-5 space-y-5">
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs">
-                  <p className="truncate text-slate-300">{selectedClipSource ? sourceLabel(selectedClipSource) : locatedClip.clip.reference_id}</p>
+                  <p className="truncate text-slate-300">
+                    {selectedClipReference ? sourceLabel(selectedClipReference) : locatedClip.clip.reference_id}
+                  </p>
                   <p className="mt-1 font-mono text-slate-600">{locatedClip.clip.clip_id}</p>
                   <p className="mt-2 text-slate-500">Track: {locatedClip.track.title}</p>
                 </div>
 
-                <div>
-                  <label className="text-xs text-slate-500">Позиция на timeline, сек</label>
+                <label className="block text-xs text-slate-500">
+                  Позиция на timeline, сек
                   <div className="mt-2 flex gap-2">
                     <input
+                      aria-label="Позиция клипа на timeline"
                       value={moveStartSec}
                       onChange={event => setMoveStartSec(event.target.value)}
                       inputMode="decimal"
@@ -574,7 +592,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                       Переместить
                     </button>
                   </div>
-                </div>
+                </label>
 
                 <div>
                   <p className="text-xs text-slate-500">Обрезка исходника</p>
@@ -582,6 +600,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                     <label className="text-[10px] text-slate-600">
                       начало, сек
                       <input
+                        aria-label="Начало исходника"
                         value={trimSourceSec}
                         onChange={event => setTrimSourceSec(event.target.value)}
                         inputMode="decimal"
@@ -591,6 +610,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                     <label className="text-[10px] text-slate-600">
                       длительность, сек
                       <input
+                        aria-label="Длительность клипа"
                         value={trimDurationSec}
                         onChange={event => setTrimDurationSec(event.target.value)}
                         inputMode="decimal"
@@ -642,8 +662,9 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                     <label className="block text-xs text-slate-500">
                       Добавить на дорожку
                       <select
+                        aria-label="Дорожка для добавления"
                         value={targetTrackId}
-                        onChange={event => setTargetTrackId(event.target.value)}
+                        onChange={event => setPreferredTrackId(event.target.value)}
                         className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500"
                       >
                         {compatibleTracks.map(track => (
@@ -739,14 +760,13 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                         const left = (clip.timeline_start_us / timelineScale) * 100;
                         const width = Math.max((clip.duration_us / timelineScale) * 100, 1.2);
                         const selected = clip.clip_id === selectedClipId;
+                        const label = reference ? sourceLabel(reference) : clip.reference_id;
                         return (
                           <button
                             type="button"
                             key={clip.clip_id}
-                            onClick={() => {
-                              setSelectedClipId(clip.clip_id);
-                              if (reference && project.sources.some(item => item.id === reference.id)) setSelectedSourceId(reference.id);
-                            }}
+                            aria-label={`Клип ${label}`}
+                            onClick={() => chooseClip(track, clip, reference)}
                             className={`absolute top-2 h-12 overflow-hidden rounded-md border px-2 text-left text-[10px] transition ${
                               selected
                                 ? 'z-10 border-white/80 bg-sky-500/35 ring-2 ring-sky-400/30'
@@ -755,10 +775,10 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
                                   : 'border-sky-800/70 bg-sky-950/60 hover:border-sky-600'
                             }`}
                             style={{ left: `${left}%`, width: `${width}%` }}
-                            title={`${reference ? sourceLabel(reference) : clip.reference_id} · ${clock(clip.duration_us)}`}
+                            title={`${label} · ${clock(clip.duration_us)}`}
                           >
-                            <span className="block truncate text-slate-200">{reference ? sourceLabel(reference) : clip.reference_id}</span>
-                            <span className="mt-1 block truncate font-mono text-slate-500">{clock(clip.timeline_start_us)} · {clock(clip.duration_us)}</span>
+                            <span className="block truncate text-slate-200">{label}</span>
+                            <span className="mt-1 block font-mono text-slate-500">{clock(clip.duration_us)}</span>
                           </button>
                         );
                       })}
@@ -768,32 +788,33 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
               </div>
             </div>
           )}
-
-          <div className="mt-3 flex flex-col gap-2 px-1 text-[11px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-            <span>Первый renderer: 1 активный visual track, без gaps; опционально 1 audio clip.</span>
-            {engine ? (
-              <span>
-                derived MLT · {engine.runtime_available ? 'runtime найден' : 'runtime не найден'} · boundary error ≤ {engine.max_boundary_error_us} μs
-              </span>
-            ) : null}
-          </div>
         </section>
 
-        {visibleExport && (
-          <section className="mt-3 rounded-2xl border border-emerald-900/60 bg-emerald-950/20 p-4">
-            <div className="flex items-center gap-2 text-emerald-300">
-              <MonitorPlay size={17} />
-              <h2 className="text-sm font-medium">Последний Studio export</h2>
-            </div>
-            <video
-              controls
-              playsInline
-              className="mt-3 max-h-[420px] w-full rounded-xl bg-black object-contain"
-              src={studioExportMediaUrl(projectId, visibleExport.id)}
-            />
-            <p className="mt-2 font-mono text-[10px] text-slate-600">{visibleExport.id} · {visibleExport.path}</p>
-          </section>
-        )}
+        <section className="mt-3 grid gap-3 lg:grid-cols-[1fr_360px]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Export truth</p>
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">
+              Первый Studio renderer намеренно ограничен: одна активная непрерывная Video-дорожка и максимум одна Audio-дорожка, покрывающая весь ролик. Gaps, overlays и несколько активных visual tracks блокируются вместо скрытого упрощения.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/45 p-4">
+            {visibleExport ? (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-emerald-400">Последний экспорт</p>
+                <p className="mt-2 truncate font-mono text-[10px] text-slate-600">{visibleExport.id}</p>
+                <Link
+                  href={studioExportMediaUrl(projectId, visibleExport.id)}
+                  target="_blank"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-sky-300 hover:text-sky-200"
+                >
+                  <MonitorPlay size={15} /> Открыть экспорт
+                </Link>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-600">Экспортов ещё нет.</div>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
