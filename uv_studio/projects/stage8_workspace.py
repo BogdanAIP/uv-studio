@@ -336,15 +336,20 @@ def get_stage8_workspace(
     return workspace
 
 
-def save_stage8_workspace(
+def build_stage8_workspace_for_project(
     store: ProjectStore,
-    project_id: str,
+    project: ProjectDocument,
     *,
     brief: str,
     script: str,
     source_ids: Sequence[str],
 ) -> Stage8RecipeWorkspace:
-    project = store.load_project(project_id)
+    """Validate exact project-owned bindings without persisting a second write.
+
+    Application services can combine this prepared execution workspace with other
+    project extension changes and commit both through one ProjectStore update.
+    """
+
     recipe_id = _current_recipe(project)
     if not isinstance(source_ids, Sequence) or isinstance(source_ids, (str, bytes)):
         raise Stage8WorkspaceError("source_ids must be an array")
@@ -372,7 +377,7 @@ def save_stage8_workspace(
             )
         try:
             verified, _ = media.resolve_verified(
-                project_id,
+                project.project_id,
                 source_id,
                 expected_kind=reference.kind,
             )
@@ -403,16 +408,44 @@ def save_stage8_workspace(
             )
         )
 
-    workspace = Stage8RecipeWorkspace.build(
+    return Stage8RecipeWorkspace.build(
         recipe_id=recipe_id,
         brief=brief,
         script=script,
         sources=bindings,
     )
+
+
+def extensions_with_stage8_workspace(
+    project: ProjectDocument,
+    workspace: Stage8RecipeWorkspace,
+) -> dict[str, Any]:
+    if workspace.recipe_id != _current_recipe(project):
+        raise Stage8WorkspaceError("workspace recipe does not match current project recipe")
     extensions = dict(project.extensions)
     workspaces = _workspace_map(project)
-    workspaces[recipe_id] = workspace.to_dict()
+    workspaces[workspace.recipe_id] = workspace.to_dict()
     extensions[_STAGE8_WORKSPACES_EXTENSION] = workspaces
+    return extensions
+
+
+def save_stage8_workspace(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    brief: str,
+    script: str,
+    source_ids: Sequence[str],
+) -> Stage8RecipeWorkspace:
+    project = store.load_project(project_id)
+    workspace = build_stage8_workspace_for_project(
+        store,
+        project,
+        brief=brief,
+        script=script,
+        source_ids=source_ids,
+    )
+    extensions = extensions_with_stage8_workspace(project, workspace)
     try:
         store.update_project(project_id, extensions=extensions)
     except (ProjectNotFound, ProjectStoreError, ProjectValidationError) as exc:
