@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: studio-v2-editor-spine -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: studio-v2-editor-spine -->
 
 **Updated:** 2026-08-24
 
@@ -9,11 +9,17 @@
 
 ## Current lifecycle
 
-Studio v2 editor-spine is frozen for Review in PR #61 on branch `stage-10/studio-v2-editor-spine`, based exactly on maintained `main` `6f656a9a3b3ea885b3280e7dd6a9594daf1dcaf7`.
+Studio v2 editor-spine is merged and the repository is back in the explicit `idle` lifecycle required by D-038.
 
-Draft candidate `1837ae279723902ca0b80674c4ca5a0bb4b76a3a` passed the complete permanent CI set in run #2912 on Ubuntu and Windows, including browser user-outcome evidence. The lifecycle-only review transition creates a new exact review head; that head must independently pass the same five required checks before merge.
+Completed slice:
 
-The last merged lifecycle slice remains Class C cold-start usability PR #58, merge `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
+- PR #61 — `stage 10: establish Studio v2 editor spine`;
+- exact review head `713d55c0f8d6f8de09df12db07e74b2d39ef4f79`;
+- merge commit `5be716ed44ac00f7d13cafb8b4ed038ddc24878b`;
+- exact review CI run #2918 passed the complete permanent check set on Ubuntu and Windows;
+- review threads: none.
+
+The next declared handoff is `studio-v2-application-transactions`. It is not active until a new slice is initialized from this idle `main`.
 
 PR #59 was intentionally closed without merge after product review rejected the recipe/workspace/wizard-centered direction. PR #60 was a short-lived branch-name/lifecycle mismatch and was superseded without merge by #61. Neither is a maintained product baseline.
 
@@ -64,9 +70,9 @@ Do not grow these as the long-term product center:
 
 Compatibility code remains until callers are proven migrated; this is a strangler migration, not a delete-first rewrite.
 
-## Review candidate — Studio v2 editor spine
+## Completed slice — Studio v2 editor spine
 
-PR #61 contains the first real vertical implementation:
+PR #61 established the first real Studio-first vertical:
 
 ```text
 Project
@@ -81,7 +87,7 @@ Project
  -> registered project-owned export
 ```
 
-Implemented properties:
+Merged properties:
 
 - Studio project creation no longer asks for recipe selection;
 - Studio runtime does not read a recipe to decide editing or export behavior;
@@ -111,7 +117,7 @@ This preserves the benefits of MLT, OpenCut, FFmpeg, Whisper-family tools, MCP s
 
 ## Verification status
 
-Draft candidate `1837ae279723902ca0b80674c4ca5a0bb4b76a3a` passed CI run #2912:
+Exact review head `713d55c0f8d6f8de09df12db07e74b2d39ef4f79` passed CI run #2918:
 
 - development-context — success;
 - bootstrap Ubuntu — success;
@@ -119,18 +125,16 @@ Draft candidate `1837ae279723902ca0b80674c4ca5a0bb4b76a3a` passed CI run #2912:
 - app-baseline Ubuntu — success;
 - app-baseline Windows — success.
 
-Both app-baseline jobs passed API integration, real-media tests, frontend lint/audit/build and the browser user-outcome suite. The Class-C browser path now proves visible Studio-first creation, media import, timeline create/add/trim, navigation away and reopen persistence, and real local export without recipe selection or direct Project Store seeding.
+Both app-baseline jobs passed API integration, real-media tests, frontend lint/audit/build and the browser user-outcome suite. The Class-C browser path proves visible Studio-first creation, media import, timeline create/add/trim, navigation away and reopen persistence, and real local export without recipe selection or direct Project Store seeding.
 
 This automated evidence is not human installed-Windows acceptance. No such human acceptance is claimed for this slice.
-
-The Review head is frozen except for review fixes. Merge remains blocked until the exact Review head passes all five permanent checks and there are no unresolved review threads.
 
 Historical Release #395 on archived #59 remains evidence for Windows packaging/runtime engineering only. It is **not** human product acceptance and must not be reused as proof of Studio v2 behavior.
 
 `main` branch protection remains intentionally deferred per current development direction.
 
-## Next authorized slice after PR #61
+## Next authorized slice
 
 `studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`.
 
-After transaction/undo foundations, proceed to a backend-owned user-visible Model Registry, then Job Manager, then one real named Image AI vertical.
+That slice must initialize from idle `main` and add Project Unit of Work, atomic multistep mutations and undo/redo identity before backend-owned Model Registry, Job Manager and the first named Image AI vertical.
