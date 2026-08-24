@@ -18,31 +18,43 @@ function sourceName(source: ProjectReference): string {
   return typeof original === 'string' && original ? original : source.path.split('/').pop() || source.id;
 }
 
-const recipeCopy: Record<Stage8CompositionRecipeId, { title: string; description: string; briefLabel: string }> = {
+type RecipeCopy = {
+  title: string;
+  description: string;
+  briefLabel: string;
+  startHint: string;
+};
+
+const recipeCopy: Record<Stage8CompositionRecipeId, RecipeCopy> = {
   general_video: {
     title: 'Обычный видеоролик',
-    description: 'Зафиксируйте задачу и порядок визуальных материалов. Текущая локальная сборка последовательно нормализует выбранные изображения и видео; встроенный звук видеоклипов не переносится, а отдельная master-аудиодорожка может быть выбрана только одна.',
+    description: 'Соберите простой ролик из собственных изображений и видео. Отдельную аудиодорожку можно добавить как звук итогового ролика.',
     briefLabel: 'Что нужно показать в ролике?',
+    startHint: 'Начните с описания задачи. Для итоговой локальной сборки нужен хотя бы один собственный визуальный материал — изображение или видео. Эта сборка пока не создаёт кадры автоматически только из текста.',
   },
   story_video: {
-    title: 'Сюжетное рабочее пространство',
-    description: 'Зафиксируйте задачу, сценарий и материалы истории. Сцены, связность и генерация остаются отдельными существующими возможностями UV Studio.',
+    title: 'Подготовка сюжетного видео',
+    description: 'Здесь фиксируются идея, сценарий и материалы будущей истории.',
     briefLabel: 'Задача / идея истории',
+    startHint: 'Начать можно без файлов: опишите идею и сохраните задачу. Изображения, видео и аудио ниже — необязательные собственные референсы или готовые материалы. В текущей сборке этот режим подготавливает историю, но ещё не создаёт финальный сюжетный ролик целиком.',
   },
   commercial_product: {
-    title: 'Продуктовое рабочее пространство',
-    description: 'Зафиксируйте рекламную задачу, текст и точные продуктовые материалы до генерации или сборки.',
+    title: 'Подготовка рекламного ролика',
+    description: 'Зафиксируйте рекламную задачу, текст и точные материалы продукта до дальнейшей генерации или сборки.',
     briefLabel: 'Что рекламируем и какой результат нужен?',
+    startHint: 'Начать можно с одного описания задачи. Фото, видео и аудио ниже нужны только если у вас уже есть исходники или референсы, которые обязательно надо использовать.',
   },
   free_project: {
-    title: 'Свободное рабочее пространство',
-    description: 'Соберите исходные материалы и заметки без навязанного конвейера. Дальше используются только выбранные возможности UV Studio.',
+    title: 'Свободный проект',
+    description: 'Соберите заметки и исходные материалы без обязательного сценария производства.',
     briefLabel: 'Задача / заметка (необязательно)',
+    startHint: 'Все поля и файлы в этом режиме необязательны. Используйте его как контейнер проекта, если пока не хотите выбирать конкретный путь производства.',
   },
   narrated_video: {
     title: 'Видео с дикторской дорожкой',
-    description: 'Зафиксируйте задачу, точный текст диктора и визуальные материалы. Текущая локальная сборка использует изображения; выбранное видео сохраняется в workspace, но не включается в мастер молча. Дикторская дорожка добавляется отдельно как проверенный PreparedAudio.',
+    description: 'Зафиксируйте задачу и точный текст диктора, затем добавьте нужные визуальные материалы.',
     briefLabel: 'Тема / задача ролика',
+    startHint: 'Для начала нужны задача и текст диктора. Изображения используются как визуальный ряд; загруженное видео пока сохраняется как материал проекта, но не включается в итоговый мастер автоматически.',
   },
 };
 
@@ -94,7 +106,7 @@ export function Stage8CompositionPanel({
       })
       .catch(err => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Не удалось загрузить рабочее пространство');
+        setError(err instanceof Error ? err.message : 'Не удалось загрузить данные задачи');
         setLoaded(true);
       });
     return () => {
@@ -134,7 +146,7 @@ export function Stage8CompositionPanel({
       await onProjectChanged();
       setMessage(
         narrated
-          ? 'Видео добавлено в workspace. Текущий Narrated render его сохраняет как вход, но не включает в мастер.'
+          ? 'Видео сохранено как материал проекта. Этот режим пока не включает его в итоговый мастер автоматически.'
           : 'Видео добавлено в материалы проекта.',
       );
     } catch (err) {
@@ -192,10 +204,10 @@ export function Stage8CompositionPanel({
       });
       setRevision(workspace.revision_sha256);
       setSelectedIds(workspace.sources.map(source => source.source_id));
-      setMessage('Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.');
+      setMessage('Задача и выбранные материалы сохранены.');
       await onProjectChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить рабочее пространство');
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить задачу');
     } finally {
       setBusy(false);
     }
@@ -204,7 +216,7 @@ export function Stage8CompositionPanel({
   if (!loaded) {
     return (
       <section className="mb-6 mt-8 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-6 text-sm text-slate-400">
-        Загрузка рабочего пространства…
+        Загрузка задачи…
       </section>
     );
   }
@@ -214,17 +226,22 @@ export function Stage8CompositionPanel({
     return kind === 'image' || kind === 'video';
   });
 
+  const mediaAreOptional = !general;
+
   return (
     <section className="mb-6 mt-8 rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-6">
-      <p className="text-xs uppercase tracking-wider text-cyan-400">Stage 8 · композиционный режим</p>
+      <p className="text-xs uppercase tracking-wider text-cyan-400">Начните здесь</p>
       <h2 className="mt-2 text-xl font-medium">{copy.title}</h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{copy.description}</p>
+      <div className="mt-4 max-w-4xl rounded-xl border border-sky-900/70 bg-sky-950/30 px-4 py-3 text-sm leading-6 text-sky-100">
+        {copy.startHint}
+      </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <label className="text-sm text-slate-300">
           {copy.briefLabel}
           <textarea
-            aria-label="Stage 8 brief"
+            aria-label="Описание задачи"
             value={brief}
             required={recipeId !== 'free_project'}
             onChange={event => setBrief(event.target.value)}
@@ -235,7 +252,7 @@ export function Stage8CompositionPanel({
         <label className="text-sm text-slate-300">
           {narrated ? 'Текст диктора (обязательно)' : 'Сценарий / текст (необязательно)'}
           <textarea
-            aria-label="Stage 8 script"
+            aria-label="Сценарий или текст"
             value={script}
             required={narrated}
             onChange={event => setScript(event.target.value)}
@@ -245,21 +262,33 @@ export function Stage8CompositionPanel({
         </label>
       </div>
 
-      <div className={`mt-6 grid gap-3 ${narrated ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+      <div className="mt-6">
+        <h3 className="text-sm font-medium text-slate-200">Свои материалы</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          {mediaAreOptional
+            ? 'Необязательно. Добавляйте только те исходники или референсы, которые уже есть у вас и должны использоваться в проекте.'
+            : 'Для локальной сборки обычного видеоролика нужен хотя бы один визуальный исходник — изображение или видео. Аудио необязательно.'}
+        </p>
+      </div>
+
+      <div className={`mt-3 grid gap-3 ${narrated ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
-          <span className="block font-medium">Добавить изображение</span>
-          <input aria-label="Stage 8 workspace image" type="file" accept="image/*" disabled={busy} onChange={event => void uploadImage(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
+          <span className="block font-medium">Добавить своё изображение{mediaAreOptional ? ' · необязательно' : ''}</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-500">Готовый кадр, фото продукта, референс или другое изображение.</span>
+          <input aria-label="Добавить своё изображение" type="file" accept="image/*" disabled={busy} onChange={event => void uploadImage(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
         </label>
         <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
-          <span className="block font-medium">
-            {narrated ? 'Добавить видео (пока только сохранить)' : 'Добавить видео'}
+          <span className="block font-medium">Добавить своё видео{mediaAreOptional ? ' · необязательно' : ''}</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-500">
+            {narrated ? 'Сохранится как материал проекта; автоматическое включение в мастер пока не поддерживается.' : 'Готовый клип или видео-референс.'}
           </span>
-          <input aria-label="Stage 8 workspace video" type="file" accept="video/*" disabled={busy} onChange={event => void uploadVideo(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
+          <input aria-label="Добавить своё видео" type="file" accept="video/*" disabled={busy} onChange={event => void uploadVideo(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
         </label>
         {!narrated && (
           <label className="rounded-xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-300">
-            <span className="block font-medium">Добавить аудио</span>
-            <input aria-label="Stage 8 workspace audio" type="file" accept="audio/*" disabled={busy} onChange={event => void uploadAudio(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
+            <span className="block font-medium">Добавить своё аудио · необязательно</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-500">Музыка, речь или другая готовая аудиодорожка.</span>
+            <input aria-label="Добавить своё аудио" type="file" accept="audio/*" disabled={busy} onChange={event => void uploadAudio(event.target.files?.[0])} className="mt-3 block w-full text-xs text-slate-400" />
           </label>
         )}
       </div>
@@ -268,7 +297,7 @@ export function Stage8CompositionPanel({
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/40 p-4">
           <h3 className="text-sm font-medium text-slate-200">Порядок визуального ряда</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            Изображение занимает 2 секунды; видео используется целиком. Стрелками задайте последовательность первого локального master.
+            Изображение занимает 2 секунды; видео используется целиком. Стрелками задайте последовательность первого локального ролика.
           </p>
           <div className="mt-3 space-y-2">
             {orderedVisualIds.map((sourceId, visualIndex) => {
@@ -303,11 +332,11 @@ export function Stage8CompositionPanel({
 
       <div className="mt-6">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-medium text-slate-200">Материалы рабочего пространства</h3>
+          <h3 className="text-sm font-medium text-slate-200">Материалы проекта</h3>
           <span className="text-xs text-slate-500">Выбрано: {selectedIds.length}</span>
         </div>
         {mediaSources.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Материалов пока нет.</p>
+          <p className="mt-2 text-sm text-slate-500">Вы пока не добавляли свои материалы.</p>
         ) : (
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {mediaSources.map(source => (
@@ -319,9 +348,7 @@ export function Stage8CompositionPanel({
                   onChange={() => toggleSource(source.id)}
                 />
                 <span className="min-w-0 flex-1 truncate">{sourceName(source)}</span>
-                <span className="text-xs text-slate-600">
-                  {narrated && source.kind === 'audio' ? 'audio · reference only' : source.kind}
-                </span>
+                <span className="text-xs text-slate-600">{source.kind}</span>
               </label>
             ))}
           </div>
@@ -334,13 +361,14 @@ export function Stage8CompositionPanel({
         onClick={() => void save()}
         className="mt-6 rounded-lg bg-cyan-400 px-4 py-2.5 text-sm font-medium text-slate-950 disabled:opacity-40"
       >
-        Сохранить рабочее пространство
+        Сохранить задачу
       </button>
 
       {revision && (
-        <p className="mt-4 break-all font-mono text-xs text-slate-500">
-          revision {revision}
-        </p>
+        <details className="mt-4 text-xs text-slate-500">
+          <summary className="cursor-pointer select-none">Технические данные сохранённой версии</summary>
+          <p className="mt-2 break-all font-mono">revision {revision}</p>
+        </details>
       )}
       {message && <p className="mt-4 text-sm text-emerald-300">{message}</p>}
       {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
