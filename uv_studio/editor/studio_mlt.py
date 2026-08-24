@@ -11,7 +11,13 @@ from typing import Any
 
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
-from uv_studio.projects.timeline import TimelineDocument, TimelineReference, TimelineStore, TimelineTrack
+from uv_studio.projects.timeline import (
+    TimelineClip,
+    TimelineDocument,
+    TimelineReference,
+    TimelineStore,
+    TimelineTrack,
+)
 
 _MICROSECONDS_PER_SECOND = 1_000_000
 _DEFAULT_RATE = Fraction(30, 1)
@@ -137,6 +143,7 @@ class StudioMLTProjection:
 @dataclass(frozen=True)
 class _PreparedClip:
     track: TimelineTrack
+    clip: TimelineClip
     reference_info: TimelineReference
     producer_id: str
     timeline_start_frame: int
@@ -253,6 +260,7 @@ class StudioMLTTimelineAdapter:
                 prepared.append(
                     _PreparedClip(
                         track=track,
+                        clip=clip,
                         reference_info=reference_info,
                         producer_id=producer_id,
                         timeline_start_frame=start_frame,
@@ -315,16 +323,9 @@ class StudioMLTTimelineAdapter:
             playlist_ids.append((playlist_id, track.kind))
             cursor_frame = 0
             projected_clips: list[StudioMLTClipProjection] = []
-            source_clips = {clip.clip_id: clip for clip in track.clips}
 
             for prepared in prepared_by_track[track.track_id]:
-                clip = next(
-                    item
-                    for item in track.clips
-                    if _frame(item.timeline_start_us, rate) == prepared.timeline_start_frame
-                    and item.reference_id == prepared.reference_info.reference.id
-                    and item.clip_id in source_clips
-                )
+                clip = prepared.clip
                 if prepared.timeline_start_frame > cursor_frame:
                     ET.SubElement(
                         playlist,
