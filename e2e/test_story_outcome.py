@@ -1,8 +1,7 @@
-"""Browser evidence for the preparation-only Product Orchestrator Story journey.
+"""Browser evidence for the preparation-only Story journey.
 
-This is Class B informed regression evidence: Story is selected through a UV-owned setup
-API, then brief entry, image import and workspace save are driven through visible UI.
-The proof intentionally asserts that no final Story render action is advertised.
+The visible UI must explain that Story is preparation-only, accept a brief without
+requiring pre-existing media, and never advertise a final Story render action.
 """
 
 from __future__ import annotations
@@ -118,21 +117,30 @@ class StoryBrowserOutcome(unittest.TestCase):
 
         page.goto(f"/projects/{encoded}")
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Сюжетное рабочее пространство", exact=True)).to_be_visible()
-        expect(page.get_by_text("Нужна подготовка", exact=True)).to_be_visible()
-        page.get_by_label("Stage 8 brief").fill("Герой находит дорогу домой")
-        page.get_by_label("Stage 8 script").fill("Завязка. Поиск пути. Возвращение.")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
-        expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
         expect(
-            page.get_by_text(
-                "Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.",
+            page.get_by_role(
+                "heading",
+                name="Сейчас это подготовка истории, а не генератор готового фильма",
                 exact=True,
             )
-        ).to_be_visible(timeout=60_000)
-        expect(page.get_by_text("Готово к следующему действию", exact=True)).to_be_visible(timeout=60_000)
+        ).to_be_visible()
+        expect(page.get_by_role("heading", name="Подготовка сюжетного видео", exact=True)).to_be_visible()
+        expect(
+            page.get_by_text(
+                "Начать можно без файлов: опишите идею и сохраните задачу. Изображения, видео и аудио ниже — необязательные собственные референсы или готовые материалы. В текущей сборке этот режим подготавливает историю, но ещё не создаёт финальный сюжетный ролик целиком.",
+                exact=True,
+            )
+        ).to_be_visible()
+        page.get_by_label("Описание задачи").fill("Герой находит дорогу домой")
+        page.get_by_label("Сценарий или текст").fill("Завязка. Поиск пути. Возвращение.")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
+        expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("Текущая подготовка выполнена", exact=True)).to_be_visible(timeout=60_000)
         expect(page.get_by_role("button", name="Собрать обычный видеоролик", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Stage 8", exact=False)).to_have_count(0)
+        expect(page.get_by_text("Stage 6", exact=False)).to_have_count(0)
 
         workflow = _api_json("GET", _project_path(project_id, "/workflow"))
         self.assertEqual(workflow["recipe_id"], "story_video")
