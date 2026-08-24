@@ -25,6 +25,7 @@ from uv_studio.api.capabilities import router as capabilities_router  # noqa: E4
 from uv_studio.api.capability_execution import router as capability_execution_router  # noqa: E402
 from uv_studio.api.configuration import router as configuration_router  # noqa: E402
 from uv_studio.api.continuity_brief import router as continuity_brief_router  # noqa: E402
+from uv_studio.api.creative_projects import router as creative_projects_router  # noqa: E402
 from uv_studio.api.diagnostics import router as diagnostics_router  # noqa: E402
 from uv_studio.api.dubbing_review_current import router as dubbing_review_current_router  # noqa: E402
 from uv_studio.api.edit_state import router as edit_state_router  # noqa: E402
@@ -84,6 +85,7 @@ app.include_router(qwen_mm_router)
 app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)
+app.include_router(creative_projects_router)
 app.include_router(project_workflow_router)
 app.include_router(project_media_router)
 app.include_router(stage8_workspace_router)
