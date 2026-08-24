@@ -123,14 +123,15 @@ class RecipeWorkspaceReconciliationBrowserOutcome(unittest.TestCase):
         page = self._new_page()
         page.goto(f"/projects/{encoded}")
         expect(page.get_by_role("heading", name="Preserved Action Transfer", exact=True)).to_be_visible()
-        expect(page.get_by_text("Сценарий переносится в новый процесс", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что делать дальше", exact=True)).to_be_visible()
         expect(page.get_by_text("Этот сценарий ещё не перенесён в Product Orchestrator.", exact=True)).to_be_visible()
+        expect(page.get_by_text("Доступна только часть процесса", exact=True)).to_be_visible()
 
         expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)
         expect(page.get_by_text("Stage 6 · Sequence Continuity", exact=True)).to_have_count(0)
         expect(page.get_by_text("Stage 5 · Dubbing / Translation", exact=True)).to_have_count(0)
         expect(page.get_by_text("Stage 8 · Performance / lip-sync", exact=True)).to_have_count(0)
-        expect(page.get_by_role("heading", name="Проект и восстановление", exact=True)).to_be_visible()
+        expect(page.get_by_text("Проект, перенос и техническая информация", exact=True)).to_be_visible()
 
         workflow = _api_json("GET", f"/api/uv/projects/{urllib.parse.quote(project.project_id, safe='')}/workflow")
         self.assertEqual(workflow["readiness"], "partial")
