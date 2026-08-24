@@ -7,7 +7,7 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - **D-001 — Repository is durable development memory.** Durable state belongs in GitHub/repository, not only chat history.
 - **D-002 — VideoClaw modern application is the initial base.** Reuse the modern application as donor/compatibility baseline rather than making its workflow universal.
 - **D-003 — Pin upstream before modification.** Vendored upstream comes from an exact commit with provenance.
-- **D-004 — No universal mandatory media pipeline.** Task recipes compose optional capabilities.
+- **D-004 — No universal mandatory media pipeline.** Task recipes compose optional capabilities. D-063 supersedes recipe-first product identity while retaining the no-mandatory-pipeline rule.
 - **D-005 — Continuity and VLM review are optional policies.** They are not mandatory project fields.
 - **D-006 — Provider-specific growth must be contained.** Superseded in runtime preference by D-011; semantic separation remains.
 - **D-007 — Windows is a first-class target.** Continuous Windows/Linux engineering evidence is required.
@@ -49,3 +49,8 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-040 — Chat-first development; no automatic Codex review](decisions/D-040-chat-first-no-automatic-codex-review.md)
 - [D-041 — Music Video Mode: UV-owned Music Map and reference-only storyboard research](decisions/D-041-music-video-map-reference-only-storyboard.md)
 - [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md)
+- [D-063 — Studio-first product architecture](decisions/D-063-studio-first-product-architecture.md)
+
+## Current product-composition authority
+
+D-063 is the current long-term product-composition decision. It keeps D-033, Project Store, Capability/MCP execution and D-062 truth/security gates, but supersedes recipe-first/Stage-first UI growth and Product Orchestrator as the target product center. See `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`.
