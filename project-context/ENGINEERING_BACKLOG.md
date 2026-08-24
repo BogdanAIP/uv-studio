@@ -2,64 +2,160 @@
 
 This is the durable queue behind the single handoff in `NEXT_TASK.md`. It does not authorize parallel implementation slices.
 
-## P0 — Product Truth closure
+D-063 is the current product-composition authority. Recipe/Stage/Product-Orchestrator work below is compatibility migration work unless explicitly described otherwise.
 
-Completed through `product-recovery-recipe-workspace-reconciliation` (PR #56, merge `44c853f00766795399de9addf74ba79cef2c35c4`).
+## P0 — Studio v2 editor spine
 
-Recovered Product Orchestrator journeys include Photo-to-Video, Visualizer, Targeted Edit (`free_project`), Dubbing, Music Video, Narrated Video, General Video, Story Video preparation and Commercial Product preparation. Preserved-only Action Transfer, Digital Human and Performance/lip-sync remain readable but are not advertised for new creation.
+Active slice: `studio-v2-editor-spine` / PR #60.
 
-The creation catalog, Product Orchestrator projections and visible workspace routing now fail closed rather than mounting generic Editor, Continuity, Dubbing or direct performance surfaces for unsupported recipes. Project Store/domain stores remain canonical; D-033 editor-command ownership and D-017 execution authorization boundaries are unchanged.
+Required proof:
 
-`main` branch protection remains an external repository-setting P0 until enabled in GitHub settings.
+- generalize the existing D-033 `ProjectEditor` foundation into the normal Studio shell;
+- introduce one canonical UV-owned multitrack Timeline/Track/Clip document in Project Store;
+- add bounded timeline commands shared by GUI and programmatic callers;
+- import existing project-owned media into the Media Bin and add it to the timeline without recipe or Stage 8 authority;
+- close/reopen with identical canonical timeline state;
+- derive MLT engine state from the UV timeline rather than making MLT canonical;
+- produce a deterministic registered export/result;
+- preserve schema-v1 recipe projects behind compatibility paths.
 
-## P0 — Product usability evidence
+Freeze during this slice:
 
-Class C cold-start is completed through `product-usability-class-c-cold-start` (PR #58, merge `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`). Exact Draft and Review heads passed all five permanent CI jobs, including browser user-outcomes on Ubuntu and Windows.
+- no new product RecipeDefinition;
+- no new Stage UI;
+- no provider integration;
+- no second timeline engine;
+- no Agent-only mutation route.
 
-The remaining P0 product-usability gate is `product-usability-installed-windows-human-acceptance`:
+## P0 — Application transactions / undo boundary
 
-- validate the packaged UV Studio application on an installed Windows system from first launch;
-- verify normal task discovery, project creation, media import, prerequisite guidance and representative product workflows through the installed host;
-- distinguish packaging/host failures from optional provider/runtime configuration requirements;
-- preserve the Class C evidence as the CI comparison baseline rather than treating browser CI as installed-app acceptance;
-- record durable human-acceptance evidence before Stage 9 resumes.
+Next slice after editor-spine merge:
 
-## P1 — Architecture and portable-state hardening
+- introduce file-first `ProjectUnitOfWork` or equivalent transaction authority;
+- group multistep project/timeline mutations atomically;
+- add durable transaction identity for product-level undo/redo;
+- prove rollback does not leave split canonical state;
+- keep GUI, Agent, scripts and MCP on the same handlers;
+- replace central dispatch switches with registries/services where required by the growing command set.
 
-- reconcile the legacy `/api/uv/projects/{project_id}/execution-plan` compatibility projection with Product Orchestrator so UV Studio does not maintain two modern product truths;
-- extract API-orchestrated use cases into a small `uv_studio/application/` layer without redesigning the domain core;
-- add executable AST dependency-boundary tests for `projects`, `capabilities`, `editor`, `orchestration` and API/application direction;
-- introduce a file-first `ProjectUnitOfWork` for multi-step project mutations and external-execution registration/rollback;
-- extend development-context validation so durable backlog state cannot drift from `ACTIVE_SLICE.json`/handoff state;
-- keep machine paths, secrets and runtime handles outside portable project state;
-- maintain strict portable-JSON and corrupt-project isolation guarantees as project state expands;
-- define a content-integrity strategy that avoids unnecessary full-file hashing while preserving Review/Accept/render/export trust;
-- keep the current single-backend-process assumption explicit until inter-process locking/state is deliberately introduced;
-- broaden Python lint/type/frontend unit/accessibility/coverage gates proportionately;
-- make dependency/runtime support claims match CI (Python 3.11 is the continuously verified baseline);
-- expand codec/container/device fixtures only when concrete compatibility risks justify them;
-- retire transitional `/api/stages` after no supported product surface depends on it.
+## P1 — User-visible Model Registry
 
-## P2 — Runtime and product extensions
+Build a backend-owned Model Registry above Capability Registry.
 
-- add a UV-owned Job Manager before long-running AI/provider work becomes a normal product path;
-- replace central execution switches with explicit transport/capability-handler registries as provider count grows;
-- generate frontend workflow/recipe contracts from backend OpenAPI/JSON Schema rather than maintaining manual duplicates;
-- move frontend workspaces incrementally into feature-owned modules plus a workspace-renderer registry;
-- remove legacy targeted-edit compatibility only after preserved unmigrated projects no longer require it;
-- sequence continuity remains optional typed/provider-neutral domain state; simple standalone clips must not inherit it automatically;
-- broader `free_project` tool palette only after an explicit ownership/product decision;
-- truthful Action Transfer / Digital Human journeys only when a complete authorized current workflow exists;
-- recover Performance/lip-sync as an authoritative Product Orchestrator journey before advertising it again for new project creation;
-- Story/Commercial production beyond their current preparation surfaces;
-- optional performance/lip-sync setup UX improvements.
+Required properties:
 
-## P3 — Stage 9 release program
+- named model identity and provider;
+- explicit user-visible model selection in relevant Studio tools;
+- supported tool modes (`t2i`, image edit, `t2v`, `i2v`, start/end frame, etc.);
+- model-specific option schema and bounds;
+- availability, locality and cost facts;
+- mapping to Capability Offer / Adapter / transport;
+- Settings own connection/runtime configuration, not creative per-operation model choice;
+- `Auto` may later be an optional policy, never the only model path.
 
-Only resume after Product Truth closure, Class C cold-start and installed Windows human acceptance are complete:
+The current donor-era `frontend/lib/modelRegistry.ts` and `workflowApi.ts` are not the target implementation.
 
-- clean-machine packaging and first-run checks;
-- migration/recovery UX;
-- signed release artifact verification;
-- Windows installer/uninstaller/desktop host acceptance;
-- release evidence and distribution hardening.
+## P1 — Project-scoped Job Manager
+
+Required before broad image/video provider work becomes a normal product path:
+
+- queued/running/succeeded/failed/cancelled lifecycle;
+- durable project/job identity;
+- progress when available;
+- cancellation and safe retry;
+- exact selected-model/input/output provenance;
+- Project Store result registration;
+- no ad-hoc background process as a competing canonical state store.
+
+## P1 — First real Image AI vertical
+
+After Model Registry + Job Manager:
+
+`Inspector -> choose named model -> prompt/references/options -> D-017 if required -> job -> project-owned generated asset -> Media Bin -> AddClip command -> timeline`.
+
+Acceptance must prove model identity remains visible to the user and no provider-specific branch leaks through unrelated frontend code.
+
+## P1 — First real Video AI vertical
+
+Repeat the same architecture for a named video model with only the modes/options that model actually supports. Long-running execution must use the Job Manager and register output/provenance before timeline use.
+
+## P2 — Move proven specialist logic into Studio tools
+
+Migrate one domain at a time; do not rewrite proven invariants.
+
+Recommended order:
+
+1. targeted edit -> selected Clip/Range `AI Edit`;
+2. dubbing/translation -> selected Clip/Audio `Dubbing`;
+3. Music Map/analysis -> selected audio `Analyze Music / Sync`;
+4. continuity -> Scene/Shot/Character `Consistency`;
+5. photo-to-video -> selected images `Arrange/Add to Timeline / Slideshow`;
+6. visualizer -> selected audio `Visualizer`;
+7. Story/Narrated/Commercial/Music Video -> optional templates, Agent-assisted setup and production policies rather than separate project engines.
+
+## P2 — Project Model enrichment
+
+Add only when a real vertical requires it:
+
+- lightweight Scene/Shot state;
+- GenerationRecord;
+- later Character, Location, Voice and richer reference relationships;
+- content-integrity strategy proportionate to large media;
+- keep secrets, machine paths and runtime handles outside portable state.
+
+Do not turn `project.json` into one giant schema; use versioned project-owned documents.
+
+## P2 — Retire parallel modern truths
+
+After v2 callers exist:
+
+- inventory and retire/derive `GET /api/uv/projects/{project_id}/execution-plan`;
+- stop treating recipe Product Orchestrator as modern product authority;
+- retire Stage 8 workspaces after supported state has moved;
+- make mandatory `recipe_id` compatibility-only through a versioned project migration;
+- retain old project readability/import until migration evidence proves removal safe.
+
+## P2 — Remove dead donor-era frontend/runtime surfaces
+
+After import/call-site proof:
+
+- `frontend/lib/workflowApi.ts`;
+- old frontend `modelRegistry.ts` implementation;
+- HomePage / WorkflowPanel / pipeline / stage / sandbox tails;
+- unmounted old VideoClaw API assumptions;
+- prove supported UV server/runtime works without vendored VideoClaw backend `sys.path` injection, then remove it if safe.
+
+Keep donor provenance/licenses and selectively adapted primitives where useful.
+
+## P2 — Architecture hardening
+
+Still valuable from the pre-D-063 backlog:
+
+- executable dependency-boundary tests for `projects`, `editor`, `capabilities`, application and API direction;
+- handler/transport registries instead of central execution switches;
+- strict portable JSON/corrupt-project isolation as state expands;
+- explicit single-backend-process assumption until locking is deliberately introduced;
+- proportionate lint/type/frontend accessibility/coverage gates;
+- codec/container/device fixtures only when concrete compatibility risks justify them.
+
+## P3 — Selective Windows release-stack restoration
+
+Archived PR #59 / Release #395 is an engineering donor, not a product baseline.
+
+After the Studio product spine is accepted, selectively port and re-prove:
+
+- Rust/WebView2 native host;
+- packaged backend/frontend/runtime;
+- diagnostics/system-resource helpers worth retaining;
+- immutable release payload/integrity gates;
+- legal/dependency closure;
+- NSIS installer/uninstaller;
+- safe user-data preservation;
+- installed launch/deep verification;
+- A->B->A update/rollback.
+
+Old #395 artifacts prove only the historical packaging implementation. Exact-head release evidence must be rerun for the accepted Studio code.
+
+## Deferred repository administration
+
+`main` branch protection is intentionally deferred by current development direction and is not part of the Studio-v2 implementation slices until explicitly requested.
