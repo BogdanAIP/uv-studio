@@ -9,12 +9,13 @@ Before changing files, read in this order:
 1. `project-context/ACTIVE_SLICE.json`
 2. `project-context/PROJECT_STATE.md`
 3. `project-context/NEXT_TASK.md`
-4. `project-context/DECISIONS.md` and detailed decisions linked from current state
-5. `ARCHITECTURE_PRINCIPLES.md`
-6. `ROADMAP.md`
-7. `UPSTREAM.md`
-8. the active PR if `lifecycle_state` is `draft` or `review`, including diff/checks/unresolved threads
-9. recent commits on `main`
+4. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-063 is the current product-composition authority**
+5. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md` when present
+6. `ARCHITECTURE_PRINCIPLES.md`
+7. `ROADMAP.md` (historical stage detail is subordinate to later accepted decisions such as D-063)
+8. `UPSTREAM.md`
+9. the active PR if `lifecycle_state` is `draft` or `review`, including diff/checks/unresolved threads
+10. recent commits on `main`
 
 Run `python tools/validate_development_context.py` before implementation.
 
@@ -33,15 +34,29 @@ Never continue work on a merged branch. A new slice starts only from an idle `ma
 - `ACTIVE_SLICE.json` owns lifecycle, active branch/PR identity when present, last completed merge identity, write scope, coordination policy, required checks and one handoff.
 - `PROJECT_STATE.md` describes the product as it exists now, verified behavior and current risks.
 - `NEXT_TASK.md` describes exactly one continuation target.
-- `PROJECT_HISTORY.md`, decision records, merged PRs and Git history hold completed detail.
+- `PROJECT_HISTORY.md`, decision records, merged/archived PRs and Git history hold completed detail.
 - Exact active-head SHAs/check conclusions remain live GitHub facts.
+
+## Studio-first product boundary
+
+D-063 is mandatory for new product work.
+
+- A UV Studio **project**, not a recipe/stage, is the normal top-level product object.
+- Do not add a new user-facing `RecipeDefinition`, numbered Stage or specialized project workspace merely to ship a feature.
+- Build the normal product around Studio: Media/Scenes, Preview/Canvas, Inspector/AI Tools, explicit model choice and a canonical multitrack Timeline.
+- Existing recipe/Product-Orchestrator/Stage 8 code is compatibility/migration material unless a later accepted decision says otherwise.
+- User-significant AI model choice must remain visible in the relevant tool. Capability abstraction is an execution boundary, not a reason to hide the model.
+- Settings configure connections/runtimes/accounts; Studio tools own per-operation model and creative parameters.
+- Agent automation uses the same Studio/Application Commands as manual UI. No Agent-only mutation authority.
 
 ## Reuse-first and programmable editing
 
-`ARCHITECTURE_PRINCIPLES.md` is mandatory.
+`ARCHITECTURE_PRINCIPLES.md`, D-033 and D-063 are mandatory.
 
 - Search/license-check/probe credible professional open-source components before building a general editor/media primitive.
 - Record a concrete rejection before replacing a suitable mature component with custom infrastructure.
+- Reuse a donor's **needed primitive behind a UV-owned boundary**; do not inherit the donor application's project/workflow model merely because its code is useful.
+- MLT remains the selected timeline/editing engine behind the UV adapter; OpenCut Classic remains a selective editor-UX donor. Do not introduce a second canonical timeline engine without a superseding evidence-backed decision.
 - Every meaningful editor mutation must converge on one UV-owned programmatic command/workflow contract used by GUI, scripts, AI and MCP.
 - Automation must not mutate canonical project/timeline files directly or bypass domain validation/D-017/review boundaries.
 
@@ -51,6 +66,7 @@ Never continue work on a merged branch. A new slice starts only from an idle `ma
 - The coordinator owns the integration branch, Git operations, context files and PR state.
 - Writers use explicitly assigned non-overlapping paths; reviewers are read-only.
 - Do not edit `vendor/videoclaw-app` during ordinary work; prefer UV-owned wrappers/adapters.
+- Closed unmerged research/reference branches are donors only; do not continue implementation on them unless the lifecycle explicitly reactivates them.
 
 ## Completion gate
 
