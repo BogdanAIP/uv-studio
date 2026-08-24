@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   createUVProject,
@@ -15,7 +16,51 @@ function formatDate(value: string) {
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 }
 
+type JourneyHint = {
+  label: string;
+  note: string;
+  tone: 'ready' | 'partial' | 'advanced';
+};
+
+const JOURNEY_HINTS: Record<string, JourneyHint> = {
+  general_video: {
+    label: 'Можно завершить локально',
+    note: 'Простой итоговый ролик собирается из ваших изображений и/или видео. Одного текста для генерации кадров в этой сборке пока недостаточно.',
+    tone: 'ready',
+  },
+  narrated_video: {
+    label: 'Можно завершить после подготовки',
+    note: 'Нужны текст диктора, изображения и подготовленная речевая дорожка; затем ролик собирается локально.',
+    tone: 'ready',
+  },
+  story_video: {
+    label: 'Подготовительный режим',
+    note: 'Можно подготовить идею, сценарий, материалы и связность сцен. Финальный сюжетный render/export end-to-end в этой сборке ещё не готов.',
+    tone: 'partial',
+  },
+  commercial_product: {
+    label: 'Подготовительный режим',
+    note: 'Можно зафиксировать рекламную задачу и материалы продукта. Полный рекламный render/export end-to-end в этой сборке ещё не готов.',
+    tone: 'partial',
+  },
+};
+
+function journeyHint(recipe: UVRecipe): JourneyHint {
+  return JOURNEY_HINTS[recipe.recipe_id] ?? {
+    label: 'Специализированный режим',
+    note: recipe.description,
+    tone: 'advanced',
+  };
+}
+
+function journeyBadgeClass(tone: JourneyHint['tone']) {
+  if (tone === 'ready') return 'bg-emerald-950/70 text-emerald-300';
+  if (tone === 'partial') return 'bg-amber-950/70 text-amber-300';
+  return 'bg-slate-800 text-slate-400';
+}
+
 export default function ProjectsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<UVProject[]>([]);
   const [recipes, setRecipes] = useState<UVRecipe[]>([]);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
@@ -33,6 +78,14 @@ export default function ProjectsPage() {
     () => new Map(recipes.map(recipe => [recipe.recipe_id, recipe.title])),
     [recipes],
   );
+  const primaryRecipes = useMemo(
+    () => recipes.filter(recipe => recipe.recipe_id === 'general_video' || recipe.recipe_id === 'narrated_video'),
+    [recipes],
+  );
+  const otherRecipes = useMemo(
+    () => recipes.filter(recipe => !primaryRecipes.some(primary => primary.recipe_id === recipe.recipe_id)),
+    [recipes, primaryRecipes],
+  );
 
   async function refresh() {
     setLoading(true);
@@ -43,7 +96,8 @@ export default function ProjectsPage() {
       setRecipes(recipeList);
       setSelectedRecipeId(current => {
         if (current && recipeList.some(recipe => recipe.recipe_id === current)) return current;
-        const preferred = recipeList.find(recipe => recipe.ui.featured) ?? recipeList[0];
+        const recommended = recipeList.find(recipe => recipe.recipe_id === 'general_video');
+        const preferred = recommended ?? recipeList.find(recipe => recipe.ui.featured) ?? recipeList[0];
         return preferred?.recipe_id ?? '';
       });
     } catch (err) {
@@ -71,11 +125,9 @@ export default function ProjectsPage() {
         title: normalized,
         recipe_id: selectedRecipe.recipe_id,
       });
-      setTitle('');
-      setProjects(current => [project, ...current.filter(item => item.project_id !== project.project_id)]);
+      router.push(`/projects/${encodeURIComponent(project.project_id)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать проект');
-    } finally {
       setCreating(false);
     }
   }
@@ -96,6 +148,32 @@ export default function ProjectsPage() {
     }
   }
 
+  const renderRecipeCard = (recipe: UVRecipe) => {
+    const selected = recipe.recipe_id === selectedRecipeId;
+    const hint = journeyHint(recipe);
+    return (
+      <button
+        key={recipe.recipe_id}
+        type="button"
+        onClick={() => setSelectedRecipeId(recipe.recipe_id)}
+        className={`rounded-xl border p-4 text-left transition ${
+          selected
+            ? 'border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/30'
+            : 'border-slate-800 bg-slate-950/60 hover:border-slate-600'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <span className="font-medium text-slate-100">{recipe.title}</span>
+          {selected && <span className="text-xs text-sky-400">Выбрано</span>}
+        </div>
+        <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] ${journeyBadgeClass(hint.tone)}`}>
+          {hint.label}
+        </span>
+        <p className="mt-3 text-xs leading-5 text-slate-500">{hint.note}</p>
+      </button>
+    );
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -104,7 +182,7 @@ export default function ProjectsPage() {
             <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-sky-400">UV Studio</p>
             <h1 className="text-4xl font-semibold tracking-tight">Проекты</h1>
             <p className="mt-3 max-w-2xl text-slate-400">
-              Выберите задачу — студия подключит только нужные этапы. Музыка, диктор, continuity и дополнительные проверки не являются обязательными для каждого проекта.
+              Выберите не технологию, а результат. UV Studio покажет, что текущая сборка действительно умеет завершить, а что пока является только подготовительным режимом.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -123,34 +201,31 @@ export default function ProjectsPage() {
 
         <form onSubmit={createProject} className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="mb-4">
-            <p className="text-sm font-medium text-slate-200">Что нужно сделать?</p>
-            <p className="mt-1 text-xs text-slate-500">Тип задачи определяет рабочий процесс, а не конкретного поставщика ИИ.</p>
+            <p className="text-sm font-medium text-slate-200">1. Что хотите получить?</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Для первого знакомства рекомендуем «Обычный видеоролик»: это самый короткий путь до реального локального результата в текущей сборке.
+            </p>
           </div>
 
           {recipes.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {recipes.map(recipe => {
-                const selected = recipe.recipe_id === selectedRecipeId;
-                return (
-                  <button
-                    key={recipe.recipe_id}
-                    type="button"
-                    onClick={() => setSelectedRecipeId(recipe.recipe_id)}
-                    className={`rounded-xl border p-4 text-left transition ${
-                      selected
-                        ? 'border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/30'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="font-medium text-slate-100">{recipe.title}</span>
-                      {selected && <span className="text-xs text-sky-400">Выбрано</span>}
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-slate-500">{recipe.description}</p>
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                {primaryRecipes.map(renderRecipeCard)}
+              </div>
+              {otherRecipes.length > 0 && (
+                <details className="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-300">
+                    Другие и подготовительные режимы ({otherRecipes.length})
+                  </summary>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    Здесь есть специализированные возможности и сценарии, которые ещё не образуют полностью завершённую цепочку от ввода до финального файла.
+                  </p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {otherRecipes.map(renderRecipeCard)}
+                  </div>
+                </details>
+              )}
+            </>
           ) : !loading ? (
             <div className="rounded-xl border border-amber-900/60 bg-amber-950/30 p-4 text-sm text-amber-200">
               Каталог типов задач недоступен. Создание нового проекта временно отключено.
@@ -159,27 +234,29 @@ export default function ProjectsPage() {
 
           {selectedRecipe && (
             <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-400">
-              <span className="text-slate-200">Основной ввод:</span> {selectedRecipe.ui.primary_input_label}
-              <span className="mx-2 text-slate-700">•</span>
-              {selectedRecipe.steps.length} этапа/этапов в описании процесса
+              <span className="text-slate-200">С чего начнём:</span> {selectedRecipe.ui.primary_input_label}
+              <p className="mt-2 text-xs leading-5 text-slate-500">{journeyHint(selectedRecipe).note}</p>
             </div>
           )}
 
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input
-              value={title}
-              onChange={event => setTitle(event.target.value)}
-              placeholder="Название нового проекта"
-              maxLength={500}
-              className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-sky-500"
-            />
-            <button
-              type="submit"
-              disabled={!title.trim() || !selectedRecipe || creating}
-              className="rounded-lg bg-sky-500 px-5 py-3 font-medium text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {creating ? 'Создание…' : 'Создать проект'}
-            </button>
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium text-slate-200">2. Назовите проект</p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                value={title}
+                onChange={event => setTitle(event.target.value)}
+                placeholder="Например: Ролик о новом продукте"
+                maxLength={500}
+                className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 outline-none transition placeholder:text-slate-600 focus:border-sky-500"
+              />
+              <button
+                type="submit"
+                disabled={!title.trim() || !selectedRecipe || creating}
+                className="rounded-lg bg-sky-500 px-5 py-3 font-medium text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {creating ? 'Создание…' : 'Создать и открыть'}
+              </button>
+            </div>
           </div>
         </form>
 
@@ -194,7 +271,7 @@ export default function ProjectsPage() {
         ) : projects.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-10 text-center">
             <h2 className="text-lg font-medium">Проектов пока нет</h2>
-            <p className="mt-2 text-sm text-slate-500">Создайте новый проект или импортируйте переносимый архив `.uvproj.zip`.</p>
+            <p className="mt-2 text-sm text-slate-500">Создайте новый проект выше или импортируйте переносимый архив `.uvproj.zip`.</p>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
