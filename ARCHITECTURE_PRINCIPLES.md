@@ -2,6 +2,23 @@
 
 These rules are product architecture constraints, not implementation suggestions.
 
+## Studio-first product composition
+
+D-063 is the current long-term product-composition authority.
+
+UV Studio is one professional project/editor workspace with contextual media and AI tools. New product growth MUST NOT be expressed primarily as a new recipe, numbered Stage or specialized project workspace when the operation belongs in the common Studio.
+
+The normal composition is:
+
+- project-owned Media/Assets and, where useful, Scenes/Shots;
+- Preview/Canvas;
+- Inspector with contextual ordinary and AI tools;
+- a UV-owned canonical multitrack Timeline;
+- explicit user-visible model choice where the model materially affects the creative result;
+- one application/command authority used by manual UI and automation.
+
+Recipe/Product-Orchestrator/Stage 8 state remains compatibility/migration material until retired through evidence-backed caller migration.
+
 ## Reuse-first / orchestration-first
 
 UV Studio MUST prefer a mature, professionally usable, maintained and license-compatible open-source component over a custom implementation of a general media/editor primitive.
@@ -16,6 +33,16 @@ Before implementing a new timeline, waveform, media player, compositor, render e
 Custom implementation is justified only for UV-specific orchestration, a missing adapter/integration, a small compatibility layer, or a capability for which the repository records a concrete technical rejection of existing solutions.
 
 A convenient custom implementation is not sufficient justification when a suitable reusable component exists.
+
+### Donors provide parts, not product authority
+
+Open-source reuse is successful only when UV Studio owns the surrounding product contract.
+
+Preferred sequence:
+
+`candidate -> license/evidence spike -> pin -> UV adapter/command boundary -> needed primitive -> tests -> Studio tool`
+
+Do not copy a donor's application/project/workflow/session model merely because one of its primitives is useful. In particular, donor stages, task taxonomies, provider settings or storage architecture do not become UV Studio product concepts without an explicit architecture decision.
 
 ## One command model: GUI = scripts = AI = MCP
 
@@ -34,9 +61,27 @@ The command layer owns:
 
 An AI assistant may inspect project state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
 
+## Project state is UV-owned; engine state is derived
+
+Project Store and UV-owned versioned domain documents remain canonical.
+
+MLT is the selected timeline/edit engine behind the D-033 adapter. Raw MLT XML/in-memory state is an engine representation and MUST NOT become a second public project authority. OpenCut Classic remains a selective editor-UX donor, not a storage/backend authority.
+
+A second canonical timeline engine requires an explicit superseding decision backed by executable evidence.
+
+## Model visibility and execution abstraction
+
+Capability Registry and adapters abstract execution; they do not hide professional creative choices.
+
+- The relevant Studio AI tool MUST expose the selected named model when model choice materially affects output.
+- A future `Auto` policy may select a model on the user's behalf, but explicit model pinning remains supported.
+- Settings own provider/runtime/account connection state; the tool owns per-operation model choice and model-specific creative parameters.
+- Provider-specific transport details stay behind Model/Capability/Adapter boundaries rather than spreading through frontend feature code.
+- Remote/non-free execution remains subject to D-017 authorization.
+
 ## Hybrid foundations are allowed
 
-UV Studio does not require one upstream editor to own the entire product. A license-compatible editor UI donor, a separate media/timeline engine, UV Studio Project Store and UV Studio Command API may be composed when this reduces custom code and preserves clean ownership boundaries.
+UV Studio does not require one upstream editor to own the entire product. A license-compatible editor UI donor, a separate media/timeline engine, UV Studio Project Store, UV Studio Command API, local tools and cloud/MCP providers may be composed when this reduces custom code and preserves clean ownership boundaries.
 
 Copyleft components may be used only in a manner consistent with their license obligations. Their presence does not silently relicense UV Studio source. License compatibility is an explicit selection gate for every reused component.
 

@@ -1,8 +1,9 @@
-"""Class C cold-start browser evidence from a user-equivalent clean state.
+"""Class C cold-start browser evidence for the Studio-first product path.
 
-This suite deliberately avoids direct Project Store access, hidden workflow seeding
-and semantic API setup. Projects are discovered, created, opened and completed
-through the same visible product controls available to a clean-state user.
+This suite deliberately avoids direct Project Store access, hidden workflow seeding,
+recipe selection and semantic API setup. The project is created, populated, edited,
+reopened and exported through the same visible Studio controls available to a clean
+user state.
 """
 
 from __future__ import annotations
@@ -12,112 +13,100 @@ import json
 from playwright.sync_api import expect
 
 import test_stage8_outcomes as stage8
-from test_user_outcomes import _select_option_containing
 
 
 class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
-    # This class reuses only the clean application/media fixture bootstrap from
-    # Stage8BrowserOutcomes. Its historical API-created Stage 8 scenario remains
-    # covered by the parent test module and must not be inherited here.
+    # Reuse only the clean application/media fixture bootstrap. The historical
+    # Stage 8 browser scenario remains covered by its own compatibility module
+    # and must not be inherited as Class C product truth.
     test_photo_and_visualizer_user_paths = None
 
-    def _create_from_visible_catalog(self, page, *, recipe_title: str, project_title: str) -> None:
+    def test_clean_user_creates_reopens_and_exports_studio_project(self) -> None:
+        page = self._new_page()
+        project_title = "Class C — Studio timeline"
+
         page.goto("/")
         page.wait_for_url("**/projects")
         expect(page.get_by_role("heading", name="Проекты", exact=True)).to_be_visible()
-        expect(page.get_by_text("Что нужно сделать?", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Новый Studio-проект", exact=True)).to_be_visible()
 
-        # Preserved-only compatibility recipes must stay out of clean-state
-        # discovery. This proves the user is not asked to understand internal
-        # workflow migration state before choosing a supported task.
-        for hidden_title in ("Перенос движения", "Говорящий персонаж", "Performance / lip-sync"):
-            expect(page.get_by_role("button", name=hidden_title, exact=False)).to_have_count(0)
+        # New-project discovery no longer asks the user to choose an internal
+        # recipe/workspace. Compatibility names must not define the clean path.
+        for obsolete_title in (
+            "Фото в видео",
+            "Аудиовизуализатор",
+            "Перенос движения",
+            "Говорящий персонаж",
+        ):
+            expect(page.get_by_role("button", name=obsolete_title, exact=False)).to_have_count(0)
 
-        recipe = page.get_by_role("button", name=recipe_title, exact=False)
-        expect(recipe).to_be_visible()
-        recipe.click()
-        expect(recipe.get_by_text("Выбрано", exact=True)).to_be_visible()
-
-        title_input = page.get_by_placeholder("Название нового проекта")
+        title_input = page.get_by_placeholder("Название проекта")
         title_input.fill(project_title)
-        create_button = page.get_by_role("button", name="Создать проект", exact=True)
+        create_button = page.get_by_role("button", name="Создать и открыть Studio", exact=True)
         expect(create_button).to_be_enabled()
         create_button.click()
 
-        project_link = page.get_by_role("link", name=project_title, exact=False)
-        expect(project_link).to_be_visible(timeout=30_000)
-        project_link.click()
-        page.wait_for_url("**/projects/*")
+        page.wait_for_url("**/projects/*/studio", timeout=30_000)
         expect(page.get_by_role("heading", name=project_title, exact=True)).to_be_visible()
-        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_text("Media Bin", exact=True)).to_be_visible()
+        expect(page.get_by_text("Inspector", exact=True)).to_be_visible()
+        expect(page.get_by_text("Timeline", exact=True)).to_be_visible()
+        expect(page.get_by_text("AI Tools", exact=True)).to_be_visible()
+        expect(page.get_by_text("Product Orchestrator", exact=True)).to_have_count(0)
+        expect(page.get_by_text("Stage 8", exact=False)).to_have_count(0)
 
-    def test_clean_user_discovers_creates_and_completes_local_supported_tasks(self) -> None:
-        page = self._new_page()
+        page.get_by_label("Импортировать медиа в Studio").set_input_files(str(self.red_image))
+        expect(page.get_by_text(self.red_image.name, exact=True).first).to_be_visible(timeout=60_000)
 
-        self._create_from_visible_catalog(
-            page,
-            recipe_title="Фото в видео",
-            project_title="Class C — фото в видео",
+        page.get_by_role("button", name="Video track", exact=False).click()
+        add_button = page.get_by_role("button", name="Добавить в конец дорожки", exact=True)
+        expect(add_button).to_be_visible(timeout=30_000)
+        expect(add_button).to_be_enabled()
+        add_button.click()
+
+        clip = page.get_by_role("button", name=f"Клип {self.red_image.name}", exact=True)
+        expect(clip).to_be_visible(timeout=30_000)
+        clip.click()
+        expect(page.get_by_text("Клип на timeline", exact=True)).to_be_visible()
+
+        # Exercise a real shared timeline mutation through Inspector.
+        duration = page.get_by_label("Длительность клипа")
+        duration.fill("2")
+        page.get_by_role("button", name="Применить trim", exact=True).click()
+        expect(page.get_by_text("00:02.00 · 1 tracks", exact=True)).to_be_visible(timeout=30_000)
+
+        # Reopen through the normal projects page. Canonical timeline state must
+        # survive browser navigation and server reload rather than living in UI state.
+        page.get_by_role("link", name="← Проекты", exact=True).click()
+        page.wait_for_url("**/projects")
+        expect(page.get_by_role("heading", name=project_title, exact=True)).to_be_visible()
+        page.get_by_role("link", name="Открыть Studio", exact=False).first.click()
+        page.wait_for_url("**/projects/*/studio")
+        expect(page.get_by_role("button", name=f"Клип {self.red_image.name}", exact=True)).to_be_visible(
+            timeout=30_000
         )
-        expect(page.get_by_role("heading", name="Фотографии → видео", exact=True)).to_be_visible()
-        compose = page.get_by_role("button", name="Собрать видео из фотографий", exact=True)
-        expect(compose).to_be_disabled()
+        expect(page.get_by_text("00:02.00 · 1 tracks", exact=True)).to_be_visible()
 
-        page.locator('input[aria-label="Изображения Stage 8"]').set_input_files(
-            [str(self.red_image), str(self.blue_image)]
-        )
-        expect(page.get_by_text("1. red.png", exact=True)).to_be_visible(timeout=60_000)
-        expect(page.get_by_text("2. blue.png", exact=True)).to_be_visible(timeout=60_000)
-        page.locator('input[aria-label="Аудио Stage 8"]').set_input_files(str(self.audio))
-        photo_audio = page.get_by_label("Аудио для фото-видео")
-        expect(photo_audio).to_be_visible(timeout=60_000)
-        _select_option_containing(photo_audio, self.audio.name)
-        expect(compose).to_be_enabled()
-        compose.click()
-        expect(page.get_by_role("link", name="Открыть готовый рендер", exact=True)).to_be_visible(
-            timeout=120_000
-        )
-
-        # Start a second task from the normal root path so prerequisite guidance
-        # is observed from a truly empty project rather than an API-seeded state.
-        self._create_from_visible_catalog(
-            page,
-            recipe_title="Аудиовизуализатор",
-            project_title="Class C — аудиовизуализатор",
-        )
-        expect(page.get_by_role("heading", name="Аудио → визуализатор", exact=True)).to_be_visible()
-        guidance = page.get_by_text("Загрузите master-аудио для визуализатора.", exact=True).first
-        expect(guidance).to_be_visible()
-        render = page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)
-        expect(render).to_be_disabled()
-
-        page.locator('input[aria-label="Аудио Stage 8"]').set_input_files(str(self.audio))
-        master_audio = page.get_by_label("Master-аудио визуализатора")
-        expect(master_audio).to_be_visible(timeout=60_000)
-        _select_option_containing(master_audio, self.audio.name)
-        expect(render).to_be_enabled()
-        render.click()
-        expect(
-            page.get_by_text(
-                "Аудиовизуализатор собран через Product Orchestrator и локальный FFmpeg capability.",
-                exact=True,
-            )
-        ).to_be_visible(timeout=120_000)
-        expect(page.get_by_role("link", name="Открыть готовый рендер", exact=True)).to_be_visible(
+        export_button = page.get_by_role("button", name="Экспортировать", exact=True)
+        expect(export_button).to_be_enabled()
+        export_button.click()
+        expect(page.get_by_role("link", name="Открыть экспорт", exact=True)).to_be_visible(
             timeout=120_000
         )
 
         report = {
-            "entry_path": "/ -> /projects",
-            "project_creation": "visible_catalog_only",
+            "entry_path": "/ -> /projects -> /projects/{id}/studio",
+            "project_creation": "studio_first_visible_controls_only",
+            "recipe_selection": False,
             "hidden_setup": False,
             "direct_store_fixture": False,
-            "outcomes": ["photo_to_video_rendered", "visualizer_rendered"],
-            "prerequisite_guidance": "visualizer_master_audio_visible_before_upload",
-            "unsupported_recipe_discovery": "preserved_only_recipes_hidden",
+            "media_import": self.red_image.name,
+            "timeline_mutations": ["create_track", "add_clip", "trim_clip"],
+            "reopen_persistence": True,
+            "outcomes": ["canonical_timeline_persisted", "studio_export_rendered"],
+            "compatibility_ui": "legacy recipe workflows are not the clean creation path",
             "optional_runtime_interpretation": (
-                "local FFmpeg-backed representative outcomes succeeded; provider/runtime-specific "
-                "journeys are not claimed by this evidence"
+                "local FFmpeg-backed Studio export succeeded; AI/provider generation is not claimed"
             ),
         }
         (self.artifact_dir / "class-c-cold-start.json").write_text(
