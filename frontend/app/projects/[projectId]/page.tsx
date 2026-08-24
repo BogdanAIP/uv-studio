@@ -82,12 +82,12 @@ function journeyNotice(recipeId: string): JourneyNotice | null {
   if (recipeId === 'commercial_product') {
     return {
       title: 'Сейчас это подготовка рекламного проекта',
-      description: 'Можно зафиксировать задачу, сценарий и материалы продукта, но проверенного end-to-end рекламного рендера в этой сборке пока нет.',
+      description: 'Можно зафиксировать задачу, сценарий и материалы продукта, но проверенного полного рекламного рендера в этой сборке пока нет.',
       steps: [
         'Опишите продукт, задачу и желаемый результат.',
         'Добавьте фото или видео продукта, если его идентичность должна быть сохранена.',
         'Сохраните подготовку проекта.',
-        'Финальный рекламный render/export появится только после отдельной продуктовой интеграции.',
+        'Финальный рекламный ролик появится только после отдельной продуктовой интеграции.',
       ],
       tone: 'partial',
     };
@@ -99,6 +99,49 @@ function noticeClass(tone: JourneyNotice['tone']) {
   if (tone === 'ready') return 'border-emerald-900/70 bg-emerald-950/20';
   if (tone === 'partial') return 'border-amber-900/70 bg-amber-950/20';
   return 'border-slate-800 bg-slate-900/50';
+}
+
+function userSummary(recipeId: string, workflow: ProjectWorkflowState) {
+  if (recipeId === 'story_video') {
+    return workflow.readiness === 'ready'
+      ? 'Идея, сценарий и выбранные материалы сохранены. Это завершает доступную сейчас подготовку истории; финальный сюжетный ролик этот режим пока не создаёт.'
+      : 'Опишите идею истории и сохраните её. Собственные изображения, видео и аудио можно добавить при необходимости, но для начала они не обязательны.';
+  }
+  if (recipeId === 'commercial_product') {
+    return workflow.readiness === 'ready'
+      ? 'Рекламная задача и материалы продукта сохранены. Это завершает доступную сейчас подготовку, но не означает, что финальный рекламный ролик уже можно собрать.'
+      : 'Опишите рекламную задачу и добавьте хотя бы одно фото или видео продукта, если нужно сохранить его точный внешний вид.';
+  }
+  if (recipeId === 'general_video') {
+    return workflow.current_outcome
+      ? 'Готовый локальный ролик соответствует сохранённым материалам проекта.'
+      : 'Для итогового ролика сохраните задачу, добавьте хотя бы одно изображение или видео и затем запустите локальную сборку.';
+  }
+  if (recipeId === 'narrated_video') {
+    return workflow.current_outcome
+      ? 'Готовое видео с дикторской дорожкой соответствует текущим материалам проекта.'
+      : 'Для итогового видео нужны текст диктора, изображения, подготовленная речевая дорожка и локальная сборка.';
+  }
+  return workflow.summary;
+}
+
+const FRIENDLY_PREREQUISITE_TITLES: Record<string, string> = {
+  'story.workspace': 'Идея истории',
+  'commercial.workspace': 'Рекламная задача',
+  'commercial.product_reference': 'Фото или видео продукта',
+  'general.workspace': 'Задача и материалы',
+  'general.visuals': 'Изображение или видео',
+  'general.audio': 'Аудиодорожка',
+  'capability.video.render_general': 'Локальная сборка видео',
+  'narrated.workspace': 'Задача и материалы',
+  'narrated.script': 'Текст диктора',
+  'narrated.images': 'Изображения',
+  'narrated.prepared_audio': 'Дикторская дорожка',
+  'capability.video.render_narrated': 'Локальная сборка видео',
+};
+
+function prerequisiteTitle(prerequisiteId: string, fallback: string) {
+  return FRIENDLY_PREREQUISITE_TITLES[prerequisiteId] ?? fallback;
 }
 
 export default function ProjectPage() {
@@ -212,14 +255,8 @@ export default function ProjectPage() {
                   projectId={project.project_id}
                   onProjectChanged={refreshProjectWorkflow}
                 />
-                <DubbingPrecisionPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProjectWorkflow}
-                />
-                <DubbingSubtitleExportPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshProjectWorkflow}
-                />
+                <DubbingPrecisionPanel projectId={project.project_id} onProjectChanged={refreshProjectWorkflow} />
+                <DubbingSubtitleExportPanel projectId={project.project_id} onProjectChanged={refreshProjectWorkflow} />
               </>
             )}
 
@@ -278,15 +315,8 @@ export default function ProjectPage() {
 
             {projectedWorkspaceIds.has('music_video') && (
               <>
-                <MusicVideoPanel
-                  projectId={project.project_id}
-                  onProjectChanged={refreshMusicPrerequisites}
-                />
-                <MusicAssemblyPanel
-                  key={workflowRefresh}
-                  projectId={project.project_id}
-                  onProjectChanged={refreshMusicPrerequisites}
-                />
+                <MusicVideoPanel projectId={project.project_id} onProjectChanged={refreshMusicPrerequisites} />
+                <MusicAssemblyPanel key={workflowRefresh} projectId={project.project_id} onProjectChanged={refreshMusicPrerequisites} />
                 <MusicVideoReviewPanel
                   key={`review-${project.artifacts.length}`}
                   projectId={project.project_id}
@@ -298,22 +328,21 @@ export default function ProjectPage() {
 
             <section className="mb-6 mt-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
               <h2 className="text-xl font-medium">Что делать дальше</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{workflow.summary}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{userSummary(project.recipe_id, workflow)}</p>
 
-              {workflow.prerequisites.length > 0 && (
+              {workflow.prerequisites.some(prerequisite => !prerequisite.satisfied) && (
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  {workflow.prerequisites.map(prerequisite => (
+                  {workflow.prerequisites.filter(prerequisite => !prerequisite.satisfied).map(prerequisite => (
                     <div key={prerequisite.prerequisite_id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-slate-200">{prerequisite.title}</span>
-                        <span className={`text-xs ${prerequisite.satisfied ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {prerequisite.satisfied ? 'Готово' : 'Нужно сделать'}
+                        <span className="text-sm text-slate-200">
+                          {prerequisiteTitle(prerequisite.prerequisite_id, prerequisite.title)}
                         </span>
+                        <span className="text-xs text-amber-400">Нужно сделать</span>
                       </div>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">{prerequisite.explanation}</p>
-                      {prerequisite.resolution && (
-                        <p className="mt-2 text-xs leading-5 text-amber-300">{prerequisite.resolution}</p>
-                      )}
+                      <p className="mt-2 text-xs leading-5 text-amber-300">
+                        {prerequisite.resolution ?? 'Выполните этот шаг в соответствующем блоке проекта.'}
+                      </p>
                     </div>
                   ))}
                 </div>
