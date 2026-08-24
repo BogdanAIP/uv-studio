@@ -8,7 +8,7 @@
     "goal": "Add one UV-owned atomic project mutation boundary and durable transaction identity so representative Studio timeline edits can commit, rollback, undo and redo through the same application command authority before any AI model integration begins.",
     "base_branch": "main",
     "branch": "stage-11/studio-v2-application-transactions",
-    "pull_request": null,
+    "pull_request": 62,
     "write_scope": [
       "project-context/**",
       "docs/architecture/**",
