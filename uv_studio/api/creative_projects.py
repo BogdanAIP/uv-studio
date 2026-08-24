@@ -38,6 +38,14 @@ class UpdateCreativeIntentRequest(BaseModel):
         return self
 
 
+class SaveCreativePreparationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal: str = Field(min_length=1, max_length=20_000)
+    script: str = Field(default="", max_length=100_000)
+    source_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
 def _service(
     store: ProjectStore,
     registry: CapabilityRegistry,
@@ -100,5 +108,30 @@ def update_creative_intent(
             script=request.script if "script" in request.model_fields_set else None,
         )
         return project.to_dict()
+    except CreativeProjectError as exc:
+        raise _translate(exc) from exc
+
+
+@router.put("/projects/{project_id}/creative-preparation")
+def save_creative_preparation(
+    project_id: str,
+    request: SaveCreativePreparationRequest,
+    store: ProjectStore = Depends(get_project_store),
+    registry: CapabilityRegistry = Depends(get_capability_registry),
+    recipe_registry: RecipeRegistry = Depends(get_recipe_registry),
+) -> dict[str, Any]:
+    service = _service(store, registry, recipe_registry)
+    try:
+        project, workspace = service.save_preparation(
+            project_id,
+            goal=request.goal,
+            script=request.script,
+            source_ids=request.source_ids,
+        )
+        return {
+            "project": project.to_dict(),
+            "workspace": workspace.to_dict(),
+            "plan": service.plan(project_id),
+        }
     except CreativeProjectError as exc:
         raise _translate(exc) from exc
