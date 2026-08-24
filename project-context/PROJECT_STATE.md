@@ -1,7 +1,7 @@
 # Project State
 
 <!-- uv-context-state: draft -->
-<!-- uv-active-slice: product-usability-installed-windows-human-acceptance -->
+<!-- uv-active-slice: product-architecture-intent-first-creation -->
 
 **Updated:** 2026-08-24
 
@@ -9,56 +9,53 @@
 
 ## Current lifecycle
 
-Installed Windows human acceptance is in **Draft** on `research/product-usability-installed-windows-human-acceptance`, based on idle `main` `6f656a9a3b3ea885b3280e7dd6a9594daf1dcaf7` after Class C closure.
+PR #59 remains the single active **Draft**, but its product goal changed after real installed-Windows review rejected the recipe-card-first product concept.
 
-Class C remains the product-behavior baseline. This slice does not reopen retired product routes or replace Product Orchestrator authority.
+The exact Windows candidate `95f96d3ecde159a1957e8ed56ad8da73d96458f6` is valuable automated infrastructure evidence only. CI and Stage 9 Release #395 were green, but that does **not** constitute product acceptance. The user explicitly rejected the underlying interaction model: hiding Stage/VideoClaw/provider implementation details did not turn the collection of recipes and source-ingestion panels into the intended creative product.
 
-## Acceptance boundary under work
+## Product decision
 
-- restore only the proven Windows packaging/desktop infrastructure needed to package the current Product Truth;
-- do not merge the divergent historical Stage 9 branch wholesale;
-- produce a per-user installable Windows build tied to an exact commit;
-- run packaged backend/frontend/desktop smoke and current product-owned browser outcomes before human use;
-- launch and exercise the installed product through the normal Windows entry point on a real Windows environment;
-- distinguish packaging/host failures from optional provider/runtime requirements;
-- preserve unsupported Action Transfer, Digital Human and Performance/lip-sync creation as unavailable;
-- collect durable evidence that identifies the exact build and Windows environment.
+The product-facing authority must start from **user intent**, not from a technical recipe catalogue.
 
-## Human acceptance findings
+The primary journey is now:
 
-The first installed Windows candidate exposed inherited Chinese text in Settings and was rejected. A later localized exact build (`f8c7e9a45f7b5d1aa94b62b055712598230b8cfa`, Stage 9 Release #373) was installed and opened successfully enough for the human tester to confirm that Settings were in Russian.
+1. user describes what they want to create;
+2. UV Studio stores that intent as canonical project state;
+3. the application layer projects a production plan from the intent, current project materials and Capability Registry;
+4. each plan step offers truthful routes such as generate, import/use own material, or complete manually;
+5. provider/model/recipe details remain execution concerns behind capabilities;
+6. deterministic assembly, review and export remain canonical UV Studio operations;
+7. unavailable generation is shown as a missing capability/connection, never as a fake completed feature.
 
-That localized build still failed product acceptance for a more important usability reason:
+Existing recipes, Stage 8 workspace files and legacy panels may remain temporarily as execution/compatibility primitives for preserved projects. They are no longer allowed to define the primary new-project UX.
 
-- a new Story project led directly to visible internal implementation labels such as `Stage 8 · композиционный режим` and `Stage 6`;
-- upload controls for images/video/audio looked like required starting inputs even though Story can begin from a text brief and is currently preparation-only;
-- the supported end-to-end path from an empty project was not discoverable, so the tester could not determine how to complete a project from scratch;
-- Story appeared alongside completed journeys even though its Product Orchestrator state explicitly has no authoritative final Story render/export action;
-- Settings exposed provider/model implementation details (provider blocks, LLM/VLM/T2I/I2I/video model selectors, endpoint/proxy controls) instead of the capability-first boundary already present in the backend.
+## Architectural direction under work
 
-This is a **product-flow acceptance blocker**, not a documentation request. Human acceptance remains pending.
+Introduce an application-owned creative-project boundary without breaking portable project archives:
 
-## Draft remediation in progress
+- store the new creative intent under `ProjectDocument.extensions` instead of bumping the project schema prematurely;
+- use a small application service to create/update intent-first projects and derive their production plan;
+- derive plan routes from the shared Capability Registry (`text.generate`, `image.generate`, `video.generate`, `speech.synthesize`, local assembly) rather than provider names;
+- allow existing local General Video assembly to remain an implementation path when the user supplies visuals;
+- keep cloud/paid execution explicit under D-017 and capability selection;
+- make the `/projects` first-run surface one goal-oriented creation form, not a grid of recipe cards;
+- keep old/specialized projects openable, but separate them from the default creation journey.
 
-The active Draft now changes the routed product UI without inventing unsupported capabilities:
+## Previous acceptance findings retained
 
-- project creation prefers the supported `general_video` journey, distinguishes finishable journeys from preparation-only/specialized journeys, and opens the new project immediately;
-- the project page gives a user-facing route for General Video, Narrated Video, Story and Commercial Product instead of exposing schema/stage/orchestrator terminology first;
-- Story is explicitly described as preparation-only and no longer renders Sequence Continuity in its primary route;
-- composition upload cards explain whether own media is required or optional and no longer present internal Stage 8 labels;
-- Settings reads `/api/uv/capabilities`, explains the safe local/free selection boundary, removes the legacy global model-picker from normal UI, and moves provider credentials/endpoint/proxy controls behind optional/advanced sections;
-- browser/static regressions are being updated to assert these user-facing contracts rather than old implementation labels.
+The earlier installed pass found and fixed inherited Chinese Settings text. A later pass found exposed Stage 6/8 terminology and provider/model configuration. Those findings remain valid, but the subsequent UI remediation was insufficient because it only made the old architecture more honest and less visible.
 
-A new exact Windows release and a new installed human pass are required after this remediation. Release #373 is evidence for the rejected localized build only and must not be reused as final acceptance evidence for later commits.
+This slice is therefore **not waiting for acceptance of Release #395**. Product work continues on top of the proven packaging/runtime foundation until the intent-first path is real and testable.
 
 ## Verification status
 
-Class C Draft head `b280ef8f8698831e3f9a72428933f817da12366d` and Review head `068f5f3687a74af9bc27ea5f75fc0941fdab983b` passed all five permanent CI jobs before PR #58 merged as `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
+- PR #58 Class C remains the last completed lifecycle slice.
+- PR #59 remains Draft and unaccepted.
+- Exact head `95f96d3e...` previously passed CI #2796/#2797 and Stage 9 Windows Release #395 before this product-architecture pivot.
+- New commits after the pivot require fresh permanent CI and, once the new product path is coherent, a fresh exact Windows Release and human pass.
 
-The current acceptance slice is not yet verified. CI/package evidence cannot by itself close this gate: a real installed Windows human run remains mandatory after the current usability remediation reaches an exact green release head.
-
-Missing `main` branch protection remains an external repository-setting P0 and is intentionally deferred per the current development direction.
+Missing `main` branch protection remains intentionally deferred per project direction.
 
 ## Next authorized slice
 
-After this acceptance gate is complete and lifecycle-closed, start `architecture-hardening-execution-truth` as defined by `project-context/NEXT_TASK.md`.
+After the intent-first product architecture is reviewed, merged and lifecycle-closed, continue with `architecture-hardening-execution-truth` to remove the remaining independently maintained legacy `/execution-plan` truth and other compatibility tails.
