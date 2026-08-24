@@ -7,12 +7,11 @@ import shutil
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from fractions import Fraction
-from pathlib import Path
 from typing import Any
 
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
-from uv_studio.projects.timeline import TimelineDocument, TimelineStore
+from uv_studio.projects.timeline import TimelineDocument, TimelineReference, TimelineStore, TimelineTrack
 
 _MICROSECONDS_PER_SECOND = 1_000_000
 _DEFAULT_RATE = Fraction(30, 1)
@@ -135,6 +134,19 @@ class StudioMLTProjection:
         }
 
 
+@dataclass(frozen=True)
+class _PreparedClip:
+    track: TimelineTrack
+    reference_info: TimelineReference
+    producer_id: str
+    timeline_start_frame: int
+    source_in_frame: int
+    source_out_frame: int
+    duration_frames: int
+    producer_length: int
+    enabled: bool
+
+
 class StudioMLTTimelineAdapter:
     """Project ``timeline/main.json`` into ephemeral MLT XML.
 
@@ -160,7 +172,10 @@ class StudioMLTTimelineAdapter:
         return {item.id: item for item in (*project.sources, *project.artifacts)}
 
     @staticmethod
-    def _profile(timeline: TimelineDocument, references: dict[str, ProjectReference]) -> tuple[Fraction, int, int]:
+    def _profile(
+        timeline: TimelineDocument,
+        references: dict[str, ProjectReference],
+    ) -> tuple[Fraction, int, int]:
         visual_refs: list[ProjectReference] = []
         for track in timeline.tracks:
             if track.kind != "video":
@@ -173,10 +188,8 @@ class StudioMLTTimelineAdapter:
             return _DEFAULT_RATE, _DEFAULT_WIDTH, _DEFAULT_HEIGHT
 
         first = visual_refs[0]
-        width = first.metadata.get("width")
-        height = first.metadata.get("height")
-        width = _positive_int(width, field_name=f"{first.id}.width")
-        height = _positive_int(height, field_name=f"{first.id}.height")
+        width = _positive_int(first.metadata.get("width"), field_name=f"{first.id}.width")
+        height = _positive_int(first.metadata.get("height"), field_name=f"{first.id}.height")
 
         video_refs = [reference for reference in visual_refs if reference.kind == "video"]
         rate = _parse_rate(video_refs[0].metadata.get("avg_frame_rate")) if video_refs else _DEFAULT_RATE
@@ -202,6 +215,57 @@ class StudioMLTTimelineAdapter:
         duration_frames = max(_frame(duration_us, rate), 1)
         boundary_errors: list[int] = []
 
+        prepared_by_track: dict[str, list[_PreparedClip]] = {}
+        producer_index = 0
+        for track in timeline.tracks:
+            cursor_frame = 0
+            prepared: list[_PreparedClip] = []
+            for clip in track.clips:
+                reference_info = self.timelines.reference(project_id, clip.reference_id)
+                reference = reference_info.reference
+                producer_index += 1
+                producer_id = f"uv_studio_producer_{producer_index}"
+                start_frame = _frame(clip.timeline_start_us, rate)
+                source_in_frame = _frame(clip.source_start_us, rate)
+                duration_frame_count = max(_frame(clip.duration_us, rate), 1)
+                source_out_frame = source_in_frame + duration_frame_count - 1
+                boundary_errors.extend(
+                    (
+                        _frame_error_us(clip.timeline_start_us, start_frame, rate),
+                        _frame_error_us(clip.source_start_us, source_in_frame, rate),
+                        _frame_error_us(clip.duration_us, duration_frame_count, rate),
+                    )
+                )
+                if start_frame < cursor_frame:
+                    raise StudioMLTError(
+                        f"clip {clip.clip_id!r} overlaps a previous clip after frame conversion"
+                    )
+                producer_length = duration_frame_count
+                if reference.kind != "image":
+                    source_duration = _positive_int(
+                        reference.metadata.get("duration_us"),
+                        field_name=f"{reference.id}.duration_us",
+                    )
+                    producer_length = max(_frame(source_duration, rate), source_out_frame + 1)
+                enabled = clip.enabled and track.enabled
+                if track.kind == "audio" and (track.muted or clip.muted):
+                    enabled = False
+                prepared.append(
+                    _PreparedClip(
+                        track=track,
+                        reference_info=reference_info,
+                        producer_id=producer_id,
+                        timeline_start_frame=start_frame,
+                        source_in_frame=source_in_frame,
+                        source_out_frame=source_out_frame,
+                        duration_frames=duration_frame_count,
+                        producer_length=producer_length,
+                        enabled=enabled,
+                    )
+                )
+                cursor_frame = start_frame + duration_frame_count
+            prepared_by_track[track.track_id] = prepared
+
         root = ET.Element("mlt", {"LC_NUMERIC": "C"})
         gcd_width_height = math.gcd(width, height)
         ET.SubElement(
@@ -222,80 +286,81 @@ class StudioMLTTimelineAdapter:
             },
         )
 
-        track_projections: list[StudioMLTTrackProjection] = []
-        playlist_ids: list[tuple[str, str, bool]] = []
-        producer_index = 0
-        for track_index, track in enumerate(timeline.tracks, start=1):
-            playlist_id = f"uv_studio_playlist_{track_index}"
-            playlist = ET.SubElement(root, "playlist", {"id": playlist_id})
-            playlist_ids.append((playlist_id, track.kind, track.muted or not track.enabled))
-            cursor_frame = 0
-            projected_clips: list[StudioMLTClipProjection] = []
-
-            for clip in track.clips:
-                reference_info = self.timelines.reference(project_id, clip.reference_id)
-                reference = reference_info.reference
-                producer_index += 1
-                producer_id = f"uv_studio_producer_{producer_index}"
-                start_frame = _frame(clip.timeline_start_us, rate)
-                source_in_frame = _frame(clip.source_start_us, rate)
-                duration_frame_count = max(_frame(clip.duration_us, rate), 1)
-                source_out_frame = source_in_frame + duration_frame_count - 1
-                boundary_errors.extend(
-                    (
-                        _frame_error_us(clip.timeline_start_us, start_frame, rate),
-                        _frame_error_us(clip.source_start_us, source_in_frame, rate),
-                        _frame_error_us(clip.duration_us, duration_frame_count, rate),
-                    )
-                )
-
-                if start_frame < cursor_frame:
-                    raise StudioMLTError(
-                        f"clip {clip.clip_id!r} overlaps a previous clip after frame conversion"
-                    )
-                if start_frame > cursor_frame:
-                    ET.SubElement(playlist, "blank", {"length": str(start_frame - cursor_frame)})
-
-                producer_length = duration_frame_count
-                if reference.kind != "image":
-                    source_duration = reference.metadata.get("duration_us")
-                    source_duration = _positive_int(
-                        source_duration,
-                        field_name=f"{reference.id}.duration_us",
-                    )
-                    producer_length = max(_frame(source_duration, rate), source_out_frame + 1)
+        # MLT resolves playlist producer references while parsing. Declare every
+        # producer before every playlist; forward references are not safe.
+        for track in timeline.tracks:
+            for prepared in prepared_by_track[track.track_id]:
                 producer = ET.SubElement(
                     root,
                     "producer",
-                    {"id": producer_id, "in": "0", "out": str(producer_length - 1)},
+                    {
+                        "id": prepared.producer_id,
+                        "in": "0",
+                        "out": str(prepared.producer_length - 1),
+                    },
                 )
                 _add_property(producer, "mlt_service", "avformat-novalidate")
-                _add_property(producer, "resource", reference_info.path.resolve().as_posix())
-                _add_property(producer, "length", str(producer_length))
+                _add_property(
+                    producer,
+                    "resource",
+                    prepared.reference_info.path.resolve().as_posix(),
+                )
+                _add_property(producer, "length", str(prepared.producer_length))
 
-                if clip.enabled and track.enabled:
-                    entry_attrs = {
-                        "producer": producer_id,
-                        "in": str(source_in_frame),
-                        "out": str(source_out_frame),
-                        "uv_clip_id": clip.clip_id,
-                    }
-                    ET.SubElement(playlist, "entry", entry_attrs)
+        track_projections: list[StudioMLTTrackProjection] = []
+        playlist_ids: list[tuple[str, str]] = []
+        for track_index, track in enumerate(timeline.tracks, start=1):
+            playlist_id = f"uv_studio_playlist_{track_index}"
+            playlist = ET.SubElement(root, "playlist", {"id": playlist_id})
+            playlist_ids.append((playlist_id, track.kind))
+            cursor_frame = 0
+            projected_clips: list[StudioMLTClipProjection] = []
+            source_clips = {clip.clip_id: clip for clip in track.clips}
+
+            for prepared in prepared_by_track[track.track_id]:
+                clip = next(
+                    item
+                    for item in track.clips
+                    if _frame(item.timeline_start_us, rate) == prepared.timeline_start_frame
+                    and item.reference_id == prepared.reference_info.reference.id
+                    and item.clip_id in source_clips
+                )
+                if prepared.timeline_start_frame > cursor_frame:
+                    ET.SubElement(
+                        playlist,
+                        "blank",
+                        {"length": str(prepared.timeline_start_frame - cursor_frame)},
+                    )
+                if prepared.enabled:
+                    ET.SubElement(
+                        playlist,
+                        "entry",
+                        {
+                            "producer": prepared.producer_id,
+                            "in": str(prepared.source_in_frame),
+                            "out": str(prepared.source_out_frame),
+                            "uv_clip_id": clip.clip_id,
+                        },
+                    )
                 else:
-                    ET.SubElement(playlist, "blank", {"length": str(duration_frame_count)})
-                cursor_frame = start_frame + duration_frame_count
+                    ET.SubElement(
+                        playlist,
+                        "blank",
+                        {"length": str(prepared.duration_frames)},
+                    )
+                cursor_frame = prepared.timeline_start_frame + prepared.duration_frames
                 projected_clips.append(
                     StudioMLTClipProjection(
                         track_id=track.track_id,
                         clip_id=clip.clip_id,
                         reference_id=clip.reference_id,
-                        media_kind=reference.kind,
-                        producer_id=producer_id,
-                        timeline_start_frame=start_frame,
-                        source_in_frame=source_in_frame,
-                        source_out_frame=source_out_frame,
-                        duration_frames=duration_frame_count,
-                        enabled=clip.enabled and track.enabled,
+                        media_kind=prepared.reference_info.reference.kind,
+                        producer_id=prepared.producer_id,
+                        timeline_start_frame=prepared.timeline_start_frame,
+                        source_in_frame=prepared.source_in_frame,
+                        source_out_frame=prepared.source_out_frame,
+                        duration_frames=prepared.duration_frames,
+                        enabled=prepared.enabled,
                     )
                 )
 
@@ -314,11 +379,13 @@ class StudioMLTTimelineAdapter:
             "tractor",
             {"id": "uv_studio_tractor", "in": "0", "out": str(duration_frames - 1)},
         )
-        for playlist_id, kind, hidden in playlist_ids:
-            attrs = {"producer": playlist_id}
-            if hidden:
-                attrs["hide"] = "audio" if kind == "audio" else "video"
-            ET.SubElement(tractor, "track", attrs)
+        for playlist_id, kind in playlist_ids:
+            # Video tracks contribute picture only; audio tracks contribute sound only.
+            ET.SubElement(
+                tractor,
+                "track",
+                {"producer": playlist_id, "hide": "audio" if kind == "video" else "video"},
+            )
 
         return StudioMLTProjection(
             timeline_id=timeline.timeline_id,
