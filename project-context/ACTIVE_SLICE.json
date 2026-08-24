@@ -1,14 +1,36 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "studio-v2-application-transactions",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Add one UV-owned atomic project mutation boundary and durable transaction identity so representative Studio timeline edits can commit, rollback, undo and redo through the same application command authority before any AI model integration begins.",
+    "base_branch": "main",
+    "branch": "stage-11/studio-v2-application-transactions",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      "docs/architecture/**",
+      "uv_studio/projects/**",
+      "uv_studio/application/**",
+      "uv_studio/editor/timeline_commands.py",
+      "uv_studio/api/studio_timeline.py",
+      "uv_studio/server.py",
+      "frontend/lib/timelineApi.ts",
+      "frontend/components/editor/StudioWorkspace.tsx",
+      "tests/**",
+      "tests_api/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-editor-spine",
     "pull_request": 61,
     "merge_commit": "5be716ed44ac00f7d13cafb8b4ed038ddc24878b"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-application-transactions",
+    "next_slice_id": "studio-v2-model-registry",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

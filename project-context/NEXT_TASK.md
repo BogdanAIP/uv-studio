@@ -1,30 +1,30 @@
 # Next Task
 
-<!-- uv-next-slice: studio-v2-application-transactions -->
+<!-- uv-next-slice: studio-v2-model-registry -->
 
 ## Goal
 
-After the Studio-v2 editor spine is reviewed, merged and lifecycle-closed, harden the application mutation boundary so multistep Studio actions have one atomic transaction/undo authority before long-running AI model integration begins.
+After application transactions and durable undo/redo are reviewed, merged and lifecycle-closed, add a backend-owned **user-visible Model Registry** for Studio AI tools.
 
 ## Required direction
 
-- introduce a file-first `ProjectUnitOfWork` or equivalent UV-owned transaction boundary for coordinated project/timeline mutations;
-- give Studio timeline commands durable transaction identity suitable for undo/redo without making MLT state canonical;
-- keep GUI, Agent, scripts and MCP on the same semantic command handlers;
-- replace growing command/API dispatch switches with explicit handler/service registries where this slice requires it;
-- preserve Project Store atomicity, path/integrity rules and portable-state constraints;
-- keep recipe/Product Orchestrator/Stage 8 paths as compatibility only and do not grow them;
-- do not add cloud/provider integration in this slice;
-- do not hide model selection or create a Model Registry prematurely inside transaction infrastructure.
+- expose semantic tool categories such as image generation/editing independently from provider transport;
+- expose concrete installed/configured model choices to the user in the relevant Studio Inspector/AI tool;
+- keep capability/provider/runtime configuration below the product interaction layer;
+- map Model Registry choices onto existing Capability Registry / MCP / D-017 execution truth instead of replacing those security boundaries;
+- keep model metadata secret-free, portable and backend-owned;
+- do not create fake model availability from donor metadata or API-key presence;
+- keep Settings for connection/runtime configuration, not ordinary per-action model choice;
+- do not add a broad provider matrix in the first registry slice.
 
 ## Completion proof
 
-The slice is complete when a representative multi-command Studio edit can commit atomically, fail/rollback without leaving split project state, and be undone/redone through the same UV-owned application command authority used by programmatic callers.
+The slice is complete when Studio can query one authoritative backend registry, show truthful model choices for at least the first planned AI tool category, preserve explicit model identity in the project/action request, and fail closed when no executable model is available.
 
 ## Following direction
 
-After transaction/undo foundations are green, the next product vertical is a backend-owned **user-visible Model Registry**, followed by a project-scoped Job Manager and one real named Image AI model from Inspector to registered project asset.
+After Model Registry, add a project-scoped Job Manager and then one real named Image AI vertical from Inspector request through execution to a registered project asset.
 
 ## Entry gate
 
-Begin only from idle `main` after `studio-v2-editor-spine` is merged and lifecycle-closed. Do not start from the archived PR #59 branch.
+Begin only from idle `main` after `studio-v2-application-transactions` is merged and lifecycle-closed.
