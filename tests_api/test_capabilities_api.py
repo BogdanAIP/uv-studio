@@ -64,16 +64,21 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(offer["availability"], "configuration_required")
         self.assertNotIn("native_videoclaw", offer["offer_id"])
 
-    def test_capability_detail_contains_offer_summary(self) -> None:
+    def test_capability_detail_contains_offer_and_execution_summaries(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.generate")
         self.assertEqual(response.status_code, 200, response.text)
         detail = response.json()
         self.assertEqual(detail["offer_summary"]["total"], 1)
         self.assertEqual(detail["offer_summary"]["configuration_required"], 1)
+        self.assertEqual(detail["execution_summary"]["local_free_available"], 0)
+        self.assertEqual(detail["execution_summary"]["external_available"], 0)
+        self.assertEqual(detail["execution_summary"]["external_configuration_required"], 1)
 
         digital_human = self.client.get("/api/uv/capabilities/video.digital_human").json()
         self.assertEqual(digital_human["offer_summary"]["total"], 1)
         self.assertEqual(digital_human["offer_summary"]["configuration_required"], 1)
+        self.assertEqual(digital_human["execution_summary"]["local_configuration_required"], 1)
+        self.assertEqual(digital_human["execution_summary"]["external_configuration_required"], 0)
 
     def test_unknown_capability_is_404(self) -> None:
         self.assertEqual(self.client.get("/api/uv/capabilities/missing.capability").status_code, 404)
