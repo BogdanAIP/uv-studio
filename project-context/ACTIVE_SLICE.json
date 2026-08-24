@@ -3,7 +3,7 @@
   "lifecycle_state": "draft",
   "active_slice": {
     "id": "studio-v2-editor-spine",
-    "kind": "architecture-product",
+    "kind": "stage",
     "roadmap_stage": "studio-v2",
     "goal": "Establish the D-063 Studio-first product spine from maintained main: generalize the D-033 editor foundation, introduce canonical UV multitrack timeline state and shared timeline commands, and prove project -> Media Bin -> timeline -> MLT projection -> deterministic export without recipe or Stage 8 authority.",
     "base_branch": "main",
@@ -25,6 +25,7 @@
       "uv_studio/api/edit_state.py",
       "uv_studio/api/project_media.py",
       "uv_studio/api/projects.py",
+      "uv_studio/api/studio_timeline.py",
       "uv_studio/server.py",
       "tests/**",
       "tests_api/**",
