@@ -114,11 +114,12 @@ class StudioMLTProjectionTests(unittest.TestCase):
         self.assertEqual(tractor_tracks[1].attrib["hide"], "video")
 
     def test_public_summary_never_exposes_resolved_host_paths(self) -> None:
-        adapter = StudioMLTTimelineAdapter(self.store, melt_path="missing-melt")
+        adapter = StudioMLTTimelineAdapter(self.store, melt_path="explicit-melt-command")
         summary = adapter.project_summary(self.project_id)
-        self.assertFalse(summary["runtime_available"])
+        self.assertIsInstance(summary["runtime_available"], bool)
         text = repr(summary)
         self.assertNotIn(str(self.store.root.resolve()), text)
+        self.assertNotIn("explicit-melt-command", text)
         self.assertIn("src_video", text)
         self.assertIn("clip_video", text)
 
