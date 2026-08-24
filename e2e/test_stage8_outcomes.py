@@ -1,4 +1,4 @@
-"""Real browser outcomes for Stage 8 local Photo-to-Video and Visualizer modes."""
+"""Real browser outcomes for local Photo-to-Video and Visualizer modes."""
 
 from __future__ import annotations
 
@@ -98,12 +98,12 @@ class Stage8BrowserOutcomes(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-            raise unittest.SkipTest("Stage 8 browser E2E requires FFmpeg/FFprobe")
+            raise unittest.SkipTest("Local media browser E2E requires FFmpeg/FFprobe")
         npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
         if npm is None:
-            raise unittest.SkipTest("Stage 8 browser E2E requires npm")
+            raise unittest.SkipTest("Local media browser E2E requires npm")
 
-        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-studio-stage8-browser-e2e-")
+        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-studio-local-media-browser-e2e-")
         cls.temp_root = Path(cls._tmp.name)
         cls.artifact_dir = Path(
             os.environ.get("UV_E2E_ARTIFACT_DIR", str(ROOT / "e2e-artifacts"))
@@ -133,7 +133,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
             [sys.executable, "-m", "uv_studio.server"],
             cwd=ROOT,
             env=env,
-            log_path=cls.artifact_dir / "stage8-backend.log",
+            log_path=cls.artifact_dir / "local-media-backend.log",
         )
         try:
             _wait_http(f"{BACKEND_ORIGIN}/api/health", cls.backend)
@@ -141,7 +141,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
                 [npm, "run", "start", "--", "--hostname", "127.0.0.1", "--port", "3000"],
                 cwd=FRONTEND,
                 env=env,
-                log_path=cls.artifact_dir / "stage8-frontend.log",
+                log_path=cls.artifact_dir / "local-media-frontend.log",
             )
             _wait_http(f"{FRONTEND_ORIGIN}/projects", cls.frontend)
         except Exception:
@@ -195,14 +195,14 @@ class Stage8BrowserOutcomes(unittest.TestCase):
     def test_photo_and_visualizer_user_paths(self) -> None:
         page = self._new_page()
 
-        photo_id, photo_encoded = self._create_project("E2E Stage 8 Photo", "photo_to_video")
+        photo_id, photo_encoded = self._create_project("E2E Photo", "photo_to_video")
         page.goto(f"/projects/{photo_encoded}")
         expect(page.get_by_text("UV Studio", exact=True)).to_be_visible()
         expect(page.get_by_text("Video-Claw", exact=True)).to_have_count(0)
         expect(page.locator('a[href^="/pipelines"], a[href="/sandbox"]')).to_have_count(0)
         expect(page.locator('a[href="/settings"]')).to_be_visible()
         expect(page.get_by_role("heading", name="Фотографии → видео", exact=True)).to_be_visible()
-        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что делать дальше", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)
         expect(page.get_by_role("heading", name="Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
         expect(page.get_by_role("heading", name="Перевод, TTS и forced alignment", exact=True)).to_have_count(0)
@@ -281,11 +281,11 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         self.assertEqual(recovered_action_response.value.status, 200)
 
         visualizer_id, visualizer_encoded = self._create_project(
-            "E2E Stage 8 Visualizer", "visualizer"
+            "E2E Visualizer", "visualizer"
         )
         page.goto(f"/projects/{visualizer_encoded}")
         expect(page.get_by_role("heading", name="Аудио → визуализатор", exact=True)).to_be_visible()
-        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что делать дальше", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)).to_have_count(0)
         expect(page.get_by_role("heading", name="Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
         expect(page.get_by_role("heading", name="Перевод, TTS и forced alignment", exact=True)).to_have_count(0)
@@ -348,7 +348,7 @@ class Stage8BrowserOutcomes(unittest.TestCase):
         ).to_be_visible(timeout=60_000)
         expect(page.get_by_role("button", name="Собрать аудиовизуализатор", exact=True)).to_be_disabled()
 
-        page.screenshot(path=str(self.artifact_dir / "stage8-local-media-final.png"), full_page=True)
+        page.screenshot(path=str(self.artifact_dir / "local-media-final.png"), full_page=True)
 
 
 if __name__ == "__main__":
