@@ -9,50 +9,83 @@
 
 ## Current lifecycle
 
-PR #59 remains the single active **Draft**, but its product goal changed after real installed-Windows review rejected the recipe-card-first product concept.
+PR #59 remains the single active **Draft**. Its original installed-Windows acceptance goal was deliberately pivoted after real human review rejected the recipe-card-first product concept.
 
-The exact Windows candidate `95f96d3ecde159a1957e8ed56ad8da73d96458f6` is valuable automated infrastructure evidence only. CI and Stage 9 Release #395 were green, but that does **not** constitute product acceptance. The user explicitly rejected the underlying interaction model: hiding Stage/VideoClaw/provider implementation details did not turn the collection of recipes and source-ingestion panels into the intended creative product.
+The exact Windows candidate `95f96d3ecde159a1957e8ed56ad8da73d96458f6` remains valuable automated infrastructure evidence only. CI and Stage 9 Release #395 were green, but that build is **not product-accepted**.
 
 ## Product decision
 
-The product-facing authority must start from **user intent**, not from a technical recipe catalogue.
+The product-facing authority starts from **user intent**, not a technical recipe catalogue.
 
-The primary journey is now:
+Primary journey:
 
 1. user describes what they want to create;
 2. UV Studio stores that intent as canonical project state;
-3. the application layer projects a production plan from the intent, current project materials and Capability Registry;
-4. each plan step offers truthful routes such as generate, import/use own material, or complete manually;
+3. an application service projects a production plan from intent, selected project materials and Capability Registry;
+4. each step exposes truthful routes such as manual work, own materials, real generation capability, or local assembly;
 5. provider/model/recipe details remain execution concerns behind capabilities;
 6. deterministic assembly, review and export remain canonical UV Studio operations;
-7. unavailable generation is shown as a missing capability/connection, never as a fake completed feature.
+7. unavailable generation is shown as missing execution, never as a fake completed feature.
 
-Existing recipes, Stage 8 workspace files and legacy panels may remain temporarily as execution/compatibility primitives for preserved projects. They are no longer allowed to define the primary new-project UX.
+Existing recipes, Stage 8 workspace files and legacy panels remain temporarily as execution/compatibility primitives for preserved projects. They no longer define the default new-project UX.
 
-## Architectural direction under work
+## First intent-first vertical slice now implemented
 
-Introduce an application-owned creative-project boundary without breaking portable project archives:
+### Application state
 
-- store the new creative intent under `ProjectDocument.extensions` instead of bumping the project schema prematurely;
-- use a small application service to create/update intent-first projects and derive their production plan;
-- derive plan routes from the shared Capability Registry (`text.generate`, `image.generate`, `video.generate`, `speech.synthesize`, local assembly) rather than provider names;
-- allow existing local General Video assembly to remain an implementation path when the user supplies visuals;
-- keep cloud/paid execution explicit under D-017 and capability selection;
-- make the `/projects` first-run surface one goal-oriented creation form, not a grid of recipe cards;
-- keep old/specialized projects openable, but separate them from the default creation journey.
+- added `uv_studio.application.CreativeProjectService`;
+- new creative projects store `goal`, editable `script`, selected `material_source_ids`, `local_free_first` policy and paid-remote denial under `ProjectDocument.extensions["creative_project"]`;
+- the existing `general_video` recipe is retained only as an internal local-assembly primitive;
+- one creative preparation save validates exact project-owned source bytes, derives the bounded assembly workspace and commits creative state + execution projection in one `ProjectStore.update_project` write;
+- Stage 8 workspace validation was split from persistence so the application layer can coordinate that one write instead of frontend chaining two independent stores/APIs.
 
-## Previous acceptance findings retained
+### Product plan
 
-The earlier installed pass found and fixed inherited Chinese Settings text. A later pass found exposed Stage 6/8 terminology and provider/model configuration. Those findings remain valid, but the subsequent UI remediation was insufficient because it only made the old architecture more honest and less visible.
+`GET /api/uv/projects/{id}/creative-plan` projects one sequence:
 
-This slice is therefore **not waiting for acceptance of Release #395**. Product work continues on top of the proven packaging/runtime foundation until the intent-first path is real and testable.
+- Замысел;
+- Сценарий и план;
+- Визуальные материалы;
+- Голос, музыка и звук;
+- Черновая сборка;
+- Просмотр и правки.
+
+Routes are derived from Capability Registry locality/cost/availability. Own-material and manual routes are real immediately. Local assembly is the existing verified FFmpeg path. Provider-specific generation is not hard-coded into the product.
+
+### Capability truth
+
+Pinned VideoClaw `text.generate`, `image.generate`, `video.generate` and action-transfer compatibility offers are now `unavailable`, not `configuration_required`, because the current UV Studio build has no authoritative execution transport for them. Edge TTS remains separate because it is actually executable when installed. A real `mcp.*` AVAILABLE offer automatically changes the creative-plan route without provider-specific product code.
+
+### Frontend
+
+- `/projects` no longer displays a recipe catalogue for new projects;
+- the user enters one free-form goal and optional project name, then goes directly to `/projects/{id}/studio`;
+- new Studio presents one project sequence instead of separate product modes;
+- own image/video/audio upload is a route inside the materials step rather than a prerequisite for project creation;
+- selected source IDs and order are canonical creative-project state;
+- local assembly is surfaced simply as `Собрать ролик`, while `general_video` remains internal;
+- old projects continue to open in the compatibility interface without silent migration.
+
+### Browser proof updated
+
+Class C cold-start now proves:
+
+`/ -> /projects -> describe goal -> start project -> /studio -> add material -> save preparation -> local render -> open result`
+
+It explicitly proves no recipe choice, Stage 8 or Product Orchestrator terminology in the clean-state journey. General-video E2E now proves the same Studio reaches the existing verified local master while the internal recipe remains an implementation detail.
+
+## Known incomplete part
+
+A semantic generation capability can be registered and selected, including via MCP and D-017 authorization, but the Studio does not yet invent a generic `prompt -> artifact` payload contract. Therefore an AVAILABLE external generator is reported truthfully, but no fake “Generate” button is wired until its standardized semantic input/output contract is defined and tested.
+
+This is the next product-architecture problem after the current vertical slice passes permanent CI.
 
 ## Verification status
 
 - PR #58 Class C remains the last completed lifecycle slice.
 - PR #59 remains Draft and unaccepted.
-- Exact head `95f96d3e...` previously passed CI #2796/#2797 and Stage 9 Windows Release #395 before this product-architecture pivot.
-- New commits after the pivot require fresh permanent CI and, once the new product path is coherent, a fresh exact Windows Release and human pass.
+- Release #395 on the pre-pivot head is infrastructure evidence only.
+- Current post-pivot commits require fresh permanent CI before any new Stage 9 candidate is built.
 
 Missing `main` branch protection remains intentionally deferred per project direction.
 
