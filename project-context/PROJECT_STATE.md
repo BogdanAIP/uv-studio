@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-editor-spine -->
 <!-- uv-last-completed: product-usability-class-c-cold-start -->
 
 **Updated:** 2026-08-24
@@ -9,31 +10,111 @@
 
 ## Current lifecycle
 
-Repository context is **idle** after Class C cold-start usability PR #58 merged as `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
+A new clean Studio-v2 slice is active in Draft PR #60 on branch `studio-v2/editor-spine`, based exactly on maintained `main` `6f656a9a3b3ea885b3280e7dd6a9594daf1dcaf7`.
 
-Class C now proves the supported product from a user-equivalent clean state without repository knowledge, direct Project Store fixtures, hidden API readiness seeding, retired pipeline routes or developer-only shortcuts.
+The last merged lifecycle slice remains Class C cold-start usability PR #58, merge `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
 
-## Completed Class C boundary
+PR #59 was intentionally **closed without merge** after product review rejected the recipe/workspace/wizard-centered direction. Its 79-commit branch remains an engineering reference, especially for the proven Windows host/installer/integrity/update/rollback work, but it is not a maintained product baseline.
 
-- discovery begins from the normal UV Studio application entry path `/` and proceeds to `/projects`;
-- only recipes advertised by the product creation catalog are selected;
-- preserved-only Action Transfer, Digital Human and Performance/lip-sync remain absent from clean-state discovery;
-- project creation, prerequisite guidance and workspace routing are exercised through visible controls alone;
-- Photo-to-Video and Visualizer projects are created through visible recipe cards and the standard project form;
-- both representative paths use visible media controls and deterministic local FFmpeg-backed actions to reach rendered outcomes;
-- optional provider/runtime-specific journeys are not falsely claimed by this evidence;
-- the browser evidence runner emits UTF-8 diagnostics portably on Ubuntu and Windows.
+## Architecture conclusion
+
+D-063 is the current long-term product-composition authority.
+
+UV Studio is now being developed as a **Studio-first professional video/AI editing workspace**:
+
+- the project is the primary product object, not a recipe;
+- normal Studio composition is Media/Scenes + Preview + Inspector/AI Tools + multitrack Timeline;
+- AI model choice is visible to the user inside the relevant tool;
+- Settings configure provider/runtime connections, while Studio tools choose named models and creative parameters;
+- GUI, Agent, scripts and MCP use the same UV-owned semantic/application commands;
+- Project Store remains canonical;
+- MLT + selective OpenCut Classic reuse from D-033 remain the editor foundation;
+- Capability Registry, D-017 and MCP remain the replaceable execution/security layer underneath a future user-visible Model Registry;
+- targeted edit, dubbing, music, continuity, slideshow/visualizer and similar proven logic migrate into contextual Studio tools instead of top-level project modes.
+
+See:
+
+- `project-context/decisions/D-063-studio-first-product-architecture.md`;
+- `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`.
+
+## What is good and retained
+
+The architecture audit found a strong lower foundation that must not be rewritten:
+
+- Project Store, project-owned paths/references, archive/migrations and integrity checks;
+- D-033 editor foundation and the existing `ProjectEditor`/`RangeTimeline` seed;
+- MLT behind a UV adapter and FFmpeg deterministic media paths;
+- UV-owned Editor/Domain Command authority;
+- Capability Registry, offer selection and exact D-017 authorization;
+- MCP discovery/binding/execution boundaries;
+- targeted-edit, dubbing/translation, continuity and music domain/review logic where it protects real invariants;
+- previously proven Windows packaging/native-host engineering, to be selectively ported from archived #59 after the Studio product spine is accepted.
+
+## What is now compatibility/legacy
+
+Do not grow these as the long-term product center:
+
+- new-project identity based on `recipe_id`;
+- recipe-by-recipe Product Orchestrator growth;
+- Stage 6/Stage 8 as user-facing product structure;
+- specialized project workspaces when a contextual Studio tool can own the action;
+- legacy `/execution-plan` as a second modern truth;
+- old VideoClaw `/api/pipelines`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/project/*` frontend clients;
+- donor-era frontend `modelRegistry.ts` as the future model architecture.
+
+Compatibility code remains until callers are proven migrated; this is a strangler migration, not a delete-first rewrite.
+
+## Current active proof — Studio v2 editor spine
+
+PR #60 must prove a local/editor-first path before provider work:
+
+```text
+Project
+ -> Media Bin
+ -> import existing image/video
+ -> shared UV timeline command
+ -> canonical multitrack timeline
+ -> close/reopen
+ -> Preview/Timeline
+ -> derived MLT projection
+ -> deterministic export
+```
+
+Required properties:
+
+- no recipe selection in the v2 path;
+- no Stage 8 workspace in the v2 path;
+- Studio shell exposes Media Bin, Preview, Inspector and Timeline;
+- bounded clip add/move/trim/remove mutations use UV commands also callable programmatically;
+- canonical timeline survives reload;
+- MLT remains derived rather than canonical;
+- export/result is project-owned and registered;
+- schema-v1/recipe projects remain readable through compatibility boundaries.
+
+## Open-source reuse rule
+
+Reuse-first remains a core strategy and is reaffirmed by D-063.
+
+Correct pattern:
+
+`candidate -> license/evidence spike -> pin -> UV adapter/command -> needed primitive -> tests -> Studio tool`
+
+Rejected pattern:
+
+`donor -> copy donor application/workflow/project model -> expose it as another UV mode`
+
+This preserves the benefits of MLT, OpenCut, FFmpeg, Whisper-family tools, MCP servers and future open-source systems without allowing donor architecture to define UV Studio.
 
 ## Verification status
 
-Draft head `b280ef8f8698831e3f9a72428933f817da12366d` passed all five permanent CI jobs in workflow run `32697091699`.
+The maintained `main` baseline is still the post-Class-C state from PR #58. PR #60 has only established the new durable architecture/context so far; the Studio editor-spine implementation and exact-head CI evidence are still pending.
 
-Review head `068f5f3687a74af9bc27ea5f75fc0941fdab983b` passed all five permanent CI jobs in workflow run `32697793227`, including browser user-outcome coverage on Ubuntu and Windows, and PR #58 merged without review threads as `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
+Historical Release #395 on archived #59 remains evidence for Windows packaging/runtime engineering only. It is **not** human product acceptance and must not be reused as proof of Studio v2 behavior.
 
-Stage 9 remains blocked until installed Windows human acceptance is complete. Missing `main` branch protection remains an external repository-setting P0 and is intentionally deferred per the current development direction.
+`main` branch protection remains intentionally deferred per current development direction.
 
-## Next authorized slice
+## Next authorized slice after PR #60
 
-`product-usability-installed-windows-human-acceptance`, defined by `project-context/NEXT_TASK.md`.
+`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`.
 
-That gate must test the packaged application on Windows and must not be substituted with CI browser evidence. Architecture hardening can be prepared in parallel only after preserving this P0 gate as explicit durable context.
+After transaction/undo foundations, proceed to a backend-owned user-visible Model Registry, then Job Manager, then one real named Image AI vertical.
