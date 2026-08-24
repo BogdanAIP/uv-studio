@@ -40,15 +40,16 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(local["adapter"]["kind"], "local")
         self.assertIn(local["availability"], {"available", "unavailable"})
 
-    def test_native_generation_offer_is_configuration_required(self) -> None:
+    def test_native_generation_offer_is_unavailable_without_execution_transport(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.generate/offers")
         self.assertEqual(response.status_code, 200, response.text)
         offers = response.json()
         self.assertEqual(len(offers), 1)
         offer = offers[0]
-        self.assertEqual(offer["availability"], "configuration_required")
+        self.assertEqual(offer["availability"], "unavailable")
         self.assertEqual(offer["cost_class"], "potentially_paid")
         self.assertEqual(offer["adapter"]["adapter_id"], "native_videoclaw")
+        self.assertIn("нет авторитетного исполняемого транспорта", offer["reason"])
 
     def test_digital_human_exposes_only_optional_local_musetalk_offer(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.digital_human/offers")
@@ -69,10 +70,11 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         detail = response.json()
         self.assertEqual(detail["offer_summary"]["total"], 1)
-        self.assertEqual(detail["offer_summary"]["configuration_required"], 1)
+        self.assertEqual(detail["offer_summary"]["configuration_required"], 0)
+        self.assertEqual(detail["offer_summary"]["unavailable"], 1)
         self.assertEqual(detail["execution_summary"]["local_free_available"], 0)
         self.assertEqual(detail["execution_summary"]["external_available"], 0)
-        self.assertEqual(detail["execution_summary"]["external_configuration_required"], 1)
+        self.assertEqual(detail["execution_summary"]["external_configuration_required"], 0)
 
         digital_human = self.client.get("/api/uv/capabilities/video.digital_human").json()
         self.assertEqual(digital_human["offer_summary"]["total"], 1)
