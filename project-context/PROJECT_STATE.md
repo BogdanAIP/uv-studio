@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-editor-spine -->
 
 **Updated:** 2026-08-24
@@ -9,7 +9,9 @@
 
 ## Current lifecycle
 
-Studio v2 editor-spine is active in Draft PR #61 on branch `stage-10/studio-v2-editor-spine`, based exactly on maintained `main` `6f656a9a3b3ea885b3280e7dd6a9594daf1dcaf7`.
+Studio v2 editor-spine is frozen for Review in PR #61 on branch `stage-10/studio-v2-editor-spine`, based exactly on maintained `main` `6f656a9a3b3ea885b3280e7dd6a9594daf1dcaf7`.
+
+Draft candidate `1837ae279723902ca0b80674c4ca5a0bb4b76a3a` passed the complete permanent CI set in run #2912 on Ubuntu and Windows, including browser user-outcome evidence. The lifecycle-only review transition creates a new exact review head; that head must independently pass the same five required checks before merge.
 
 The last merged lifecycle slice remains Class C cold-start usability PR #58, merge `9d3f9f04800e7cc3a1e280038a15b0efc53f3ca4`.
 
@@ -62,9 +64,9 @@ Do not grow these as the long-term product center:
 
 Compatibility code remains until callers are proven migrated; this is a strangler migration, not a delete-first rewrite.
 
-## Current active proof — Studio v2 editor spine
+## Review candidate — Studio v2 editor spine
 
-PR #61 now contains the first real vertical implementation:
+PR #61 contains the first real vertical implementation:
 
 ```text
 Project
@@ -109,13 +111,19 @@ This preserves the benefits of MLT, OpenCut, FFmpeg, Whisper-family tools, MCP s
 
 ## Verification status
 
-The first PR #61 CI attempt proved that the new API integration suite and the existing real-media suite still pass, including the new Studio API tests. It also exposed three expected stabilization problems rather than product regressions:
+Draft candidate `1837ae279723902ca0b80674c4ca5a0bb4b76a3a` passed CI run #2912:
 
-1. lifecycle context still carried a draft-forbidden `uv-last-completed` marker and stale #60 text;
-2. one Studio MLT unit test incorrectly assumed an explicitly supplied `melt_path` must be unavailable;
-3. the new `StudioWorkspace` had three React `set-state-in-effect` lint errors.
+- development-context — success;
+- bootstrap Ubuntu — success;
+- bootstrap Windows — success;
+- app-baseline Ubuntu — success;
+- app-baseline Windows — success.
 
-Those failures are being corrected in this Draft. Exact-head frontend build/browser evidence and all permanent Ubuntu/Windows checks are still required before Review.
+Both app-baseline jobs passed API integration, real-media tests, frontend lint/audit/build and the browser user-outcome suite. The Class-C browser path now proves visible Studio-first creation, media import, timeline create/add/trim, navigation away and reopen persistence, and real local export without recipe selection or direct Project Store seeding.
+
+This automated evidence is not human installed-Windows acceptance. No such human acceptance is claimed for this slice.
+
+The Review head is frozen except for review fixes. Merge remains blocked until the exact Review head passes all five permanent checks and there are no unresolved review threads.
 
 Historical Release #395 on archived #59 remains evidence for Windows packaging/runtime engineering only. It is **not** human product acceptance and must not be reused as proof of Studio v2 behavior.
 
