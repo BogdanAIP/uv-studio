@@ -1,4 +1,5 @@
 import type { UVProject } from './projectsApi';
+import type { Stage8RecipeWorkspace } from './stage8WorkspaceApi';
 
 export type CreativeRouteState = 'ready' | 'needs_connection' | 'unavailable' | 'blocked';
 export type CreativePhaseState = 'complete' | 'actionable' | 'optional' | 'blocked' | 'waiting';
@@ -44,6 +45,12 @@ export interface CreativePlan {
   };
   current_outcome: Record<string, unknown> | null;
   phases: CreativePhase[];
+}
+
+export interface CreativePreparationResult {
+  project: UVProject;
+  workspace: Stage8RecipeWorkspace;
+  plan: CreativePlan;
 }
 
 async function apiError(response: Response, fallback: string): Promise<Error> {
@@ -92,5 +99,18 @@ export async function updateCreativeIntent(
     body: JSON.stringify(input),
   });
   if (!response.ok) throw await apiError(response, 'Не удалось сохранить замысел проекта');
+  return response.json();
+}
+
+export async function saveCreativePreparation(
+  projectId: string,
+  input: { goal: string; script: string; source_ids: string[] },
+): Promise<CreativePreparationResult> {
+  const response = await fetch(`/api/uv/projects/${encodeURIComponent(projectId)}/creative-preparation`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw await apiError(response, 'Не удалось сохранить подготовку проекта');
   return response.json();
 }
