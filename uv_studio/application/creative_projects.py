@@ -28,6 +28,7 @@ from uv_studio.recipes import RecipeRegistry, UnknownRecipe
 CREATIVE_EXTENSION_KEY = "creative_project"
 CREATIVE_SCHEMA_VERSION = 1
 _INTERNAL_RECIPE_ID = "general_video"
+_MAX_MATERIAL_SOURCE_IDS = 200
 
 
 class CreativeProjectError(RuntimeError):
@@ -56,6 +57,20 @@ def _optional_text(value: str | None, *, field_name: str, max_length: int) -> st
     return normalized
 
 
+def _material_source_ids(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise CreativeProjectError("creative project material_source_ids must be an array")
+    if len(value) > _MAX_MATERIAL_SOURCE_IDS:
+        raise CreativeProjectError("creative project has too many selected materials")
+    if any(not isinstance(item, str) or not item for item in value):
+        raise CreativeProjectError("creative project material_source_ids must contain non-empty ids")
+    if len(set(value)) != len(value):
+        raise CreativeProjectError("creative project material_source_ids must be unique")
+    return list(value)
+
+
 def _creative_extension(project: ProjectDocument) -> dict[str, Any]:
     raw = project.extensions.get(CREATIVE_EXTENSION_KEY)
     if not isinstance(raw, dict):
@@ -72,6 +87,7 @@ def _creative_extension(project: ProjectDocument) -> dict[str, Any]:
         "schema_version": CREATIVE_SCHEMA_VERSION,
         "goal": goal.strip(),
         "script": script.strip(),
+        "material_source_ids": _material_source_ids(raw.get("material_source_ids", [])),
         "provider_policy": "local_free_first",
         "allow_paid_remote": False,
     }
@@ -174,6 +190,7 @@ class CreativeProjectService:
             "schema_version": CREATIVE_SCHEMA_VERSION,
             "goal": normalized_goal,
             "script": "",
+            "material_source_ids": [],
             "provider_policy": "local_free_first",
             "allow_paid_remote": False,
         }
@@ -212,7 +229,7 @@ class CreativeProjectService:
         script: str,
         source_ids: Sequence[str],
     ) -> tuple[ProjectDocument, Stage8RecipeWorkspace]:
-        """Commit user intent and the bounded assembly projection in one store write."""
+        """Commit creative state and the bounded assembly projection in one store write."""
 
         project = self._load(project_id)
         current = _creative_extension(project)
@@ -222,13 +239,14 @@ class CreativeProjectService:
             field_name="script",
             max_length=100_000,
         ) or ""
+        current["material_source_ids"] = _material_source_ids(list(source_ids))
         try:
             workspace = build_stage8_workspace_for_project(
                 self.store,
                 project,
                 brief=current["goal"],
                 script=current["script"],
-                source_ids=source_ids,
+                source_ids=current["material_source_ids"],
             )
             extensions = extensions_with_stage8_workspace(project, workspace)
             extensions[CREATIVE_EXTENSION_KEY] = current
@@ -260,6 +278,11 @@ class CreativeProjectService:
         video_count = sum(source.kind == "video" for source in project.sources)
         audio_count = sum(source.kind == "audio" for source in project.sources)
         visual_count = image_count + video_count
+        selected_ids = intent["material_source_ids"]
+        source_by_id = {source.id: source for source in project.sources}
+        selected_sources = [source_by_id[item] for item in selected_ids if item in source_by_id]
+        selected_visual_count = sum(source.kind in {"image", "video"} for source in selected_sources)
+        selected_audio_count = sum(source.kind == "audio" for source in selected_sources)
 
         text_route = _capability_route(self.registry, "text.generate")
         image_route = _capability_route(self.registry, "image.generate")
@@ -277,19 +300,22 @@ class CreativeProjectService:
             next_step = "Просмотрите готовый ролик и решите, нужны ли правки или новый вариант."
         elif render_action is not None and render_action.enabled:
             overall_state = "ready_to_assemble"
-            next_step = "Материалы готовы. Сохраните их порядок и соберите первый черновой ролик."
+            next_step = "Материалы готовы. Соберите первый черновой ролик."
         elif visual_count == 0:
             overall_state = "needs_materials"
             if image_route["state"] == "ready" or video_route["state"] == "ready":
                 next_step = "Создайте визуальные материалы подключённым генератором или добавьте свои файлы."
             else:
                 next_step = "Добавьте свои изображения/видео либо подключите генератор изображений или видео."
-        elif not intent["script"]:
-            overall_state = "planning"
-            next_step = "Уточните план ролика и сохраните выбранные визуальные материалы."
+        elif selected_visual_count == 0:
+            overall_state = "needs_selection"
+            next_step = "Выберите из материалов проекта хотя бы одно изображение или видео для первого черновика."
+        elif selected_audio_count > 1:
+            overall_state = "needs_selection"
+            next_step = "Для первого локального черновика оставьте не более одной выбранной аудиодорожки."
         else:
             overall_state = "preparing"
-            next_step = "Сохраните план и выбранные материалы, чтобы открыть финальную локальную сборку."
+            next_step = "Сохраните текущий план и материалы, чтобы открыть локальную сборку."
 
         phases = [
             {
@@ -328,13 +354,15 @@ class CreativeProjectService:
             {
                 "phase_id": "visuals",
                 "title": "Визуальные материалы",
-                "state": "complete" if visual_count else "actionable",
+                "state": "complete" if selected_visual_count else "actionable",
                 "summary": (
-                    f"В проекте {visual_count} визуальных материалов."
+                    f"Для черновика выбрано {selected_visual_count} визуальных материалов."
+                    if selected_visual_count
+                    else f"В библиотеке проекта {visual_count} визуальных материалов; выберите нужные или добавьте новые."
                     if visual_count
                     else "Нужны кадры: их можно импортировать или получить через подключённую генерацию."
                 ),
-                "blocking": visual_count == 0,
+                "blocking": selected_visual_count == 0,
                 "routes": [
                     {
                         "route_id": "use_own_media",
@@ -358,13 +386,15 @@ class CreativeProjectService:
             {
                 "phase_id": "audio",
                 "title": "Голос, музыка и звук",
-                "state": "complete" if audio_count else "optional",
+                "state": "complete" if selected_audio_count else "optional",
                 "summary": (
-                    f"В проекте {audio_count} аудиоматериалов."
-                    if audio_count
-                    else "Этот шаг необязателен для первого черновика. Можно добавить готовое аудио или подключить синтез речи."
+                    "Для черновика выбрана одна аудиодорожка."
+                    if selected_audio_count == 1
+                    else "Для первого локального черновика оставьте не более одной аудиодорожки."
+                    if selected_audio_count > 1
+                    else "Этот шаг необязателен. Можно добавить готовое аудио или подключить синтез речи."
                 ),
-                "blocking": False,
+                "blocking": selected_audio_count > 1,
                 "routes": [
                     {
                         "route_id": "use_own_audio",
@@ -430,6 +460,7 @@ class CreativeProjectService:
             "title": project.title,
             "goal": intent["goal"],
             "script": intent["script"],
+            "material_source_ids": selected_ids,
             "provider_policy": intent["provider_policy"],
             "allow_paid_remote": intent["allow_paid_remote"],
             "overall_state": overall_state,
@@ -439,6 +470,8 @@ class CreativeProjectService:
                 "videos": video_count,
                 "audio": audio_count,
                 "visuals": visual_count,
+                "selected_visuals": selected_visual_count,
+                "selected_audio": selected_audio_count,
             },
             "current_outcome": asdict(outcome) if outcome is not None else None,
             "phases": phases,
