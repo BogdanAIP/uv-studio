@@ -1,7 +1,8 @@
-"""Browser evidence for the supported General Video journey.
+"""Browser evidence for the intent-first creative Studio local assembly path.
 
-From an empty project, task entry, image/video import, save and final render are
-driven through the same user-facing controls presented by the installed product.
+The test starts from canonical creative intent, uses only Studio-visible material
+and preparation controls, and proves the internal General Video primitive remains
+an implementation detail while the project reaches a real local master.
 """
 
 from __future__ import annotations
@@ -50,16 +51,16 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-            raise unittest.SkipTest("General Video browser E2E requires FFmpeg/FFprobe")
+            raise unittest.SkipTest("Creative Studio browser E2E requires FFmpeg/FFprobe")
         npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
         if npm is None:
-            raise unittest.SkipTest("General Video browser E2E requires npm")
-        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-general-video-e2e-")
+            raise unittest.SkipTest("Creative Studio browser E2E requires npm")
+        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-creative-studio-e2e-")
         cls.temp_root = Path(cls._tmp.name)
         cls.artifact_dir = Path(os.environ.get("UV_E2E_ARTIFACT_DIR", str(ROOT / "e2e-artifacts"))).resolve()
         cls.artifact_dir.mkdir(parents=True, exist_ok=True)
-        cls.image = cls.temp_root / "general-frame.png"
-        cls.video = cls.temp_root / "general-clip.mp4"
+        cls.image = cls.temp_root / "creative-frame.png"
+        cls.video = cls.temp_root / "creative-clip.mp4"
         _image_fixture(cls.image)
         _video_fixture(cls.video)
         env = os.environ.copy()
@@ -71,14 +72,14 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
         })
         cls.backend = _start_process(
             [sys.executable, "-m", "uv_studio.server"], cwd=ROOT, env=env,
-            log_path=cls.artifact_dir / "general-video-backend.log",
+            log_path=cls.artifact_dir / "creative-studio-backend.log",
         )
         try:
             _wait_http(f"{BACKEND_ORIGIN}/api/health", cls.backend)
             cls.frontend = _start_process(
                 [npm, "run", "start", "--", "--hostname", "127.0.0.1", "--port", "3000"],
                 cwd=FRONTEND, env=env,
-                log_path=cls.artifact_dir / "general-video-frontend.log",
+                log_path=cls.artifact_dir / "creative-studio-frontend.log",
             )
             _wait_http(f"{FRONTEND_ORIGIN}/projects", cls.frontend)
         except Exception:
@@ -109,35 +110,54 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
             cls._tmp.cleanup()
 
     def _new_page(self) -> Page:
-        context = self.browser.new_context(base_url=FRONTEND_ORIGIN, viewport={"width": 1600, "height": 1200}, locale="ru-RU")
+        context = self.browser.new_context(base_url=FRONTEND_ORIGIN, viewport={"width": 1600, "height": 1400}, locale="ru-RU")
         self.addCleanup(context.close)
         page = context.new_page()
         page.set_default_timeout(60_000)
         return page
 
-    def test_general_workspace_reaches_current_master_from_visible_inputs(self) -> None:
+    def test_intent_first_studio_reaches_current_master_from_visible_inputs(self) -> None:
         page = self._new_page()
-        title = "General Video E2E"
-        project = _api_json("POST", "/api/uv/projects", {"title": title, "recipe_id": "general_video"})
+        title = "Creative Studio E2E"
+        project = _api_json(
+            "POST",
+            "/api/uv/creative-projects",
+            {"title": title, "goal": "Собрать короткий ролик из изображения и клипа"},
+        )
         project_id = project["project_id"]
         encoded = urllib.parse.quote(project_id, safe="")
-        page.goto(f"/projects/{encoded}")
+        page.goto(f"/projects/{encoded}/studio")
+
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Как получить готовый ролик", exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Обычный видеоролик", exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Сборка текущего визуального ряда", exact=True)).to_be_visible()
-        page.get_by_label("Описание задачи").fill("Собрать короткий ролик из изображения и клипа")
-        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
+        expect(page.get_by_text("Следующий шаг", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что именно делаем", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Из чего будет состоять ролик", exact=True)).to_be_visible()
+        expect(page.get_by_text("General Video", exact=False)).to_have_count(0)
+        expect(page.get_by_text("Stage 8", exact=False)).to_have_count(0)
+
+        page.get_by_label("Сценарий и план").fill("1. Статичный кадр. 2. Короткий видеоклип.")
+        page.get_by_label("Добавить изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_label("Добавить своё видео").set_input_files(str(self.video))
+        page.get_by_label("Добавить видео").set_input_files(str(self.video))
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
-        expect(page.get_by_text("Порядок визуального ряда", exact=True)).to_be_visible()
-        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
-        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
-        render_button = page.get_by_role("button", name="Собрать обычный видеоролик", exact=True)
+        expect(page.get_by_text("Порядок первого черновика", exact=True)).to_be_visible()
+
+        page.get_by_role("button", name="Сохранить подготовку", exact=True).click()
+        expect(
+            page.get_by_text(
+                "Замысел, план и выбранные материалы сохранены как одно состояние проекта.",
+                exact=True,
+            )
+        ).to_be_visible(timeout=60_000)
+
+        render_button = page.get_by_role("button", name="Собрать ролик", exact=True)
         expect(render_button).to_be_enabled(timeout=60_000)
         render_button.click()
-        expect(page.get_by_text("Текущий мастер соответствует входам", exact=True)).to_be_visible(timeout=120_000)
+        expect(
+            page.get_by_text("Текущий ролик соответствует сохранённым материалам", exact=True)
+        ).to_be_visible(timeout=120_000)
+        expect(page.get_by_role("link", name="Открыть готовый ролик", exact=False)).to_be_visible()
+
         workflow = _api_json("GET", _project_path(project_id, "/workflow"))
         self.assertEqual(workflow["recipe_id"], "general_video")
         self.assertEqual([item["workspace_id"] for item in workflow["relevant_workspaces"]], ["general_video"])
@@ -148,7 +168,12 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
         self.assertEqual([item["kind"] for item in metadata["visual_bindings"]], ["image", "video"])
         self.assertTrue(metadata["visual_bindings"][1]["embedded_audio_ignored"])
         self.assertIsNone(metadata["audio_binding"])
-        page.screenshot(path=str(self.artifact_dir / "general-video-outcome.png"), full_page=True)
+
+        creative = _api_json("GET", _project_path(project_id, "/creative-plan"))
+        self.assertEqual(creative["overall_state"], "result_ready")
+        self.assertEqual(creative["source_summary"]["selected_visuals"], 2)
+        self.assertEqual(len(creative["material_source_ids"]), 2)
+        page.screenshot(path=str(self.artifact_dir / "creative-studio-outcome.png"), full_page=True)
 
 
 if __name__ == "__main__":
