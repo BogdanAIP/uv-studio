@@ -25,7 +25,7 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
         page.goto("/")
         page.wait_for_url("**/projects")
         expect(page.get_by_role("heading", name="Проекты", exact=True)).to_be_visible()
-        expect(page.get_by_text("Что нужно сделать?", exact=True)).to_be_visible()
+        expect(page.get_by_text("1. Что хотите получить?", exact=True)).to_be_visible()
 
         # Preserved-only compatibility recipes must stay out of clean-state
         # discovery. This proves the user is not asked to understand internal
@@ -34,22 +34,21 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
             expect(page.get_by_role("button", name=hidden_title, exact=False)).to_have_count(0)
 
         recipe = page.get_by_role("button", name=recipe_title, exact=False)
+        if recipe.count() and not recipe.is_visible():
+            page.get_by_text("Другие и подготовительные режимы", exact=False).click()
         expect(recipe).to_be_visible()
         recipe.click()
         expect(recipe.get_by_text("Выбрано", exact=True)).to_be_visible()
 
-        title_input = page.get_by_placeholder("Название нового проекта")
+        title_input = page.get_by_placeholder("Например: Ролик о новом продукте")
         title_input.fill(project_title)
-        create_button = page.get_by_role("button", name="Создать проект", exact=True)
+        create_button = page.get_by_role("button", name="Создать и открыть", exact=True)
         expect(create_button).to_be_enabled()
         create_button.click()
 
-        project_link = page.get_by_role("link", name=project_title, exact=False)
-        expect(project_link).to_be_visible(timeout=30_000)
-        project_link.click()
         page.wait_for_url("**/projects/*")
         expect(page.get_by_role("heading", name=project_title, exact=True)).to_be_visible()
-        expect(page.get_by_text("Product Orchestrator", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что делать дальше", exact=True)).to_be_visible()
 
     def test_clean_user_discovers_creates_and_completes_local_supported_tasks(self) -> None:
         page = self._new_page()
@@ -108,8 +107,8 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
         )
 
         report = {
-            "entry_path": "/ -> /projects",
-            "project_creation": "visible_catalog_only",
+            "entry_path": "/ -> /projects -> /projects/{id}",
+            "project_creation": "visible_catalog_and_auto_open",
             "hidden_setup": False,
             "direct_store_fixture": False,
             "outcomes": ["photo_to_video_rendered", "visualizer_rendered"],
