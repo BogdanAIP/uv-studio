@@ -1,4 +1,4 @@
-"""Browser regressions for Stage 8 composition workspaces and Product Orchestrator routing."""
+"""Browser regressions for composition workspaces and product routing."""
 
 from __future__ import annotations
 
@@ -89,12 +89,12 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
-            raise unittest.SkipTest("Stage 8 composition browser E2E requires FFmpeg/FFprobe")
+            raise unittest.SkipTest("Composition browser E2E requires FFmpeg/FFprobe")
         npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
         if npm is None:
-            raise unittest.SkipTest("Stage 8 composition browser E2E requires npm")
+            raise unittest.SkipTest("Composition browser E2E requires npm")
 
-        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-studio-stage8-composition-e2e-")
+        cls._tmp = tempfile.TemporaryDirectory(prefix="uv-studio-composition-e2e-")
         cls.temp_root = Path(cls._tmp.name)
         cls.artifact_dir = Path(
             os.environ.get("UV_E2E_ARTIFACT_DIR", str(ROOT / "e2e-artifacts"))
@@ -120,7 +120,7 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
             [sys.executable, "-m", "uv_studio.server"],
             cwd=ROOT,
             env=env,
-            log_path=cls.artifact_dir / "stage8-composition-backend.log",
+            log_path=cls.artifact_dir / "composition-backend.log",
         )
         try:
             _wait_http(f"{BACKEND_ORIGIN}/api/health", cls.backend)
@@ -128,7 +128,7 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
                 [npm, "run", "start", "--", "--hostname", "127.0.0.1", "--port", "3000"],
                 cwd=FRONTEND,
                 env=env,
-                log_path=cls.artifact_dir / "stage8-composition-frontend.log",
+                log_path=cls.artifact_dir / "composition-frontend.log",
             )
             _wait_http(f"{FRONTEND_ORIGIN}/projects", cls.frontend)
         except Exception:
@@ -188,47 +188,49 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
     def test_story_commercial_narrated_round_trip_and_free_routes_to_targeted_edit(self) -> None:
         page = self._new_page()
 
-        _story_id, story_encoded = self._create_project("E2E Stage 8 Story", "story_video")
+        _story_id, story_encoded = self._create_project("E2E Story", "story_video")
         page.goto(f"/projects/{story_encoded}")
-        expect(page.get_by_role("heading", name="Сюжетное рабочее пространство", exact=True)).to_be_visible()
-        page.get_by_label("Stage 8 brief").fill("Герой возвращается домой после долгого путешествия")
-        page.get_by_label("Stage 8 script").fill("Сцена 1. Герой входит в кадр.")
-        page.locator('input[aria-label="Stage 8 workspace video"]').set_input_files(str(self.video))
+        expect(page.get_by_role("heading", name="Подготовка сюжетного видео", exact=True)).to_be_visible()
+        expect(page.get_by_text("Stage 8", exact=False)).to_have_count(0)
+        expect(page.get_by_text("Stage 6", exact=False)).to_have_count(0)
+        page.get_by_label("Описание задачи").fill("Герой возвращается домой после долгого путешествия")
+        page.get_by_label("Сценарий или текст").fill("Сцена 1. Герой входит в кадр.")
+        page.get_by_label("Добавить своё видео").set_input_files(str(self.video))
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(story_encoded, "story_video", "video", "story_video")
         page.reload()
-        expect(page.get_by_label("Stage 8 brief")).to_have_value("Герой возвращается домой после долгого путешествия")
+        expect(page.get_by_label("Описание задачи")).to_have_value("Герой возвращается домой после долгого путешествия")
         expect(page.get_by_label(f"Использовать {self.video.name}")).to_be_checked(timeout=60_000)
 
         _commercial_id, commercial_encoded = self._create_project(
-            "E2E Stage 8 Commercial", "commercial_product"
+            "E2E Commercial", "commercial_product"
         )
         page.goto(f"/projects/{commercial_encoded}")
-        expect(page.get_by_role("heading", name="Продуктовое рабочее пространство", exact=True)).to_be_visible()
-        page.get_by_label("Stage 8 brief").fill("Показать продукт крупно и сохранить точные детали упаковки")
-        page.get_by_label("Stage 8 script").fill("Текст оффера без подмены продукта")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        expect(page.get_by_role("heading", name="Подготовка рекламного ролика", exact=True)).to_be_visible()
+        page.get_by_label("Описание задачи").fill("Показать продукт крупно и сохранить точные детали упаковки")
+        page.get_by_label("Сценарий или текст").fill("Текст оффера без подмены продукта")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(commercial_encoded, "commercial_product", "image", "product_image")
         page.reload()
-        expect(page.get_by_label("Stage 8 script")).to_have_value("Текст оффера без подмены продукта")
+        expect(page.get_by_label("Сценарий или текст")).to_have_value("Текст оффера без подмены продукта")
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
 
         _narrated_id, narrated_encoded = self._create_project("E2E Narrated", "narrated_video")
         page.goto(f"/projects/{narrated_encoded}")
         expect(page.get_by_role("heading", name="Видео с дикторской дорожкой", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Подготовленная речь", exact=True)).to_be_visible()
-        expect(page.locator('input[aria-label="Stage 8 workspace audio"]')).to_have_count(0)
-        page.get_by_label("Stage 8 brief").fill("Коротко объяснить процесс")
-        page.get_by_label("Stage 8 script").fill("Три секунды проверенного текста диктора.")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        expect(page.get_by_label("Добавить своё аудио · необязательно")).to_have_count(0)
+        page.get_by_label("Описание задачи").fill("Коротко объяснить процесс")
+        page.get_by_label("Сценарий или текст").fill("Три секунды проверенного текста диктора.")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(page.get_by_text("Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
         self._assert_workspace(narrated_encoded, "narrated_video", "image", "narrated_image")
 
         page.locator('input[aria-label="Narrated prepared audio upload"]').set_input_files(str(self.audio))
@@ -247,13 +249,12 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         expect(
             page.get_by_role("heading", name="Точечное редактирование исходного видео", exact=True)
         ).to_be_visible()
-        expect(page.get_by_role("heading", name="Свободное рабочее пространство", exact=True)).to_have_count(0)
+        expect(page.get_by_role("heading", name="Свободный проект", exact=True)).to_have_count(0)
         expect(page.get_by_text("Дубляж в том же проекте и таймлайне", exact=True)).to_have_count(0)
         expect(page.get_by_text("Непрерывность связанных кадров", exact=True)).to_have_count(0)
-        expect(page.locator('input[aria-label="Stage 8 workspace audio"]')).to_have_count(0)
-        expect(page.get_by_role("heading", name="Нужна подготовка", exact=True)).to_be_visible()
+        expect(page.get_by_text("Есть следующий шаг", exact=True)).to_be_visible()
 
-        page.screenshot(path=str(self.artifact_dir / "stage8-composition-workspaces.png"), full_page=True)
+        page.screenshot(path=str(self.artifact_dir / "composition-workspaces.png"), full_page=True)
 
 
 if __name__ == "__main__":
