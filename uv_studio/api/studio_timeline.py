@@ -1,14 +1,15 @@
-"""Studio v2 timeline HTTP projection over the shared command service."""
+"""Studio v2 HTTP boundary over canonical project/timeline services."""
 
 from __future__ import annotations
 
 from typing import Annotated, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.capability_execution import get_local_ffmpeg_adapter
-from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.api.projects import ProjectPayload, ProjectReferencePayload, get_project_store
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
 from uv_studio.capabilities.execution import CapabilityToolFailed, CapabilityToolUnavailable
 from uv_studio.editor.studio_mlt import StudioMLTError, StudioMLTTimelineAdapter
@@ -22,14 +23,26 @@ from uv_studio.editor.timeline_commands import (
     TimelineCommandService,
     TrimClipCommand,
 )
-from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
+from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.store import (
+    ProjectAlreadyExists,
+    ProjectNotFound,
+    ProjectStore,
+    ProjectStoreError,
+)
 from uv_studio.projects.timeline import TimelineError, TimelineStore
 
-router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Studio Timeline"])
+router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Studio"])
+_STUDIO_COMPAT_RECIPE_ID = "studio_v2"
+_STUDIO_EXTENSION_KEY = "studio"
 
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class CreateStudioProjectPayload(_StrictModel):
+    title: str = Field(min_length=1, max_length=500)
 
 
 class TimelineClipPayload(_StrictModel):
@@ -156,7 +169,12 @@ class StudioRenderPayload(_StrictModel):
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, ProjectNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if isinstance(exc, (TimelineCommandError, TimelineError, StudioMLTError, StudioRenderError)):
+    if isinstance(exc, ProjectAlreadyExists):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project already exists")
+    if isinstance(
+        exc,
+        (ProjectValidationError, TimelineCommandError, TimelineError, StudioMLTError, StudioRenderError),
+    ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, CapabilityToolUnavailable):
         return HTTPException(
@@ -169,8 +187,35 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Studio timeline operation failed",
+        detail="Studio operation failed",
     )
+
+
+@router.post("/studio", response_model=ProjectPayload, status_code=status.HTTP_201_CREATED)
+def create_studio_project(
+    request: CreateStudioProjectPayload,
+    store: ProjectStore = Depends(get_project_store),
+) -> ProjectPayload:
+    """Create a Studio-first project without exposing recipe selection to the user.
+
+    Project schema v1 still requires ``recipe_id``. ``studio_v2`` is neutral
+    compatibility metadata only: Studio state, commands and rendering do not read it.
+    """
+
+    try:
+        project = store.create_project(
+            title=request.title,
+            recipe_id=_STUDIO_COMPAT_RECIPE_ID,
+            extensions={
+                _STUDIO_EXTENSION_KEY: {
+                    "schema_version": 1,
+                    "product_model": "studio_first",
+                }
+            },
+        )
+        return ProjectPayload.model_validate(project.to_dict())
+    except (ProjectValidationError, ProjectAlreadyExists, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
 
 
 @router.get("/{project_id}/studio/timeline", response_model=TimelinePayload)
@@ -220,6 +265,48 @@ def render_studio_timeline(
         ProjectStoreError,
     ) as exc:
         raise _translate(exc) from exc
+
+
+@router.get("/{project_id}/studio/exports/{artifact_id}/media", response_class=FileResponse)
+def stream_studio_export(
+    project_id: str,
+    artifact_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    """Stream only a registered Studio video export from the project ``exports`` root."""
+
+    try:
+        project = store.load_project(project_id)
+        reference = next(
+            (
+                item
+                for item in project.artifacts
+                if item.id == artifact_id
+                and item.kind == "video"
+                and item.metadata.get("role") == "studio-export"
+            ),
+            None,
+        )
+        if reference is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Studio export not found")
+        path = store.resolve_project_file(
+            project_id,
+            reference.path,
+            must_exist=True,
+            allowed_roots=("exports",),
+        )
+    except HTTPException:
+        raise
+    except (ProjectNotFound, ProjectValidationError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+    if not path.is_file() or path.is_symlink():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Studio export not found")
+    return FileResponse(
+        path=path,
+        media_type="video/mp4",
+        filename=path.name,
+        content_disposition_type="inline",
+    )
 
 
 @router.post(
