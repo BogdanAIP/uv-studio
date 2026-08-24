@@ -46,11 +46,13 @@ class CreativeProjectServiceTests(unittest.TestCase):
         creative = project.extensions[CREATIVE_EXTENSION_KEY]
         self.assertEqual(creative["goal"], "Сделай короткий ролик о ночном городе")
         self.assertEqual(creative["script"], "")
+        self.assertEqual(creative["material_source_ids"], [])
         self.assertEqual(creative["provider_policy"], "local_free_first")
         self.assertFalse(creative["allow_paid_remote"])
 
         plan = self.service.plan(project.project_id)
         self.assertEqual(plan["goal"], creative["goal"])
+        self.assertEqual(plan["material_source_ids"], [])
         self.assertEqual(
             [phase["phase_id"] for phase in plan["phases"]],
             ["intent", "plan", "visuals", "audio", "assembly", "review"],
@@ -74,10 +76,10 @@ class CreativeProjectServiceTests(unittest.TestCase):
         self.assertEqual(own_media["state"], "ready")
         self.assertEqual(own_media["route_class"], "local_input")
 
-    def test_real_provider_offer_changes_plan_without_provider_specific_product_code(self) -> None:
+    def test_real_mcp_offer_changes_plan_without_provider_specific_product_code(self) -> None:
         self.registry.register_adapter(
             AdapterDefinition(
-                "test_mcp_provider",
+                "mcp.test_provider",
                 "Test MCP provider",
                 "test external generator",
                 AdapterKind.MCP,
@@ -85,9 +87,9 @@ class CreativeProjectServiceTests(unittest.TestCase):
         )
         self.registry.register_offer(
             CapabilityOffer(
-                "test_mcp_provider.image_generate",
+                "mcp.test_provider.image_generate",
                 "image.generate",
-                "test_mcp_provider",
+                "mcp.test_provider",
                 "Test image generator",
                 OfferAvailability.AVAILABLE,
                 "ready through discovered MCP binding",
