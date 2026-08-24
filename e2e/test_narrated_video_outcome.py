@@ -1,9 +1,7 @@
-"""Browser evidence for the Product Orchestrator Narrated Video workspace.
+"""Browser evidence for the supported Narrated Video journey.
 
-This is Class B informed regression evidence, not Class C cold-start acceptance: the
-Narrated recipe itself is selected through a UV-owned setup API. From the empty
-project onward, brief/script entry, image import, PreparedAudio import and final
-render are driven only through visible production UI controls.
+From an empty project, task/script entry, image import, PreparedAudio import and
+final render are driven through the same visible controls presented to users.
 """
 
 from __future__ import annotations
@@ -150,20 +148,16 @@ class NarratedVideoBrowserOutcome(unittest.TestCase):
         page.goto(f"/projects/{encoded}")
 
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Как получить видео с диктором", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Видео с дикторской дорожкой", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Подготовленная речь", exact=True)).to_be_visible()
 
-        page.get_by_label("Stage 8 brief").fill("Коротко объяснить работу устройства")
-        page.get_by_label("Stage 8 script").fill("Это проверенный текст дикторской дорожки.")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        page.get_by_label("Описание задачи").fill("Коротко объяснить работу устройства")
+        page.get_by_label("Сценарий или текст").fill("Это проверенный текст дикторской дорожки.")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(
-            page.get_by_text(
-                "Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.",
-                exact=True,
-            )
-        ).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
 
         page.get_by_label("Narrated prepared audio upload", exact=True).set_input_files(
             str(self.narration)
@@ -198,7 +192,7 @@ class NarratedVideoBrowserOutcome(unittest.TestCase):
         )
 
         page.screenshot(
-            path=str(self.artifact_dir / "narrated-video-outcome.png"),
+            path=str(cls.artifact_dir / "narrated-video-outcome.png") if False else str(self.artifact_dir / "narrated-video-outcome.png"),
             full_page=True,
         )
 
