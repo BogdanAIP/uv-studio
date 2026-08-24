@@ -13,6 +13,7 @@ CJK_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF]")
 PRODUCT_UI_ROOTS = (
     REPO_ROOT / "frontend" / "app",
     REPO_ROOT / "frontend" / "config",
+    REPO_ROOT / "frontend" / "components" / "editor",
 )
 PRODUCT_UI_FILES = (
     REPO_ROOT / "frontend" / "components" / "AppShell.tsx",
