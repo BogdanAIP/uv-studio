@@ -1,4 +1,4 @@
-"""Browser evidence for the preparation-only Product Orchestrator Commercial journey."""
+"""Browser evidence for the preparation-only Commercial journey."""
 
 from __future__ import annotations
 
@@ -113,20 +113,15 @@ class CommercialProductBrowserOutcome(unittest.TestCase):
 
         page.goto(f"/projects/{encoded}")
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Продуктовое рабочее пространство", exact=True)).to_be_visible()
-        expect(page.get_by_text("Нужна подготовка", exact=True)).to_be_visible()
-        page.get_by_label("Stage 8 brief").fill("Показать новую упаковку и сохранить точные детали продукта")
-        page.get_by_label("Stage 8 script").fill("Крупный план упаковки. Польза. Финальный packshot.")
-        page.locator('input[aria-label="Stage 8 workspace image"]').set_input_files(str(self.image))
+        expect(page.get_by_role("heading", name="Сейчас это подготовка рекламного проекта", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Подготовка рекламного ролика", exact=True)).to_be_visible()
+        page.get_by_label("Описание задачи").fill("Показать новую упаковку и сохранить точные детали продукта")
+        page.get_by_label("Сценарий или текст").fill("Крупный план упаковки. Польза. Финальный packshot.")
+        page.get_by_label("Добавить своё изображение").set_input_files(str(self.image))
         expect(page.get_by_label(f"Использовать {self.image.name}")).to_be_checked(timeout=60_000)
-        page.get_by_role("button", name="Сохранить рабочее пространство", exact=True).click()
-        expect(
-            page.get_by_text(
-                "Рабочее пространство сохранено с точной SHA-привязкой выбранных материалов.",
-                exact=True,
-            )
-        ).to_be_visible(timeout=60_000)
-        expect(page.get_by_text("Готово к следующему действию", exact=True)).to_be_visible(timeout=60_000)
+        page.get_by_role("button", name="Сохранить задачу", exact=True).click()
+        expect(page.get_by_text("Задача и выбранные материалы сохранены.", exact=True)).to_be_visible(timeout=60_000)
+        expect(page.get_by_text("Текущая подготовка выполнена", exact=True)).to_be_visible(timeout=60_000)
         expect(page.get_by_role("button", name="Собрать обычный видеоролик", exact=True)).to_have_count(0)
 
         workflow = _api_json("GET", _project_path(project_id, "/workflow"))
