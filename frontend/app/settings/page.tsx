@@ -21,7 +21,14 @@ type Field = {
   options?: Array<{ id: string; label: string }> | ProviderGroup[];
 };
 
-type ModelSelectKey = 'llm' | 'vlm' | 'image_it2i' | 'image_t2i' | 'video_first_frame' | 'video_start_end' | 'video_reference';
+type ModelSelectKey =
+  | 'llm'
+  | 'vlm'
+  | 'image_it2i'
+  | 'image_t2i'
+  | 'video_first_frame'
+  | 'video_start_end'
+  | 'video_reference';
 
 const EMPTY_MODEL_SELECTS: Record<ModelSelectKey, ProviderGroup[]> = {
   llm: [],
@@ -34,107 +41,107 @@ const EMPTY_MODEL_SELECTS: Record<ModelSelectKey, ProviderGroup[]> = {
 };
 
 const LOG_LEVEL_OPTIONS = [
-  { id: 'DEBUG', label: 'DEBUG - 最详细' },
-  { id: 'INFO', label: 'INFO - 常规' },
-  { id: 'WARNING', label: 'WARNING - 仅警告及错误' },
-  { id: 'ERROR', label: 'ERROR - 仅错误' },
-  { id: 'CRITICAL', label: 'CRITICAL - 严重错误' },
+  { id: 'DEBUG', label: 'DEBUG — максимально подробно' },
+  { id: 'INFO', label: 'INFO — обычный режим' },
+  { id: 'WARNING', label: 'WARNING — предупреждения и ошибки' },
+  { id: 'ERROR', label: 'ERROR — только ошибки' },
+  { id: 'CRITICAL', label: 'CRITICAL — только критические ошибки' },
 ];
 
 const GROUPS: Array<{ title: string; description: string; fields: Field[] }> = [
   {
-    title: 'API Server',
-    description: '服务启动与日志配置。安全边界要求服务保持在本机 loopback 地址。',
+    title: 'Сервер API',
+    description: 'Параметры запуска локального сервера и журналирования. Для безопасности сервер должен оставаться доступным только на этом компьютере.',
     fields: [
-      { path: 'server.host', label: 'host 主机地址' },
-      { path: 'server.port', label: 'port 端口', type: 'number' },
-      { path: 'server.log_level', label: 'log_level 日志层级', type: 'select', options: LOG_LEVEL_OPTIONS },
-      { path: 'server.access_log', label: 'access_log 请求访问日志', type: 'boolean' },
+      { path: 'server.host', label: 'Адрес сервера (host)' },
+      { path: 'server.port', label: 'Порт', type: 'number' },
+      { path: 'server.log_level', label: 'Уровень журналирования', type: 'select', options: LOG_LEVEL_OPTIONS },
+      { path: 'server.access_log', label: 'Журнал запросов', type: 'boolean' },
     ],
   },
   {
-    title: 'Common Provider Settings',
-    description: '模型调用公共配置和代理设置。',
+    title: 'Общие настройки поставщиков ИИ',
+    description: 'Общие параметры вызова моделей и сетевого прокси.',
     fields: [
-      { path: 'api_providers.common.print_model_input', label: 'print_model_input 打印模型输入', type: 'boolean' },
-      { path: 'api_providers.common.proxy', label: 'proxy 代理地址' },
+      { path: 'api_providers.common.print_model_input', label: 'Записывать входные данные моделей в журнал', type: 'boolean' },
+      { path: 'api_providers.common.proxy', label: 'Адрес прокси' },
     ],
   },
   {
     title: 'OpenAI',
-    description: 'OpenAI / 兼容 OpenAI 接口配置。密钥为只写字段。',
+    description: 'Настройки OpenAI и совместимых с OpenAI интерфейсов. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.openai.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.openai.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.openai.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.openai.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.openai.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.openai.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
     title: 'Gemini',
-    description: 'Gemini 及兼容接口配置。密钥为只写字段。',
+    description: 'Настройки Gemini и совместимых интерфейсов. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.gemini.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.gemini.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.gemini.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.gemini.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.gemini.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.gemini.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
     title: 'DeepSeek',
-    description: 'DeepSeek 接口配置。密钥为只写字段。',
+    description: 'Настройки DeepSeek. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.deepseek.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.deepseek.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.deepseek.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.deepseek.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.deepseek.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.deepseek.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
     title: 'DashScope',
-    description: '通义千问、通义万相等 DashScope 服务配置。密钥为只写字段。',
+    description: 'Настройки сервисов Alibaba Cloud DashScope, включая модели Qwen и Wan. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.dashscope.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.dashscope.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.dashscope.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.dashscope.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.dashscope.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.dashscope.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
     title: 'ARK',
-    description: 'Seedream / Seedance 使用的火山方舟配置。密钥为只写字段。',
+    description: 'Настройки Volcengine ARK для Seedream и Seedance. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.ark.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.ark.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.ark.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.ark.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.ark.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.ark.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
     title: 'Kling',
-    description: '可灵视频生成接口配置。密钥为只写字段。',
+    description: 'Настройки сервиса генерации видео Kling. Ключ хранится отдельно и никогда не читается обратно в браузер.',
     fields: [
-      { path: 'api_providers.kling.base_url', label: 'base_url 接口地址' },
-      { path: 'api_providers.kling.api_key', label: 'api_key API 密钥', type: 'password' },
-      { path: 'api_providers.kling.enable_proxy', label: 'enable_proxy 启用代理', type: 'boolean' },
+      { path: 'api_providers.kling.base_url', label: 'Адрес API (base_url)' },
+      { path: 'api_providers.kling.api_key', label: 'Ключ API', type: 'password' },
+      { path: 'api_providers.kling.enable_proxy', label: 'Использовать прокси', type: 'boolean' },
     ],
   },
   {
-    title: 'Default Models',
-    description: '主流程和未来经过授权的 Provider Adapter 使用的默认模型。',
+    title: 'Модели по умолчанию',
+    description: 'Модели, которые основной рабочий процесс и разрешённые адаптеры поставщиков используют по умолчанию.',
     fields: [
-      { path: 'models.llm', label: 'llm 文本模型', type: 'select', options: [] },
-      { path: 'models.vlm', label: 'vlm 视觉语言模型', type: 'select', options: [] },
-      { path: 'models.image_it2i', label: 'image_it2i 图生图模型', type: 'select', options: [] },
-      { path: 'models.image_t2i', label: 'image_t2i 文生图模型', type: 'select', options: [] },
-      { path: 'models.video_first_frame', label: 'video_first_frame 首帧生视频模型', type: 'select', options: [] },
-      { path: 'models.video_start_end', label: 'video_start_end 首尾帧生视频模型', type: 'select', options: [] },
-      { path: 'models.video_reference', label: 'video_reference 参考图生视频模型', type: 'select', options: [] },
+      { path: 'models.llm', label: 'Текстовая модель (LLM)', type: 'select', options: [] },
+      { path: 'models.vlm', label: 'Визуально-языковая модель (VLM)', type: 'select', options: [] },
+      { path: 'models.image_it2i', label: 'Редактирование изображения по изображению', type: 'select', options: [] },
+      { path: 'models.image_t2i', label: 'Генерация изображения по тексту', type: 'select', options: [] },
+      { path: 'models.video_first_frame', label: 'Видео по первому кадру', type: 'select', options: [] },
+      { path: 'models.video_start_end', label: 'Видео по первому и последнему кадрам', type: 'select', options: [] },
+      { path: 'models.video_reference', label: 'Видео по референсному изображению', type: 'select', options: [] },
     ],
   },
   {
-    title: '视频生成配置',
-    description: '默认生成方式、风格、画幅比例和视频分辨率。',
+    title: 'Генерация видео',
+    description: 'Способ генерации по умолчанию, визуальный стиль, соотношение сторон и разрешение видео.',
     fields: [
-      { path: 'generation.video_generation_mode', label: 'video_generation_mode 视频生成方式', type: 'select', options: VIDEO_GENERATION_MODES },
-      { path: 'generation.style', label: 'style 风格', type: 'select', options: STYLES },
-      { path: 'generation.video_ratio', label: 'video_ratio 视频长宽比', type: 'select', options: VIDEO_RATIOS },
-      { path: 'generation.video_resolution', label: 'video_resolution 视频分辨率', type: 'select', options: VIDEO_RESOLUTIONS },
+      { path: 'generation.video_generation_mode', label: 'Способ генерации видео', type: 'select', options: VIDEO_GENERATION_MODES },
+      { path: 'generation.style', label: 'Визуальный стиль', type: 'select', options: STYLES },
+      { path: 'generation.video_ratio', label: 'Соотношение сторон', type: 'select', options: VIDEO_RATIOS },
+      { path: 'generation.video_resolution', label: 'Разрешение видео', type: 'select', options: VIDEO_RESOLUTIONS },
     ],
   },
 ];
@@ -195,20 +202,20 @@ export default function SettingsPage() {
       setError('');
       try {
         const resp = await fetch('/api/config');
-        if (!resp.ok) throw new Error('读取配置失败');
+        if (!resp.ok) throw new Error('Не удалось загрузить настройки');
         const data = await resp.json();
         setConfig(data.config || {});
         setSecretStatus(data.secrets || {});
         setPath(data.path || 'data/config/runtime.json');
         setSecretDrafts({});
         setSecretClears({});
-      } catch (error: unknown) {
-        setError(errorMessage(error, '读取配置失败'));
+      } catch (loadError: unknown) {
+        setError(errorMessage(loadError, 'Не удалось загрузить настройки'));
       } finally {
         setLoading(false);
       }
     };
-    load();
+    void load();
   }, []);
 
   useEffect(() => {
@@ -235,14 +242,16 @@ export default function SettingsPage() {
         });
       })
       .catch(() => {
-        // Legacy /api/models is intentionally unavailable while provider routes
-        // are being migrated behind the UV Studio capability/authorization layer.
+        // Legacy /api/models intentionally remains unavailable while provider
+        // routes move behind the UV Studio capability/authorization layer.
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const groups = GROUPS.map(group => {
-    if (group.title !== 'Default Models') return group;
+    if (group.title !== 'Модели по умолчанию') return group;
     return {
       ...group,
       fields: group.fields.map(field => {
@@ -269,10 +278,7 @@ export default function SettingsPage() {
   };
 
   const toggleSecretClear = (field: Field) => {
-    setSecretClears(current => {
-      const next = !current[field.path];
-      return { ...current, [field.path]: next };
-    });
+    setSecretClears(current => ({ ...current, [field.path]: !current[field.path] }));
     setSecretDrafts(current => ({ ...current, [field.path]: '' }));
   };
 
@@ -297,7 +303,7 @@ export default function SettingsPage() {
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || '保存配置失败');
+        throw new Error(data.detail || 'Не удалось сохранить настройки');
       }
       const data = await resp.json();
       setConfig(data.config || {});
@@ -305,9 +311,9 @@ export default function SettingsPage() {
       setPath(data.path || 'data/config/runtime.json');
       setSecretDrafts({});
       setSecretClears({});
-      setMessage('配置已保存');
-    } catch (error: unknown) {
-      setError(errorMessage(error, '保存配置失败'));
+      setMessage('Настройки сохранены');
+    } catch (saveError: unknown) {
+      setError(errorMessage(saveError, 'Не удалось сохранить настройки'));
     } finally {
       setSaving(false);
     }
@@ -319,17 +325,17 @@ export default function SettingsPage() {
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 mb-3">
             <Settings className="w-7 h-7 text-blue-500" />
-            <h1 className="text-2xl font-bold text-gray-800">设置</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Настройки</h1>
           </div>
           <p className="text-sm text-gray-500">
-            公开配置保存到 <span className="font-mono">{formatConfigPath(path)}</span>；API 密钥单独存储且不会从后端读回浏览器。
+            Обычные параметры сохраняются в <span className="font-mono">{formatConfigPath(path)}</span>. Ключи API хранятся отдельно и не возвращаются из локального сервера в интерфейс.
           </p>
         </div>
 
         {loading ? (
           <div className="h-56 rounded-2xl border border-gray-200 bg-white flex items-center justify-center text-sm text-gray-400">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            正在读取配置
+            Загрузка настроек…
           </div>
         ) : (
           <div className="space-y-5">
@@ -354,8 +360,8 @@ export default function SettingsPage() {
                             onChange={event => updateField(field, event.target.value === 'true')}
                             className="h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-blue-300"
                           >
-                            <option value="true">true</option>
-                            <option value="false">false</option>
+                            <option value="true">Включено</option>
+                            <option value="false">Выключено</option>
                           </select>
                         ) : field.type === 'select' ? (
                           <select
@@ -372,7 +378,7 @@ export default function SettingsPage() {
                                 </optgroup>
                               ))
                             ) : (
-                              (field.options || []).map(option => (
+                              (field.options as Array<{ id: string; label: string }> | undefined || []).map(option => (
                                 <option key={option.id} value={option.id}>{option.label}</option>
                               ))
                             )}
@@ -386,10 +392,10 @@ export default function SettingsPage() {
                               onChange={event => updateSecretField(field, event.target.value)}
                               placeholder={
                                 clearPending
-                                  ? '保存后将清除密钥'
+                                  ? 'Ключ будет удалён после сохранения'
                                   : configuredSecret
-                                    ? '已配置 — 输入新密钥即可覆盖'
-                                    : '输入新密钥'
+                                    ? 'Ключ настроен — введите новый для замены'
+                                    : 'Введите новый ключ'
                               }
                               className="h-10 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 font-mono text-sm text-gray-700 outline-none focus:border-blue-300"
                             />
@@ -403,7 +409,7 @@ export default function SettingsPage() {
                                     : 'border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                                 }`}
                               >
-                                {clearPending ? '取消清除' : '清除'}
+                                {clearPending ? 'Отменить удаление' : 'Удалить'}
                               </button>
                             )}
                           </div>
@@ -416,10 +422,10 @@ export default function SettingsPage() {
                           />
                         )}
                         {field.type === 'password' && configuredSecret && !clearPending && !secretDraft && (
-                          <span className="text-[11px] text-green-600">密钥已配置；后端不会返回原值。</span>
+                          <span className="text-[11px] text-green-600">Ключ настроен. Исходное значение не передаётся обратно в интерфейс.</span>
                         )}
                         {field.type === 'password' && clearPending && (
-                          <span className="text-[11px] text-amber-600">清除将在保存配置后生效。</span>
+                          <span className="text-[11px] text-amber-600">Ключ будет удалён после сохранения настроек.</span>
                         )}
                       </label>
                     );
@@ -447,7 +453,7 @@ export default function SettingsPage() {
                 className="ml-auto flex items-center gap-2 rounded-xl bg-blue-500 px-5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-200"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                保存配置
+                Сохранить настройки
               </button>
             </div>
           </div>
