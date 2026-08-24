@@ -9,13 +9,19 @@ older recipe model is retired.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Sequence
 
 from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailability
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.orchestration import project_workflow_state
 from uv_studio.projects.models import ProjectDocument
 from uv_studio.projects.source_media import ProjectSourceMediaStore
+from uv_studio.projects.stage8_workspace import (
+    Stage8RecipeWorkspace,
+    Stage8WorkspaceError,
+    build_stage8_workspace_for_project,
+    extensions_with_stage8_workspace,
+)
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 from uv_studio.recipes import RecipeRegistry, UnknownRecipe
 
@@ -197,6 +203,39 @@ class CreativeProjectService:
         extensions = dict(project.extensions)
         extensions[CREATIVE_EXTENSION_KEY] = current
         return self.store.update_project(project_id, extensions=extensions)
+
+    def save_preparation(
+        self,
+        project_id: str,
+        *,
+        goal: str,
+        script: str,
+        source_ids: Sequence[str],
+    ) -> tuple[ProjectDocument, Stage8RecipeWorkspace]:
+        """Commit user intent and the bounded assembly projection in one store write."""
+
+        project = self._load(project_id)
+        current = _creative_extension(project)
+        current["goal"] = _clean_text(goal, field_name="goal", max_length=20_000)
+        current["script"] = _optional_text(
+            script,
+            field_name="script",
+            max_length=100_000,
+        ) or ""
+        try:
+            workspace = build_stage8_workspace_for_project(
+                self.store,
+                project,
+                brief=current["goal"],
+                script=current["script"],
+                source_ids=source_ids,
+            )
+            extensions = extensions_with_stage8_workspace(project, workspace)
+            extensions[CREATIVE_EXTENSION_KEY] = current
+            updated = self.store.update_project(project_id, extensions=extensions)
+        except (Stage8WorkspaceError, ProjectStoreError) as exc:
+            raise CreativeProjectError(str(exc)) from exc
+        return updated, workspace
 
     def plan(self, project_id: str) -> dict[str, Any]:
         project = self._load(project_id)
