@@ -33,7 +33,12 @@ class StudioTimelineApiTests(unittest.TestCase):
             id="src_api",
             kind="video",
             path="sources/src_api.mp4",
-            metadata={"duration_us": 12_000_000, "width": 1280, "height": 720},
+            metadata={
+                "duration_us": 12_000_000,
+                "width": 1280,
+                "height": 720,
+                "avg_frame_rate": "30/1",
+            },
         )
         self.store.update_project(self.project_id, sources=(self.reference,))
 
@@ -95,6 +100,15 @@ class StudioTimelineApiTests(unittest.TestCase):
         reloaded = self.client.get(f"/api/uv/projects/{self.project_id}/studio/timeline")
         self.assertEqual(reloaded.status_code, 200, reloaded.text)
         self.assertEqual(reloaded.json(), trimmed["timeline"])
+
+        engine = self.client.get(f"/api/uv/projects/{self.project_id}/studio/timeline/engine")
+        self.assertEqual(engine.status_code, 200, engine.text)
+        engine_payload = engine.json()
+        self.assertEqual(engine_payload["adapter_id"], "mlt")
+        self.assertEqual(engine_payload["timeline_id"], "main")
+        self.assertEqual(engine_payload["frame_rate"], "30/1")
+        self.assertEqual(engine_payload["tracks"][0]["clips"][0]["clip_id"], "clip_api")
+        self.assertNotIn(str(self.store.root.resolve()), repr(engine_payload))
 
         removed = self._command({"command": "remove_clip", "clip_id": "clip_api"})
         self.assertEqual(removed["timeline"]["tracks"][0]["clips"], [])
