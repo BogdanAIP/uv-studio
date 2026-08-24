@@ -56,7 +56,7 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
 
         self._create_from_visible_catalog(
             page,
-            recipe_title="Фотографии → видео",
+            recipe_title="Фото в видео",
             project_title="Class C — фото в видео",
         )
         expect(page.get_by_role("heading", name="Фотографии → видео", exact=True)).to_be_visible()
@@ -82,7 +82,7 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
         # is observed from a truly empty project rather than an API-seeded state.
         self._create_from_visible_catalog(
             page,
-            recipe_title="Аудио → визуализатор",
+            recipe_title="Аудиовизуализатор",
             project_title="Class C — аудиовизуализатор",
         )
         expect(page.get_by_role("heading", name="Аудио → визуализатор", exact=True)).to_be_visible()
