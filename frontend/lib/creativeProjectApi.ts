@@ -33,6 +33,7 @@ export interface CreativePlan {
   title: string;
   goal: string;
   script: string;
+  material_source_ids: string[];
   provider_policy: 'local_free_first';
   allow_paid_remote: false;
   overall_state: string;
@@ -42,6 +43,8 @@ export interface CreativePlan {
     videos: number;
     audio: number;
     visuals: number;
+    selected_visuals: number;
+    selected_audio: number;
   };
   current_outcome: Record<string, unknown> | null;
   phases: CreativePhase[];
