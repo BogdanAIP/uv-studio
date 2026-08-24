@@ -8,7 +8,7 @@
     "goal": "Restore the minimum packaged Windows product path around the current Product Truth, prove the exact packaged build automatically, then complete a real installed Windows human-acceptance run before closing the gate.",
     "base_branch": "main",
     "branch": "research/product-usability-installed-windows-human-acceptance",
-    "pull_request": null,
+    "pull_request": 59,
     "write_scope": [
       "project-context/**",
       ".github/workflows/**",
