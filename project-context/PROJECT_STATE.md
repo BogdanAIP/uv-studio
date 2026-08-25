@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-production-directions -->
 
 **Updated:** 2026-08-25
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-Active draft slice:
+Active review slice:
 
 - PR #63 — `stage 11: restore Studio production directions`;
 - branch `stage-11/studio-v2-production-directions`;
@@ -71,7 +71,7 @@ The Studio shell remains common. Production Directions compose around it instead
 
 ## Current implementation in PR #63
 
-The draft slice currently establishes:
+The review slice establishes:
 
 - new `uv_studio.production` layer independent of legacy recipes;
 - backend Production Direction catalog with six first-class directions;
@@ -99,7 +99,7 @@ Compatibility code remains until callers are proven migrated; this is still a st
 
 ## Verification status
 
-PR #63 is still draft. Exact-head CI and final review evidence are not yet claimed. Before review, the implementation, context, tests and PR body must agree and all five permanent checks must pass on the exact review head.
+Draft candidate `0903b78fca8e305712ca4e411e461b10e9139b03` passed CI #2966 / Actions run `32816553992` on all five permanent jobs, including browser E2E on Ubuntu and Windows. PR #63 is now in review; the review transition is context-only and must pass the same five checks on its exact review head before merge.
 
 ## Next authorized slice
 
