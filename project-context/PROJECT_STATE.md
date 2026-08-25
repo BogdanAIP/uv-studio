@@ -14,7 +14,7 @@ Repository has an active documentation/architecture slice from the Stage-13-clos
 - active slice `jarvishub-agent-donor-architecture`;
 - branch `chore/jarvishub-agent-donor-architecture`;
 - base `main` at `e9b249124c48203c71d386a5fc997cbbfe61e3e6`;
-- PR identity is populated after draft PR creation;
+- draft PR #67;
 - the implementation handoff remains `studio-v2-model-registry-job-manager-generation` from `project-context/NEXT_TASK.md`.
 
 This slice changes durable architecture/development memory only; it does not add product runtime code.
