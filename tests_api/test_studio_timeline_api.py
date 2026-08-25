@@ -19,13 +19,20 @@ class StudioTimelineApiTests(unittest.TestCase):
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
 
-        created = self.client.post("/api/uv/projects/studio", json={"title": "Studio Timeline"})
+        created = self.client.post(
+            "/api/uv/projects/studio",
+            json={"title": "Studio Timeline", "direction_id": "free_project"},
+        )
         self.assertEqual(created.status_code, 201, created.text)
         created_payload = created.json()
         self.assertEqual(created_payload["recipe_id"], "studio_v2")
         self.assertEqual(
             created_payload["extensions"]["studio"],
-            {"schema_version": 1, "product_model": "studio_first"},
+            {
+                "schema_version": 2,
+                "product_model": "production_directions",
+                "direction_id": "free_project",
+            },
         )
         self.project_id = created_payload["project_id"]
 
@@ -60,6 +67,32 @@ class StudioTimelineApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
+
+    def test_production_directions_are_product_composition_not_recipe_identity(self) -> None:
+        response = self.client.get("/api/uv/projects/studio/directions")
+        self.assertEqual(response.status_code, 200, response.text)
+        directions = response.json()
+        ids = [item["direction_id"] for item in directions]
+        self.assertEqual(
+            ids,
+            [
+                "micro_drama",
+                "commercial",
+                "music_video",
+                "narrated_video",
+                "dub_battle",
+                "free_project",
+            ],
+        )
+        self.assertIn("scenes", directions[0]["workspace_sections"])
+        self.assertIn("cast", directions[4]["workspace_sections"])
+
+        unknown = self.client.post(
+            "/api/uv/projects/studio",
+            json={"title": "Unknown", "direction_id": "not_a_direction"},
+        )
+        self.assertEqual(unknown.status_code, 422, unknown.text)
+        self.assertIn("unknown production direction", unknown.json()["detail"])
 
     def test_commands_create_reload_and_mutate_canonical_timeline(self) -> None:
         empty = self.client.get(f"/api/uv/projects/{self.project_id}/studio/timeline")
