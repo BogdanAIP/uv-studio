@@ -21,13 +21,20 @@ class GenerationModelContractTests(unittest.TestCase):
             editable_variables=("выражение лица", "положение камеры"),
             forbidden_changes=("не менять персонажа",),
             approved_reference_id="asset_anna_keyframe",
+            continuation_source_reference_id="artifact_previous_take",
         )
 
         restored = GenerationContract.from_dict(contract.to_dict())
 
         self.assertEqual(restored, contract)
+        self.assertEqual(
+            contract.to_dict()["continuation_source_reference_id"],
+            "artifact_previous_take",
+        )
         self.assertNotIn("prompt", contract.to_dict())
         self.assertNotIn("provider", contract.to_dict())
+        self.assertNotIn("session", contract.to_dict())
+        self.assertNotIn("latent", contract.to_dict())
 
     def test_generation_contract_rejects_duplicate_constraints(self) -> None:
         with self.assertRaises(GenerationValidationError):
@@ -47,6 +54,7 @@ class GenerationModelContractTests(unittest.TestCase):
         self.assertEqual(described["output_kind"], "image")
         self.assertEqual(described["execution"]["adapter_id"], "native_videoclaw")
         self.assertEqual(described["execution"]["availability"], "configuration_required")
+        self.assertEqual(described["execution"]["features"], [])
 
     def test_model_registry_rejects_offer_for_different_capability(self) -> None:
         capabilities = build_builtin_capability_registry()
