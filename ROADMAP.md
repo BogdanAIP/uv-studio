@@ -1,18 +1,17 @@
 # UV Studio Roadmap
 
-The roadmap targets the full product. Early stages create useful working slices, but the architecture must remain compatible with later stages.
+The roadmap targets the full product. Historical Stage numbering records how the repository got here, but **D-064 is the current product-composition authority**: one shared Studio Core with first-class Production Directions. Recipe/Stage/Product-Orchestrator details below are historical where D-063/D-064 supersede them.
 
 ## Program completion gate
 
-The initial UV Studio program is complete when Stage 9 produces a distributable Windows release **after the Product Truth Recovery Gate passes**, and the release candidate proves all five permanent regression scenarios through user-facing workflows rather than manual API calls or test-only state seeding.
+The initial UV Studio program is complete when Stage 9 produces a distributable Windows release **after the Product Truth Recovery Gate passes**, and the release candidate proves the permanent regression scenarios through user-facing workflows rather than manual API calls or test-only state seeding.
 
 The completion gate requires:
 
 - clean-machine installation without a separately prepared Python, Node/npm or FFmpeg toolchain;
 - canonical projects that survive restart, export/import, upgrade, backup and recovery;
-- complete UI paths for general video, narrated video, music-video excerpt, dubbing and targeted existing-video range edit;
-- truthful recipe/workflow readiness backed by actually mounted executable product paths;
-- a product-level orchestration contract that exposes prerequisites and next actions instead of requiring the frontend to reconstruct independent backend state machines;
+- truthful user-facing Production Direction/tool readiness backed by actually mounted executable product paths;
+- one shared Studio Core and one application/command authority rather than direction-specific engines;
 - local/free baseline implementations wherever a viable local path exists, with remote/paid providers remaining explicit optional choices;
 - real media fixtures and evidence-based output checks on Windows and Linux;
 - cold-start user-outcome evidence without hidden API/test fixture setup;
@@ -20,7 +19,7 @@ The completion gate requires:
 - license/security/dependency audit and signed release artifacts;
 - no mandatory dependency on VideoClaw, Qwen, MCP, a particular model vendor or a paid API in canonical project state.
 
-After this gate passes, additional recipes, providers and refinements belong to a versioned post-release backlog. They do not postpone the initial product indefinitely.
+After this gate passes, additional Production Directions, tools, providers and refinements belong to a versioned post-release backlog. They do not postpone the initial product indefinitely.
 
 ## Stage completion rule
 
@@ -38,10 +37,13 @@ A failed clean installed-app human journey is product evidence and may block rel
 ## Permanent architecture rules
 
 - no single mandatory film/music/micro-drama pipeline;
+- one shared Studio Core may host multiple first-class Production Directions with different domain state/navigation;
+- a Production Direction is not a RecipeDefinition/provider/execution engine;
+- operation-level transforms remain contextual Studio tools unless an evidence-backed decision proves a distinct production model;
 - paid AI APIs are optional capabilities, never hidden baseline dependencies;
 - prefer deterministic/local tools for deterministic work;
 - local/free implementations may coexist with paid providers behind the same semantic capability;
-- provider choice and expected paid cost must remain explicit for chargeable generation;
+- provider/model choice and expected paid cost must remain explicit when creatively or financially significant;
 - capability discovery/ordering is metadata, not permission to execute or spend;
 - all product execution paths that can contact a remote or non-free provider must pass the product-owned authorization boundary; legacy compatibility routes may not bypass it;
 - user-visible readiness must be backed by an actually reachable UV-owned execution path; an unmounted or historical route is never `available` product functionality;
@@ -84,27 +86,22 @@ Engineering exit: canonical project storage and archives are traversal-safe, ato
 
 User exit: close/reopen application, export/import a complete project, and resume without data loss.
 
-## Stage 2 — Recipe Registry + Production Policy
+## Stage 2 — Historical Recipe Registry + Production Policy foundation
 
-Goal: one studio supports different tasks without one mandatory pipeline, while professional production discipline is reusable across recipes.
+**Historical note:** recipe-first product identity is superseded by D-063/D-064. Existing recipe code remains compatibility/reference material; new v2 product growth uses Production Directions plus contextual tools over one Studio Core.
 
-- recipe schema/registry;
-- required/optional capabilities;
-- UI schema/progressive disclosure;
-- wrap existing VideoClaw pipelines;
-- add `general_video` and rename narrated semantics clearly;
+Original useful outcomes retained from this stage:
+
 - provider-neutral production policy hooks;
-- source-review gate for workflows based on real footage;
-- optional creative direction/taste contract;
+- source-review gates for workflows based on real footage;
+- optional creative direction/taste contracts;
 - sample-first generation policy;
-- scene/take ledger where multi-scene work needs it;
+- scene/take ledger concepts where multi-scene work needs them;
 - plan/review gate contracts;
 - evidence-based final review with timestamps/frame references;
-- use/adapt suitable Apache-2.0 Qwen-MM-Plugins `video-edit` workflow ideas without inheriting its DashScope dependency.
+- reusable task/domain knowledge that can migrate into Production Direction metadata/domain services or Studio tools.
 
-Engineering exit: recipes compose provider-neutral capabilities and policies without embedding concrete runtime/provider IDs.
-
-User exit: user selects a task and only the relevant workflow/UI is presented.
+Do not add a new `RecipeDefinition` to ship a v2 feature.
 
 ## Stage 3 — Capability Registry & Adapters
 
@@ -219,6 +216,8 @@ Engineering exit: the exact requested range and mechanical constraints survive s
 
 User exit: user opens an existing video, selects a 5–10 second range, requests a change, reviews the result in context, accepts/rejects it and exports the edited video without regenerating the whole source workflow or issuing manual API calls.
 
+Under D-064 this is a contextual Studio tool, not a top-level Production Direction.
+
 ## Stage 5 — Dubbing / Translation
 
 Goal: revoice an existing video without running filmmaking workflow.
@@ -238,6 +237,8 @@ Engineering exit: ASR/translation/TTS/alignment remain replaceable capabilities 
 
 User exit: existing video can be dubbed independently without requiring Qwen/DashScope or another paid media API.
 
+Under D-064 ordinary dubbing/translation remains a contextual Studio tool. It is distinct from the `dub_battle` Production Direction, which is organized around scene/characters/dialogue/cast/takes/mix.
+
 ## Stage 6 — Optional Sequence Continuity & Review
 
 Goal: robust linked-shot generation only where continuity matters.
@@ -255,61 +256,76 @@ Engineering exit: continuity state is optional, typed and provider-neutral.
 
 User exit: connected generated clips continue from accepted observed state; simple projects do not pay this complexity.
 
-## Stage 7 — Music Video Mode
+Under D-064 this logic is especially relevant to `micro_drama`, but remains optional and reusable rather than globally mandatory.
 
-Goal: professional music-driven video workflow.
+## Stage 7 — Music Video production domain
 
-- integrate `musical-mv-storyboard` through adapter boundary;
+Goal: professional music-driven video production inside the `music_video` Production Direction.
+
+- integrate `musical-mv-storyboard` through adapter boundary where useful;
 - song/lyrics/structure analysis;
 - Music Map UI;
-- Music Director;
+- Music Director / visual direction;
 - music-aware shot timing;
 - beat-sync and audio-first editing craft;
 - sample-first generated assets;
 - rhythm audit/final assembly;
 - evidence-based review of timing/scene transitions.
 
-Engineering exit: music-specific policy composes existing project/capability/media primitives rather than becoming a new universal engine.
+Engineering exit: music-specific domain state/policy composes the shared Project/Studio/Capability primitives rather than becoming a separate editor engine.
 
-User exit: 20–30 second music excerpt completes a music-aware production workflow without making music mandatory for other video types.
+User exit: a music project can move from song/Music Map through visual direction/shots into the shared Timeline without making music mandatory for other directions.
 
-## Stage 8 — Additional recipes
+## Stage 8 — Production Directions and contextual tools
 
-Goal: broaden product by composing existing primitives, not new engines.
+Historical Stage 8 originally grouped heterogeneous recipes. D-064 replaces that taxonomy with two levels.
 
-- story video;
-- commercial/product;
-- photo-to-video;
+### First-class Production Directions
+
+- `micro_drama` — Микродрама / сюжетное видео;
+- `commercial` — Реклама / продукт;
+- `music_video` — Музыкальный клип;
+- `narrated_video` — Видео с диктором;
+- `dub_battle` — Киноозвучка / Кинобатл;
+- `free_project` — Свободный проект.
+
+### Contextual tools / quick actions
+
+- photo-to-video/slideshow;
 - visualizer;
 - performance/lip-sync;
-- free project.
+- talking character/digital human;
+- action transfer;
+- ordinary dubbing/translation;
+- targeted edit and future transforms/generation tools.
 
-Exit: each mode is mostly recipe + capability mapping + production policy + minimal UI and passes its relevant user-facing regression path.
+Exit: direction selection changes production composition/domain context while all directions share one Studio Core and all tools use common application/capability boundaries.
 
 ## Product Truth Recovery — mandatory gate before Stage 9 merge
 
 The first installed-app human review and subsequent repository/history audit showed that the engineering foundation and packaged runtime can be healthy while product-level workflow truth is not.
 
-This recovery is defined in `docs/architecture/PRODUCT_RECOVERY_PLAN.md` and accepted by D-062. It restores product coherence without redefining UV Studio's already-set identity as a hybrid local-first production **and editing** workspace.
+D-062 remains the truth/release gate. D-063/D-064 supersede the old plan to expand Product Orchestrator recipe-by-recipe as the long-term product center.
 
-Ordered phases:
+Current ordered recovery/product phases are:
 
-1. **Product Truth Inventory** — map every visible action to frontend handler, mounted API, domain command, capability/adapter and actual result. **Completed in PR #42; keep the inventory current.**
-2. **Recipe/execution contract repair** — remove false `available` states and stale launch paths. **Base repair completed in PR #42.**
-3. **Product Orchestrator** — project readiness, prerequisites, relevant workspaces and semantic next actions so React is not the primary orchestrator. **Foundation implemented for Photo -> Video in PR #43; expand recipe-by-recipe.**
-4. **D-033 editor conformance** — audit the live implementation against the already accepted UV + MLT + selective OpenCut ownership map; repair command/authority bypasses and record incomplete work before generic NLE growth. This is **not** a new choice between UV Studio, OpenCut and MLT and not a product-identity decision.
-5. **Core intent-to-result journeys** — recover targeted edit, dubbing, music video, narrated video and general video in that order, keeping setup/remote cost explicit and internal domain state progressively disclosed.
-6. **Additional recipe rationalization** — retain Photo as the first orchestrated deterministic reference, migrate Visualizer as the second, turn composition-only modes into real workflows, and gate optional ML modes truthfully.
-7. **Cold-start product verification** — clean-state UI-only regression without hidden state seeding, plus human installed-app acceptance.
-8. **Resume Stage 9** — reconcile preserved packaging/native-shell work with the recovered product, then finish signing/publication.
+1. **Product Truth Inventory** — completed in PR #42; keep the inventory current.
+2. **Shared Studio editor spine** — completed in PR #61: Project -> Media -> canonical Timeline -> MLT -> deterministic export.
+3. **Production Directions** — restore meaningful task/domain composition over the shared Studio Core without reviving recipe engines.
+4. **Project Unit of Work / Undo-Redo** — atomic production-document + asset + timeline mutations.
+5. **Direction-domain verticals** — prove real micro-drama/commercial/music/narrated/dub-battle domain journeys incrementally.
+6. **Model Registry + Job Manager + named AI execution** — one visible model/job/result lifecycle shared across directions.
+7. **Contextual-tool migration** — move useful targeted edit/dubbing/music/continuity behavior out of legacy workspace/orchestrator surfaces.
+8. **Cold-start product verification** — clean-state UI-only regression plus human installed-app acceptance.
+9. **Resume Stage 9** — reconcile preserved packaging/native-shell work with the accepted product, then finish signing/publication.
 
 Recovery exit:
 
-- every visible recipe/action has a truthful readiness state backed by a current executable path;
-- no execution-plan target points to an unmounted endpoint;
-- the frontend consumes Product Orchestrator next actions/prerequisites/relevant workspaces for migrated journeys rather than reconstructing hidden workflow state;
-- D-033 conformance is established, with generic editor growth blocked behind the accepted reuse/command boundaries rather than a new foundation debate;
-- all five permanent scenarios complete through UI without manual API calls or test-only state seeding;
+- every visible Production Direction and contextual tool has truthful readiness backed by current executable product paths;
+- no modern path depends on Product Orchestrator/legacy execution-plan as its primary authority;
+- D-033 editor conformance remains established;
+- direction identity/domain state and common Studio state survive project round-trip;
+- permanent regression scenarios complete through UI without manual API calls or test-only state seeding;
 - cold-start automated evidence and human Windows installed-app review pass.
 
 Until this gate passes, Stage 9 may remain an engineering/package reference but **must not merge as the maintained product baseline**.
@@ -337,10 +353,14 @@ Exit: user installs and runs UV Studio without manually preparing Python/Node/FF
 
 ## Permanent regression scenarios
 
-A. 30–60 s general video without required song/narration.  
-B. 60 s narrated video with visuals/subtitles.  
-C. 20–30 s music-video excerpt.  
-D. Existing-video dubbing.  
-E. 5–10 s targeted existing-video edit.
+The existing engineering/user-outcome scenarios remain valuable and are reclassified under D-064:
 
-Major architecture must remain compatible with all five scenarios and must not make a paid third-party API mandatory for scenarios that have a viable local/free implementation.
+A. **Free/general production** — 30–60 s video without required song/narration.  
+B. **Narrated direction** — 60 s narrated video with visuals/subtitles.  
+C. **Music-video direction** — 20–30 s music-driven excerpt.  
+D. **Dubbing tool** — existing-video dubbing/translation.  
+E. **Targeted-edit tool** — 5–10 s existing-video edit.  
+
+Class-C discovery must additionally protect all six initial Production Direction cards and ensure operation-level tools are not accidentally promoted back into top-level project identity. Rich micro-drama, commercial and dub-battle journeys become permanent regression scenarios as their domain verticals are implemented.
+
+Major architecture must remain compatible with these scenarios and must not make a paid third-party API mandatory for scenarios that have a viable local/free implementation.
