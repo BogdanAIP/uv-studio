@@ -18,4 +18,6 @@ Studio model choice
  -> canonical Timeline
 ```
 
+D-069 continuation lineage is a bounded backend/contract seam inside Stage 14, **not** an additional user-visible feature claim. `continuation_source_reference_id` is accepted only for offers that declare `generation.continuation`, but Stage 14 intentionally ships no real continuation-capable offer, InfinityEdit/Helios runtime or Continue/Edit UI. A later user-visible continuation workflow needs its own Product Truth surface and E2E outcome proof.
+
 The final slice must add a machine-readable Product Truth Contract that resolves to the actual command/API, frontend entry and browser E2E test. This file is planning context only and must be updated or removed before review if implementation details differ.
