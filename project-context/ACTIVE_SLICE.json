@@ -1,7 +1,30 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "studio-v2-production-directions",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Correct Studio v2 product composition by introducing Production Directions above the shared Studio Core, restoring task cards for distinct production journeys without reviving recipe-specific engines or workspaces.",
+    "base_branch": "main",
+    "branch": "stage-11/studio-v2-production-directions",
+    "pull_request": 63,
+    "write_scope": [
+      "project-context/**",
+      "docs/architecture/**",
+      "AGENTS.md",
+      "ARCHITECTURE_PRINCIPLES.md",
+      "README.md",
+      "ROADMAP.md",
+      "frontend/app/projects/**",
+      "frontend/lib/timelineApi.ts",
+      "uv_studio/production/**",
+      "uv_studio/api/studio_timeline.py",
+      "tests/**",
+      "tests_api/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-editor-spine",
     "pull_request": 61,

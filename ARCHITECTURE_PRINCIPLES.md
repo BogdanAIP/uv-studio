@@ -2,22 +2,27 @@
 
 These rules are product architecture constraints, not implementation suggestions.
 
-## Studio-first product composition
+## Production Directions over one Studio Core
 
-D-063 is the current long-term product-composition authority.
+D-064 is the current long-term product-composition authority. D-063 remains the accepted shared-Studio-core foundation that D-064 refines.
 
-UV Studio is one professional project/editor workspace with contextual media and AI tools. New product growth MUST NOT be expressed primarily as a new recipe, numbered Stage or specialized project workspace when the operation belongs in the common Studio.
+UV Studio is one professional local-first production/editing application with a shared Studio Core and multiple Production Directions. New product growth may introduce a direction when a user journey has materially different production entities/navigation/policy, but it MUST NOT introduce a separate canonical project engine, recipe execution stack or duplicated editor infrastructure.
 
 The normal composition is:
 
-- project-owned Media/Assets and, where useful, Scenes/Shots;
-- Preview/Canvas;
-- Inspector with contextual ordinary and AI tools;
-- a UV-owned canonical multitrack Timeline;
+- one UV-owned Project and Project Store;
+- one selected Production Direction for projects that need a domain-specific production model;
+- direction-specific project-owned production documents where useful;
+- shared Media/Assets, Preview/Canvas, Inspector/AI Tools and canonical multitrack Timeline;
 - explicit user-visible model choice where the model materially affects the creative result;
-- one application/command authority used by manual UI and automation.
+- one application/command authority used by manual UI and automation;
+- shared Model Registry, Job Manager, Capability Registry, adapters and export infrastructure.
 
-Recipe/Product-Orchestrator/Stage 8 state remains compatibility/migration material until retired through evidence-backed caller migration.
+Initial first-class directions are micro-drama/story, commercial/product, music video, narrated video, dub battle/cinematic revoicing and free project.
+
+Operation-level features such as targeted edit, ordinary dubbing/translation, slideshow, visualizer, action transfer, talking character and lip-sync remain contextual tools unless a later evidence-backed decision proves that one requires a distinct production model.
+
+Recipe/Product-Orchestrator/Stage 8 state remains compatibility/migration material until retired through evidence-backed caller migration. A Production Direction is not a `RecipeDefinition` and does not select an execution engine/provider.
 
 ## Reuse-first / orchestration-first
 
@@ -40,17 +45,17 @@ Open-source reuse is successful only when UV Studio owns the surrounding product
 
 Preferred sequence:
 
-`candidate -> license/evidence spike -> pin -> UV adapter/command boundary -> needed primitive -> tests -> Studio tool`
+`candidate -> license/evidence spike -> pin -> UV adapter/command boundary -> needed primitive -> tests -> Studio tool/direction service`
 
 Do not copy a donor's application/project/workflow/session model merely because one of its primitives is useful. In particular, donor stages, task taxonomies, provider settings or storage architecture do not become UV Studio product concepts without an explicit architecture decision.
 
 ## One command model: GUI = scripts = AI = MCP
 
-Every meaningful non-trivial editor mutation MUST have one product-owned programmatic command contract.
+Every meaningful non-trivial editor or production mutation MUST have one product-owned programmatic command contract.
 
-The GUI, user scripts, AI actions and MCP automation MUST call the same command model. They MUST NOT maintain four independent editing implementations or mutate canonical project/timeline JSON directly.
+The GUI, user scripts, AI actions and MCP automation MUST call the same command model. They MUST NOT maintain independent editing/production implementations or mutate canonical project/timeline/production JSON directly.
 
-The command layer owns:
+The command/application layer owns:
 
 - validation and project/path boundaries;
 - deterministic mutation semantics;
@@ -59,7 +64,9 @@ The command layer owns:
 - conversion to the selected editor/render-engine adapter;
 - canonical UV Studio domain invariants.
 
-An AI assistant may inspect project state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
+A Project Unit of Work MUST be capable of coordinating direction/domain documents, project assets/references, generation records and timeline state atomically when one semantic operation spans them.
+
+An AI assistant may inspect project/direction state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
 
 ## Project state is UV-owned; engine state is derived
 

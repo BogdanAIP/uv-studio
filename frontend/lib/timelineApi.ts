@@ -2,6 +2,16 @@ import type { ProjectReference, UVProject } from './projectsApi';
 
 export type StudioMediaKind = 'video' | 'image' | 'audio';
 
+export interface ProductionDirection {
+  direction_id: string;
+  title: string;
+  description: string;
+  primary_input_label: string;
+  workspace_sections: string[];
+  default_tools: string[];
+  featured: boolean;
+}
+
 export interface StudioTimelineClip {
   clip_id: string;
   reference_id: string;
@@ -116,11 +126,20 @@ async function apiError(response: Response, fallback: string): Promise<Error> {
   return new Error(fallback);
 }
 
-export async function createStudioProject(title: string): Promise<UVProject> {
+export async function listProductionDirections(): Promise<ProductionDirection[]> {
+  const response = await fetch('/api/uv/projects/studio/directions', { cache: 'no-store' });
+  if (!response.ok) throw await apiError(response, 'Не удалось загрузить направления Studio');
+  return response.json();
+}
+
+export async function createStudioProject(
+  title: string,
+  directionId: string,
+): Promise<UVProject> {
   const response = await fetch('/api/uv/projects/studio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, direction_id: directionId }),
   });
   if (!response.ok) throw await apiError(response, 'Не удалось создать Studio-проект');
   return response.json();
