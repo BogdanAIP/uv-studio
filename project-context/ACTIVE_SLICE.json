@@ -8,7 +8,7 @@
     "goal": "Correct Studio v2 product composition by introducing Production Directions above the shared Studio Core, restoring task cards for distinct production journeys without reviving recipe-specific engines or workspaces.",
     "base_branch": "main",
     "branch": "stage-11/studio-v2-production-directions",
-    "pull_request": null,
+    "pull_request": 63,
     "write_scope": [
       "project-context/**",
       "docs/architecture/**",
