@@ -156,7 +156,9 @@ class MicroDramaProductionBrowserOutcome(unittest.TestCase):
             project_id = urllib.parse.unquote(path_parts[1])
 
             page.get_by_label("Импортировать медиа в Studio", exact=True).set_input_files(str(self.video))
-            expect(page.get_by_text(self.video.name, exact=True).first).to_be_visible(timeout=60_000)
+            expect(page.get_by_role("button").filter(has_text=self.video.name).first).to_be_visible(
+                timeout=60_000
+            )
             production_media = page.get_by_label("Медиа для production-дубля", exact=True)
             expect(production_media).to_be_visible()
             production_media.select_option(label=self.video.name)
@@ -166,12 +168,12 @@ class MicroDramaProductionBrowserOutcome(unittest.TestCase):
                 "Герой принимает решение у уходящего поезда"
             )
             page.get_by_role("button", name="Создать сцену", exact=True).click()
-            expect(page.get_by_text(scene_title, exact=True).first).to_be_visible()
+            expect(page.locator("p").filter(has_text=scene_title).first).to_be_visible()
 
             page.get_by_label("Сцена для кадра", exact=True).select_option(label=scene_title)
             page.get_by_label("Замысел production-кадра", exact=True).fill(shot_intent)
             page.get_by_role("button", name="Создать кадр", exact=True).click()
-            expect(page.get_by_text(shot_intent, exact=True).first).to_be_visible()
+            expect(page.locator("p").filter(has_text=shot_intent).first).to_be_visible()
 
             page.get_by_label("Кадр для дубля", exact=True).select_option(label=shot_intent)
             page.get_by_role(
@@ -221,7 +223,10 @@ class MicroDramaProductionBrowserOutcome(unittest.TestCase):
             self.assertIsNotNone(accepted["shots"][0]["accepted_take_id"])
             self.assertEqual(len(accepted["shots"][0]["timeline_clip_ids"]), 1)
             timeline = _api_json("GET", _project_path(project_id, "/studio/timeline"))
-            self.assertEqual(timeline["tracks"][0]["clips"][0]["reference_id"], accepted["takes"][0]["reference_id"])
+            self.assertEqual(
+                timeline["tracks"][0]["clips"][0]["reference_id"],
+                accepted["takes"][0]["reference_id"],
+            )
 
             page.get_by_role("button", name="Отменить последнее действие проекта", exact=True).click()
             expect(page.get_by_text("Принят", exact=True)).to_have_count(0, timeout=60_000)
