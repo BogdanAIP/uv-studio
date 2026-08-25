@@ -2,21 +2,24 @@
 
 These rules are product architecture constraints, not implementation suggestions.
 
-## Production Directions over one Studio Core
+## Production Directions over one Studio + shared production semantics
 
-D-064 is the current long-term product-composition authority. D-063 remains the accepted shared-Studio-core foundation that D-064 refines.
+D-064 is the current product-composition authority. D-065 defines the shared Production Semantic Core beneath directions. D-063 remains supporting history for the shared Studio/application core that D-064/D-065 refine.
 
-UV Studio is one professional local-first production/editing application with a shared Studio Core and multiple Production Directions. New product growth may introduce a direction when a user journey has materially different production entities/navigation/policy, but it MUST NOT introduce a separate canonical project engine, recipe execution stack or duplicated editor infrastructure.
+UV Studio is one professional local-first production/editing application with multiple Production Directions, one shared Production Semantic Core where common concepts exist, and one shared Studio Core. New product growth may introduce a direction when a user journey has materially different organization/navigation/policy, but it MUST NOT introduce a separate canonical project engine, recipe execution stack, duplicated editor infrastructure or parallel common Shot/Take model.
 
 The normal composition is:
 
 - one UV-owned Project and Project Store;
-- one selected Production Direction for projects that need a domain-specific production model;
-- direction-specific project-owned production documents where useful;
+- one validated Production Direction for modern projects that need a domain-specific production model;
+- optional shared production entities such as Sequence/Scene, Shot, Take/accepted take, semantic bindings and continuity/canon links;
+- direction-specific extension documents only for genuinely specialized concepts;
 - shared Media/Assets, Preview/Canvas, Inspector/AI Tools and canonical multitrack Timeline;
 - explicit user-visible model choice where the model materially affects the creative result;
 - one application/command authority used by manual UI and automation;
-- shared Model Registry, Job Manager, Capability Registry, adapters and export infrastructure.
+- shared Project Unit of Work, Model Registry, Job Manager, Capability Registry, adapters and export infrastructure.
+
+Not every project must instantiate every shared semantic entity. Sharing a contract does not justify one giant mandatory film schema.
 
 Initial first-class directions are micro-drama/story, commercial/product, music video, narrated video, dub battle/cinematic revoicing and free project.
 
@@ -64,13 +67,15 @@ The command/application layer owns:
 - conversion to the selected editor/render-engine adapter;
 - canonical UV Studio domain invariants.
 
-A Project Unit of Work MUST be capable of coordinating direction/domain documents, project assets/references, generation records and timeline state atomically when one semantic operation spans them.
+A Project Unit of Work MUST be capable of coordinating shared production-semantic documents, direction extensions, project assets/references, generation records and Timeline state atomically when one semantic operation spans them.
 
-An AI assistant may inspect project/direction state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
+An AI assistant may inspect project/direction/production state and propose commands or higher-level plans, but it does not receive a privileged raw-state mutation bypass.
 
 ## Project state is UV-owned; engine state is derived
 
-Project Store and UV-owned versioned domain documents remain canonical.
+Project Store and UV-owned versioned production/domain documents remain canonical.
+
+A Shot is a semantic production unit; a Timeline Clip is an assembly unit. Production semantics may project/bind accepted material into the Timeline but do not create a second Timeline.
 
 MLT is the selected timeline/edit engine behind the D-033 adapter. Raw MLT XML/in-memory state is an engine representation and MUST NOT become a second public project authority. OpenCut Classic remains a selective editor-UX donor, not a storage/backend authority.
 

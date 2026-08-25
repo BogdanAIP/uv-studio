@@ -17,9 +17,12 @@ def test_current_architecture_is_explicit_authority() -> None:
 
     assert "CURRENT AUTHORITY" in current
     assert "Production Direction" in current
+    assert "Shared Production Semantic Core" in current
     assert "D-064" in current
+    assert "D-065" in current
     assert "CURRENT_ARCHITECTURE.md" in index
     assert "CURRENT_ARCHITECTURE.md" in agents
+    assert "D-065" in agents
 
 
 def test_architecture_index_names_only_real_supporting_documents() -> None:
@@ -38,7 +41,6 @@ def test_architecture_index_names_only_real_supporting_documents() -> None:
         assert (ARCH / name).is_file(), name
         assert name in index, name
 
-    # Old names accidentally introduced by the first authority-index draft must not return.
     for nonexistent in (
         "CAPABILITY_CONTRACT.md",
         "AUTHORIZED_EXECUTION.md",
@@ -103,15 +105,40 @@ def test_historical_supporting_evidence_is_labeled() -> None:
     assert "HISTORICAL COMPONENT EVALUATION" in qwen[:300]
 
 
+def test_shared_production_semantics_are_current_authority() -> None:
+    d065_path = DECISIONS / "D-065-shared-production-semantic-core.md"
+    assert d065_path.is_file()
+    d065 = _text(d065_path)
+    current = _text(ARCH / "CURRENT_ARCHITECTURE.md")
+    principles = _text(ROOT / "ARCHITECTURE_PRINCIPLES.md")
+    readme = _text(ROOT / "README.md")
+
+    assert "Status:** Accepted" in d065[:300]
+    assert "Shared Production Semantic Core" in d065
+    assert "Shot is not a Timeline Clip" in d065
+    assert "parallel direction-specific versions" in d065
+
+    assert "Shared Production Semantic Core" in current
+    assert "Shot is not a Timeline Clip" in current
+    assert "parallel direction-specific Scene/Shot/Take schemas" in current
+
+    assert "D-065" in principles
+    assert "Shot is a semantic production unit" in principles
+    assert "Production Semantic Core" in readme
+
+
 def test_next_slice_records_modern_studio_boundary_gates() -> None:
     next_task = _text(ROOT / "project-context" / "NEXT_TASK.md")
     project_store = _text(ROOT / "docs" / "PROJECT_STORE.md")
 
     assert "after PR #64" in next_task
     assert "Protect Production Direction identity" in next_task
+    assert "Distinguish modern identity from legacy compatibility" in next_task
     assert "Decouple modern Studio API from recipe/orchestrator imports" in next_task
     assert "Remove legacy creation defaults from the core foundation" in next_task
+    assert "Reserve a bounded production-state layout" in next_task
     assert "ProjectUnitOfWork" in next_task
+    assert "shared Scene/Shot/Take" in next_task
 
     assert "Current debt" in project_store
     assert "direction_id" in project_store
@@ -133,4 +160,5 @@ def test_decision_index_points_to_current_authority() -> None:
     decisions = _text(ROOT / "project-context" / "DECISIONS.md")
     assert "Current product / application authority" in decisions
     assert "D-064" in decisions
+    assert "D-065" in decisions
     assert "Partially superseded / historical product-composition decisions" in decisions

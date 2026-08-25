@@ -5,7 +5,7 @@
     "id": "architecture-authority-cleanup",
     "kind": "chore",
     "roadmap_stage": "studio-v2",
-    "goal": "Consolidate current architecture authority around D-064 and the shared Studio Core, reclassify superseded recipe/Product Orchestrator documents as historical or compatibility evidence, remove stale supporting-document claims, and record code-boundary prerequisites that must be corrected before Studio-v2 transactions/domain growth.",
+    "goal": "Consolidate current architecture authority around D-064 Production Directions, D-065 shared production semantics and the common Studio Core; reclassify superseded recipe/Product Orchestrator documents; remove stale supporting-document claims; and record code-boundary prerequisites before Studio-v2 transaction/domain growth.",
     "base_branch": "main",
     "branch": "chore/architecture-authority-cleanup",
     "pull_request": 64,

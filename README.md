@@ -2,51 +2,33 @@
 
 Universal Video Studio — open-source desktop/local-first AI video production and editing workspace.
 
-The project is built by reusing proven open-source video-production components instead of rebuilding the whole stack. The initial technical base is the modern `video-claw/video-claw` application from `HITsz-TMG/VideoClaw`, pinned and tracked as upstream.
+The project reuses proven open-source video-production components instead of rebuilding the whole media stack. The initial technical donor is the modern `HITsz-TMG/VideoClaw` application, pinned and tracked as upstream; donor application concepts are not UV Studio product authority.
 
 ## Product scope
 
-UV Studio uses one shared Studio Core with multiple **Production Directions**. A direction changes how a production is organized; it does not create a separate editor engine or choose a hidden AI provider.
+UV Studio uses multiple **Production Directions** over one shared production/application core. A direction changes how a production is organized; it does not create a separate editor engine or choose a hidden AI provider.
 
 Initial directions:
 
-- **Микродрама / сюжетное видео** — story, characters, locations, scenes, shots, takes and continuity where needed;
-- **Реклама / продукт** — brief, product, brand, audience, concepts, shots and creative variants;
-- **Музыкальный клип** — song, Music Map, sections, visual direction, shots and rhythm-aware assembly;
+- **Микродрама / сюжетное видео** — story, characters, locations and scene organization;
+- **Реклама / продукт** — brief, product, brand, audience and concepts;
+- **Музыкальный клип** — song, Music Map, sections and visual direction;
 - **Видео с диктором** — script, voice, semantic segments, visual plan and subtitles;
-- **Киноозвучка / Кинобатл** — source scene, characters, dialogue lines, cast, takes and final mix;
+- **Киноозвучка / Кинобатл** — source scene, dialogue, cast and mix policy;
 - **Свободный проект** — unconstrained Studio work without mandatory production-domain structure.
 
-All directions share the same Project Store, Media/Assets, Preview, canonical multitrack Timeline, Inspector/AI tools, Model Registry/Job Manager direction, application commands and export infrastructure.
+Where directions share real production concepts, they reuse one **Production Semantic Core** rather than fork them. In particular, Scene/Shot/Take/accepted-material identities, semantic bindings and continuity links are shared contracts when applicable. A direction may add specialized documents, and a project does not have to instantiate semantic entities it does not need.
 
-Operation-level features remain contextual Studio tools rather than project identities, including:
+All directions share Project Store, Media/Assets, Preview, canonical multitrack Timeline, Inspector/AI tools, application commands, transaction/undo foundation, Model Registry/Job Manager direction and export infrastructure.
 
-- targeted range editing;
-- ordinary dubbing/translation;
-- photo-to-video/slideshow;
-- visualizer;
-- action transfer;
-- talking character/digital human;
-- performance/lip-sync;
-- image/video/audio generation and transforms.
+Operation-level features remain contextual Studio tools rather than project identities, including targeted range editing, ordinary dubbing/translation, slideshow/visualizer, action transfer, talking character, lip-sync and image/video/audio generation/transforms.
 
-Music, narration, characters, continuity and specialized review state are optional domain capabilities, not mandatory fields for every project.
+A **Shot is not a Timeline Clip**: the Shot carries production intent/context and accepted Take; the Timeline carries final temporal assembly.
 
-See D-064 for the current product-composition architecture.
+See `docs/architecture/CURRENT_ARCHITECTURE.md`, D-064 (Production Directions) and D-065 (shared production semantics).
 
 ## Development source of truth
 
-Repository and GitHub state are the durable project memory. Coding agents and new development chats must start with `AGENTS.md`; it defines the required reading order, active-slice contract and multi-agent ownership rules. Do not rely on an old chat transcript to know the current implementation state.
+Repository and GitHub state are durable project memory. Coding agents and new development chats start with `AGENTS.md`; it defines reading order, active-slice contract and ownership rules. Do not rely on an old chat transcript for current implementation state.
 
-## Development rule
-
-Every meaningful development slice must end with:
-
-- code/tests committed to one integration branch;
-- a PR describing what changed and what was verified;
-- `project-context/ACTIVE_SLICE.json` synchronized with the PR and its single handoff;
-- `PROJECT_STATE.md` updated to the actual repository state;
-- `NEXT_TASK.md` containing one concrete next development target;
-- architectural decisions recorded in `DECISIONS.md` when they change long-term behavior.
-
-See `DEVELOPMENT_PROTOCOL.md` for the full cross-chat workflow.
+Every meaningful development slice ends with one integration branch/PR, synchronized `ACTIVE_SLICE.json`, truthful `PROJECT_STATE.md`, one concrete `NEXT_TASK.md`, required tests/evidence and ADR updates when long-term behavior changes. See `DEVELOPMENT_PROTOCOL.md`.
