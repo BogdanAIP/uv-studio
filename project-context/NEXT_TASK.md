@@ -11,12 +11,13 @@ The slice must not be interpreted narrowly as “timeline undo”. The architect
 ## Entry prerequisites — modern Studio boundary
 
 1. **Protect Production Direction identity.** Introduce a typed/validated Studio metadata contract for `product_model=production_directions` + known `direction_id`. Its schema version must version that metadata contract itself; do not use a version number merely because the product is called “Studio v2”.
-2. **Distinguish modern identity from legacy compatibility.** A modern Studio project must have valid direction identity. A legacy recipe project may remain readable/editable through an explicit compatibility mode, but direction-specific domain commands must not silently treat it as a modern direction project. Any later upgrade/direction change is an explicit semantic migration operation.
-3. **Prevent arbitrary generic mutation of Studio identity.** Generic project PATCH/import compatibility paths must not silently replace/corrupt modern direction identity.
-4. **Decouple modern Studio API from recipe/orchestrator imports.** `studio_timeline.py` and `project_media.py` currently import neutral payload/store helpers from `api/projects.py`, whose import graph pulls Recipe Registry and `orchestration.catalog`. Extract neutral project API schemas/dependencies or otherwise make modern Studio/media modules recipe-free.
-5. **Remove legacy creation defaults from the core foundation.** `ProjectStore.create_project()` must not silently default to `general_video`; compatibility callers pass legacy identity explicitly. Generic recipe-create/execution-plan client/server surfaces are explicitly compatibility-only so new GUI/Agent/scripts/MCP code cannot accidentally adopt them.
-6. **Reserve a bounded production-state layout.** Establish a deliberate project-owned production/domain root or equivalent storage contract suitable for D-065 shared Scene/Shot/Take documents and direction extensions; do not misuse `tasks/`, Timeline files or generic `project.json.extensions` as the long-term semantic store.
-7. Preserve old projects/imports and legacy workflow routes until caller/dependency proof permits removal. This is boundary isolation, not a destructive rewrite.
+2. **Distinguish modern identity from legacy compatibility.** A modern Studio project must have valid direction identity. A legacy recipe or pre-D-064 Studio project may remain readable/editable through an explicit compatibility classification, but direction-specific domain commands must not silently treat it as a modern direction project. Any later upgrade/direction change is an explicit semantic migration operation.
+3. **Make identity classification backend-owned.** Current `/projects` UI infers “Studio” from `recipe_id == studio_v2` or the mere presence of an `extensions.studio` object. Replace that guess with a validated server/application projection such as modern-direction / legacy-compatibility / invalid-recovery status. Frontend code must not decide canonical product identity by reparsing arbitrary extensions JSON.
+4. **Prevent arbitrary generic mutation of Studio identity.** Generic project PATCH/import compatibility paths must not silently replace/corrupt modern direction identity.
+5. **Decouple modern Studio API from recipe/orchestrator imports.** `studio_timeline.py` and `project_media.py` currently import neutral payload/store helpers from `api/projects.py`, whose import graph pulls Recipe Registry and `orchestration.catalog`. Extract neutral project API schemas/dependencies or otherwise make modern Studio/media modules recipe-free.
+6. **Remove legacy creation defaults from the core foundation.** `ProjectStore.create_project()` must not silently default to `general_video`; compatibility callers pass legacy identity explicitly. Generic recipe-create/execution-plan client/server surfaces are explicitly compatibility-only so new GUI/Agent/scripts/MCP code cannot accidentally adopt them.
+7. **Reserve a bounded production-state layout.** Establish a deliberate project-owned production/domain root or equivalent storage contract suitable for D-065 shared Scene/Shot/Take documents and direction extensions; do not misuse `tasks/`, Timeline files or generic `project.json.extensions` as the long-term semantic store.
+8. Preserve old projects/imports and legacy workflow routes until caller/dependency proof permits removal. This is boundary isolation, not a destructive rewrite.
 
 ## Project Unit of Work / undo-redo
 
@@ -37,7 +38,7 @@ After the boundary above is explicit:
 The slice is complete when all of the following are true:
 
 - a valid modern Studio project has one parseable known Production Direction identity across create/load/archive round-trip;
-- malformed/unknown/tampered modern Studio identity fails closed;
+- malformed/unknown/tampered modern Studio identity fails closed and is not mislabeled by the frontend;
 - an explicit legacy compatibility project can remain readable without being assigned a fake direction, while direction-specific commands reject/require migration;
 - modern Studio/media API modules no longer require recipe/Product-Orchestrator imports merely to access neutral project services;
 - core Project Store creation cannot accidentally choose `general_video` through an implicit default;

@@ -134,6 +134,8 @@ def test_next_slice_records_modern_studio_boundary_gates() -> None:
     assert "after PR #64" in next_task
     assert "Protect Production Direction identity" in next_task
     assert "Distinguish modern identity from legacy compatibility" in next_task
+    assert "Make identity classification backend-owned" in next_task
+    assert "Frontend code must not decide canonical product identity" in next_task
     assert "Decouple modern Studio API from recipe/orchestrator imports" in next_task
     assert "Remove legacy creation defaults from the core foundation" in next_task
     assert "Reserve a bounded production-state layout" in next_task
