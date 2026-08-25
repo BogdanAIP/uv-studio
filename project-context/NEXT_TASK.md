@@ -35,7 +35,7 @@ A named model is a user-visible creative/execution choice owned by the backend M
 
 A Job is project-scoped durable long-running work. A generation Attempt records the exact named model, provider/adapter mapping, normalized inputs, Generation Contract, status, output/failure and provenance.
 
-Retrying infrastructure must not accidentally become a new creative Attempt.
+Retrying infrastructure must not accidentally become a new creative Attempt. Conversely, a deliberate user/Agent reroll must be able to create a new creative Attempt even when its normalized generation inputs are identical to an earlier Attempt.
 
 ### Idempotency
 
@@ -44,11 +44,12 @@ For the first generation path prove at minimum:
 - an idempotency key is bound to a stable normalized request/context digest;
 - the digest includes project/semantic target, named model, selected execution mapping and generation inputs/contract;
 - same key + different normalized request fails closed as a conflict;
-- an equivalent request already running is not executed twice;
-- a succeeded equivalent request returns/reuses the recorded result instead of launching duplicate expensive work;
+- same key + matching digest already running is not executed twice;
+- same key + matching digest already succeeded returns/reuses the recorded result instead of launching duplicate expensive work;
+- a fresh idempotency key creates a deliberate new creative Attempt and may execute even when all normalized generation inputs match an earlier Attempt;
 - failure/retry history remains inspectable and distinct from deliberately starting a new creative attempt.
 
-Idempotency does not replace D-017 authorization. A retry/replay must not silently widen remote/cost permission.
+Idempotency deduplicates replay of one request identity; it must not globally suppress creative rerolls that happen to use identical parameters. It also does not replace D-017 authorization. Any new external execution, including a fresh-key reroll, remains subject to the normal remote/cost permission boundary.
 
 ### Generation Contract
 
@@ -101,8 +102,9 @@ modern Studio project + shared Shot
 
 Also prove:
 
-- a duplicate/replayed generation request cannot create a second expensive execution;
+- replaying the same idempotency key + matching digest cannot create a second expensive execution;
 - reusing the same idempotency key for materially different inputs is rejected;
+- using a fresh idempotency key with otherwise identical generation inputs creates a new creative Attempt and executes normally;
 - the Product Truth Contract resolves to real backend/frontend/test references;
 - the browser E2E begins from the visible Studio surface rather than manual API calls or test-only state seeding.
 
