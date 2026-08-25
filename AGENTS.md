@@ -11,7 +11,7 @@ Before changing files, read in this order:
 3. `project-context/NEXT_TASK.md`
 4. `docs/architecture/CURRENT_ARCHITECTURE.md`
 5. `docs/architecture/README.md` — use its authority classification before reading older architecture files
-6. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 owns Production Direction composition, D-065 owns shared production semantics, D-066 owns the JarvisHub Agent Harness donor/factoring boundary, D-033 owns the editor foundation**
+6. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 owns Production Direction composition, D-065 owns shared production semantics, D-066 owns the JarvisHub Agent Harness donor/factoring boundary, D-067 owns Product Truth/current-doc consistency, D-068 owns desktop in-place updates, D-033 owns the editor foundation**
 7. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`
 8. `ARCHITECTURE_PRINCIPLES.md`
 9. `ROADMAP.md` — historical Stage detail is subordinate to current architecture/accepted decisions
@@ -73,9 +73,38 @@ D-066 is mandatory when designing Jobs, generation orchestration or Agent runtim
 - Future Agent trace/evaluations/repair records reference canonical Project/Scene/Shot/Take/asset/Timeline identities; they do not become a second source of truth.
 - Agent, GUI, scripts and MCP converge on the same commands/models/jobs/capabilities and authorization boundaries.
 
+## Product Truth + current documentation
+
+D-067 is mandatory for user-visible product work and current project/architecture documentation.
+
+- A user-visible feature is complete only when canonical application/backend behavior, the required frontend surface and user-outcome evidence agree.
+- Do not count backend-only implementation as a finished desktop feature merely because its unit/API tests are green.
+- Do not expose a frontend control as ready when its canonical backend/application path is missing, stubbed or semantically incompatible.
+- Internal infrastructure may intentionally have no UI, but it must be explicitly non-user-visible/not-ready rather than counted as product functionality.
+- New user-visible features should acquire a machine-readable Product Truth Contract binding feature identity, command/query, backend/API surface, frontend entry, relevant canonical state/dependencies and E2E proof.
+- `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `CURRENT_ARCHITECTURE.md`, authority indexes and declared Product Truth Contracts must agree on narrow machine-checkable facts.
+- Prefer explicit markers/registries/reference checks over heuristic CI that attempts to understand arbitrary prose.
+- Current documentation must distinguish as-built behavior from target/future behavior.
+
+See `docs/architecture/PRODUCT_TRUTH_CONTRACT.md`.
+
+## Desktop updates
+
+D-068 is mandatory for maintained desktop release/productization work.
+
+- Stable UV Studio releases default to one maintained installation identity and in-place updates, not one side-by-side installation per version.
+- Update UI must expose current version, check-for-updates, available version/release notes, progress and controlled update/restart state.
+- Update installation is an explicit user action initially; automatic checking may be configurable.
+- Update artifacts/metadata must be bounded and verified; fail closed on digest/signature/identity mismatch.
+- Application/runtime files are replaceable; Project Store data, user media and intended persistent settings are protected separately.
+- Use an out-of-process updater/installer handoff or another proven safe replacement mechanism; do not overwrite the running application unsafely.
+- Stage-9 release evidence must include clean install **and** supported N-1 -> N in-place upgrade with representative real project/settings state.
+
+See `docs/architecture/DESKTOP_UPDATES.md`.
+
 ## Reuse-first and programmable editing
 
-`ARCHITECTURE_PRINCIPLES.md`, D-033, D-064, D-065 and D-066 are mandatory. D-063 is supporting/partially superseded history, not independent product-composition authority.
+`ARCHITECTURE_PRINCIPLES.md`, D-033, D-064, D-065, D-066, D-067 and D-068 are mandatory. D-063 is supporting/partially superseded history, not independent product-composition authority.
 
 - Search/license-check/probe credible professional open-source components before building a general editor/media/agent primitive.
 - Record a concrete rejection before replacing a suitable mature component with custom infrastructure.
@@ -96,10 +125,11 @@ D-066 is mandatory when designing Jobs, generation orchestration or Agent runtim
 
 Before marking a PR ready:
 
-1. synchronize implementation, `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, decisions and PR body;
-2. set `lifecycle_state` to `review` and make the PR non-draft;
-3. run focused tests plus `python tools/validate_development_context.py`;
-4. require the exact review head to pass every declared check;
-5. confirm no unresolved review threads.
+1. synchronize implementation, `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, current architecture/decision indexes and PR body;
+2. for user-visible work, ensure the Product Truth Contract/evidence is synchronized and no backend/frontend readiness gap remains;
+3. set `lifecycle_state` to `review` and make the PR non-draft;
+4. run focused tests plus `python tools/validate_development_context.py` and applicable architecture/product-truth consistency checks;
+5. require the exact review head to pass every declared check;
+6. confirm no unresolved review threads.
 
 After merge, perform the D-038 context-closure transition to `idle` using the exact merged PR number/merge commit. Only then start the declared handoff.
