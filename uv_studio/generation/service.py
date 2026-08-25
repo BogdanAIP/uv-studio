@@ -28,7 +28,13 @@ from .jobs import (
     GenerationStatus,
     generation_request_digest,
 )
-from .models import GenerationContract, GenerationValidationError, ModelDefinition, ModelRegistry
+from .models import (
+    GENERATION_FEATURE_CONTINUATION,
+    GenerationContract,
+    GenerationValidationError,
+    ModelDefinition,
+    ModelRegistry,
+)
 
 
 class GenerationServiceError(RuntimeError):
@@ -44,7 +50,13 @@ class GenerationOutputError(GenerationServiceError):
 
 
 class GenerationExecutor(Protocol):
-    """Transport seam. Executors materialize one bounded output path supplied by UV Studio."""
+    """Transport seam for one bounded output.
+
+    Executors receive durable UV-owned request semantics. Provider-private continuation
+    state such as KV caches, latents, session handles, sliding windows or anchor caches
+    remains adapter-owned/reconstructible and must not become Project Store truth.
+    Returned metadata is durable provenance only.
+    """
 
     def execute(
         self,
@@ -128,11 +140,21 @@ class GenerationService:
         model = self.model_registry.get(model_id)
         offer = self.model_registry.capability_registry.get_offer(model.offer_id)
 
+        references = {item.id for item in (*project.sources, *project.artifacts)}
         if contract.approved_reference_id is not None:
-            references = {item.id for item in (*project.sources, *project.artifacts)}
             if contract.approved_reference_id not in references:
                 raise GenerationValidationError(
                     "approved_reference_id is not registered in this project"
+                )
+
+        if contract.continuation_source_reference_id is not None:
+            if GENERATION_FEATURE_CONTINUATION not in offer.features:
+                raise GenerationValidationError(
+                    "selected model does not support generation continuation"
+                )
+            if contract.continuation_source_reference_id not in references:
+                raise GenerationValidationError(
+                    "continuation_source_reference_id is not registered in this project"
                 )
 
         digest, request = generation_request_digest(
@@ -360,6 +382,12 @@ class GenerationService:
         contract: GenerationContract,
         executor_metadata: Mapping[str, Any],
     ) -> ProjectReference:
+        lineage = None
+        if contract.continuation_source_reference_id is not None:
+            lineage = {
+                "kind": "continuation",
+                "source_reference_id": contract.continuation_source_reference_id,
+            }
         metadata = {
             "size_bytes": output_path.stat().st_size,
             "sha256": self._sha256_file(output_path),
@@ -372,6 +400,7 @@ class GenerationService:
                 "adapter_id": offer.adapter_id,
                 "request_digest": job.request_digest,
                 "contract": contract.to_dict(),
+                "lineage": lineage,
             },
             "executor": dict(executor_metadata),
         }
