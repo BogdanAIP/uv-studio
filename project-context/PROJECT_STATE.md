@@ -27,18 +27,22 @@ A Shot is production meaning, not a Timeline Clip. Direction-specific data may r
 
 ## Stage 13 implementation state
 
-The draft now contains the first complete backend vertical path:
+The draft now contains the first complete rich-direction vertical path:
 
 1. strict shared `Scene`, `Shot`, `Take` and accepted-take contracts in `production/semantics.json`;
 2. micro-drama-only Story, Characters, Locations and per-scene continuity/canon in `production/micro_drama.json`;
-3. one `ProductionSemanticService` command boundary for shared semantic mutations;
-4. shared Scene/Shot/Take reuse proven from the commercial direction rather than hidden inside micro-drama;
-5. `accept_take` atomically updates accepted Shot state, the accepted project-owned media reference and `timeline/main.json` through Stage-12 `ProjectUnitOfWork`;
-6. accepted Shot state stores Timeline clip binding without making production state a second timeline;
-7. recipe-neutral Studio HTTP routes expose the same semantic handlers;
-8. core and API proof covers Scene -> Shot -> multiple Takes -> micro-drama context -> accepted Take -> canonical Timeline plus durable undo/redo.
+3. one serialized `ProductionSemanticService` command boundary for shared semantic mutations, holding the shared Project Store lock across read/modify/commit so concurrent GUI/Agent callers cannot lose updates;
+4. explicit HTTP command-handler registry over the same service rather than a direction-private pipeline or growing conditional dispatcher;
+5. shared Scene/Shot/Take reuse proven from the commercial direction rather than hidden inside micro-drama;
+6. `accept_take` atomically updates accepted Shot state, the accepted project-owned media reference and `timeline/main.json` through Stage-12 `ProjectUnitOfWork`;
+7. accepted media provenance supports multiple Shot/Take/Timeline bindings for one reusable project media reference and survives undo/redo exactly;
+8. accepted Shot state stores Timeline clip binding without making production state a second timeline;
+9. the existing common Studio page now exposes the rich Production panel only for `micro_drama`; other directions keep the shared Studio Core without receiving premature direction UI;
+10. Production and the existing Timeline/Undo/Redo UI synchronize through project-level change notifications instead of maintaining independent canonical browser state;
+11. core and API proof covers Scene -> Shot -> multiple Takes -> micro-drama context -> accepted Take -> canonical Timeline, durable undo/redo, shared commercial reuse and concurrent semantic commands;
+12. a Playwright user-outcome test drives the visible `/projects` and shared Studio UI through direction selection, real-media import, Scene -> Shot -> Take, Story/Character/Location/continuity, acceptance into Timeline, Undo and Redo without using API calls to perform the workflow.
 
-CI and review hardening are still required before this slice can move from draft to review.
+The previous backend/API matrix was green on Ubuntu and Windows before the rich UI was connected. The current exact-head CI is the remaining merge gate; the earlier frontend lint finding was corrected structurally by replacing effect-driven form synchronization with explicit continuity draft hydration.
 
 ## Compatibility rule
 
@@ -46,6 +50,12 @@ Recipe/Product Orchestrator/Stage routes remain compatibility code. Stage 13 doe
 
 Legacy/compatibility projects cannot execute modern direction production commands until they have valid modern Production Direction identity.
 
+## Known intentional limit
+
+Replacing an already accepted Take with another candidate remains an explicit future semantic operation. Stage 13 requires Undo before choosing another accepted Take rather than silently mutating acceptance history.
+
+Model Registry, project-scoped Job Manager and real AI generation are intentionally not part of Stage 13.
+
 ## Next handoff
 
-After shared production semantics are green and merged, `studio-v2-model-registry-job-manager-generation` should add the backend-owned user-visible Model Registry, project-scoped Job Manager and first named AI generation path through the same application-command and transaction authority.
+After shared production semantics are green, reviewed, merged and lifecycle-closed, `studio-v2-model-registry-job-manager-generation` should add the backend-owned user-visible Model Registry, project-scoped Job Manager and first named AI generation path through the same application-command and transaction authority.
