@@ -20,7 +20,13 @@ from uv_studio.capabilities.models import (
     OperationKind,
 )
 from uv_studio.capabilities.registry import CapabilityRegistry
-from uv_studio.generation.models import GenerationContract, ModelDefinition, ModelRegistry
+from uv_studio.generation.models import (
+    GENERATION_FEATURE_CONTINUATION,
+    GenerationContract,
+    GenerationValidationError,
+    ModelDefinition,
+    ModelRegistry,
+)
 from uv_studio.generation.service import GenerationService
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
@@ -80,7 +86,12 @@ class GenerationServiceTests(unittest.TestCase):
         self.tmp.cleanup()
 
     @staticmethod
-    def _model_registry(*, locality: LocalityClass, cost: CostClass) -> ModelRegistry:
+    def _model_registry(
+        *,
+        locality: LocalityClass,
+        cost: CostClass,
+        continuation: bool = False,
+    ) -> ModelRegistry:
         capability = CapabilityDefinition(
             "image.generate",
             "Image generation",
@@ -108,6 +119,7 @@ class GenerationServiceTests(unittest.TestCase):
                 locality=locality,
                 cost_class=cost,
                 asynchronous=True,
+                features=(GENERATION_FEATURE_CONTINUATION,) if continuation else (),
             )
         )
         return ModelRegistry(
@@ -151,6 +163,7 @@ class GenerationServiceTests(unittest.TestCase):
         self.assertEqual(artifact.metadata["generation"]["job_id"], completed.job_id)
         self.assertEqual(artifact.metadata["generation"]["model_id"], "uv.image.test")
         self.assertEqual(artifact.metadata["generation"]["contract"], self.contract.to_dict())
+        self.assertIsNone(artifact.metadata["generation"]["lineage"])
 
         shot = self.production.state(self.project.project_id).shot("shot_1")
         self.assertEqual(shot.take_ids, (attempt.take_id,))
@@ -179,6 +192,64 @@ class GenerationServiceTests(unittest.TestCase):
         durable_job = self.service.jobs.get(self.project.project_id, completed.job_id)
         self.assertEqual(durable_job.status.value, "succeeded")
         self.assertEqual(durable_job.current_attempt.output_reference_id, artifact.id)
+
+    def test_continuation_is_feature_gated_and_records_durable_lineage(self) -> None:
+        parent = self._submit("idem_parent")
+        parent_done = self.service.run(self.project.project_id, parent.job.job_id)
+        parent_reference_id = parent_done.current_attempt.output_reference_id
+        self.assertIsNotNone(parent_reference_id)
+
+        continuation_contract = GenerationContract(
+            fixed_constraints=("same character",),
+            editable_variables=("camera",),
+            forbidden_changes=("identity",),
+            continuation_source_reference_id=parent_reference_id,
+        )
+        request = {
+            "project_id": self.project.project_id,
+            "shot_id": "shot_1",
+            "model_id": "uv.image.test",
+            "inputs": {"prompt": "continue with a wider camera", "seed": 8},
+            "contract": continuation_contract,
+        }
+
+        with self.assertRaises(GenerationValidationError):
+            self.service.prepare(**request)
+
+        continuation_service = GenerationService(
+            self.store,
+            self._model_registry(
+                locality=LocalityClass.LOCAL,
+                cost=CostClass.FREE,
+                continuation=True,
+            ),
+            self.authorizations,
+            self.executor,
+        )
+        submitted = continuation_service.submit(
+            **request,
+            idempotency_key="idem_continuation",
+            authorization_token=None,
+        )
+        completed = continuation_service.run(self.project.project_id, submitted.job.job_id)
+        artifact = next(
+            item
+            for item in self.store.load_project(self.project.project_id).artifacts
+            if item.id == completed.current_attempt.output_reference_id
+        )
+
+        self.assertEqual(
+            artifact.metadata["generation"]["lineage"],
+            {"kind": "continuation", "source_reference_id": parent_reference_id},
+        )
+        self.assertEqual(
+            artifact.metadata["generation"]["contract"]["continuation_source_reference_id"],
+            parent_reference_id,
+        )
+        self.assertEqual(
+            completed.request["generation_contract"]["continuation_source_reference_id"],
+            parent_reference_id,
+        )
 
     def test_completed_replay_reuses_result_and_fresh_key_rerolls(self) -> None:
         first = self._submit("idem_replay")
