@@ -56,7 +56,7 @@ class ArgosTranslateExecutionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Argos transport")
+        self.project = self.store.create_project(recipe_id="general_video", title="Argos transport")
         self.registry = self._registry()
         self.executor = StubArgosExecutor()
         app.dependency_overrides[get_project_store] = lambda: self.store

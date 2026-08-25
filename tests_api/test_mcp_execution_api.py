@@ -44,7 +44,7 @@ class MCPExecutionApiTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.projects = ProjectStore(self.root / "projects")
-        self.project = self.projects.create_project(title="MCP execution")
+        self.project = self.projects.create_project(recipe_id="general_video", title="MCP execution")
         self.registry = build_builtin_capability_registry()
         self.config_store = MCPConfigStore(self.root / "config")
         self.fixture_exit = self.root / "fixture-exit.txt"

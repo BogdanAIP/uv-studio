@@ -129,7 +129,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project_store = ProjectStore(root / "projects")
-            project = project_store.create_project(title="WhisperX")
+            project = project_store.create_project(recipe_id="general_video", title="WhisperX")
             audio_path = root / "voice.wav"
             audio_path.write_bytes(b"fake-audio")
             model_dir = root / "models"
@@ -198,7 +198,7 @@ class WhisperXAlignmentAdapterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             store = ProjectStore(root / "projects")
-            project = store.create_project(title="WhisperX bad")
+            project = store.create_project(recipe_id="general_video", title="WhisperX bad")
             model_dir = root / "models"
             model_dir.mkdir()
             audio_path = root / "voice.wav"

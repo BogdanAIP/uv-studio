@@ -21,7 +21,7 @@ class RangeEditStateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Edit state")
+        self.project = self.store.create_project(recipe_id="general_video", title="Edit state")
         self.project_dir = self.store.project_directory(self.project.project_id)
         self.state_store = RangeEditStateStore(self.store)
         self.source = self.project_dir / "sources" / "source.mkv"

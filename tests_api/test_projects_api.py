@@ -67,16 +67,16 @@ class ProjectsApiTests(unittest.TestCase):
     def test_create_rejects_nonfinite_nested_project_state(self) -> None:
         response = self.client.post(
             "/api/uv/projects",
-            content='{"title":"Bad JSON","settings":{"nested":{"value":NaN}}}',
+            content='{"title":"Bad JSON","recipe_id":"general_video","settings":{"nested":{"value":NaN}}}',
             headers={"Content-Type": "application/json"},
         )
         self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(list(self.project_root.iterdir()), [])
 
     def test_list_projects_skips_corrupt_project_without_changing_response_shape(self) -> None:
-        self.store.create_project(title="Healthy A", project_id="prj_api_healthy_a")
-        self.store.create_project(title="Broken", project_id="prj_api_corrupt")
-        self.store.create_project(title="Healthy B", project_id="prj_api_healthy_b")
+        self.store.create_project(recipe_id="general_video", title="Healthy A", project_id="prj_api_healthy_a")
+        self.store.create_project(recipe_id="general_video", title="Broken", project_id="prj_api_corrupt")
+        self.store.create_project(recipe_id="general_video", title="Healthy B", project_id="prj_api_healthy_b")
         corrupt_path = self.store.project_path("prj_api_corrupt")
         corrupt_bytes = b"{broken-json\n"
         corrupt_path.write_bytes(corrupt_bytes)
@@ -97,7 +97,7 @@ class ProjectsApiTests(unittest.TestCase):
     def test_archive_export_and_import_round_trip(self) -> None:
         created = self.client.post(
             "/api/uv/projects",
-            json={"title": "Archive API", "settings": {"quality": "preview"}},
+            json={"recipe_id": "general_video", "title": "Archive API", "settings": {"quality": "preview"}},
         ).json()
         project_id = created["project_id"]
         source_file = self.store.project_path(project_id).parent / "sources" / "input.txt"
@@ -165,7 +165,7 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_update_rejects_explicit_null(self) -> None:
-        created = self.client.post("/api/uv/projects", json={"title": "Null Test"}).json()
+        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Null Test"}).json()
         response = self.client.patch(
             f"/api/uv/projects/{created['project_id']}",
             json={"title": None},

@@ -89,7 +89,7 @@ class NativeVideoClawAdapterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Native TTS")
+        self.project = self.store.create_project(recipe_id="general_video", title="Native TTS")
         self.offer = edge_offer()
         self.calls: list[dict[str, object]] = []
 

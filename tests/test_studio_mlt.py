@@ -15,7 +15,7 @@ class StudioMLTProjectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        project = self.store.create_project(title="MLT Studio")
+        project = self.store.create_project(recipe_id="general_video", title="MLT Studio")
         self.project_id = project.project_id
 
         video_path = self.store.resolve_project_file(

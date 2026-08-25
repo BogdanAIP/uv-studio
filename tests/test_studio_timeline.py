@@ -22,7 +22,7 @@ class StudioTimelineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        project = self.store.create_project(title="Studio v2")
+        project = self.store.create_project(recipe_id="general_video", title="Studio v2")
         self.project_id = project.project_id
 
         video_path = self.store.resolve_project_file(

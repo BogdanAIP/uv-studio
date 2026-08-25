@@ -52,7 +52,7 @@ class NativeVideoClawExecutionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Edge TTS API")
+        self.project = self.store.create_project(recipe_id="general_video", title="Edge TTS API")
         self.registry = self._registry()
         self.executor = StubNativeVideoClawExecutor()
         self.authorizations = OneShotAuthorizationStore()

@@ -62,7 +62,7 @@ class WhisperXAlignmentExecutionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="WhisperX transport")
+        self.project = self.store.create_project(recipe_id="general_video", title="WhisperX transport")
         self.registry = self._registry()
         self.executor = StubWhisperXExecutor()
         app.dependency_overrides[get_project_store] = lambda: self.store

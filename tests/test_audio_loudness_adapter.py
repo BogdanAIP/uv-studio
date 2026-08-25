@@ -47,7 +47,7 @@ class LoudnessRunner:
 class AudioLoudnessAdapterTests(unittest.TestCase):
     def _fixture(self, root: Path):
         store = ProjectStore(root / "projects")
-        project = store.create_project(title="Loudness")
+        project = store.create_project(recipe_id="general_video", title="Loudness")
         audio_store = ProjectPreparedAudioStore(store)
         allocation = audio_store.allocate(project.project_id, "voice.wav")
         body = b"prepared-audio"

@@ -21,7 +21,7 @@ class SequenceAcceptedStateIntegrityTests(unittest.TestCase):
     def test_corrupted_required_result_invalidates_already_accepted_take_on_reopen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Accepted state integrity")
+            project = store.create_project(recipe_id="general_video", title="Accepted state integrity")
             project_dir = store.project_directory(project.project_id)
             media = b"accepted-sequence-anchor"
             media_path = project_dir / "sources" / "anchor.mp4"

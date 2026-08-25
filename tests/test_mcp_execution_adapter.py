@@ -36,7 +36,7 @@ class MCPExecutionAdapterInputTests(unittest.TestCase):
     def test_declared_file_input_resolves_only_declared_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="File input")
+            project = store.create_project(recipe_id="general_video", title="File input")
             source = store.project_directory(project.project_id) / "sources" / "clip.txt"
             source.write_text("portable input\n", encoding="utf-8")
             adapter = MCPExecutionAdapter(object(), store)
@@ -59,7 +59,7 @@ class MCPExecutionAdapterInputTests(unittest.TestCase):
     def test_declared_file_input_rejects_wrong_root_missing_file_and_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="File input rejection")
+            project = store.create_project(recipe_id="general_video", title="File input rejection")
             asset = store.project_directory(project.project_id) / "assets" / "asset.txt"
             asset.write_text("asset\n", encoding="utf-8")
             adapter = MCPExecutionAdapter(object(), store)
@@ -80,7 +80,7 @@ class MCPExecutionAdapterInputTests(unittest.TestCase):
     def test_required_declared_file_input_must_be_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Required file")
+            project = store.create_project(recipe_id="general_video", title="Required file")
             adapter = MCPExecutionAdapter(object(), store)
             binding = self._binding(
                 project_file_inputs=(

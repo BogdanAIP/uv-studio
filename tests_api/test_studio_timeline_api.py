@@ -29,7 +29,7 @@ class StudioTimelineApiTests(unittest.TestCase):
         self.assertEqual(
             created_payload["extensions"]["studio"],
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "product_model": "production_directions",
                 "direction_id": "free_project",
             },

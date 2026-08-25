@@ -28,7 +28,7 @@ class ReplacementReviewArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source_store = ProjectStore(root / "source-projects")
-            project = source_store.create_project(title="Review archive", project_id="prj_review")
+            project = source_store.create_project(recipe_id="general_video", title="Review archive", project_id="prj_review")
             project_dir = source_store.project_directory(project.project_id)
             (project_dir / "sources" / "source.mkv").write_bytes(b"source")
             RangeContinuityBriefStore(source_store).upsert(

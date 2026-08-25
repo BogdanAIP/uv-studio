@@ -21,7 +21,7 @@ class SequenceAcceptTrustTests(unittest.TestCase):
     def test_accept_revalidates_required_review_results_after_review_state_corruption(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Accept trust")
+            project = store.create_project(recipe_id="general_video", title="Accept trust")
             project_dir = store.project_directory(project.project_id)
             media = b"sequence-accept-trust-video"
             media_path = project_dir / "sources" / "candidate.mp4"

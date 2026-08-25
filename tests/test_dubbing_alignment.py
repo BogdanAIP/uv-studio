@@ -62,7 +62,7 @@ class DubbingAlignmentTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.project_store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.project_store.create_project(title="Alignment")
+        self.project = self.project_store.create_project(recipe_id="general_video", title="Alignment")
         self.take = PreparedSpeechTake(
             take_id="take_1",
             dubbing_id="dub_1",

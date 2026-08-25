@@ -17,7 +17,7 @@ class EditorEngineProjectionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="MLT public projection")
+        self.project = self.store.create_project(recipe_id="general_video", title="MLT public projection")
         self.project_dir = self.store.project_directory(self.project.project_id)
         source_path = self.project_dir / "sources" / "clip.mp4"
         source_path.write_bytes(b"project-owned fixture")
