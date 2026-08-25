@@ -61,7 +61,7 @@ class BrowserPreviewRealMediaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Browser preview")
+        self.project = self.store.create_project(recipe_id="general_video", title="Browser preview")
         self.project_dir = self.store.project_directory(self.project.project_id)
         self.master = self.project_dir / "artifacts" / "master.mkv"
         _ffmpeg(
