@@ -8,8 +8,11 @@ Use this index before treating any architecture document as current guidance.
 2. [`UV_STUDIO_V2_ARCHITECTURE_MAP.md`](UV_STUDIO_V2_ARCHITECTURE_MAP.md) — practical component/migration map.
 3. `project-context/decisions/D-064-production-directions-over-shared-studio-core.md` — Production Direction/product-composition authority.
 4. `project-context/decisions/D-065-shared-production-semantic-core.md` — shared Scene/Shot/Take/production-semantics factoring beneath directions.
-5. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
-6. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
+5. `project-context/decisions/D-066-jarvishub-agent-harness-donor.md` — Agent Harness donor/factoring authority; JarvisHub informs the agent/runtime patterns without replacing UV-owned project/production/timeline state.
+6. `project-context/decisions/D-067-product-truth-contract-and-current-doc-consistency.md` — Product Truth, current-doc consistency, backend/frontend parity and user-outcome verification authority.
+7. `project-context/decisions/D-068-desktop-in-place-updates.md` — desktop update/version migration authority.
+8. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
+9. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
 
 ## Current supporting technical documents
 
@@ -17,6 +20,8 @@ These remain valid when they do not conflict with current authority:
 
 - [`CAPABILITIES.md`](CAPABILITIES.md) — Capability Registry below Studio tools/Model Registry;
 - [`CAPABILITY_EXECUTION.md`](CAPABILITY_EXECUTION.md) — selection, authorization and bounded execution;
+- [`PRODUCT_TRUTH_CONTRACT.md`](PRODUCT_TRUTH_CONTRACT.md) — target machine-verifiable contract connecting current docs, backend/frontend surfaces and user-outcome evidence;
+- [`DESKTOP_UPDATES.md`](DESKTOP_UPDATES.md) — target Update Service/UI, in-place upgrade and N-1 -> N release proof;
 - [`MCP_ADAPTER.md`](MCP_ADAPTER.md) — current optional MCP capability/execution boundary;
 - [`DUBBING_TRANSLATION.md`](DUBBING_TRANSLATION.md) — reusable contextual dubbing-domain implementation;
 - [`RANGE_REINSERTION.md`](RANGE_REINSERTION.md) — deterministic range-replacement primitive;
@@ -43,14 +48,17 @@ The following describe earlier recipe/Product-Orchestrator recovery eras. They a
 - `RECIPE_EXECUTION.md`;
 - `LEGACY_SURFACE_INVENTORY.md`.
 
-If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064 or D-065, current authority wins.
+If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064, D-065, D-066, D-067 or D-068, current authority wins.
 
 ## Decision status
 
 - D-064 — current Production Direction/product-composition authority;
 - D-065 — current shared production-semantics authority beneath directions;
+- D-066 — current JarvisHub Agent Harness donor/factoring authority;
+- D-067 — current Product Truth/current-documentation consistency authority;
+- D-068 — current desktop in-place update/version migration authority;
 - D-063 — partially superseded by D-064; shared application core remains useful;
-- D-062 — partially superseded; Product Truth invariants remain, Product Orchestrator as long-term center does not;
+- D-062 — historical Product Truth recovery rationale; forward verification is now D-067;
 - D-042 — superseded at product-composition level; technical capability/media evidence remains historical reference.
 
 Git history retains original detail of compacted historical documents.

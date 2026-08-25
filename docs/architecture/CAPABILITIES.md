@@ -1,15 +1,15 @@
 # UV Studio Capability Registry
 
 **Status:** CURRENT SUPPORTING TECHNICAL CONTRACT  
-**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064
+**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064 / D-066
 
 ## Purpose
 
-`CapabilityRegistry` describes provider-neutral semantic operations and replaceable execution offers. It sits **below** Production Directions, Studio tools and the future user-visible Model Registry. Capability metadata answers *how an operation can be executed*; it does not define project identity, production navigation or creative model choice.
+`CapabilityRegistry` describes provider-neutral semantic operations and replaceable execution offers. It sits **below** Production Directions, Studio tools and the user-visible Model Registry. Capability metadata answers *how an operation can be executed*; it does not define project identity, production navigation or creative model choice.
 
 ```text
 Production Direction / Studio Tool / Application Command
-  -> optional user-visible Model selection
+  -> user-visible Model selection where meaningful
   -> semantic capability_id
   -> CapabilityRegistry / CapabilityOffer
   -> SelectionPolicy
@@ -38,22 +38,42 @@ Registry order is convenience metadata, not authorization.
 - `local_free_first` may choose only `available + local + free`.
 - explicit/pinned selection may target a known offer.
 - remote or non-free execution remains subject to D-017 and the exact execution contract.
-- a future Model Registry may map named creative models onto capabilities/offers, but Capability Registry itself must not hide user-significant model choice.
+- the Model Registry maps named creative models onto capabilities/offers without letting Capability Registry hide user-significant model choice.
+
+## Effects visibility for Jobs and Agent policy
+
+D-066 adapts the useful JarvisHub tool-effects pattern into UV's existing command/capability layer rather than creating a parallel tool registry.
+
+Where meaningful, definitions/commands should be able to expose effects such as:
+
+- mutates project state;
+- mutates canonical Timeline state;
+- generates media;
+- destructive;
+- long-running;
+- reversible;
+- cost-bearing.
+
+This metadata is descriptive input for Job orchestration, Agent policy and trace. It is **not** authorization by itself. Existing availability/locality/cost metadata and D-017 remain the execution permission boundary.
 
 ## Project-file boundary
 
 Adapters receive portable project identity and bounded semantic inputs. Translation to host paths occurs only inside the exact adapter/binding and remains constrained to allowed Project Store roots. Generic callers never receive a raw shell/FFmpeg command surface.
 
-## D-064 boundary
+## D-064 / D-066 boundary
 
-Do not add a RecipeDefinition or Production-Direction-specific capability stack. Directions and tools reuse the same capability layer. New product work should normally flow:
+Do not add a RecipeDefinition, Production-Direction-specific capability stack or JarvisHub-style parallel Protocol Bridge. Directions, tools, Jobs and the future Agent Harness reuse the same capability layer.
+
+New generation work should flow:
 
 ```text
 direction/domain intent
  -> Studio/Application Command or Tool Service
- -> Model/Capability selection
- -> bounded execution
- -> project-owned result
+ -> named Model
+ -> project Job / Attempt
+ -> semantic Capability / Offer
+ -> bounded authorized execution
+ -> project-owned result + provenance
 ```
 
-Stage 12 establishes the application transaction boundary. The next product slice proves shared production semantics in the micro-drama direction; capability breadth is still not the architectural bottleneck.
+Stage 13 has already proven the shared Scene/Shot/Take production-semantic path. Current next work is the visible Model Registry + retry-safe Job Manager + GenerationContract + first named generation-to-Take-candidate flow described by `project-context/NEXT_TASK.md`.

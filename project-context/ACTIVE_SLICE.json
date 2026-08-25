@@ -1,7 +1,21 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "jarvishub-agent-donor-architecture",
+    "kind": "chore",
+    "roadmap_stage": "studio-v2",
+    "goal": "Synchronize current architecture after Stage 13: record JarvisHub as the Agent Harness donor, define Product Truth/current-documentation consistency gates, and define the maintained desktop in-place update contract while preserving the existing next implementation handoff to Model Registry/Job Manager/generation.",
+    "base_branch": "main",
+    "branch": "chore/jarvishub-agent-donor-architecture",
+    "pull_request": 67,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "AGENTS.md",
+      "UPSTREAM.md"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-micro-drama-production-semantics",
     "pull_request": 66,
