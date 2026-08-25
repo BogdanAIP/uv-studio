@@ -1,0 +1,36 @@
+name: Stage 12 explicit media fixtures
+
+on:
+  push:
+    branches:
+      - stage-12/studio-v2-application-transactions
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage-12/studio-v2-application-transactions
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Make media fixture identities explicit
+        run: python tools/stage12_explicit_media_fixture_identity.py
+      - name: Commit deterministic fixture migration
+        shell: bash
+        run: |
+          git diff --check
+          if git diff --quiet -- tests_real_media tests_browser; then
+            echo "No media fixture migration changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests_real_media tests_browser
+          git commit -m "tests: make media fixture project identity explicit"
+          git push origin HEAD:stage-12/studio-v2-application-transactions
