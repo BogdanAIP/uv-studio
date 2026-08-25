@@ -78,7 +78,7 @@ Avoid over-generalizing distinct concepts only to make schemas look uniform. Sha
 
 ### 3. Timeline remains assembly authority, not production meaning
 
-A Timeline Clip answers where media is assembled in time. A Shot answers production intent/context and which Take was accepted. They are related but are not the same object.
+**Shot is not a Timeline Clip.** A Timeline Clip answers where media is assembled in time. A Shot answers production intent/context and which Take was accepted. They are related but are not the same object.
 
 ```text
 Shot 12.3
