@@ -11,8 +11,9 @@ Use this index before treating any architecture document as current guidance.
 5. `project-context/decisions/D-066-jarvishub-agent-harness-donor.md` — Agent Harness donor/factoring authority; JarvisHub informs the agent/runtime patterns without replacing UV-owned project/production/timeline state.
 6. `project-context/decisions/D-067-product-truth-contract-and-current-doc-consistency.md` — Product Truth, current-doc consistency, backend/frontend parity and user-outcome verification authority.
 7. `project-context/decisions/D-068-desktop-in-place-updates.md` — desktop update/version migration authority.
-8. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
-9. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
+8. `project-context/decisions/D-069-stateful-generative-continuation-lineage.md` — stateful/sequential generation continuation authority: durable parent media lineage with provider-private runtime state kept behind adapters.
+9. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
+10. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
 
 ## Current supporting technical documents
 
@@ -48,7 +49,7 @@ The following describe earlier recipe/Product-Orchestrator recovery eras. They a
 - `RECIPE_EXECUTION.md`;
 - `LEGACY_SURFACE_INVENTORY.md`.
 
-If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064, D-065, D-066, D-067 or D-068, current authority wins.
+If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064, D-065, D-066, D-067, D-068 or D-069, current authority wins.
 
 ## Decision status
 
@@ -57,6 +58,7 @@ If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, 
 - D-066 — current JarvisHub Agent Harness donor/factoring authority;
 - D-067 — current Product Truth/current-documentation consistency authority;
 - D-068 — current desktop in-place update/version migration authority;
+- D-069 — current stateful generative continuation lineage/provider-state boundary authority;
 - D-063 — partially superseded by D-064; shared application core remains useful;
 - D-062 — historical Product Truth recovery rationale; forward verification is now D-067;
 - D-042 — superseded at product-composition level; technical capability/media evidence remains historical reference.
