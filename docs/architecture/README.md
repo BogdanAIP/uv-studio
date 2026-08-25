@@ -8,8 +8,9 @@ Use this index before treating any architecture document as current guidance.
 2. [`UV_STUDIO_V2_ARCHITECTURE_MAP.md`](UV_STUDIO_V2_ARCHITECTURE_MAP.md) — practical component/migration map.
 3. `project-context/decisions/D-064-production-directions-over-shared-studio-core.md` — Production Direction/product-composition authority.
 4. `project-context/decisions/D-065-shared-production-semantic-core.md` — shared Scene/Shot/Take/production-semantics factoring beneath directions.
-5. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
-6. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
+5. `project-context/decisions/D-066-jarvishub-agent-harness-donor.md` — Agent Harness donor/factoring authority; JarvisHub informs the agent/runtime patterns without replacing UV-owned project/production/timeline state.
+6. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
+7. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
 
 ## Current supporting technical documents
 
@@ -43,12 +44,13 @@ The following describe earlier recipe/Product-Orchestrator recovery eras. They a
 - `RECIPE_EXECUTION.md`;
 - `LEGACY_SURFACE_INVENTORY.md`.
 
-If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064 or D-065, current authority wins.
+If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064, D-065 or D-066, current authority wins.
 
 ## Decision status
 
 - D-064 — current Production Direction/product-composition authority;
 - D-065 — current shared production-semantics authority beneath directions;
+- D-066 — current JarvisHub Agent Harness donor/factoring authority;
 - D-063 — partially superseded by D-064; shared application core remains useful;
 - D-062 — partially superseded; Product Truth invariants remain, Product Orchestrator as long-term center does not;
 - D-042 — superseded at product-composition level; technical capability/media evidence remains historical reference.
