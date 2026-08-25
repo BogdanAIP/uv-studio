@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Any, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.project_common import get_project_store
-from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.production.commands import ProductionCommandResult, ProductionSemanticService
 from uv_studio.production.micro_drama import (
     Character,
     Location,
@@ -175,6 +176,89 @@ def _micro_drama_document(payload: MicroDramaInput) -> MicroDramaDocument:
     )
 
 
+def _handle_create_scene(
+    service: ProductionSemanticService,
+    project_id: str,
+    payload: CreateScenePayload,
+) -> ProductionCommandResult:
+    return service.create_scene(
+        project_id,
+        scene_id=payload.scene_id,
+        title=payload.title,
+        summary=payload.summary,
+    )
+
+
+def _handle_create_shot(
+    service: ProductionSemanticService,
+    project_id: str,
+    payload: CreateShotPayload,
+) -> ProductionCommandResult:
+    return service.create_shot(
+        project_id,
+        shot_id=payload.shot_id,
+        scene_id=payload.scene_id,
+        intent=payload.intent,
+        reference_ids=tuple(payload.reference_ids),
+    )
+
+
+def _handle_register_take(
+    service: ProductionSemanticService,
+    project_id: str,
+    payload: RegisterTakePayload,
+) -> ProductionCommandResult:
+    return service.register_take(
+        project_id,
+        take_id=payload.take_id,
+        shot_id=payload.shot_id,
+        reference_id=payload.reference_id,
+        label=payload.label,
+        notes=payload.notes,
+    )
+
+
+def _handle_set_micro_drama_context(
+    service: ProductionSemanticService,
+    project_id: str,
+    payload: SetMicroDramaContextPayload,
+) -> ProductionCommandResult:
+    return service.set_micro_drama_context(
+        project_id,
+        _micro_drama_document(payload.document),
+    )
+
+
+def _handle_accept_take(
+    service: ProductionSemanticService,
+    project_id: str,
+    payload: AcceptTakePayload,
+) -> ProductionCommandResult:
+    return service.accept_take(
+        project_id,
+        take_id=payload.take_id,
+        timeline_start_us=payload.timeline_start_us,
+        source_start_us=payload.source_start_us,
+        duration_us=payload.duration_us,
+        track_id=payload.track_id,
+        clip_id=payload.clip_id,
+    )
+
+
+ProductionCommandHandler = Callable[
+    [ProductionSemanticService, str, Any],
+    ProductionCommandResult,
+]
+
+_COMMAND_HANDLERS: dict[type[_StrictModel], ProductionCommandHandler] = {
+    CreateScenePayload: _handle_create_scene,
+    CreateShotPayload: _handle_create_shot,
+    RegisterTakePayload: _handle_register_take,
+    SetMicroDramaContextPayload: _handle_set_micro_drama_context,
+    AcceptTakePayload: _handle_accept_take,
+}
+
+
 @router.get("/{project_id}/studio/production", response_model=dict[str, Any])
 def get_production_semantics(
     project_id: str,
@@ -212,47 +296,9 @@ def execute_production_command(
 ) -> dict[str, Any]:
     service = ProductionSemanticService(store)
     try:
-        if isinstance(payload, CreateScenePayload):
-            result = service.create_scene(
-                project_id,
-                scene_id=payload.scene_id,
-                title=payload.title,
-                summary=payload.summary,
-            )
-        elif isinstance(payload, CreateShotPayload):
-            result = service.create_shot(
-                project_id,
-                shot_id=payload.shot_id,
-                scene_id=payload.scene_id,
-                intent=payload.intent,
-                reference_ids=tuple(payload.reference_ids),
-            )
-        elif isinstance(payload, RegisterTakePayload):
-            result = service.register_take(
-                project_id,
-                take_id=payload.take_id,
-                shot_id=payload.shot_id,
-                reference_id=payload.reference_id,
-                label=payload.label,
-                notes=payload.notes,
-            )
-        elif isinstance(payload, SetMicroDramaContextPayload):
-            result = service.set_micro_drama_context(
-                project_id,
-                _micro_drama_document(payload.document),
-            )
-        elif isinstance(payload, AcceptTakePayload):
-            result = service.accept_take(
-                project_id,
-                take_id=payload.take_id,
-                timeline_start_us=payload.timeline_start_us,
-                source_start_us=payload.source_start_us,
-                duration_us=payload.duration_us,
-                track_id=payload.track_id,
-                clip_id=payload.clip_id,
-            )
-        else:  # pragma: no cover
+        handler = _COMMAND_HANDLERS.get(type(payload))
+        if handler is None:  # pragma: no cover - discriminated union rejects this first.
             raise ProductionSemanticError("unsupported production command")
-        return result.to_dict()
+        return handler(service, project_id, payload).to_dict()
     except Exception as exc:
         raise _translate(exc) from exc
