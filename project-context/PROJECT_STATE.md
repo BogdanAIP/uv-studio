@@ -24,6 +24,8 @@ This slice changes durable architecture/development memory only; it does not add
 - **D-064** — Production Directions over one shared Studio Core.
 - **D-065** — shared Production Semantic Core beneath directions.
 - **D-066** — JarvisHub is the reference architecture/method donor for the future UV Studio Agent Harness while UV keeps its own project/production/timeline/transaction authorities.
+- **D-067** — Product Truth Contract and current-documentation consistency: user-visible readiness requires backend/application behavior, frontend surface and user-outcome proof to agree; current docs must agree on machine-checkable repository facts.
+- **D-068** — maintained desktop releases use one installation identity with visible in-place Update UI/Service and separate N-1 -> N upgrade evidence.
 - **D-033** — canonical Timeline remains UV-owned; MLT remains derived.
 
 A Shot is production meaning, not a Timeline Clip. Direction-specific data may reference shared production identities but must not fork Scene/Shot/Take infrastructure. The future Agent may reason over these identities but must mutate them only through shared Studio/Application Commands.
@@ -72,18 +74,55 @@ Carry into the **next** implementation slice immediately:
 
 Do not import JarvisHub Canvas/node/PostgreSQL/Hono application authority or create a parallel tool/protocol layer. Project Store, shared production semantics, canonical Timeline, Studio/Application Commands, ProjectUnitOfWork, Capability Registry and D-017 remain UV-owned authorities.
 
+## Product Truth decision
+
+D-067 turns the earlier Product Truth recovery lesson into a permanent forward contract.
+
+A future user-visible feature is complete only when:
+
+```text
+canonical command/backend behavior
+ + required frontend surface
+ + user-visible state/progress/errors
+ + E2E user-outcome proof
+ = ready product feature
+```
+
+The target machine-readable Product Truth Contract binds stable feature identity to command/query, backend/API, frontend entry, relevant canonical state/dependencies and E2E proof. Internal infrastructure can intentionally lack UI, but it must be explicitly non-user-visible/not-ready rather than counted as completed product functionality.
+
+Current documentation is part of Product Truth. CI should progressively validate narrow explicit facts across `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, current architecture/decision indexes and Product Truth Contract references. The design explicitly avoids brittle natural-language semantic linting.
+
+The next Model Registry/Job Manager/generation slice is the first required consumer: named-model generation must land with truthful Studio UI states and browser E2E, not backend contracts alone.
+
+## Desktop update decision
+
+D-068 defines the future maintained Windows update behavior:
+
+- one normal installed UV Studio identity rather than one stable side-by-side copy per version;
+- Settings/About update UI with current version, check-for-updates, release notes, progress and controlled update/restart;
+- GitHub Releases acceptable as the first source through bounded machine-readable metadata;
+- verified artifact identity/digest/signature before installation;
+- out-of-process replacement with recovery/rollback behavior;
+- application/runtime replacement kept separate from Project Store/user data;
+- application version kept separate from project/domain schema versions;
+- Stage-9 release proof must include both clean installation and N-1 -> N in-place upgrade with representative project/settings state.
+
+This is accepted target architecture only; the Update Service/UI is not implemented in this documentation slice.
+
 ## Compatibility rule
 
 Recipe/Product Orchestrator/Stage routes remain compatibility code. New Studio modules must not depend on them merely to access neutral project or production services.
 
 Legacy/compatibility projects cannot execute modern direction production commands until they have valid modern Production Direction identity.
 
-Stage 13 and D-066 add no RecipeDefinition, Product-Orchestrator graph, numbered Stage workspace, direction-private editor engine, second timeline, provider-specific production identity or JarvisHub Canvas-as-source-of-truth.
+Stage 13 and D-066/D-067/D-068 add no RecipeDefinition, Product-Orchestrator graph, numbered Stage workspace, direction-private editor engine, second timeline, provider-specific production identity, JarvisHub Canvas-as-source-of-truth or parallel application update authority.
 
 ## Known intentional limits
 
 - Replacing an already accepted Take with another candidate remains a future semantic operation. Current callers Undo the acceptance before choosing another Take rather than silently rewriting acceptance history.
 - The Model Registry, project-scoped Job Manager, GenerationContract and full Agent Harness are not implemented yet.
+- Product Truth Contract registry/validators beyond the existing lifecycle/user-outcome checks are not implemented yet.
+- Desktop Update Service/UI and packaged N-1 -> N upgrade automation are not implemented yet.
 - JarvisHub is currently a pinned architecture/method donor, not a vendored dependency.
 
 ## Next handoff
@@ -91,3 +130,7 @@ Stage 13 and D-066 add no RecipeDefinition, Product-Orchestrator graph, numbered
 `studio-v2-model-registry-job-manager-generation` should add the backend-owned user-visible Model Registry, project-scoped retry-safe Job Manager and first named AI generation path through the same shared Shot/Take application-command and transaction boundaries.
 
 Generated output must become project-owned media with explicit model/provider/adapter/GenerationContract provenance before it can become a Take candidate. Equivalent replay must not duplicate expensive execution. Accepting a generated Take remains separate semantic history, so Undo of acceptance must not corrupt or erase the underlying Job/Attempt/provenance record.
+
+Under D-067 that slice must also add the first machine-readable Product Truth Contract and prove named model selection, Job/progress/failure/result state and Take-candidate materialization through the real Studio UI/browser E2E.
+
+D-068 remains a later Stage-9 desktop-productization obligation and must be applied when packaging/release work resumes.
