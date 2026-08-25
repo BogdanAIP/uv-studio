@@ -3,6 +3,7 @@
 **Status:** CURRENT AUTHORITY  
 **Product-composition decision:** D-064  
 **Shared production-semantics decision:** D-065  
+**Agent Harness donor/factoring decision:** D-066  
 **Editor foundation:** D-033
 
 This document is the primary architecture entry point for new development. Historical recovery documents, Recipe Registry flows, Product Orchestrator projections and numbered Stage workspaces are not competing target architectures.
@@ -49,7 +50,7 @@ Project
        Project Unit of Work / Undo-Redo
        Model Registry
        Job Manager
-       Agent
+       Agent Harness
        Export
   -> Capability / Adapter boundaries
   -> MLT / FFmpeg / MCP / local models / optional remote tools
@@ -66,8 +67,9 @@ Not every project must instantiate every production-semantic entity. `free_proje
 - **Canonical Timeline** is UV-owned assembly state; MLT is derived behind the D-033 adapter.
 - **Studio/Application Commands** are the shared semantic mutation boundary for GUI, Agent, scripts and MCP.
 - **Project Unit of Work** owns atomic multi-document mutations and durable undo/redo across production semantics, project references/assets and Timeline.
-- **Model Registry** will expose meaningful model choice to the user.
-- **Job Manager** will own long-running generation lifecycle and provenance.
+- **Model Registry** owns user-visible named model identity and maps it onto lower execution capabilities/providers.
+- **Job Manager** owns project-scoped long-running lifecycle, retry/idempotency and durable execution/generation provenance.
+- **Agent Harness** observes and acts through the same commands/models/jobs/capabilities as manual callers; it does not own a second project graph or private mutation path.
 - **Capability Registry / D-017 / adapters** own execution availability, authorization and transport, not product identity.
 
 ## Production semantics versus Timeline
@@ -84,6 +86,90 @@ Shot
 ```
 
 This gives the Agent/UI a production-level model without creating a second canonical timeline.
+
+Stage 13 has now implemented the first complete shared vertical path: Scene -> Shot -> multiple Takes -> direction context -> accepted Take -> project-owned media provenance -> canonical Timeline, including project-level Undo/Redo and cross-direction reuse of the shared contracts.
+
+## Generation and long-running work
+
+Generated media is not accepted production state merely because a model returned a file.
+
+Target flow:
+
+```text
+Shot / production intent
+  -> choose named Model
+  -> GenerationContract
+  -> project-scoped Job / Attempt
+  -> Capability / Provider / Adapter execution
+  -> project-owned generated asset + provenance
+  -> Take candidate
+  -> explicit acceptance command
+  -> canonical Timeline projection
+```
+
+The Job/Attempt layer records what was requested and executed. Take acceptance records production meaning. Undoing Take acceptance must not erase the historical generation Job/Attempt or its provenance.
+
+Long-running, cost-bearing or externally mutating generation must be retry-safe. The Job Manager therefore owns a UV-native idempotency contract that binds an idempotency key to a stable normalized request/context digest and prevents duplicate execution on request replay.
+
+A provider-neutral `GenerationContract` constrains what a generation attempt may change. It should express fixed constraints, editable variables, forbidden changes and approved project references/keyframes where applicable. Provider adapters translate this semantic contract into provider-specific prompts/options; provider prompt text is not canonical production truth.
+
+## Agent Harness donor boundary — D-066
+
+JarvisHub is the reference architecture/method donor for the future UV Studio Agent Harness.
+
+Borrow/adapt its proven patterns for:
+
+- persistent agent runtime/turn loop;
+- Planner + durable Tasks;
+- Skills;
+- context pipeline, memory and compaction;
+- a small functional subagent set such as explore / plan / media / critic;
+- action/tool effects and policy;
+- inspectable trace;
+- background execution;
+- evaluate -> repair loops and dependency-aware local repair.
+
+Do **not** adopt JarvisHub's Canvas-as-source-of-truth, generic node project model, PostgreSQL/Hono application authority or duplicate tool/protocol layer. UV Studio already has its own canonical project/production/timeline/transaction/capability authorities.
+
+The future runtime shape is therefore:
+
+```text
+Human UI / Chat / scripts / MCP          Director Agent
+              |                    explore / plan / media / critic
+              +--------------------------+
+                         |
+              Studio/Application Commands
+                         |
+                 Project Unit of Work
+             /             |              \
+ Production Semantics   Project Store   Timeline
+                         |
+                  Model Registry
+                         |
+                    Job Manager
+                         |
+                Capability / Adapters
+                         |
+           local / MCP / optional remote
+```
+
+Agent trace, evaluation and repair records reference canonical Project/Scene/Shot/Take/asset/Timeline identities. They are history/observations over project truth, not a second source of truth.
+
+## Capability/effects boundary
+
+JarvisHub's useful action-effect pattern is adapted into existing UV-owned command/capability metadata instead of creating a competing Protocol Bridge.
+
+Where relevant, the runtime should be able to inspect effects such as:
+
+- project mutation;
+- Timeline mutation;
+- media generation;
+- destructive behavior;
+- long-running behavior;
+- reversibility;
+- cost-bearing execution.
+
+Existing locality, availability, provider/adapters and D-017 authorization remain in the current Capability layer.
 
 ## Direction versus tool
 
@@ -105,23 +191,31 @@ A tool may be especially useful in one direction without becoming a separate pro
 6. Do not create parallel direction-specific Scene/Shot/Take schemas when the semantic concept is shared.
 7. Do not hide user-significant model choice behind capability selection.
 8. GUI, Agent, scripts and MCP must converge on the same application/domain commands.
-9. Reuse mature media/editor/model components behind UV-owned boundaries rather than copying their application model.
+9. Reuse mature media/editor/model/agent components behind UV-owned boundaries rather than copying their application model.
 10. Keep compatibility paths until call-site/dependency proof permits deletion.
 11. Modern Studio identity must be validated independently from compatibility `recipe_id` and generic extensions mutation.
+12. Do not give the Agent a private write path or let Agent memory/trace become canonical project state.
+13. Do not execute a replayed long-running/cost-bearing generation twice when the normalized idempotency identity is the same.
+14. Do not make provider prompt text the canonical representation of production constraints.
 
-## Current implementation boundary before rich direction work
+## Current implementation boundary after Stage 13
 
-Stage 12 repairs the application seams identified after PR #63:
+Stages 12 and 13 now provide the concrete lower foundation for generation and later autonomy:
 
 - modern Studio/project-media APIs use recipe-free common project contracts;
 - modern Production Direction identity has a typed load/update/import gate with explicit compatibility and recovery projections;
-- core project creation has no implicit recipe-era default;
-- bounded `production/` storage is available for shared semantic documents;
+- bounded `production/` storage owns strict shared semantics and direction documents;
 - `ProjectUnitOfWork` coordinates strict canonical JSON with prepared journals, exact rollback/recovery and durable project-level undo/redo;
 - timeline commands plus source/export reference registration use the shared transaction authority;
-- HTTP and Studio UI expose the same canonical history rather than creating a frontend-only undo stack.
+- shared `Scene`, `Shot`, `Take` and accepted-Take contracts are implemented in `production/semantics.json`;
+- micro-drama Story/Characters/Locations/continuity extensions are implemented in `production/micro_drama.json`;
+- `ProductionSemanticService` is the shared semantic mutation boundary;
+- Take acceptance can atomically span production state, project-owned media provenance and canonical Timeline;
+- Undo/Redo preserves a single project history across production and Timeline;
+- the shared Scene/Shot/Take contracts are proven outside micro-drama through the commercial direction;
+- Studio UI and browser tests prove the rich production path with real media.
 
-The next rich-direction slice may add shared Scene/Shot/Take contracts, but must route cross-document mutations through this unit of work. It must not widen the transaction journal to large media blobs or introduce a second state/undo authority.
+The next implementation slice is `studio-v2-model-registry-job-manager-generation`: user-visible Model Registry, project-scoped retry-safe Job Manager, bounded GenerationContract and first named generation -> Take candidate flow. Full Planner/Memory/Skills/Subagents remain later Agent Harness work.
 
 ## Compatibility layer
 
@@ -137,4 +231,4 @@ They are **compatibility/migration code** unless a later accepted decision expli
 - useful targeted-edit, dubbing, music, continuity and media adapters should be extracted/reused rather than discarded;
 - legacy projects may remain readable/editable in an explicit compatibility mode without being assigned a fake Production Direction.
 
-See `docs/architecture/README.md`, D-064 and D-065.
+See `docs/architecture/README.md`, D-064, D-065 and D-066.
