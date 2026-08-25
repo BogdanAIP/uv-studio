@@ -1,14 +1,37 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "studio-v2-model-registry-job-manager-generation",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Add a backend-owned user-visible Model Registry, durable project-scoped generation Job Manager and one explicit local demo generation path that materializes project-owned media as a shared Take candidate without bypassing Capability/Adapter boundaries or Stage-13 acceptance and Timeline transactions.",
+    "base_branch": "main",
+    "branch": "stage-14/studio-v2-model-registry-job-manager-generation",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "uv_studio/api/**",
+      "uv_studio/capabilities/**",
+      "uv_studio/model_registry/**",
+      "uv_studio/jobs/**",
+      "uv_studio/production/**",
+      "uv_studio/projects/**",
+      "frontend/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_browser/**",
+      "e2e/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-micro-drama-production-semantics",
     "pull_request": 66,
     "merge_commit": "16409d2d01ce4ca2be3eab61a02a06655650f444"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-model-registry-job-manager-generation",
+    "next_slice_id": "studio-v2-first-real-image-ai",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

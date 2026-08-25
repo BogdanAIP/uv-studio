@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-micro-drama-production-semantics -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-model-registry-job-manager-generation -->
 
 **Updated:** 2026-08-25
 
@@ -9,52 +9,47 @@
 
 ## Current lifecycle
 
-Repository is idle on `main` after completion of Stage 13:
+Stage 14 is active in draft:
 
-- completed slice `studio-v2-micro-drama-production-semantics`;
-- PR #66 merged as `16409d2d01ce4ca2be3eab61a02a06655650f444`;
-- no feature branch is currently active;
-- next authorized handoff is `studio-v2-model-registry-job-manager-generation` from `project-context/NEXT_TASK.md`.
+- slice `studio-v2-model-registry-job-manager-generation`;
+- branch `stage-14/studio-v2-model-registry-job-manager-generation`;
+- base `main` at `e9b249124c48203c71d386a5fc997cbbfe61e3e6`;
+- PR is not opened yet;
+- last completed Stage 13 / PR #66, merge `16409d2d01ce4ca2be3eab61a02a06655650f444`.
 
 ## Current architecture authority
 
 - **D-064** — Production Directions over one shared Studio Core.
 - **D-065** — shared Production Semantic Core beneath directions.
 - **D-033** — canonical Timeline remains UV-owned; MLT remains derived.
+- Capability Registry / adapter boundaries own execution availability, authorization and transport; they do not own user-visible model identity.
 
-A Shot is production meaning, not a Timeline Clip. Direction-specific data may reference shared production identities but must not fork Scene/Shot/Take infrastructure.
+## Stage 14 implementation target
 
-## Stage 13 completed
+Stage 14 must establish the missing execution spine between shared Shot intent and generated Take candidates:
 
-Stage 13 establishes the first complete rich-direction vertical path:
+1. a backend-owned user-visible Model Registry with stable `model_id` independent from provider/adapter/offer identity;
+2. explicit model-to-capability/transport bindings with availability/locality/cost facts reused from Capability Registry rather than duplicated as product authority;
+3. durable project-scoped generation Jobs with queued/running/succeeded/failed/cancelled lifecycle and bounded exact provenance;
+4. canonical Job documents under the existing Project Store `tasks/` boundary rather than a second project-state root;
+5. one explicitly labelled local demo/test generation model and adapter for deterministic cross-platform proof without pretending it is a production AI model;
+6. generated media materialized into project-owned bytes/reference metadata before it can become a shared Take candidate;
+7. Take registration through the existing `ProductionSemanticService`, with acceptance and canonical Timeline projection left on the Stage-13 `accept_take` / `ProjectUnitOfWork` path;
+8. Undo of acceptance must restore production/project/Timeline state without erasing successful Job/model/provider provenance;
+9. GUI and API must expose meaningful model choice and Job state through backend authority rather than donor-era frontend registries;
+10. the implementation must remain ready for the next slice to replace the demo binding with a first real named Image AI model without introducing provider-specific project schemas.
 
-1. strict shared `Scene`, `Shot`, `Take` and accepted-take contracts in `production/semantics.json`;
-2. micro-drama Story, Characters, Locations and per-scene continuity/canon extensions in `production/micro_drama.json`;
-3. one serialized `ProductionSemanticService` command boundary for shared semantic mutations with shared Project Store locking across read/modify/commit;
-4. explicit HTTP semantic command handlers over the same service rather than a direction-private pipeline;
-5. cross-direction reuse of shared Scene/Shot/Take contracts proven from the commercial direction;
-6. transactional `accept_take` spanning accepted production state, project-owned media provenance and canonical `timeline/main.json` through Stage-12 `ProjectUnitOfWork`;
-7. exact project-level Undo/Redo of accepted Take projection without splitting production and Timeline state;
-8. support for multiple Shot/Take/Timeline provenance bindings when one project media reference is reused;
-9. rich micro-drama Production UI inside the shared Studio page, while other directions keep the common Studio Core without premature direction-specific UI;
-10. shared project-change synchronization between Production, Timeline and Undo/Redo controls;
-11. core/API coverage for Scene -> Shot -> multiple Takes -> micro-drama context -> accepted Take -> canonical Timeline, concurrency and cross-direction reuse;
-12. cross-platform Playwright proof from visible direction selection and real-media import through Scene/Shot/Take, Story/Characters/Locations/continuity, acceptance, Timeline, Undo and Redo.
+## Storage and authority decisions for this slice
 
-Final review head `7bf776e4a58cade4706e6a5256e5fc2dcc2f91d0` passed all five permanent CI jobs. Ubuntu and Windows app-baseline both passed frontend lint/build, real-media evidence and the full browser user-outcome suite. A pre-merge Windows-only Music Video test race was traced to an assertion on transient local notification state; the E2E now verifies durable Assembly readiness instead, and the exact review head is green on both platforms.
+- Reuse canonical `tasks/` for durable Job documents; do not add a project-level `jobs/` root.
+- Keep minimal shared Take semantics (`take_id`, `shot_id`, project `reference_id`) provider-neutral; generation provenance belongs to the durable Job and generated ProjectReference metadata.
+- Persist a resolved execution snapshot on each Job so later registry/config changes cannot rewrite historical model/provider provenance.
+- Job lifecycle is not a second undo stack. Acceptance remains a separate product transaction after Job success and candidate registration.
 
 ## Compatibility rule
 
-Recipe/Product Orchestrator/Stage routes remain compatibility code. New Studio modules must not depend on them merely to access neutral project or production services.
-
-Legacy/compatibility projects cannot execute modern direction production commands until they have valid modern Production Direction identity.
-
-Stage 13 adds no RecipeDefinition, Product-Orchestrator graph, numbered Stage workspace, direction-private editor engine, second timeline or provider-specific production identity.
-
-## Known intentional limit
-
-Replacing an already accepted Take with another candidate remains a future semantic operation. Current callers Undo the acceptance before choosing another Take rather than silently rewriting acceptance history.
+Recipe/Product Orchestrator/numbered Stage routes remain compatibility code. Stage 14 must not route new model/job/generation state through recipe identity, Stage workspaces or provider-private project documents.
 
 ## Next handoff
 
-`studio-v2-model-registry-job-manager-generation` should add the backend-owned user-visible Model Registry, project-scoped Job Manager and first named AI generation path through the same shared Shot/Take application-command and transaction boundaries. Generated output must become project-owned media with explicit model/provider provenance before it can become a Take candidate and later project to the canonical Timeline.
+After Stage 14 is reviewed, merged and lifecycle-closed, `studio-v2-first-real-image-ai` should bind a real named image model to the same Model Registry / Job Manager path and prove a user-visible generated image enters the Project Store/Media Bin without provider-specific frontend branching.

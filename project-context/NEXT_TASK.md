@@ -1,39 +1,48 @@
 # Next Task
 
-<!-- uv-next-slice: studio-v2-model-registry-job-manager-generation -->
+<!-- uv-next-slice: studio-v2-first-real-image-ai -->
 
 ## Goal
 
-After `studio-v2-micro-drama-production-semantics` is reviewed, merged and lifecycle-closed, add the backend-owned user-visible model and long-running generation layer without bypassing the shared production commands or Stage-12 transaction authority.
+After `studio-v2-model-registry-job-manager-generation` is reviewed, merged and lifecycle-closed, replace the Stage-14 demo generation binding with the first real named Image AI vertical while preserving the same backend-owned model identity, Job lifecycle, project-media ownership and capability/adapter authorization boundaries.
 
 ## Required direction
 
-- add a user-visible Model Registry whose canonical model identity is separate from capability/provider transport;
-- add a project-scoped Job Manager for queued/running/succeeded/failed/cancelled long-running work and durable provenance;
-- implement the first named AI generation path against an existing shared Shot/Take workflow rather than a provider-private project model;
-- preserve meaningful model choice in GUI/Agent/script/MCP callers;
-- materialize generated media as project-owned references before it can become an accepted Take;
-- keep acceptance and Timeline projection on the existing `ProductionSemanticService` / `ProjectUnitOfWork` path;
-- do not turn Capability Registry, provider names, RecipeDefinition, Product Orchestrator or frontend state into product authority.
+- choose one real named image model with a supportable local or optional remote execution path;
+- register its stable user-visible model identity in the backend Model Registry separately from provider/transport identity;
+- expose only the modes/options the selected model actually supports;
+- keep connection/runtime configuration in Settings/adapter configuration rather than hiding creative model choice;
+- execute through the Stage-14 project-scoped Job Manager and existing Capability/Adapter authorization boundary;
+- persist exact selected model, resolved provider/offer, bounded inputs/options and output provenance;
+- materialize generated image bytes as a project-owned reference before any production/timeline use;
+- expose the generated asset in the shared Studio Media/Inspector flow without provider-specific frontend routing;
+- retain explicit user model choice; `Auto` may be additive later but must not replace named-model selection.
 
 ## Required proof
 
-At minimum prove one bounded flow such as:
+At minimum prove:
 
 ```text
-modern Studio project + shared Shot
- -> choose named model
- -> create project-scoped generation Job
- -> execute through capability/provider adapter
- -> persist result + model/provider provenance
- -> register generated media as project-owned Take candidate
- -> accept through shared production command
- -> project to canonical Timeline
- -> undo acceptance without corrupting Job/provenance history
+modern Studio project
+ -> choose one real named image model
+ -> submit bounded image generation input/options
+ -> create and run project-scoped Job
+ -> persist resolved model/provider provenance
+ -> materialize project-owned image
+ -> expose it in shared Studio media state
+ -> preserve Job/provenance across reload/archive boundaries
 ```
 
-The first implementation may use one local or test adapter; model/provider abstraction must remain explicit enough for later local and optional remote models.
+If the selected provider is remote or potentially paid, existing one-shot consent/authorization requirements remain mandatory and must not be bypassed by the Job Manager.
+
+## Non-goals
+
+- no second Model Registry in frontend state;
+- no provider-specific project schema;
+- no new RecipeDefinition/Product-Orchestrator product path;
+- no broad multi-provider matrix in this slice;
+- no video-model expansion until the image vertical proves the common path.
 
 ## Entry gate
 
-Begin only after PR #66 `studio-v2-micro-drama-production-semantics` is merged and lifecycle-closed on idle `main`.
+Begin only after Stage 14 `studio-v2-model-registry-job-manager-generation` is merged and lifecycle-closed on idle `main`.
