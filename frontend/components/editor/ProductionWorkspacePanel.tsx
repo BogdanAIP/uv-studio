@@ -113,6 +113,8 @@ export function ProductionWorkspacePanel({
     );
   }
 
+  if (project.product_identity.direction_id !== 'micro_drama') return null;
+
   return (
     <div className="bg-slate-950 px-3 pt-4 text-slate-100 sm:px-5">
       <div className="mx-auto max-w-[1800px]">
