@@ -278,14 +278,13 @@ class ProductionSemanticService:
         except ProjectValidationError as exc:
             raise ProductionSemanticError(str(exc)) from exc
 
-        annotated_reference = replace(
+        annotated_reference = self._annotate_accepted_reference(
             reference,
-            metadata={
-                **reference.metadata,
-                "production_role": "accepted_take",
-                "shot_id": shot.shot_id,
-                "take_id": take.take_id,
-            },
+            shot_id=shot.shot_id,
+            take_id=take.take_id,
+            timeline_clip_id=clip_id,
+            source_start_us=source_start_us,
+            duration_us=duration_us,
         )
         proposed_project = self._replace_project_reference(
             project,
@@ -461,6 +460,46 @@ class ProductionSemanticService:
             raise ProductionSemanticError(
                 f"accepted range exceeds source duration for {reference.id!r}"
             )
+
+    @staticmethod
+    def _annotate_accepted_reference(
+        reference: ProjectReference,
+        *,
+        shot_id: str,
+        take_id: str,
+        timeline_clip_id: str,
+        source_start_us: int,
+        duration_us: int,
+    ) -> ProjectReference:
+        raw_bindings = reference.metadata.get("production_acceptances", [])
+        if not isinstance(raw_bindings, list) or not all(
+            isinstance(item, dict) for item in raw_bindings
+        ):
+            raise ProductionSemanticError(
+                f"reference {reference.id!r} has invalid production_acceptances metadata"
+            )
+        bindings = [dict(item) for item in raw_bindings]
+        if any(item.get("shot_id") == shot_id for item in bindings):
+            raise ProductionSemanticError(
+                f"reference {reference.id!r} already has an acceptance binding for shot {shot_id!r}"
+            )
+        bindings.append(
+            {
+                "shot_id": shot_id,
+                "take_id": take_id,
+                "timeline_clip_id": timeline_clip_id,
+                "source_start_us": source_start_us,
+                "duration_us": duration_us,
+            }
+        )
+        return replace(
+            reference,
+            metadata={
+                **reference.metadata,
+                "production_role": "accepted_take",
+                "production_acceptances": bindings,
+            },
+        )
 
     @staticmethod
     def _replace_project_reference(
