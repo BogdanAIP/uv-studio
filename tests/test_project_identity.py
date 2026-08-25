@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
+from uv_studio.projects.archive import ARCHIVE_MANIFEST, export_project, import_project
 from uv_studio.projects.identity import (
     STUDIO_COMPAT_RECIPE_ID,
     StudioIdentityError,
@@ -117,6 +120,71 @@ class ProjectIdentityTests(unittest.TestCase):
         self.assertEqual(updated.title, "Renamed")
         self.assertFalse(updated.extensions["demo"]["enabled"])
         self.assertEqual(classify_project_identity(updated).kind, "modern_direction")
+
+    def test_modern_identity_survives_archive_round_trip(self) -> None:
+        project = self.store.create_project(
+            title="Portable modern",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_modern_archive",
+            extensions=studio_project_extensions("commercial"),
+        )
+        archive = Path(self.tmp.name) / "modern.uvproj.zip"
+        export_project(self.store, project.project_id, archive)
+
+        imported_store = ProjectStore(Path(self.tmp.name) / "imported")
+        imported = import_project(imported_store, archive)
+        identity = require_modern_studio_identity(imported)
+        self.assertEqual(identity.direction_id, "commercial")
+        self.assertEqual(classify_project_identity(imported).kind, "modern_direction")
+
+    def test_tampered_archive_identity_is_rejected_before_canonical_commit(self) -> None:
+        project = self.store.create_project(
+            title="Portable protected",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_tampered_archive",
+            extensions=studio_project_extensions("free_project"),
+        )
+        archive = Path(self.tmp.name) / "source.uvproj.zip"
+        tampered = Path(self.tmp.name) / "tampered.uvproj.zip"
+        export_project(self.store, project.project_id, archive)
+
+        with zipfile.ZipFile(archive, "r") as source:
+            project_name = "project/project.json"
+            project_data = json.loads(source.read(project_name).decode("utf-8"))
+            project_data["extensions"]["studio"]["direction_id"] = "unknown_direction"
+            project_bytes = (
+                json.dumps(project_data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+
+            manifest = json.loads(source.read(ARCHIVE_MANIFEST).decode("utf-8"))
+            record = next(item for item in manifest["files"] if item["path"] == project_name)
+            record["size"] = len(project_bytes)
+            record["sha256"] = hashlib.sha256(project_bytes).hexdigest()
+            manifest_bytes = (
+                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+
+            with zipfile.ZipFile(
+                tampered,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                allowZip64=True,
+            ) as output:
+                for info in source.infolist():
+                    if info.filename == ARCHIVE_MANIFEST:
+                        payload = manifest_bytes
+                    elif info.filename == project_name:
+                        payload = project_bytes
+                    elif info.is_dir():
+                        payload = b""
+                    else:
+                        payload = source.read(info.filename)
+                    output.writestr(info, payload)
+
+        imported_store = ProjectStore(Path(self.tmp.name) / "tampered-import")
+        with self.assertRaises(StudioIdentityError):
+            import_project(imported_store, tampered)
+        self.assertFalse(imported_store.project_path(project.project_id).parent.exists())
 
 
 if __name__ == "__main__":
