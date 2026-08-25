@@ -1,39 +1,39 @@
 # Next Task
 
-<!-- uv-next-slice: studio-v2-micro-drama-production-semantics -->
+<!-- uv-next-slice: studio-v2-model-registry-job-manager-generation -->
 
 ## Goal
 
-After `studio-v2-application-transactions` is reviewed, merged and lifecycle-closed, use **micro-drama** as the first rich Production Direction to prove the D-065 shared Production Semantic Core without creating direction-private Scene/Shot/Take infrastructure.
+After `studio-v2-micro-drama-production-semantics` is reviewed, merged and lifecycle-closed, add the backend-owned user-visible model and long-running generation layer without bypassing the shared production commands or Stage-12 transaction authority.
 
 ## Required direction
 
-- implement bounded shared `Scene`/`Shot`/`Take`/accepted-take contracts in the canonical `production/` storage established by Stage 12;
-- add micro-drama extensions for Story, Characters, Locations and continuity/canon relationships;
-- keep a Shot distinct from a Timeline Clip and project accepted production material to the canonical Timeline only through application commands/transactions;
-- use the Stage-12 Project Unit of Work for cross-document mutations;
-- keep GUI, Agent, scripts and MCP on the same semantic handlers;
-- do not add a second timeline, new RecipeDefinition, Product-Orchestrator graph or Stage workspace;
-- do not hide meaningful model choice or couple the domain model to one provider.
+- add a user-visible Model Registry whose canonical model identity is separate from capability/provider transport;
+- add a project-scoped Job Manager for queued/running/succeeded/failed/cancelled long-running work and durable provenance;
+- implement the first named AI generation path against an existing shared Shot/Take workflow rather than a provider-private project model;
+- preserve meaningful model choice in GUI/Agent/script/MCP callers;
+- materialize generated media as project-owned references before it can become an accepted Take;
+- keep acceptance and Timeline projection on the existing `ProductionSemanticService` / `ProjectUnitOfWork` path;
+- do not turn Capability Registry, provider names, RecipeDefinition, Product Orchestrator or frontend state into product authority.
 
 ## Required proof
 
-At minimum prove one user-meaningful flow such as:
+At minimum prove one bounded flow such as:
 
 ```text
-Micro-drama project
- -> create Scene
- -> create Shot with intent/references
- -> register multiple Takes/candidates
- -> accept one Take
- -> update shared Shot state
- -> bind accepted project-owned asset
- -> project to canonical Timeline through the transaction authority
- -> undo/redo without split state
+modern Studio project + shared Shot
+ -> choose named model
+ -> create project-scoped generation Job
+ -> execute through capability/provider adapter
+ -> persist result + model/provider provenance
+ -> register generated media as project-owned Take candidate
+ -> accept through shared production command
+ -> project to canonical Timeline
+ -> undo acceptance without corrupting Job/provenance history
 ```
 
-Commercial, music-video and dub-battle directions must be able to reuse the resulting common Shot/Take contracts later rather than forking them.
+The first implementation may use one local or test adapter; model/provider abstraction must remain explicit enough for later local and optional remote models.
 
-## Following direction
+## Entry gate
 
-After shared production semantics are proven in a real direction, add the backend-owned user-visible Model Registry, project-scoped Job Manager and first named AI generation path through the same application command and transaction boundaries.
+Begin only after PR #66 `studio-v2-micro-drama-production-semantics` is merged and lifecycle-closed on idle `main`.
