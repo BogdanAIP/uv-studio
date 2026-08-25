@@ -9,10 +9,10 @@ Before changing files, read in this order:
 1. `project-context/ACTIVE_SLICE.json`
 2. `project-context/PROJECT_STATE.md`
 3. `project-context/NEXT_TASK.md`
-4. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-063 is the current product-composition authority**
+4. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 is the current product-composition authority; D-063 remains the shared-Studio-core foundation it refines**
 5. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md` when present
 6. `ARCHITECTURE_PRINCIPLES.md`
-7. `ROADMAP.md` (historical stage detail is subordinate to later accepted decisions such as D-063)
+7. `ROADMAP.md` (historical stage detail is subordinate to later accepted decisions such as D-064)
 8. `UPSTREAM.md`
 9. the active PR if `lifecycle_state` is `draft` or `review`, including diff/checks/unresolved threads
 10. recent commits on `main`
@@ -37,13 +37,15 @@ Never continue work on a merged branch. A new slice starts only from an idle `ma
 - `PROJECT_HISTORY.md`, decision records, merged/archived PRs and Git history hold completed detail.
 - Exact active-head SHAs/check conclusions remain live GitHub facts.
 
-## Studio-first product boundary
+## Production Directions over one Studio Core
 
-D-063 is mandatory for new product work.
+D-064 is mandatory for new product work.
 
-- A UV Studio **project**, not a recipe/stage, is the normal top-level product object.
-- Do not add a new user-facing `RecipeDefinition`, numbered Stage or specialized project workspace merely to ship a feature.
-- Build the normal product around Studio: Media/Scenes, Preview/Canvas, Inspector/AI Tools, explicit model choice and a canonical multitrack Timeline.
+- A UV Studio **Project** is the canonical product object; a **Production Direction** describes how a distinct kind of production is organized above the shared Studio Core.
+- Current first-class directions are micro-drama/story, commercial/product, music video, narrated video, dub battle/cinematic revoicing and free project.
+- Directions may own domain documents, navigation, production policy and Agent context, but they MUST share Project Store, Studio shell, canonical Timeline, application commands, models/jobs and export infrastructure.
+- Do not implement a new direction as a `RecipeDefinition`, Product-Orchestrator execution graph, numbered Stage or separate canonical project engine.
+- Operation-level features such as targeted edit, ordinary dubbing/translation, slideshow, visualizer, action transfer, talking character and lip-sync remain contextual Studio tools unless a later decision proves a distinct production model.
 - Existing recipe/Product-Orchestrator/Stage 8 code is compatibility/migration material unless a later accepted decision says otherwise.
 - User-significant AI model choice must remain visible in the relevant tool. Capability abstraction is an execution boundary, not a reason to hide the model.
 - Settings configure connections/runtimes/accounts; Studio tools own per-operation model and creative parameters.
@@ -51,14 +53,14 @@ D-063 is mandatory for new product work.
 
 ## Reuse-first and programmable editing
 
-`ARCHITECTURE_PRINCIPLES.md`, D-033 and D-063 are mandatory.
+`ARCHITECTURE_PRINCIPLES.md`, D-033, D-063 and D-064 are mandatory.
 
 - Search/license-check/probe credible professional open-source components before building a general editor/media primitive.
 - Record a concrete rejection before replacing a suitable mature component with custom infrastructure.
 - Reuse a donor's **needed primitive behind a UV-owned boundary**; do not inherit the donor application's project/workflow model merely because its code is useful.
 - MLT remains the selected timeline/editing engine behind the UV adapter; OpenCut Classic remains a selective editor-UX donor. Do not introduce a second canonical timeline engine without a superseding evidence-backed decision.
-- Every meaningful editor mutation must converge on one UV-owned programmatic command/workflow contract used by GUI, scripts, AI and MCP.
-- Automation must not mutate canonical project/timeline files directly or bypass domain validation/D-017/review boundaries.
+- Every meaningful editor or production mutation must converge on one UV-owned programmatic command/workflow contract used by GUI, scripts, AI and MCP.
+- Automation must not mutate canonical project/timeline/production documents directly or bypass domain validation/D-017/review boundaries.
 
 ## Slice and Git ownership
 
