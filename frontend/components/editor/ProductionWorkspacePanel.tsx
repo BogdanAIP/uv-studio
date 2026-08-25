@@ -143,6 +143,7 @@ export function ProductionWorkspacePanel({
         </div>
 
         <ProductionSemanticsPanel
+          key={`${projectId}:${history.cursor}`}
           projectId={projectId}
           project={project}
           selectedSource={selectedSource}
