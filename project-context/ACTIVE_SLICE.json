@@ -3,7 +3,7 @@
   "lifecycle_state": "draft",
   "active_slice": {
     "id": "studio-v2-application-transactions",
-    "kind": "foundation",
+    "kind": "stage",
     "roadmap_stage": "studio-v2",
     "goal": "Harden the modern Project/Studio identity, dependency and production-storage boundary, then establish a UV-owned Project Unit of Work and undo/redo authority that can coordinate shared production semantics, project references/assets and the canonical Timeline without reviving recipe-era product authority.",
     "base_branch": "main",
