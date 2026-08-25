@@ -1,9 +1,9 @@
-"""Class C cold-start browser evidence for the Studio-first product path.
+"""Class C cold-start browser evidence for the Studio production-direction path.
 
 This suite deliberately avoids direct Project Store access, hidden workflow seeding,
-recipe selection and semantic API setup. The project is created, populated, edited,
-reopened and exported through the same visible Studio controls available to a clean
-user state.
+legacy recipe selection and semantic API setup. The user chooses a product-level
+Production Direction, then creates, populates, edits, reopens and exports through the
+same visible Studio controls available to a clean user state.
 """
 
 from __future__ import annotations
@@ -21,24 +21,40 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
     # and must not be inherited as Class C product truth.
     test_photo_and_visualizer_user_paths = None
 
-    def test_clean_user_creates_reopens_and_exports_studio_project(self) -> None:
+    def test_clean_user_chooses_direction_reopens_and_exports_studio_project(self) -> None:
         page = self._new_page()
         project_title = "Class C — Studio timeline"
 
         page.goto("/")
         page.wait_for_url("**/projects")
         expect(page.get_by_role("heading", name="Проекты", exact=True)).to_be_visible()
-        expect(page.get_by_role("heading", name="Новый Studio-проект", exact=True)).to_be_visible()
+        expect(page.get_by_role("heading", name="Что хотите создать?", exact=True)).to_be_visible()
 
-        # New-project discovery no longer asks the user to choose an internal
-        # recipe/workspace. Compatibility names must not define the clean path.
-        for obsolete_title in (
+        # Product directions are first-class setup choices over one Studio Core.
+        for direction_title in (
+            "Микродрама / сюжетное видео",
+            "Реклама / продукт",
+            "Музыкальный клип",
+            "Видео с диктором",
+            "Киноозвучка / Кинобатл",
+            "Свободный проект",
+        ):
+            expect(page.get_by_role("button", name=direction_title, exact=False)).to_be_visible()
+
+        # Operation-level tools do not return as top-level project identities.
+        for tool_title in (
             "Фото в видео",
             "Аудиовизуализатор",
             "Перенос движения",
             "Говорящий персонаж",
+            "Performance / lip-sync",
+            "Дубляж видео",
         ):
-            expect(page.get_by_role("button", name=obsolete_title, exact=False)).to_have_count(0)
+            expect(page.get_by_role("button", name=tool_title, exact=False)).to_have_count(0)
+
+        free_project = page.get_by_role("button", name="Свободный проект", exact=False)
+        free_project.click()
+        expect(free_project).to_have_attribute("aria-pressed", "true")
 
         title_input = page.get_by_placeholder("Название проекта")
         title_input.fill(project_title)
@@ -75,11 +91,12 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
         page.get_by_role("button", name="Применить trim", exact=True).click()
         expect(page.get_by_text("00:02.00 · 1 tracks", exact=True)).to_be_visible(timeout=30_000)
 
-        # Reopen through the normal projects page. Canonical timeline state must
-        # survive browser navigation and server reload rather than living in UI state.
+        # Reopen through the normal projects page. Direction identity and canonical
+        # timeline state must survive browser navigation and server reload.
         page.get_by_role("link", name="← Проекты", exact=True).click()
         page.wait_for_url("**/projects")
         expect(page.get_by_role("heading", name=project_title, exact=True)).to_be_visible()
+        expect(page.get_by_text("Свободный проект", exact=True).last).to_be_visible()
         page.get_by_role("link", name="Открыть Studio", exact=False).first.click()
         page.wait_for_url("**/projects/*/studio")
         expect(page.get_by_role("button", name=f"Клип {self.red_image.name}", exact=True)).to_be_visible(
@@ -95,15 +112,20 @@ class ClassCColdStartBrowserOutcome(stage8.Stage8BrowserOutcomes):
         )
 
         report = {
-            "entry_path": "/ -> /projects -> /projects/{id}/studio",
-            "project_creation": "studio_first_visible_controls_only",
-            "recipe_selection": False,
+            "entry_path": "/ -> /projects -> choose Production Direction -> /projects/{id}/studio",
+            "project_creation": "production_direction_visible_controls_only",
+            "production_direction": "free_project",
+            "legacy_recipe_selection": False,
             "hidden_setup": False,
             "direct_store_fixture": False,
             "media_import": self.red_image.name,
             "timeline_mutations": ["create_track", "add_clip", "trim_clip"],
             "reopen_persistence": True,
-            "outcomes": ["canonical_timeline_persisted", "studio_export_rendered"],
+            "outcomes": [
+                "production_direction_persisted",
+                "canonical_timeline_persisted",
+                "studio_export_rendered",
+            ],
             "compatibility_ui": "legacy recipe workflows are not the clean creation path",
             "optional_runtime_interpretation": (
                 "local FFmpeg-backed Studio export succeeded; AI/provider generation is not claimed"
