@@ -48,7 +48,8 @@ def _constant_string(node: ast.AST | None) -> str | None:
 
 
 def _migrate_file(path: Path) -> bool:
-    text = path.read_text(encoding="utf-8")
+    original = path.read_text(encoding="utf-8")
+    text = original
     try:
         tree = ast.parse(text, filename=str(path))
     except SyntaxError:
@@ -83,6 +84,11 @@ def _migrate_file(path: Path) -> bool:
             (_dict_open_brace(text, json_keyword.value) + 1, '"recipe_id": "general_video", ')
         )
 
+    # Apply all AST-coordinate edits before any content-specific replacements so
+    # source offsets remain valid.
+    for offset, value in sorted(set(insertions), reverse=True):
+        text = text[:offset] + value + text[offset:]
+
     # The strict-JSON regression deliberately sends NaN as raw content rather than
     # through httpx JSON encoding, so it is not represented by an ast.Dict.
     if path.name == "test_projects_api.py":
@@ -97,10 +103,6 @@ def _migrate_file(path: Path) -> bool:
             '"schema_version": 1,\n                "product_model": "production_directions",',
         )
 
-    for offset, value in sorted(set(insertions), reverse=True):
-        text = text[:offset] + value + text[offset:]
-
-    original = path.read_text(encoding="utf-8")
     if text == original:
         return False
     ast.parse(text, filename=str(path))
