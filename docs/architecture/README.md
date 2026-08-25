@@ -1,0 +1,56 @@
+# Architecture Document Authority
+
+Use this index before treating any architecture document as current guidance.
+
+## Current authority
+
+1. [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) — primary architecture entry point.
+2. [`UV_STUDIO_V2_ARCHITECTURE_MAP.md`](UV_STUDIO_V2_ARCHITECTURE_MAP.md) — practical component/migration map.
+3. `project-context/decisions/D-064-production-directions-over-shared-studio-core.md` — Production Direction/product-composition authority.
+4. `project-context/decisions/D-065-shared-production-semantic-core.md` — shared Scene/Shot/Take/production-semantics factoring beneath directions.
+5. `project-context/decisions/D-033-reuse-first-scriptable-editor-foundation.md` — editor/MLT ownership foundation.
+6. `ARCHITECTURE_PRINCIPLES.md` — repository-wide engineering constraints.
+
+## Current supporting technical documents
+
+These remain valid when they do not conflict with current authority:
+
+- [`CAPABILITIES.md`](CAPABILITIES.md) — Capability Registry below Studio tools/Model Registry;
+- [`CAPABILITY_EXECUTION.md`](CAPABILITY_EXECUTION.md) — selection, authorization and bounded execution;
+- [`MCP_ADAPTER.md`](MCP_ADAPTER.md) — current optional MCP capability/execution boundary;
+- [`DUBBING_TRANSLATION.md`](DUBBING_TRANSLATION.md) — reusable contextual dubbing-domain implementation;
+- [`RANGE_REINSERTION.md`](RANGE_REINSERTION.md) — deterministic range-replacement primitive;
+- `docs/PROJECT_STORE.md` — canonical storage plus current Studio identity/transaction debt;
+- `docs/PROJECT_ARCHIVES.md` — archive portability/integrity;
+- `docs/FRONTEND.md` — current and compatibility frontend surfaces.
+
+## Historical evidence / evaluations
+
+- [`EDITOR_FOUNDATION_CONFORMANCE.md`](EDITOR_FOUNDATION_CONFORMANCE.md) — historical PR #44 D-033 conformance snapshot;
+- [`QWEN_MM_PLUGINS_EVALUATION.md`](QWEN_MM_PLUGINS_EVALUATION.md) — pinned 2026-08-11 external-component evaluation;
+- [`TEST_EVIDENCE_GAPS.md`](TEST_EVIDENCE_GAPS.md) — current evidence-class policy with historical recovery context.
+
+## Compatibility / historical product documents
+
+The following describe earlier recipe/Product-Orchestrator recovery eras. They are retained for migration evidence and archaeology, **not as instructions for new product composition**:
+
+- `PRODUCT_ORCHESTRATOR.md`;
+- `PRODUCT_RECOVERY_PLAN.md`;
+- `PRODUCT_SURFACE_AUDIT.md`;
+- `PRODUCT_TRUTH_MATRIX.md`;
+- `FRONTEND_BACKEND_INTERACTION_MAP.md`;
+- `RECIPES.md`;
+- `RECIPE_EXECUTION.md`;
+- `LEGACY_SURFACE_INVENTORY.md`.
+
+If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064 or D-065, current authority wins.
+
+## Decision status
+
+- D-064 — current Production Direction/product-composition authority;
+- D-065 — current shared production-semantics authority beneath directions;
+- D-063 — partially superseded by D-064; shared application core remains useful;
+- D-062 — partially superseded; Product Truth invariants remain, Product Orchestrator as long-term center does not;
+- D-042 — superseded at product-composition level; technical capability/media evidence remains historical reference.
+
+Git history retains original detail of compacted historical documents.

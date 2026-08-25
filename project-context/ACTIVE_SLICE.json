@@ -1,7 +1,24 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "architecture-authority-cleanup",
+    "kind": "chore",
+    "roadmap_stage": "studio-v2",
+    "goal": "Consolidate current architecture authority around D-064 Production Directions, D-065 shared production semantics and the common Studio Core; reclassify superseded recipe/Product Orchestrator documents; remove stale supporting-document claims; and record code-boundary prerequisites before Studio-v2 transaction/domain growth.",
+    "base_branch": "main",
+    "branch": "chore/architecture-authority-cleanup",
+    "pull_request": 64,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "AGENTS.md",
+      "ARCHITECTURE_PRINCIPLES.md",
+      "README.md",
+      "ROADMAP.md",
+      "tests/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-production-directions",
     "pull_request": 63,

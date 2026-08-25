@@ -1,111 +1,43 @@
 # Qwen-MM-Plugins evaluation for UV Studio
 
+**Status:** HISTORICAL COMPONENT EVALUATION — not current product architecture  
 **Reviewed:** 2026-08-11  
 **Reference repository:** `QwenLM/Qwen-MM-Plugins`  
 **Reference commit:** `7dfc08b7de8e621fc28bf9814e3d41a59b4595ae`  
-**Upstream license:** Apache-2.0
+**Upstream license:** Apache-2.0  
+**Current authority:** [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) / D-064
 
-## Decision
+## Durable result
 
-Qwen-MM-Plugins is **not** a replacement for UV Studio and is **not** a mandatory runtime dependency.
+Qwen-MM-Plugins is not a replacement for UV Studio and is not a mandatory runtime. It remains useful as:
 
-Use it in two ways:
+1. an engineering/workflow donor for source review, pacing/audio-first editing, Scene Ledger ideas, sample-first generation and evidence-based review;
+2. an optional MCP capability source for explicitly configured users.
 
-1. as a source of strong provider-neutral media-production workflow practices;
-2. as an optional MCP capability package for users who explicitly configure the required services.
+Those ideas belong in Production Direction policies, Studio tools and shared review/command infrastructure — not in a Qwen-specific project model.
 
-UV Studio remains responsible for the durable project, recipes, UI, task/artifact history, provider choice, existing-video range workflows, music-specific production logic and final assembly/export.
+## Provider/cost boundary
 
-## Why it is relevant
+The open-source package does not imply free cloud execution. Qwen/Wan/Omni/DashScope operations may require configured remote APIs and can never become hidden baseline dependencies. When adequate local/free paths exist, canonical baseline journeys must not require a Qwen cloud key.
 
-The upstream project has a mature media-oriented skill/MCP architecture. The most relevant part for UV Studio is its `video-edit` workflow discipline:
+Provider-independent/local ideas such as FFmpeg preprocessing, media budgeting, deterministic routing, workflow gates, project ledgers and retrieval patterns may be reused behind UV-owned boundaries with applicable Apache-2.0 attribution obligations.
 
-- source material is actually reviewed before content decisions;
-- editing direction/taste is planned before assembly;
-- pacing and audio-first cutting are explicit concerns;
-- beat-sync has a dedicated workflow;
-- multi-scene work can use a Scene Ledger;
-- generated assets follow sample-first rather than blind batch generation;
-- plan, scene and final-review gates are mechanically checked;
-- final review uses evidence such as timestamps/frame references;
-- sound/mix/grading are treated as production work, not afterthoughts;
-- approved workflows should not silently downgrade when a tool fails.
+## Windows boundary
 
-These practices should become reusable UV Studio production policies rather than a hard dependency on Qwen models.
+At the reviewed revision, Windows support was documented through WSL2 rather than proven native Windows operation. Therefore this package cannot sit on UV Studio's required native-Windows startup path; it may remain optional.
 
-## Paid API boundary
+## Current architecture mapping
 
-The open-source plugin repository does not imply free execution of all AI operations.
-
-At the reviewed revision, cloud model capabilities are separated from local file handling, and paid/configured APIs remain required for major Qwen/Wan/Omni generation/understanding paths.
-
-Examples observed during review include:
-
-- Qwen image generation/editing through DashScope;
-- Wan video generation through DashScope;
-- Qwen Omni/VL/ASR/segmentation cloud API capability packages;
-- dense video-memory embeddings through Qwen/DashScope;
-- graph-memory build steps using configured model APIs.
-
-Therefore:
-
-> no baseline UV Studio scenario may require `DASHSCOPE_API_KEY` or another Qwen cloud key when an adequate local/free path exists.
-
-Qwen cloud features may be offered as explicit optional capabilities.
-
-## Local/free parts worth reusing or matching
-
-Relevant provider-independent/local patterns include:
-
-- FFmpeg/ffprobe media probing and preprocessing;
-- local file reading/preparation infrastructure;
-- media size/FPS/resolution budgeting before model calls;
-- deterministic edit routing;
-- workflow gates/scripts;
-- project-log/ledger patterns;
-- BM25 fallback ideas for long-video retrieval;
-- MCP packaging and tool schema patterns where useful.
-
-Any copied Apache-2.0 code must retain required attribution/NOTICE obligations.
-
-## Video memory
-
-The hierarchical long-video memory design is technically useful but should not become mandatory Project Store infrastructure.
-
-Potential future optional use:
+The recipe-era diagram from the original evaluation is superseded. Under D-064 the relevant mapping is:
 
 ```text
-long source video
-  -> temporal/event memory
-  -> searchable event hierarchy
-  -> retrieve relevant ranges
-  -> feed only needed ranges into edit/review workflow
+Production Direction / Studio Tool
+  -> Studio/Application Command or Tool Service
+  -> visible Model selection when significant
+  -> Capability Registry
+       -> local adapters
+       -> direct MCP (optional Qwen-MM package)
+       -> other local/remote adapters
 ```
 
-UV Studio should keep the interface provider-neutral so local embeddings/VLMs or other services can replace Qwen/DashScope.
-
-## Windows constraint
-
-Qwen-MM-Plugins currently documents WSL2 as the supported Windows path rather than validated native Windows operation.
-
-UV Studio is native-Windows-first, so Qwen-MM-Plugins cannot sit on the required startup path. It can be detected and enabled as an optional WSL/MCP capability.
-
-## Resulting UV Studio architecture
-
-```text
-Recipe
-  |
-  +-- Production Policy
-  |     source review / pacing / sample-first / gates / review
-  |
-  +-- Capability Registry
-        |
-        +-- local tools
-        +-- direct MCP
-        |     +-- Qwen-MM-Plugins (optional)
-        +-- native VideoClaw adapter
-        +-- OpenClaw adapter (optional)
-        +-- other provider adapters
-```
-
-The recipe and production policy never depend on a specific paid provider.
+Production state, provider choice and execution transport remain separate concerns. Git history preserves the full original evaluation text.

@@ -1,23 +1,29 @@
 # Architecture Decisions
 
-This file is the compact decision index. Detailed records from D-013 onward live under `project-context/decisions/`; do not duplicate their full rationale here.
+This is the compact decision authority index. Read `docs/architecture/CURRENT_ARCHITECTURE.md` first for the current system shape; detailed ADRs are historical records whose status may be accepted, partially superseded or superseded.
 
-## Foundational decisions
+## Current product / application authority
 
-- **D-001 — Repository is durable development memory.** Durable state belongs in GitHub/repository, not only chat history.
-- **D-002 — VideoClaw modern application is the initial base.** Reuse the modern application as donor/compatibility baseline rather than making its workflow universal.
-- **D-003 — Pin upstream before modification.** Vendored upstream comes from an exact commit with provenance.
-- **D-004 — No universal mandatory media pipeline.** Task-specific production composition may differ while execution remains capability-based; D-064 is the current product-composition authority.
-- **D-005 — Continuity and VLM review are optional policies.** They are not mandatory project fields.
-- **D-006 — Provider-specific growth must be contained.** Superseded in runtime preference by D-011; semantic separation remains.
-- **D-007 — Windows is a first-class target.** Continuous Windows/Linux engineering evidence is required.
-- **D-008 — Vendored upstream is a compatibility boundary.** Ordinary UV work stays outside `vendor/`.
-- **D-009 — Project Store is file-first and product-owned.** Canonical state is UV-owned, local-first and versioned.
-- **D-010 — User-facing frontend is UV Studio-owned derived code.** The pinned donor snapshot remains provenance, not live product authority.
-- **D-011 — Capability Registry has peer adapters; no mandatory OpenClaw hop.** Local/native/MCP/runtime implementations are peers.
-- **D-012 — Qwen-MM is an optional capability/workflow donor, not a paid dependency.** Cloud use remains explicit.
+- **D-064 — Production Directions over shared Studio Core.** Current product-composition/direction authority.
+- **D-065 — Shared Production Semantic Core beneath Production Directions.** Current factoring authority for reusable Scene/Shot/Take/accepted-material semantics and direction extensions.
+- **D-033 — Reuse-first scriptable editor foundation.** Current editor/MLT ownership foundation.
+- **D-009 — Project Store is file-first and product-owned.** Canonical local-first project authority.
+- **D-017 — Exact one-shot execution authorization.** Current remote/non-free execution authorization boundary.
+- **D-038 — Explicit idle development lifecycle.** Current repository development-state lifecycle.
 
-## Detailed decision records
+## Supporting accepted decisions
+
+- D-001 — Repository is durable development memory.
+- D-003 — Pin upstream before modification.
+- D-004 — No universal mandatory media pipeline; task/domain composition may differ over shared execution foundations.
+- D-005 — Continuity and VLM review are optional policies unless a direction/user journey requires them.
+- D-007 — Windows is a first-class target.
+- D-008 — Vendored upstream is a compatibility boundary.
+- D-010 — User-facing frontend is UV Studio-owned derived code.
+- D-011 — Capability Registry has peer adapters; no mandatory OpenClaw hop.
+- D-012 — Qwen-MM is optional capability/workflow donor, not a required paid dependency.
+
+Detailed supporting records:
 
 - [D-013 — Capability offers](decisions/D-013-capability-offers.md)
 - [D-014 — Execution permission](decisions/D-014-execution-permission.md)
@@ -47,11 +53,23 @@ This file is the compact decision index. Detailed records from D-013 onward live
 - [D-038 — Explicit idle development lifecycle](decisions/D-038-explicit-idle-development-lifecycle.md)
 - [D-039 — Optional sequence continuity and bounded inspection](decisions/D-039-sequence-continuity-bounded-inspection.md)
 - [D-040 — Chat-first development; no automatic Codex review](decisions/D-040-chat-first-no-automatic-codex-review.md)
-- [D-041 — Music Video Mode: UV-owned Music Map and reference-only storyboard research](decisions/D-041-music-video-map-reference-only-storyboard.md)
-- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md)
-- [D-063 — Studio-first product architecture](decisions/D-063-studio-first-product-architecture.md)
+- [D-041 — Music Map / reference-only storyboard research](decisions/D-041-music-video-map-reference-only-storyboard.md)
+- [D-043 — Optional MuseTalk lip-sync pack](decisions/D-043-musetalk-optional-lipsync-pack.md)
 - [D-064 — Production Directions over shared Studio Core](decisions/D-064-production-directions-over-shared-studio-core.md)
+- [D-065 — Shared Production Semantic Core](decisions/D-065-shared-production-semantic-core.md)
 
-## Current product-composition authority
+## Partially superseded / historical product-composition decisions
 
-D-064 is the current long-term product-composition decision. It keeps D-063's shared Studio Core, Project Store, canonical Timeline, common GUI/Agent/scripts/MCP command authority, Model/Capability separation and strangler migration, but corrects the overreach that removed meaningful top-level production choices. New projects may select a first-class Production Direction such as micro-drama, commercial, music video, narrated video, dub battle or free project. Directions compose domain state/UI over one Studio Core; they are not RecipeDefinitions or separate execution engines.
+These records remain useful for rationale and migration evidence but are not co-equal current product authority:
+
+- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md) — Product Truth invariants remain; Product Orchestrator as long-term center is superseded.
+- [D-063 — Studio-first product architecture](decisions/D-063-studio-first-product-architecture.md) — shared Studio application/model/job/command architecture remains; prohibition on meaningful Production Direction choice is superseded by D-064.
+- [D-042 — Stage 8 composition-first additional recipes](decisions/D-042-stage-8-composition-first-additional-recipes.md) — recipe-first product composition is superseded; technical media/capability evidence remains historical reference.
+
+## Historical donor-era decisions
+
+D-002 (VideoClaw as initial base) and D-006 (provider-specific containment before D-011) describe earlier migration choices. They must not override current UV-owned Studio, production semantics, capability and adapter authority.
+
+When documents disagree, use this order:
+
+`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) -> active foundational ADR for the specific concern -> compatibility/historical records.

@@ -1,194 +1,55 @@
 # UV Studio Direct MCP Adapter
 
+**Status:** CURRENT SUPPORTING TECHNICAL CONTRACT  
+**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064
+
 ## Purpose
 
-UV Studio connects MCP packages as optional capability sources without making any one MCP server, Qwen-MM-Plugins, OpenClaw or cloud account part of canonical project state.
-
-The first MCP slice is deliberately **discovery-only**:
+MCP is an optional source of tools/models/capabilities. It is not a project model, Production Direction, mandatory runtime or privileged Agent path.
 
 ```text
-machine MCP profile
-  -> bounded stdio discovery
-  -> normalized tool descriptors
-  -> explicit MCPToolBinding
-  -> semantic CapabilityOffer
+Studio Tool / Application Command
+  -> Model/Capability selection
+  -> explicit MCPToolBinding when MCP backs the operation
+  -> D-017 authorization when required
+  -> bounded MCP invocation
+  -> project-owned result/provenance
 ```
-
-Discovering a tool does not execute it and does not authorize paid work.
-
-## Official SDK
-
-UV Studio uses the official Model Context Protocol Python SDK v2 (`mcp>=2,<3`) as a UV Studio-owned dependency in `requirements-uv.txt`.
-
-The dependency is separate from `vendor/videoclaw-app/backend/requirements.txt`; the vendored VideoClaw snapshot remains an upstream compatibility boundary.
 
 ## Machine configuration, not project state
 
-MCP profiles live under the UV Studio configuration root (`UV_STUDIO_CONFIG_DIR` or `data/config`). They are not stored in `project.json` and are not part of `.uvproj.zip`.
+MCP profiles live in machine configuration (`UV_STUDIO_CONFIG_DIR` / `data/config`), outside `project.json` and `.uvproj.zip`. Profiles store command/argv and environment-variable **references**, never raw secret values as portable project fields.
 
-A profile contains:
+There is intentionally no generic public endpoint that lets an arbitrary browser caller create an unrestricted local command profile. Machine process configuration remains a privileged local setting.
 
-- stable `profile_id`;
-- title;
-- `stdio` transport;
-- command + argv;
-- optional working directory;
-- environment-variable **references**;
-- enabled flag;
-- bounded startup/discovery timeouts.
+## Discovery and binding
 
-Raw secret values are not a valid profile field. Environment mapping is expressed as:
+Discovery uses the official MCP Python SDK and bounded configured transports. Tool catalogs are normalized under size/count limits. Discovered tool names do not become UV semantics automatically.
 
-```json
-{
-  "env_refs": {
-    "CHILD_TOKEN": "UV_STUDIO_QWEN_TOKEN"
-  }
-}
-```
+Only an explicit `MCPToolBinding` maps a provider/package-specific tool to a UV semantic `capability_id` and declares locality/cost/feature facts. Unbound tools never become executable semantic offers by inference.
 
-At connection time UV Studio reads the named host environment variable and passes its value only to the child process. Public profile APIs return the reference name, not the value.
+## Execution
 
-## No arbitrary command configuration API
+MCP execution is implemented through the UV capability execution boundary. Invocation is bound to the configured profile/tool/binding and bounded project-file translation. Remote/non-free MCP offers use D-017 exactly like other adapters.
 
-This slice intentionally has no HTTP endpoint that creates or edits an MCP profile command.
+Portable provenance records semantic/tool identity and bounded result facts without persisting reusable authorization tokens, secrets or resolved host-only paths.
 
-Allowing an arbitrary local HTTP caller to submit `command + args` would create a general host process-execution surface. Profiles are trusted machine configuration; future desktop settings UI must use a privileged local configuration path rather than a generic remote command endpoint.
+## Cost/locality
 
-## Bounded ephemeral stdio discovery
+Package license does not determine operation cost. One open-source MCP server may expose both local/free and remote/potentially-paid tools; those are separate offers with separate policy/authorization behavior.
 
-`MCPStdioDiscoveryClient`:
+`local_free_first` never widens to a remote or paid-capable MCP offer.
 
-1. resolves referenced environment variables;
-2. validates optional working directory;
-3. starts the configured server with the official SDK stdio transport;
-4. initializes the MCP client;
-5. calls `list_tools()` only;
-6. normalizes bounded tool metadata;
-7. exits the SDK contexts and terminates the child process tree;
-8. captures child stderr to a machine-local log file that is never returned by the public API.
+## Qwen-MM / OpenClaw boundary
 
-`ready` therefore means **the latest bounded discovery succeeded**. It does not mean UV Studio keeps a hidden MCP child process resident.
+Qwen-MM-Plugins and OpenClaw remain optional adapters/packages, not required layers. Qwen cloud operations must remain explicitly configured and classified; OpenClaw is not a mandatory hop for direct MCP.
 
-Startup and tool discovery have independent timeouts. The implementation uses AnyIO cancel scopes in the same task as the SDK context because MCP SDK task groups must be exited from the task that entered them.
+The pinned Qwen evaluation in `QWEN_MM_PLUGINS_EVALUATION.md` is historical component evidence and must not restore recipe-first product composition.
 
-## Tool metadata limits
+## D-064 invariants
 
-Discovery is intentionally bounded:
-
-- maximum 500 tools per profile;
-- tool names/titles/descriptions have length limits;
-- input/output JSON schemas are limited to 64 KiB each;
-- duplicate tool names fail discovery.
-
-A server cannot turn an unbounded tool catalog into application/API memory growth.
-
-## Explicit semantic binding
-
-MCP tool names are provider/package-specific and never become UV Studio domain semantics automatically.
-
-A configured binding declares:
-
-```text
-binding_id
-profile_id
-tool_name
-capability_id
-title
-locality
-cost_class
-asynchronous
-features
-```
-
-Only a binding can create an MCP `CapabilityOffer`.
-
-If a server reports an unbound tool, UV Studio exposes it in the profile's discovered-tools view but does **not** create a semantic offer for it.
-
-If a binding references a tool that the server does not report, its offer is `unavailable`.
-
-## Cost/locality are binding facts
-
-The license of the MCP package does not determine operation cost.
-
-For example, one open-source server can expose both:
-
-```text
-local transcription   -> local + free
-cloud video generation -> remote + potentially_paid
-```
-
-Those become different offers. Existing D-014 rules still apply: `local_free_first` cannot widen to a remote or paid-capable MCP offer.
-
-## Capability Registry integration
-
-Each configured profile uses an adapter ID:
-
-```text
-mcp.<profile_id>
-```
-
-Each binding uses an offer ID:
-
-```text
-mcp.<binding_id>
-```
-
-Successful discovery marks a bound/present tool's offer `available`. Disconnecting clears the ready discovery snapshot and marks bound offers unavailable.
-
-Registry `upsert_adapter()` / `upsert_offer()` exist only to refresh runtime discovery metadata; they do not authorize tool execution.
-
-## API
-
-Read/discovery endpoints:
-
-```text
-GET  /api/uv/mcp/profiles
-GET  /api/uv/mcp/bindings
-GET  /api/uv/mcp/profiles/{profile_id}/status
-POST /api/uv/mcp/profiles/{profile_id}/connect
-GET  /api/uv/mcp/profiles/{profile_id}/tools
-POST /api/uv/mcp/profiles/{profile_id}/disconnect
-```
-
-There is intentionally no MCP tool-call endpoint in this slice.
-
-## Qwen-MM-Plugins boundary
-
-Qwen-MM-Plugins is **not installed, vendored or required** by the generic MCP layer.
-
-After this generic layer is green, Qwen-MM can be added as a separate optional profile/binding pack against a re-verified pinned upstream revision.
-
-The binding pack must classify each relevant tool independently:
-
-- actual local/free operations as local/free when verified;
-- remote DashScope/Qwen/Wan/Omni calls as configuration-dependent and potentially-paid/paid;
-- WSL-only requirements, if still present at integration time, as optional platform constraints rather than native Windows prerequisites.
-
-## OpenClaw boundary
-
-OpenClaw remains a separate optional runtime adapter. Direct MCP does not route through OpenClaw, and OpenClaw is not required to connect Qwen-MM or other MCP servers.
-
-## Not implemented yet
-
-- MCP tool execution;
-- persistent MCP process pooling;
-- Streamable HTTP transport;
-- API/profile editor for arbitrary local commands;
-- Qwen-MM profile/bindings;
-- DashScope calls;
-- paid-provider consent/cost confirmation;
-- automatic semantic inference from discovered tool names.
-
-## Security invariants
-
-1. No MCP server is launched at UV Studio startup just because a profile exists.
-2. Discovery invokes `list_tools()` only; it never calls discovered tools.
-3. Profiles store env references, not secret values.
-4. Public APIs never return resolved secret values or child stderr.
-5. No arbitrary profile-command creation endpoint exists.
-6. MCP subprocesses use official SDK stdio argv handling, not shell interpolation.
-7. Discovery subprocesses are ephemeral and cleaned up after success, timeout or failure.
-8. Unbound tools never become semantic capabilities/offers.
-9. Offer locality/cost remain explicit binding metadata.
-10. D-014 execution-permission rules remain unchanged.
+1. MCP does not define Production Direction identity or domain state.
+2. MCP/Agent cannot mutate canonical project files directly outside the same application/domain command authority used by GUI/scripts.
+3. User-significant model choice remains visible in the Studio tool even when execution uses MCP.
+4. Project Unit of Work must own future multi-document acceptance/materialization; MCP success alone is not permission to partially mutate project state.
+5. No hidden remote/non-free fallback.

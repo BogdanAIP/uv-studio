@@ -1,45 +1,40 @@
 # UV Studio Frontend
 
-Top-level `frontend/` is UV Studio-owned product source. It began as a reproducible derived copy of the pinned VideoClaw frontend, whose untouched comparison snapshot remains under `vendor/videoclaw-app/frontend/` with provenance/attribution metadata.
+**Status:** CURRENT SUPPORTING PRODUCT SURFACE  
+**Product authority:** D-064 / `docs/architecture/CURRENT_ARCHITECTURE.md`
 
-## Supported product surfaces
+Top-level `frontend/` is UV Studio-owned product source. The pinned VideoClaw frontend under `vendor/videoclaw-app/frontend/` is provenance/comparison material only.
 
-Current canonical UV-owned user paths are:
+## Current product surfaces
 
-- `/projects` — project list/create/import;
-- `/projects/[projectId]` — canonical project/editor workspace;
-- targeted existing-video range editing through the Stage 4C UI;
-- Stage 5 dubbing/translation/precision/subtitle panels mounted inside the canonical project page.
+- `/projects` — canonical project list/import and **Production Direction** selection for new Studio projects;
+- `/projects/[projectId]/studio` — shared Studio Core (Media/Assets, Preview, Inspector/AI area, canonical Timeline, export);
+- `/settings` — machine/provider/runtime configuration.
 
-These surfaces use `/api/uv/*` product APIs and canonical UV project IDs.
+New projects use Production Directions and open the shared Studio surface. Direction-specific production navigation/domain panels will grow inside that shell as their domain verticals are implemented.
 
-## Legacy root workspace
+## Compatibility project surface
 
-The historical VideoClaw `WorkflowPanel` and related source still exist in the derived frontend, but D-025 deliberately stopped mounting the complete legacy VideoClaw backend route table. Therefore `/` must not be described as a fully supported working production workflow merely because the UI source is still present.
+`/projects/[projectId]` remains a legacy compatibility workspace for older recipe/Product-Orchestrator projects. It mounts specialized targeted-edit/dubbing/music/Stage-era panels and must not be used as the template for new Production Direction UI.
 
-The post-Stage-5 hardening slice must either:
+The `/projects` list labels this path as an old compatible workflow. Compatibility may remain until caller/project migration evidence permits retirement.
 
-1. make the root route a UV-owned landing/redirect into supported project surfaces; or
-2. explicitly isolate a separate compatibility runtime with its own security/authorization contract.
+The historical donor `WorkflowPanel`, pipeline pages and related components may still exist in source. They do not regain product authority merely because they compile.
 
-It must not silently remount the old provider/pipeline/sandbox backend and weaken D-025.
+## Identity and command rules
 
-## Identity rule
-
-UV `project_id` and legacy VideoClaw session IDs are different identifiers. Do not substitute one for the other.
+- `project_id` is the stable UV project identity.
+- Modern product composition uses validated Studio Production Direction metadata, not recipe identity.
+- durable project/timeline/domain mutations must converge on UV-owned application/domain commands;
+- the frontend may keep transient interaction state but must not become a second canonical project store;
+- user-significant model choice belongs in the relevant Studio AI tool, not hidden in provider settings.
 
 ## Source provenance
 
-Initial donor:
+Initial donor: `HITsz-TMG/VideoClaw` commit `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276` (MIT). `frontend/.uv-derived.json` and `frontend/UPSTREAM_LICENSE` preserve provenance. `tools/promote_frontend.py --force` is destructive and is not an ordinary development operation.
 
-- `HITsz-TMG/VideoClaw`
-- commit `5a16ae23a4f1cb6886c44c0205f7b7e52a34c276`
-- MIT
+D-033 also authorizes selective MIT OpenCut Classic interaction/UI reuse while keeping UV Project Store/commands authoritative.
 
-`frontend/.uv-derived.json` records the source baseline and `frontend/UPSTREAM_LICENSE` preserves the license. `tools/promote_frontend.py --force` is destructive and must not be used during ordinary development.
+## Testing
 
-Stage 4C also selectively adapts MIT OpenCut Classic timeline interaction ideas while keeping UV Project Store/Command boundaries authoritative.
-
-## Testing state
-
-Permanent CI currently runs frontend lint, high-severity dependency audit and production build on Windows/Ubuntu. Browser E2E and frontend unit/accessibility coverage remain incomplete; browser E2E for the existing-video and dubbing user outcomes is the next Stage 5 quality gate.
+Permanent CI runs lint, high-severity dependency audit, production build and real browser outcome suites on Windows/Ubuntu. Class-C evidence additionally verifies clean Production Direction discovery/creation plus shared Studio reopen/export; richer direction journeys must extend that evidence as they are implemented.

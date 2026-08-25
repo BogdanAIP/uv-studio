@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: architecture-authority-cleanup -->
 
 **Updated:** 2026-08-25
 
@@ -8,71 +9,66 @@
 
 ## Current lifecycle
 
-No development slice is active. `main` is the integration authority.
+Active review chore:
 
-Last completed slice:
+- PR #64 — `chore: consolidate architecture authority`;
+- slice `architecture-authority-cleanup`;
+- branch `chore/architecture-authority-cleanup`;
+- base `main` at `cf0b719540e35fd10ec9a6fac8c3b905500ec35b`;
+- previous completed slice: PR #63 `studio-v2-production-directions`, merge `4ff135ecd059acbce0fa8ff428ada8a47f6bc57b`.
 
-- PR #63 — `studio-v2-production-directions`;
-- merge commit `4ff135ecd059acbce0fa8ff428ada8a47f6bc57b`;
-- review head `9ddd2d6df78c09160f140bb21e7bfce7fe881bb6` passed all five permanent CI jobs before merge.
+This chore changes repository architecture memory/authority and next-slice boundaries, not runtime behavior.
 
-## Architecture conclusion
+## Current architecture authority
 
-D-064 is the current product-composition authority. UV Studio is a **local-first AI production studio with multiple Production Directions over one shared Studio Core**.
-
-Canonical composition:
+- **D-064** — Production Directions over one shared Studio Core.
+- **D-065** — shared Production Semantic Core beneath directions, so common Scene/Shot/Take/accepted-material semantics are not reimplemented per direction.
+- **D-033** — MLT/editor foundation.
 
 ```text
 Project
- -> Production Direction
- -> direction-specific production documents where needed
+ -> validated Production Direction
+ -> shared optional production semantics
+      Sequence/Scene -> Shot -> Takes/Accepted Take
+      semantic refs / continuity / asset/timeline bindings
+ -> direction extensions
+      story/characters/locations OR product/brand OR Music Map OR ...
  -> shared Studio Core
-      Media / Assets
-      Preview / Canvas
-      Inspector / AI Tools
-      canonical Timeline
-      Project Unit of Work / Undo-Redo
-      Model Registry / Jobs
-      Agent / Commands
-      Export
+      Media/Assets / Preview / Inspector/AI / canonical Timeline
+      Application Commands / Project Unit of Work / Models / Jobs / Agent / Export
+ -> Capability/Adapter boundaries
 ```
 
-Current first-class Production Directions:
+A Shot is production meaning; a Timeline Clip is assembly. Production semantic state is not a second Timeline.
 
-- `micro_drama` — Микродрама / сюжетное видео;
-- `commercial` — Реклама / продукт;
-- `music_video` — Музыкальный клип;
-- `narrated_video` — Видео с диктором;
-- `dub_battle` — Киноозвучка / Кинобатл;
-- `free_project` — Свободный проект.
+## Cleanup findings
 
-Production Directions are not recipes or execution engines. Operation-level features such as targeted edit, ordinary dubbing/translation, photo-to-video, visualizer, action transfer, digital human and lip-sync remain contextual Studio tools.
+The primary architecture is coherent after D-064/D-065, but the audit found code seams that must be addressed before rich domain/AI work:
 
-## Retained foundations
+1. modern `studio_timeline.py` and `project_media.py` import neutral project schemas/store dependency from recipe-aware `api/projects.py`, whose import graph pulls Recipe Registry/Product-Orchestrator catalog;
+2. generic project creation and `ProjectStore.create_project()` retain recipe-era creation, including implicit `general_video` at the lower foundation;
+3. modern Studio identity currently lives in arbitrary `extensions.studio` JSON: creation validates direction, but generic PATCH/import/load paths do not protect it as one typed invariant;
+4. the initial extension writes `schema_version: 2` without a separate typed metadata-schema contract, conflating Studio-v2 naming with schema version semantics;
+5. legacy projects can open the mechanical Studio editor without modern direction identity; future direction-domain commands therefore need explicit modern-vs-compatibility gating/migration;
+6. generic frontend `projectsApi.ts` mixes neutral project access with recipe creation/execution-plan concepts;
+7. `studio_timeline.py` already owns directions/project creation plus Timeline routes, so application responsibilities should split as UoW/commands grow.
 
-- Project Store and project-owned portable state;
-- canonical `timeline/main.json`;
-- D-033 editor foundation;
-- MLT behind a UV adapter and FFmpeg deterministic media/export paths;
-- shared GUI = Agent = scripts = MCP command semantics;
-- Capability Registry, D-017 authorization and MCP boundaries;
-- existing targeted-edit, dubbing/translation, continuity and music domain/review logic where it protects real invariants;
-- compatibility code until caller/dependency proof permits retirement.
+These are strangler-boundary debt, not grounds for a rewrite.
 
-## Compatibility / legacy
+## Compatibility assessment
 
-Do not grow these as long-term product authority:
+Recipe Registry, Product Orchestrator, Stage 6/8 workspaces, legacy `/projects/{id}` and donor-era route/UI code may remain while supported old projects/tests need them. They are not templates for new product work and must not leak into modern neutral core dependencies.
 
-- `recipe_id` as v2 project identity;
-- new `RecipeDefinition` entries for product features;
-- recipe-by-recipe Product Orchestrator growth;
-- Stage 6/Stage 8 product navigation;
-- separate project workspaces/engines per direction;
-- legacy `/execution-plan` as modern truth;
-- donor-era VideoClaw frontend/API taxonomy.
+Modern path:
+
+```text
+/projects -> Production Direction -> /projects/{id}/studio
+```
+
+Legacy projects may remain explicitly readable/editable in compatibility mode without being assigned a fake Production Direction.
 
 ## Next authorized product slice
 
-`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`.
+`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`, remains next after this cleanup closes. It first hardens modern Studio identity/dependency/storage boundaries, then establishes Project Unit of Work + undo/redo across shared production semantics, direction extensions, assets and Timeline.
 
-Before that product slice begins, architecture-memory cleanup may run as a bounded chore so superseded recipe/Product Orchestrator documents cannot be mistaken for current authority. Such cleanup must preserve useful historical evidence and runtime compatibility until dependency proof supports deletion.
+The first rich direction afterward is micro-drama, used to prove the **shared** Scene/Shot/Take model plus Story/Characters/Locations/continuity extensions. Then Model Registry, Job Manager and named AI generation follow through the same command/transaction authority.

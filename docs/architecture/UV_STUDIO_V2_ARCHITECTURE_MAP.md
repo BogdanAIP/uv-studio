@@ -1,58 +1,29 @@
 # UV Studio v2 — architecture map and migration inventory
 
-**Status:** active architecture map under D-064  
+**Status:** active architecture map under D-064 + D-065  
 **Date:** 2026-08-25
 
-This document is the practical migration map for turning the repository into a coherent local-first AI production studio **without rewriting the proven foundations**.
+This is the practical migration map for a coherent local-first AI production studio without rewriting proven foundations.
 
-Classifications:
-
-- **KEEP** — correct long-term foundation;
-- **ADAPT** — keep but change scope/boundary;
-- **MOVE** — useful logic belongs at another product level;
-- **LEGACY** — compatibility only; do not grow new product behavior on it;
-- **DELETE LATER** — remove only after dependency/call-site proof and replacement tests.
+Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Diagnosis
 
-UV Studio has a strong lower technical spine:
+The repository has a strong lower spine:
 
 ```text
 Project Store
-   |
-Studio/Application Commands
-   |
-MLT / FFmpeg / domain tools / Capability execution
-   |
-local runtimes / MCP / optional external providers
+ -> Studio/Application Commands
+ -> MLT / FFmpeg / domain tools / Capability execution
+ -> local runtimes / MCP / optional external providers
 ```
 
-Two opposite product-composition failures have now been observed.
+Two product-composition errors were corrected:
 
-The first was recipe/workspace proliferation:
+1. recipe/workspace proliferation — separate recipe orchestration/workspaces pretending to be products;
+2. generic-editor overcorrection — one Media/Preview/Timeline shell with insufficient production semantics.
 
-```text
-recipe
- -> recipe-specific orchestration
- -> specialized workspace
- -> recipe-specific state/API
- -> another readiness/action projection
-```
-
-D-063 correctly froze that growth and PR #61 established one shared Studio editor spine.
-
-The second was the overcorrection exposed after PR #61:
-
-```text
-one generic Studio project
- -> Media Bin
- -> Preview
- -> Timeline
-```
-
-That removed the domain value inherited from LocalMiniDrama and related production workflows. A micro-drama, commercial, music video and dub-battle share editor infrastructure, but they do not share the same production organization.
-
-D-064 corrects the composition model without reverting the common Studio Core.
+D-064 restores meaningful Production Directions. D-065 prevents the correction from creating six parallel domain models by sharing genuinely common Scene/Shot/Take semantics.
 
 ## 2. Target architecture
 
@@ -60,331 +31,220 @@ D-064 corrects the composition model without reverting the common Studio Core.
                               Project
                                  |
                       Production Direction
-       +-------------------------+-------------------------+
-       |                         |                         |
-  micro_drama               commercial                music_video
-  narrated_video            dub_battle                free_project
-       |                         |                         |
-       +------------- direction-owned domain docs --------+
+       micro_drama | commercial | music_video | narrated | dub_battle | free
+                                 |
+                   organization / policy / navigation
+                                 |
+                   Shared Production Semantic Core
+            Sequence/Scene | Shot | Take/Accepted Take
+          semantic refs | continuity | asset/timeline bindings
+                                 |
+                      Direction Extensions
+      story/characters/locations | product/brand | Music Map | etc.
                                  |
                          Shared Studio Core
-      +----------------+----------------------+----------------+
-      | Production/Nav |   Preview / Canvas   | Inspector      |
-      | Media / Assets |                      | AI Tools       |
-      | Scenes/Shots*  |                      | Model Picker   |
-      +----------------+-----------+----------+----------------+
-                                   |
-                         Canonical Multitrack Timeline
-                                   |
-                       Studio / Application Commands
-                (same GUI / Agent / scripts / MCP)
-                                   |
-                         Project Unit of Work
-          +------------------------+------------------------+
-          |                        |                        |
- direction/domain docs       Project Assets/Refs      Timeline/Generations
-          |                        |                        |
-          +------------------------+------------------------+
-                                   |
-                    Tool Services / Project Job Manager
-                                   |
-                          Model Registry (visible)
-                                   |
-                          Capability Registry
-                                   |
-                    Adapter / Transport Registry
-                    MLT / FFmpeg / MCP / local / cloud
-                                   |
-                           actual models/tools
+        Media/Assets | Preview/Canvas | Inspector/AI/Model Picker
+                         Canonical Timeline
+                                 |
+                    Studio / Application Commands
+                 same GUI / Agent / scripts / MCP
+                                 |
+                       Project Unit of Work
+       production docs + direction extensions + assets + timeline
+                                 |
+                  Tool Services / Project Job Manager
+                                 |
+                       Model Registry (visible)
+                                 |
+                       Capability Registry
+                                 |
+                  Adapter / Transport Registry
+                 MLT / FFmpeg / MCP / local / cloud
 ```
 
-`*` Direction-specific entities appear only when that production journey needs them.
+A project instantiates only the semantic/domain state it needs. The Production Semantic Core is not a mandatory giant film schema and is not a second Timeline.
 
-The Agent sits above Studio/Application Commands. It has no privileged raw-state mutation path.
+## 3. Production Directions — KEEP + GROW
 
-## 3. Production Directions — NEW PRODUCT COMPOSITION
-
-Primary paths:
+Primary current paths:
 
 - `uv_studio/production/directions.py`;
 - `/api/uv/projects/studio/directions`;
-- Studio extension metadata in `project.json`;
+- Studio metadata in `project.json`;
 - `/projects` direction cards.
 
-Initial first-class directions:
+Initial directions:
 
-| direction_id | User-facing direction | Core production organization |
-| --- | --- | --- |
-| `micro_drama` | Микродрама / сюжетное видео | story, characters, locations, scenes, shots, takes, continuity |
-| `commercial` | Реклама / продукт | brief, product, brand, audience, concepts, shots, variants |
-| `music_video` | Музыкальный клип | song, Music Map, sections, visual direction, shots |
-| `narrated_video` | Видео с диктором | brief, script, voice, segments, visual plan, subtitles |
-| `dub_battle` | Киноозвучка / Кинобатл | source scene, characters, dialogue, cast, takes, mix |
-| `free_project` | Свободный проект | media/assets/timeline with no mandatory production structure |
+| direction_id | Organization / specialized extension |
+| --- | --- |
+| `micro_drama` | story, characters, locations, dramaturgy; shared Scenes/Shots/Takes |
+| `commercial` | brief, product, brand, audience, concepts; shared Shots/Takes |
+| `music_video` | song, Music Map, sections, visual direction; shared Shots/Takes |
+| `narrated_video` | script, narration, semantic segments, subtitles/visual plan |
+| `dub_battle` | source scene, dialogue, cast, mix policy; shared Scene/Takes where applicable |
+| `free_project` | no mandatory production-semantic structure |
 
-A Production Direction:
+A direction is not a `RecipeDefinition`, provider or execution engine.
 
-- is **not** a `RecipeDefinition`;
-- does not choose a provider or execution engine;
-- may define navigation/domain sections, starting inputs, relevant tools and later production policy;
-- uses one common Studio shell and canonical project/timeline authority;
-- stores richer canonical state in versioned project-owned documents only when required.
+## 4. Shared Production Semantic Core — NEW TARGET (D-065)
 
-New Studio projects keep schema-v1 `recipe_id=studio_v2` only as compatibility metadata. Product identity is `extensions.studio.direction_id`.
+Common concepts that appear across directions must have one UV-owned contract. First bounded primitives:
 
-## 4. Contextual tools — NOT PROJECT DIRECTIONS
+- optional Sequence/Scene grouping;
+- Shot independent from Timeline Clip;
+- Take/candidate + accepted-take identity;
+- project asset/generation bindings;
+- optional continuity/canon relationships;
+- accepted-production-material -> canonical Timeline binding/projection.
 
-These remain tools/quick actions inside Studio:
+Direction extensions reference these identities instead of defining private duplicate Shot/Take systems.
 
-- targeted range edit;
-- ordinary dubbing/translation;
-- photo-to-video/slideshow;
-- visualizer;
-- action transfer;
-- talking character/digital human;
-- performance/lip-sync;
-- background removal and other transforms;
-- image/video/audio generation operations.
+Preferred first proof is micro-drama, but the contracts are shared infrastructure.
 
-They may be surfaced more prominently inside a relevant Production Direction without becoming separate canonical project engines.
+## 5. Contextual tools — NOT DIRECTIONS
 
-## 5. Foundation inventory
+Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualizer, action transfer, talking character, lip-sync, background transforms and image/video/audio generation are contextual tools. They may be prominent in a direction without becoming its product engine.
 
-### 5.1 Project Store — KEEP
+## 6. Foundation inventory
 
-Primary paths:
+### Project Store — KEEP + ADAPT
 
-- `uv_studio/projects/models.py`;
-- `uv_studio/projects/store.py`;
-- archive/migration/media-integrity modules.
+Keep atomic file persistence, strict portable JSON, path/symlink protection, project-owned refs and archive integrity.
 
-Keep:
+Required adaptation before rich domain work:
 
-- atomic local persistence;
-- strict portable JSON;
-- traversal/symlink protection;
-- project-owned source/artifact references;
-- migrations/archive portability.
+- typed Studio/Production Direction identity;
+- explicit legacy compatibility mode rather than fake modern direction;
+- no implicit `general_video` default in core creation;
+- deliberate bounded production/domain storage root or equivalent;
+- Project Unit of Work for multi-document transactions.
 
-Adapt:
+### Project references/media — KEEP
 
-- `recipe_id` remains schema-v1 compatibility only;
-- keep `project.json` small;
-- direction/domain state belongs in dedicated versioned project files.
+Remain the base for Media Bin, generated assets and production bindings. Provider URLs/host paths never become canonical identity.
 
-### 5.2 Project references/media ownership — KEEP
+### D-033 editor foundation — KEEP + EXPAND
 
-`ProjectReference`, source-media registration, artifact registration, SHA/size verification and project-relative path rules remain the base for Media Bin and generated media.
+MLT stays behind UV adapter; OpenCut is a selective UI/interaction donor; UV owns canonical Timeline/commands; FFmpeg remains deterministic export substrate where used.
 
-Do not replace them with provider URLs or arbitrary host filesystem paths as canonical state.
+### Studio/Application commands — KEEP + ADAPT
 
-### 5.3 D-033 editor foundation — KEEP + EXPAND
+Current timeline commands are a valid first family. Grow shared handler registries, direction/domain commands, transaction identity and undo/redo. No Agent-only mutation path.
 
-- MLT = reusable timeline/edit engine behind UV adapter;
-- OpenCut Classic = selective MIT editor/timeline interaction donor;
-- UV Project Store/domain state = canonical;
-- UV Command API = mutation authority;
-- FFmpeg = first deterministic export path.
+### Project Unit of Work — NEXT FOUNDATION
 
-PR #61's Studio editor spine is retained. It is a common work surface, not the complete product taxonomy.
-
-### 5.4 Studio/Application commands — KEEP + ADAPT
-
-The command model remains the permanent GUI = scripts = AI = MCP boundary.
-
-Current timeline commands are a valid first family. Grow toward:
-
-- more timeline operations as required;
-- direction/domain commands;
-- transaction grouping / Project Unit of Work;
-- product-level undo/redo;
-- handler registries/services instead of central dispatch switches.
-
-### 5.5 Project Unit of Work — NEXT FOUNDATION
-
-It must coordinate all canonical state touched by one semantic production operation, including:
-
-- direction/domain documents;
-- project references/assets;
-- generation/take records;
-- timeline changes;
-- undo/redo identity.
-
-Representative future operation:
+Must coordinate Studio identity/project metadata, shared production semantics, direction extensions, refs/assets, generation/take records, Timeline and undo history.
 
 ```text
 AcceptTake(shot_12_3, take_4)
- -> update take/shot state
- -> register asset
- -> update timeline
- -> commit as one transaction
+ -> accepted Take
+ -> Shot state
+ -> asset/reference
+ -> Timeline binding/update
+ -> one transaction / reversible undo
 ```
 
-Rollback must leave no split state.
+### Capability Registry — KEEP, REFRAME
 
-### 5.6 Capability Registry — KEEP, REFRAME
+Execution semantics/availability/locality/cost/authorization only. Below visible Model Registry and below production composition.
 
-It owns semantic capability, adapter/offer, availability, locality, cost class and D-017 execution authorization.
+### Model Registry — NEW TARGET
 
-It remains below the user-visible Model Registry and below Production Directions. A direction/tool may ask for a semantic capability, but it does not hard-code transport/provider execution branches.
+Backend-owned and user-visible for meaningful model selection; maps named models/modes onto capabilities/offers/adapters.
 
-### 5.7 Model Registry — NEW TARGET
+### Job Manager — NEW TARGET
 
-Backend-owned, user-visible. It should expose named models, modes, supported inputs/outputs, model-specific options, availability/locality/cost facts and underlying offer/adapter identity.
+Project-scoped queued/running/succeeded/failed/cancelled generation lifecycle, cancellation/retry and exact provenance.
 
-Model choice remains visible when creatively significant.
+### MCP — KEEP
 
-### 5.8 Job Manager — NEW TARGET
+Optional capability/model/tool source. Discovery and execution are implemented behind explicit bindings and D-017 where required. MCP is not product state.
 
-Project-scoped long-running generation with queued/running/succeeded/failed/cancelled, progress, cancellation, retry and exact input/model/output provenance.
+## 7. Modern/legacy boundary findings from 2026-08-25 audit
 
-Generation output becomes a project-owned asset and is added to timeline/domain state through normal application commands.
+These are mandatory preconditions for `studio-v2-application-transactions`:
 
-### 5.9 MCP — KEEP
+1. `studio_timeline.py` and `project_media.py` import neutral `ProjectPayload`/`ProjectReferencePayload`/`get_project_store` from recipe-aware `api/projects.py`; extract a recipe-free project API/core dependency boundary.
+2. Generic project POST and `ProjectStore.create_project()` retain recipe-era creation semantics/defaults; modern application code must not inherit them accidentally.
+3. Studio identity is currently arbitrary `extensions.studio` JSON; generic PATCH/import can corrupt it and Studio endpoints do not have one typed identity gate.
+4. The initial extension uses `schema_version: 2`; define an actual Studio-metadata schema version rather than treating “Studio v2” as schema semantics.
+5. Legacy projects can open the mechanical Studio editor without modern direction identity. Keep that only as explicit compatibility; direction-specific semantic commands require valid modern identity or migration.
+6. Generic frontend `projectsApi.ts` still mixes neutral project access with recipe creation/execution-plan types; split modern/core vs legacy clients before new callers grow.
+7. `studio_timeline.py` already owns direction catalog/project creation in addition to Timeline routes; split application responsibilities as the command/UoW layer grows rather than allowing a timeline API module to become the Studio god-module.
 
-MCP is a capability/model/tool source, not the product model. Preserve local profile boundaries, bounded discovery, semantic binding, D-017 authorization and project-owned I/O.
+None requires a rewrite; they are strangler-boundary debt.
 
-## 6. Legacy/migration inventory
+## 8. Legacy/migration inventory
 
-### 6.1 Recipe Registry — COMPATIBILITY LEGACY
+- Recipe Registry — **LEGACY**; old project/import vocabulary only.
+- Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful readiness/domain logic into modern tool/direction query services.
+- `api/project_workflow.py` — **LEGACY + EXTRACT**.
+- `/execution-plan` and recipe execution — **LEGACY**.
+- Stage 6/8 workspaces and `/projects/{id}` specialized page — **LEGACY UI**.
+- donor-era pipeline/session/task/model frontend clients — **DELETE LATER** after caller proof.
+- VideoClaw backend path injection — **DELETE LATER** after runtime/test/package proof.
+- archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
-Existing recipe definitions remain for old projects/imports and as production-knowledge reference. Do not add new v2 product features by adding a recipe.
+## 9. Direction-domain growth
 
-Useful knowledge may migrate into:
+### Micro-drama — first rich proof
 
-- Production Direction metadata/domain schemas;
-- Studio Tool services;
-- production-policy checks;
-- Agent-assisted setup.
-
-### 6.2 Product Orchestrator / `uv_studio/orchestration/*` — MOVE + LEGACY
-
-Keep useful readiness/prerequisite/domain eligibility logic, but move it into direction/tool query services. Do not grow recipe-specific workspace/action graphs.
-
-### 6.3 `uv_studio/api/project_workflow.py` — LEGACY + EXTRACT
-
-Keep for compatibility while required. Extract useful semantic operations into application services/handlers. New direction execution must not depend on this as primary authority.
-
-### 6.4 `/execution-plan` and recipe execution — LEGACY
-
-Do not maintain a second modern execution truth. Retire after caller proof or derive compatibility output from modern state where still required.
-
-### 6.5 Stage 6/8 UI — LEGACY
-
-No numbered Stage is normal product navigation. Continuity, photo/video utilities and other useful behavior move to direction/domain state or contextual tools.
-
-### 6.6 Old VideoClaw frontend/API clients — DELETE LATER
-
-Old `/api/pipelines`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/project/*` clients and donor-era taxonomy remain deletion candidates after import/caller proof.
-
-### 6.7 VideoClaw backend path injection — DELETE LATER AFTER PROOF
-
-Remove runtime injection only after supported server/tests/package paths prove independence. Preserve provenance/license material where useful.
-
-### 6.8 Windows host / packaging / update / integrity — KEEP AS REFERENCE
-
-Archived PR #59 / Release #395 remains reusable engineering evidence for Rust/WebView2 host, packaged runtime, installer/uninstaller, integrity, update/rollback and legal gates. Product UI rejection does not invalidate the packaging architecture.
-
-## 7. Direction-domain growth
-
-Do not model every possible production entity globally.
-
-### Micro-drama preferred first rich domain
-
-Expected bounded growth:
-
-```text
-Story
-Characters
-Locations
-Scenes
-  -> Shots
-      -> Takes / generations
-      -> accepted take
-Continuity state where required
-```
+Direction extensions: Story, Characters, Locations, dramaturgy. Reuse shared Scene -> Shot -> Take -> accepted Take contracts and optional continuity.
 
 ### Commercial
 
-```text
-Brief
-Product references
-Brand constraints
-Audience / offer
-Concepts
-Shots / variants
-Delivery variants
-```
+Brief/Product/Brand/Audience/Concept extensions + shared Shot/Take lifecycle.
 
 ### Music video
 
-Reuse existing Music Map/music analysis/review logic behind the direction:
+Song/Music Map/Sections/Visual Direction extensions + shared Shot/Take lifecycle + rhythm-aware Timeline assembly.
 
-```text
-Song
-Music Map
-Sections / beats
-Visual Direction
-Shots
-Rhythm-aware assembly
-```
+### Narrated video
+
+Script/Narration/semantic-segment extensions; visual Shots may reuse shared contracts when the journey needs shot-level production.
 
 ### Dub battle
 
-Distinct from ordinary dubbing/translation tool:
+Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics where they are truly the same concept. Ordinary dubbing remains a contextual tool.
 
-```text
-Source Scene
-Characters
-Dialogue Lines
-Cast
-Recording Sessions
-Takes
-Final Mix
-```
-
-## 8. Studio UI target
+## 10. Studio UI target
 
 ```text
 +--------------------------------------------------------------------+
-| Project / Direction                      Agent        Export       |
+| Project / Direction                      Agent        Export        |
 +--------------------+---------------------------+-------------------+
 | Production / Media |                           | Inspector         |
-|                    |          Preview          |                   |
-| direction sections |                           | Properties        |
-| Media / Assets     |                           | AI Tools          |
-| Generations        |                           | Model Picker      |
+| direction sections |          Preview          | Properties        |
+| shared semantic    |                           | AI Tools          |
+| entities / Assets  |                           | Model Picker      |
 +--------------------+---------------------------+-------------------+
-|                                                                    |
 |                         Multitrack Timeline                         |
-|                                                                    |
 +--------------------------------------------------------------------+
 ```
 
-Left-side production navigation is composable by direction; Preview, Inspector, Timeline, models/jobs and commands remain common.
+## 11. Migration order
 
-## 9. Migration order
+1. Production Directions — D-064 (done at first metadata/UI spine).
+2. Architecture authority cleanup + D-065 shared production semantics (current PR #64).
+3. Modern Studio identity/dependency boundary + Project Unit of Work + undo/redo.
+4. First rich micro-drama vertical proving **shared** Scene/Shot/Take semantics plus its direction extensions.
+5. Backend-owned visible Model Registry.
+6. Project Job Manager.
+7. First named AI generation -> candidate Take/asset -> explicit acceptance -> Timeline through normal commands.
+8. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
+9. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
+10. Retire compatibility code only after caller proof and reconcile proven Windows packaging onto accepted product shell.
 
-1. **Production Directions** — D-064, backend registry, project metadata, cards, Class-C truth.
-2. **Project Unit of Work + undo/redo** spanning production docs/assets/timeline.
-3. **First rich direction domain** — preferred: micro-drama Scenes/Shots/Characters/Locations/Takes.
-4. **Backend-owned Model Registry**.
-5. **Project Job Manager**.
-6. **First named AI generation** -> project-owned result -> direction state/Media Bin -> Timeline through normal commands.
-7. Extend commercial/music/dub-battle direction-specific domain services as real user journeys require them.
-8. Move legacy targeted edit/dubbing/music/continuity logic into modern direction/tool surfaces.
-9. Retire Product Orchestrator/Stage 8/execution-plan and dead donor clients only after caller evidence.
-10. Reconcile and port proven Windows packaging/runtime work onto the accepted product shell.
-
-## 10. Invariants
+## 12. Invariants
 
 - one Project Store authority;
 - one canonical Timeline;
-- no RecipeDefinition as new v2 product identity;
-- no separate engine/workspace per Production Direction;
+- shared production semantic identities where concepts truly overlap;
+- no RecipeDefinition as new v2 identity;
+- no separate engine/workspace per direction;
 - no Agent-only mutation path;
 - visible meaningful model choice;
-- remote/non-free execution remains explicit and authorized;
-- local-first desktop target remains the maintained baseline;
+- remote/non-free work remains explicit/authorized;
+- local-first desktop baseline;
 - reuse mature components behind UV-owned contracts;
-- tests must protect user-visible Production Direction discovery while distinguishing directions from contextual tools.
+- compatibility remains isolated, not silently imported into new boundaries.

@@ -4,29 +4,20 @@ Development commands run from the repository root. This document describes the c
 
 ## Continuously verified toolchain
 
-Permanent CI currently verifies Python 3.11, Node.js 20, npm, FFmpeg/FFprobe, MLT `melt`, Windows and Ubuntu. Newer Python versions may work, but they are not a support claim until added to CI.
+Permanent CI verifies Python 3.11, Node.js 20/npm, FFmpeg/FFprobe, MLT `melt`, Windows and Ubuntu. Newer versions are not support claims until added to CI.
 
-## Windows setup
+## Local setup
+
+Windows:
 
 ```powershell
 .\scripts\setup-dev.ps1
-```
-
-The script creates `.venv`, installs `requirements-uv-dev.txt` on top of `requirements-uv.txt`, and runs `npm ci` in top-level `frontend/`.
-
-Start backend:
-
-```powershell
 .\scripts\run-backend.ps1
-```
-
-Start frontend in another terminal:
-
-```powershell
+# another terminal
 .\scripts\run-frontend.ps1
 ```
 
-Cross-platform launcher:
+Cross-platform helper:
 
 ```text
 python tools/uv_dev.py paths
@@ -37,25 +28,27 @@ python tools/uv_dev.py health-smoke
 
 ## Runtime boundary
 
-The backend entrypoint is `uv_studio.server`. It is a UV Studio-owned FastAPI application. The complete VideoClaw FastAPI route table is not mounted by default; the pinned vendor tree remains available only to exact compatibility adapters and provenance/comparison tooling.
+The backend entrypoint is `uv_studio.server`, a UV-owned FastAPI application. The complete VideoClaw FastAPI application is not mounted as product root. Exact compatibility adapters and selected legacy UV routes remain while supported historical projects/tests need them.
 
-Current health endpoint:
+Current health endpoint: `GET http://127.0.0.1:8000/api/health`.
+
+## Current frontend/product boundary
+
+Modern product entry points are:
 
 ```text
-GET http://127.0.0.1:8000/api/health
+/projects
+ -> choose Production Direction
+ -> /projects/{projectId}/studio
 ```
 
-`health-smoke` proves the UV-owned server starts and responds over real HTTP without provider configuration. It does not prove legacy VideoClaw routes are live.
+`/projects/{projectId}` remains a compatibility workspace for old recipe/Product-Orchestrator projects. Do not add new Production Direction UI there.
 
-## Project data
+Canonical projects default to `data/projects/` and can be moved with `UV_STUDIO_PROJECTS_DIR`. Machine-only runtime configuration is separate from portable project state.
 
-Canonical projects default to `data/projects/` and can be moved with `UV_STUDIO_PROJECTS_DIR`. Machine-only runtime configuration is separate from canonical project data.
+## Architecture reading order
 
-## Frontend
-
-Top-level `frontend/` is UV Studio-owned product source derived from the pinned VideoClaw frontend. `vendor/videoclaw-app/frontend/` is comparison/provenance only.
-
-Supported canonical product surfaces are under `/projects` and `/projects/[projectId]`. The historical VideoClaw workflow UI still exists in source, but its legacy API surface is not mounted by the UV-owned backend; do not treat it as a supported working product path. The next Stage 5 hardening slice will remove or explicitly isolate that mismatch.
+Before implementation read `AGENTS.md`, `project-context/ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `docs/architecture/CURRENT_ARCHITECTURE.md` and the relevant accepted decisions. D-064 is current product composition; historical Stage/Recipe/Product-Orchestrator documents are subordinate compatibility/evidence.
 
 ## Vendored upstream
 
@@ -63,4 +56,4 @@ Do not edit `vendor/videoclaw-app` during ordinary feature work. Reconstruct it 
 
 ## Cross-chat continuation
 
-Repository memory lifecycle is defined by `AGENTS.md`, `DEVELOPMENT_PROTOCOL.md` and D-038. Always run `python tools/validate_development_context.py` before implementation. A new slice starts only from idle `main`.
+Repository lifecycle is defined by `AGENTS.md`, `DEVELOPMENT_PROTOCOL.md` and D-038. Run `python tools/validate_development_context.py` before implementation. A new slice starts only from idle `main`.
