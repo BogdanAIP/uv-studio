@@ -1,14 +1,33 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "studio-v2-application-transactions",
+    "kind": "foundation",
+    "roadmap_stage": "studio-v2",
+    "goal": "Harden the modern Project/Studio identity, dependency and production-storage boundary, then establish a UV-owned Project Unit of Work and undo/redo authority that can coordinate shared production semantics, project references/assets and the canonical Timeline without reviving recipe-era product authority.",
+    "base_branch": "main",
+    "branch": "stage-12/studio-v2-application-transactions",
+    "pull_request": 65,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "uv_studio/api/**",
+      "uv_studio/projects/**",
+      "uv_studio/editor/**",
+      "frontend/**",
+      "tests/**",
+      "tests_api/**",
+      "tests_browser/**"
+    ]
+  },
   "last_completed": {
     "id": "architecture-authority-cleanup",
     "pull_request": 64,
     "merge_commit": "e213315643bf5d0b724c23bb725f10cda0a96e95"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-application-transactions",
+    "next_slice_id": "studio-v2-micro-drama-production-semantics",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

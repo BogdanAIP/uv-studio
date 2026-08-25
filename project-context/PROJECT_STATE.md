@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: architecture-authority-cleanup -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-application-transactions -->
 
 **Updated:** 2026-08-25
 
@@ -9,63 +9,38 @@
 
 ## Current lifecycle
 
-Idle after the architecture-authority cleanup:
+Active Stage 12 foundation slice:
 
-- PR #64 — `chore: consolidate architecture authority` — merged;
-- completed slice `architecture-authority-cleanup`;
-- merge commit `e213315643bf5d0b724c23bb725f10cda0a96e95`;
-- next authorized slice: `studio-v2-application-transactions`.
+- slice `studio-v2-application-transactions`;
+- branch `stage-12/studio-v2-application-transactions`;
+- PR #65 (draft);
+- base idle `main` at `a9c3c38b05e6ed37f8efdad9e28c340fce4a4854`;
+- last completed PR #64 `architecture-authority-cleanup`, merge `e213315643bf5d0b724c23bb725f10cda0a96e95`.
 
 ## Current architecture authority
 
 - **D-064** — Production Directions over one shared Studio Core.
-- **D-065** — shared Production Semantic Core beneath directions, so common Scene/Shot/Take/accepted-material semantics are not reimplemented per direction.
-- **D-033** — MLT/editor foundation.
+- **D-065** — shared Production Semantic Core beneath directions.
+- **D-033** — MLT/editor foundation; canonical Timeline remains UV-owned.
 
-```text
-Project
- -> validated Production Direction
- -> shared optional production semantics
-      Sequence/Scene -> Shot -> Takes/Accepted Take
-      semantic refs / continuity / asset/timeline bindings
- -> direction extensions
-      story/characters/locations OR product/brand OR Music Map OR ...
- -> shared Studio Core
-      Media/Assets / Preview / Inspector/AI / canonical Timeline
-      Application Commands / Project Unit of Work / Models / Jobs / Agent / Export
- -> Capability/Adapter boundaries
-```
+The current slice does not add rich Scene/Shot/AI features yet. It first makes the Project/Studio boundary safe enough for those features.
 
-A Shot is production meaning; a Timeline Clip is assembly. Production semantic state is not a second Timeline.
+## Stage 12 implementation order
 
-## Cleanup findings
+1. typed backend-owned Production Direction identity;
+2. backend projection of `modern_direction` / `legacy_compatibility` / `invalid_recovery`;
+3. protect Studio identity against generic PATCH/save/import corruption;
+4. decouple modern Studio/media API helpers from Recipe Registry/Product Orchestrator imports;
+5. remove implicit `general_video` creation from the Project Store/core compatibility surfaces;
+6. establish bounded `production/` canonical storage for future D-065 documents;
+7. after those P0 boundaries are green, establish Project Unit of Work + transaction/undo authority across production documents, project references/assets and Timeline state.
 
-The primary architecture is coherent after D-064/D-065, but the audit found code seams that must be addressed before rich domain/AI work:
+## Compatibility rule
 
-1. modern `studio_timeline.py` and `project_media.py` import neutral project schemas/store dependency from recipe-aware `api/projects.py`, whose import graph pulls Recipe Registry/Product-Orchestrator catalog;
-2. generic project creation and `ProjectStore.create_project()` retain recipe-era creation, including implicit `general_video` at the lower foundation;
-3. modern Studio identity currently lives in arbitrary `extensions.studio` JSON: creation validates direction, but generic PATCH/import/load paths do not protect it as one typed invariant;
-4. the initial extension writes `schema_version: 2` without a separate typed metadata-schema contract, conflating Studio-v2 naming with schema version semantics;
-5. legacy projects can open the mechanical Studio editor without modern direction identity; future direction-domain commands therefore need explicit modern-vs-compatibility gating/migration;
-6. generic frontend `projectsApi.ts` mixes neutral project access with recipe creation/execution-plan concepts;
-7. `studio_timeline.py` already owns directions/project creation plus Timeline routes, so application responsibilities should split as UoW/commands grow.
+Legacy recipe projects and pre-D-064 `studio_first` projects remain readable as explicit compatibility projects. They do not receive a fake Production Direction. Invalid/tampered Studio identity is surfaced as recovery state rather than guessed by the frontend.
 
-These are strangler-boundary debt, not grounds for a rewrite.
+Recipe/Product Orchestrator/Stage routes remain compatibility code; new Studio modules must not depend on them merely to access neutral project services.
 
-## Compatibility assessment
+## Next handoff
 
-Recipe Registry, Product Orchestrator, Stage 6/8 workspaces, legacy `/projects/{id}` and donor-era route/UI code may remain while supported old projects/tests need them. They are not templates for new product work and must not leak into modern neutral core dependencies.
-
-Modern path:
-
-```text
-/projects -> Production Direction -> /projects/{id}/studio
-```
-
-Legacy projects may remain explicitly readable/editable in compatibility mode without being assigned a fake Production Direction.
-
-## Next authorized product slice
-
-`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`, is now authorized from this idle `main`. It first hardens modern Studio identity/dependency/storage boundaries, then establishes Project Unit of Work + undo/redo across shared production semantics, direction extensions, assets and Timeline.
-
-The first rich direction afterward is micro-drama, used to prove the **shared** Scene/Shot/Take model plus Story/Characters/Locations/continuity extensions. Then Model Registry, Job Manager and named AI generation follow through the same command/transaction authority.
+After this transaction foundation is complete, `studio-v2-micro-drama-production-semantics` will prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.
