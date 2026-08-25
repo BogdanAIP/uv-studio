@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, replace
+from functools import wraps
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -67,6 +68,17 @@ class ProductionCommandResult:
         }
 
 
+def _serialized_production_command(method):
+    """Hold the shared ProjectStore lock across each semantic read/modify/commit."""
+
+    @wraps(method)
+    def wrapped(service, *args, **kwargs):
+        with service.project_store._lock:
+            return method(service, *args, **kwargs)
+
+    return wrapped
+
+
 class ProductionSemanticService:
     """One semantic command surface for GUI, Agent, scripts and MCP callers."""
 
@@ -85,6 +97,7 @@ class ProductionSemanticService:
         self._require_micro_drama(project)
         return self._load_micro_drama(project_id)
 
+    @_serialized_production_command
     def create_scene(
         self,
         project_id: str,
@@ -110,6 +123,7 @@ class ProductionSemanticService:
             production=updated,
         )
 
+    @_serialized_production_command
     def create_shot(
         self,
         project_id: str,
@@ -151,6 +165,7 @@ class ProductionSemanticService:
             production=updated,
         )
 
+    @_serialized_production_command
     def register_take(
         self,
         project_id: str,
@@ -194,6 +209,7 @@ class ProductionSemanticService:
             production=updated,
         )
 
+    @_serialized_production_command
     def set_micro_drama_context(
         self,
         project_id: str,
@@ -221,6 +237,7 @@ class ProductionSemanticService:
             micro_drama=document,
         )
 
+    @_serialized_production_command
     def accept_take(
         self,
         project_id: str,
