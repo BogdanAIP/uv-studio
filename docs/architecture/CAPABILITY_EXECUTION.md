@@ -52,6 +52,6 @@ MCP execution and D-017 integration are implemented; older discovery-only descri
 7. Provider/runtime identity does not become canonical product identity.
 8. User-significant model identity remains visible above this layer.
 9. Generated/reviewed media must be rebound to current project identity before acceptance/materialization.
-10. Multi-document acceptance/materialization must eventually commit through Project Unit of Work rather than ad-hoc partial writes.
+10. Multi-document acceptance/materialization commits through Project Unit of Work rather than ad-hoc partial writes.
 
-Historical Stage-5 hardening findings are retained in Git history and tests; they are not the current next-slice definition. Current next work is the application transaction/identity boundary described by `project-context/NEXT_TASK.md`.
+Historical Stage-5 hardening findings are retained in Git history and tests; they are not the current next-slice definition. Current next work is the shared micro-drama production-semantics proof described by `project-context/NEXT_TASK.md`.

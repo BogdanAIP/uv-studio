@@ -29,6 +29,7 @@ PROJECT_DIRECTORIES = (
     "artifacts",
     "production",
     "timeline",
+    "history",
     "reviews",
     "exports",
 )
@@ -351,23 +352,30 @@ class ProjectStore:
         return destination
 
     def _atomic_write_json(self, path: Path, data: Mapping[str, Any]) -> None:
+        try:
+            serialized = json.dumps(
+                dict(data),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            ) + "\n"
+        except (TypeError, ValueError) as exc:
+            raise ProjectStoreError(
+                f"Project data is not strict portable JSON: {_bounded_error_message(exc)}"
+            ) from exc
+        self._atomic_write_bytes(path, serialized.encode("utf-8"))
+
+    def _atomic_write_bytes(self, path: Path, data: bytes) -> None:
+        """Replace one project-owned file after flushing its complete new bytes."""
+
+        if not isinstance(data, bytes):
+            raise ProjectStoreError("atomic project writes require bytes")
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
         try:
-            try:
-                serialized = json.dumps(
-                    dict(data),
-                    ensure_ascii=False,
-                    indent=2,
-                    sort_keys=True,
-                    allow_nan=False,
-                ) + "\n"
-            except (TypeError, ValueError) as exc:
-                raise ProjectStoreError(
-                    f"Project data is not strict portable JSON: {_bounded_error_message(exc)}"
-                ) from exc
-            with temp.open("w", encoding="utf-8", newline="\n") as handle:
-                handle.write(serialized)
+            with temp.open("wb") as handle:
+                handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp, path)

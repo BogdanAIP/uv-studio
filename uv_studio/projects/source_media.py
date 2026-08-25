@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from .media_integrity import MediaIntegrityError, verify_registered_media_bytes
-from .models import ProjectDocument, ProjectReference, ProjectValidationError
+from .models import ProjectDocument, ProjectReference, ProjectValidationError, utc_now_iso
 from .store import ProjectStore, ProjectStoreError
+from .transactions import ProjectUnitOfWork
 
 _MAX_ORIGINAL_NAME_LENGTH = 255
 _SAFE_EXTENSION_RE = re.compile(r"^\.[A-Za-z0-9]{1,16}$")
@@ -104,9 +105,17 @@ class ProjectSourceMediaStore:
             project = self.project_store.load_project(project_id)
             if any(item.id == reference.id for item in (*project.sources, *project.artifacts)):
                 raise SourceMediaError(f"duplicate source reference id: {reference.id}")
-            return self.project_store.update_project(
-                project_id, sources=project.sources + (reference,)
+            updated = replace(
+                project,
+                sources=project.sources + (reference,),
+                updated_at=utc_now_iso(),
             )
+            ProjectUnitOfWork(self.project_store).commit(
+                project_id,
+                command=f"register_{media_kind}_source",
+                documents={"project.json": updated.to_dict()},
+            )
+            return self.project_store.load_project(project_id)
 
     def get(
         self,

@@ -139,6 +139,7 @@ TimelineCommandPayload = Annotated[
 
 class TimelineCommandResultPayload(_StrictModel):
     command: str
+    transaction_id: str
     track_id: str | None = None
     clip_id: str | None = None
     timeline: TimelinePayload

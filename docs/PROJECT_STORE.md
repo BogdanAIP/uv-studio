@@ -13,6 +13,7 @@ Project Store owns:
 - project-owned source/asset/artifact references;
 - versioned production/domain documents;
 - canonical timeline and review state;
+- durable project transaction journals and undo/redo history;
 - portable `.uvproj.zip` archive import/export;
 - strict project-relative path/integrity boundaries and atomic single-file persistence.
 
@@ -27,7 +28,12 @@ projects/prj_<id>/
   assets/
   tasks/
   artifacts/
+  production/
   timeline/
+  history/
+    index.json
+    transactions/
+    operations/
   reviews/
   exports/
 ```
@@ -38,19 +44,21 @@ Direction-specific documents should use deliberate versioned project-owned files
 
 Schema v1 still requires `recipe_id`; modern Studio projects use neutral compatibility value `studio_v2`. Under D-064, the meaningful product composition is Studio metadata containing `product_model=production_directions` and a known `direction_id`.
 
-**Current debt:** the v1 `extensions` mapping is generic JSON and the generic project update API can replace it. Creation validates `direction_id`, but the Project Store does not yet enforce Studio identity as a typed invariant on every modern load/update/import path. Before rich direction-domain/Agent work relies on it, the next application-foundation slice must introduce a validated Studio identity boundary and prevent arbitrary generic mutation from silently changing/corrupting it.
+Modern Studio identity is validated as a typed invariant on load, update and archive-import boundaries. Generic mutation cannot silently replace a valid Production Direction or convert compatibility identity into modern identity. Legacy and invalid projects remain explicit compatibility/recovery states rather than receiving a guessed direction.
 
 Changing Production Direction in the future, if supported, should be an explicit semantic migration operation rather than an arbitrary `extensions` patch.
 
 ## Atomicity and transactions
 
-Current Project Store writes use atomic replacement and an in-process re-entrant lock, preventing partial individual JSON writes. This is **not** a multi-document transaction.
+Individual writes use atomic replacement under an in-process re-entrant lock. Cross-document application commands use `ProjectUnitOfWork`: it validates prospective canonical state, writes a prepared journal before canonical files, restores exact byte snapshots on failure/interruption and publishes the committed marker as the final commit point.
 
-The next `ProjectUnitOfWork` foundation must coordinate one semantic operation across production/domain documents, references/assets, generation/take state, timeline and undo history with rollback on failure. MLT remains derived.
+History is project-owned and portable. Undo/redo verifies that current canonical bytes still match the expected transaction snapshot, fails closed on out-of-band mutation, survives process restart/archive round-trip and truncates a stale redo branch when a new command commits. The bounded transaction document set is `project.json` plus strict JSON under `production/`, `timeline/`, `tasks/` and `reviews/`; large media bytes remain project files referenced by canonical metadata rather than being copied into undo journals. MLT remains derived.
+
+Timeline commands, source-media registration and Studio export registration use this authority. New semantic production commands must commit all related production/reference/timeline changes in one unit of work rather than composing independent stores.
 
 ## Compatibility debt
 
-`ProjectStore.create_project()` and generic project APIs still carry recipe-era creation semantics/defaults. Modern Studio creation uses the dedicated Production Direction path, but the lower foundation should stop making `general_video` the implicit default so new backend/application code cannot accidentally create legacy identity.
+Generic compatibility APIs still accept explicit recipe identity, but lower Project Store creation no longer supplies an implicit `general_video` default. Modern Studio creation uses the dedicated Production Direction path.
 
 Legacy projects/imports remain readable until migration/caller proof supports removal.
 

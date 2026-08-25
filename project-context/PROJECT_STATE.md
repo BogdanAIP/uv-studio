@@ -25,15 +25,21 @@ Active Stage 12 foundation slice:
 
 The current slice does not add rich Scene/Shot/AI features yet. It first makes the Project/Studio boundary safe enough for those features.
 
-## Stage 12 implementation order
+## Stage 12 implementation state
+
+The slice now contains the complete application-foundation path under review:
 
 1. typed backend-owned Production Direction identity;
 2. backend projection of `modern_direction` / `legacy_compatibility` / `invalid_recovery`;
-3. protect Studio identity against generic PATCH/save/import corruption;
-4. decouple modern Studio/media API helpers from Recipe Registry/Product Orchestrator imports;
-5. remove implicit `general_video` creation from the Project Store/core compatibility surfaces;
-6. establish bounded `production/` canonical storage for future D-065 documents;
-7. after those P0 boundaries are green, establish Project Unit of Work + transaction/undo authority across production documents, project references/assets and Timeline state.
+3. protected Studio identity across generic PATCH/save/import boundaries;
+4. recipe-free modern Studio/media API helpers and no implicit `general_video` core creation;
+5. bounded `production/` canonical storage for future D-065 documents;
+6. file-first `ProjectUnitOfWork` with prepared journals, exact rollback, restart recovery and portable durable history;
+7. project-level undo/redo across production documents, `project.json` references/assets and `timeline/main.json`;
+8. timeline commands, media registration and Studio export registration routed through the shared transaction authority;
+9. HTTP history/undo/redo plus Studio UI controls backed by canonical project history rather than browser-local state.
+
+Local proof currently passes 435 core tests, 228 API tests, frontend lint/build and high-severity dependency audit. Exact-head required checks remain the merge authority.
 
 ## Compatibility rule
 
@@ -43,4 +49,4 @@ Recipe/Product Orchestrator/Stage routes remain compatibility code; new Studio m
 
 ## Next handoff
 
-After this transaction foundation is complete, `studio-v2-micro-drama-production-semantics` will prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.
+After this transaction foundation is reviewed, merged and lifecycle-closed, `studio-v2-micro-drama-production-semantics` will prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.

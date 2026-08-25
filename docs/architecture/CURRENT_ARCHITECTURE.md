@@ -65,7 +65,7 @@ Not every project must instantiate every production-semantic entity. `free_proje
 - **Direction Extensions** own genuinely direction-specific data while referencing shared identities for common concepts.
 - **Canonical Timeline** is UV-owned assembly state; MLT is derived behind the D-033 adapter.
 - **Studio/Application Commands** are the shared semantic mutation boundary for GUI, Agent, scripts and MCP.
-- **Project Unit of Work** will own atomic multi-document mutations and undo/redo across production semantics, assets and Timeline.
+- **Project Unit of Work** owns atomic multi-document mutations and durable undo/redo across production semantics, project references/assets and Timeline.
 - **Model Registry** will expose meaningful model choice to the user.
 - **Job Manager** will own long-running generation lifecycle and provenance.
 - **Capability Registry / D-017 / adapters** own execution availability, authorization and transport, not product identity.
@@ -109,16 +109,19 @@ A tool may be especially useful in one direction without becoming a separate pro
 10. Keep compatibility paths until call-site/dependency proof permits deletion.
 11. Modern Studio identity must be validated independently from compatibility `recipe_id` and generic extensions mutation.
 
-## Current implementation gap before rich direction work
+## Current implementation boundary before rich direction work
 
-PR #63 proves direction discovery/creation and shared Studio entry, but the current code still has four boundary seams:
+Stage 12 repairs the application seams identified after PR #63:
 
-- modern Studio/project-media API modules import neutral helpers from recipe-aware `api/projects.py`;
-- generic project creation and lower `ProjectStore.create_project()` still carry recipe-era defaults;
-- Studio direction identity currently lives in untyped generic extension JSON and can be corrupted through compatibility mutation/import paths;
-- legacy projects can enter the shared Studio editor without modern direction identity, so future direction-domain commands need an explicit compatibility-vs-modern identity gate.
+- modern Studio/project-media APIs use recipe-free common project contracts;
+- modern Production Direction identity has a typed load/update/import gate with explicit compatibility and recovery projections;
+- core project creation has no implicit recipe-era default;
+- bounded `production/` storage is available for shared semantic documents;
+- `ProjectUnitOfWork` coordinates strict canonical JSON with prepared journals, exact rollback/recovery and durable project-level undo/redo;
+- timeline commands plus source/export reference registration use the shared transaction authority;
+- HTTP and Studio UI expose the same canonical history rather than creating a frontend-only undo stack.
 
-`studio-v2-application-transactions` must repair these seams before building Project Unit of Work and before rich direction-domain/AI mutation relies on them.
+The next rich-direction slice may add shared Scene/Shot/Take contracts, but must route cross-document mutations through this unit of work. It must not widen the transaction journal to large media blobs or introduce a second state/undo authority.
 
 ## Compatibility layer
 

@@ -87,6 +87,17 @@ from .replacement_review import (
     replacement_candidate_sha256,
 )
 from .store import ProjectStore
+from .transactions import (
+    NothingToRedo,
+    NothingToUndo,
+    ProjectHistoryState,
+    ProjectTransactionConflict,
+    ProjectTransactionEntry,
+    ProjectTransactionError,
+    ProjectTransactionRecoveryError,
+    ProjectTransactionResult,
+    ProjectUnitOfWork,
+)
 
 __all__ = [
     "ARCHIVE_SCHEMA_VERSION",
@@ -110,12 +121,21 @@ __all__ = [
     "MEDIA_RANGE_SCHEMA_VERSION",
     "MICROSECONDS_PER_SECOND",
     "MechanicalFact",
+    "NothingToRedo",
+    "NothingToUndo",
     "PROJECT_SCHEMA_VERSION",
     "ProjectArchiveError",
     "ProjectDocument",
+    "ProjectHistoryState",
     "ProjectMediaRange",
     "ProjectReference",
     "ProjectStore",
+    "ProjectTransactionConflict",
+    "ProjectTransactionEntry",
+    "ProjectTransactionError",
+    "ProjectTransactionRecoveryError",
+    "ProjectTransactionResult",
+    "ProjectUnitOfWork",
     "REPLACEMENT_AUDIO_STRATEGIES",
     "REPLACEMENT_CANDIDATE_PATH",
     "REPLACEMENT_CANDIDATE_SCHEMA_VERSION",

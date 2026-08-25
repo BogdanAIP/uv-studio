@@ -24,7 +24,9 @@ def _reject_nonfinite_json_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON number {value!r} is not portable")
 
 
-def _validate_document(document: Mapping[str, Any]) -> dict[str, Any]:
+def validate_production_document(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one detached, versioned, strict-JSON production document."""
+
     if not isinstance(document, Mapping):
         raise ProductionStateError("production document must be a JSON object")
     schema_version = document.get("schema_version")
@@ -88,7 +90,7 @@ class ProductionDocumentStore:
             raise ProductionStateError("production document could not be read") from exc
         if not isinstance(raw, Mapping):
             raise ProductionStateError("production document must be a JSON object")
-        return _validate_document(raw)
+        return validate_production_document(raw)
 
     def save(
         self,
@@ -96,7 +98,7 @@ class ProductionDocumentStore:
         document_id: str,
         document: Mapping[str, Any],
     ) -> dict[str, Any]:
-        payload = _validate_document(document)
+        payload = validate_production_document(document)
         with self.project_store._lock:
             self.project_store.load_project(project_id)
             try:

@@ -20,7 +20,7 @@ These remain valid when they do not conflict with current authority:
 - [`MCP_ADAPTER.md`](MCP_ADAPTER.md) — current optional MCP capability/execution boundary;
 - [`DUBBING_TRANSLATION.md`](DUBBING_TRANSLATION.md) — reusable contextual dubbing-domain implementation;
 - [`RANGE_REINSERTION.md`](RANGE_REINSERTION.md) — deterministic range-replacement primitive;
-- `docs/PROJECT_STORE.md` — canonical storage plus current Studio identity/transaction debt;
+- `docs/PROJECT_STORE.md` — canonical storage, typed Studio identity and transaction/undo contract;
 - `docs/PROJECT_ARCHIVES.md` — archive portability/integrity;
 - `docs/FRONTEND.md` — current and compatibility frontend surfaces.
 

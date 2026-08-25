@@ -7,7 +7,9 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from uv_studio.projects.models import ProjectValidationError, validate_identifier
+from uv_studio.projects.transactions import ProjectTransactionError, ProjectUnitOfWork
 from uv_studio.projects.timeline import (
+    MAIN_TIMELINE_PATH,
     TimelineClip,
     TimelineClipNotFound,
     TimelineDocument,
@@ -129,12 +131,14 @@ class RemoveClipCommand:
 class TimelineCommandResult:
     command: str
     timeline: TimelineDocument
+    transaction_id: str
     track_id: str | None = None
     clip_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "command": self.command,
+            "transaction_id": self.transaction_id,
             "track_id": self.track_id,
             "clip_id": self.clip_id,
             "timeline": self.timeline.to_dict(),
@@ -147,6 +151,7 @@ class TimelineCommandService:
     def __init__(self, project_store: ProjectStore) -> None:
         self.project_store = project_store
         self.timelines = TimelineStore(project_store)
+        self.unit_of_work = ProjectUnitOfWork(project_store)
 
     @staticmethod
     def _new_track_id() -> str:
@@ -170,6 +175,24 @@ class TimelineCommandService:
         tracks = tuple(replacement if track.track_id == track_id else track for track in timeline.tracks)
         return TimelineDocument(timeline_id=timeline.timeline_id, tracks=tracks)
 
+    def _commit_timeline(
+        self,
+        project_id: str,
+        *,
+        command: str,
+        timeline: TimelineDocument,
+    ) -> str:
+        try:
+            self.timelines.validate(project_id, timeline)
+            transaction = self.unit_of_work.commit(
+                project_id,
+                command=f"timeline.{command}",
+                documents={MAIN_TIMELINE_PATH: timeline.to_dict()},
+            )
+        except (TimelineError, ProjectTransactionError) as exc:
+            raise TimelineCommandError(str(exc)) from exc
+        return transaction.transaction_id
+
     def create_track(self, project_id: str, command: CreateTrackCommand) -> TimelineCommandResult:
         if not isinstance(command, CreateTrackCommand):
             raise TimelineCommandError("create_track requires CreateTrackCommand")
@@ -186,11 +209,17 @@ class TimelineCommandService:
             timeline_id=timeline.timeline_id,
             tracks=(*timeline.tracks, track),
         )
-        try:
-            self.timelines.save(project_id, updated)
-        except TimelineError as exc:
-            raise TimelineCommandError(str(exc)) from exc
-        return TimelineCommandResult(command="create_track", track_id=track_id, timeline=updated)
+        transaction_id = self._commit_timeline(
+            project_id,
+            command="create_track",
+            timeline=updated,
+        )
+        return TimelineCommandResult(
+            command="create_track",
+            transaction_id=transaction_id,
+            track_id=track_id,
+            timeline=updated,
+        )
 
     def add_clip(self, project_id: str, command: AddClipCommand) -> TimelineCommandResult:
         if not isinstance(command, AddClipCommand):
@@ -213,11 +242,16 @@ class TimelineCommandService:
         try:
             replacement = replace(track, clips=(*track.clips, clip))
             updated = self._replace_track(timeline, track.track_id, replacement)
-            self.timelines.save(project_id, updated)
         except TimelineError as exc:
             raise TimelineCommandError(str(exc)) from exc
+        transaction_id = self._commit_timeline(
+            project_id,
+            command="add_clip",
+            timeline=updated,
+        )
         return TimelineCommandResult(
             command="add_clip",
+            transaction_id=transaction_id,
             track_id=track.track_id,
             clip_id=clip_id,
             timeline=updated,
@@ -238,11 +272,16 @@ class TimelineCommandService:
                 clips=tuple(moved if item.clip_id == clip.clip_id else item for item in track.clips),
             )
             updated = self._replace_track(timeline, track.track_id, replacement)
-            self.timelines.save(project_id, updated)
         except TimelineError as exc:
             raise TimelineCommandError(str(exc)) from exc
+        transaction_id = self._commit_timeline(
+            project_id,
+            command="move_clip",
+            timeline=updated,
+        )
         return TimelineCommandResult(
             command="move_clip",
+            transaction_id=transaction_id,
             track_id=track.track_id,
             clip_id=clip.clip_id,
             timeline=updated,
@@ -267,11 +306,16 @@ class TimelineCommandService:
                 clips=tuple(trimmed if item.clip_id == clip.clip_id else item for item in track.clips),
             )
             updated = self._replace_track(timeline, track.track_id, replacement)
-            self.timelines.save(project_id, updated)
         except TimelineError as exc:
             raise TimelineCommandError(str(exc)) from exc
+        transaction_id = self._commit_timeline(
+            project_id,
+            command="trim_clip",
+            timeline=updated,
+        )
         return TimelineCommandResult(
             command="trim_clip",
+            transaction_id=transaction_id,
             track_id=track.track_id,
             clip_id=clip.clip_id,
             timeline=updated,
@@ -291,11 +335,16 @@ class TimelineCommandService:
                 clips=tuple(item for item in track.clips if item.clip_id != clip.clip_id),
             )
             updated = self._replace_track(timeline, track.track_id, replacement)
-            self.timelines.save(project_id, updated)
         except TimelineError as exc:
             raise TimelineCommandError(str(exc)) from exc
+        transaction_id = self._commit_timeline(
+            project_id,
+            command="remove_clip",
+            timeline=updated,
+        )
         return TimelineCommandResult(
             command="remove_clip",
+            transaction_id=transaction_id,
             track_id=track.track_id,
             clip_id=clip.clip_id,
             timeline=updated,

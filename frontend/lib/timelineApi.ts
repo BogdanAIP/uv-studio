@@ -115,7 +115,31 @@ export interface StudioTimelineCommandResult {
   command: StudioTimelineCommand['command'];
   track_id: string | null;
   clip_id: string | null;
+  transaction_id: string;
   timeline: StudioTimeline;
+}
+
+export interface ProjectTransactionEntry {
+  transaction_id: string;
+  command: string;
+  created_at: string;
+  changed_paths: string[];
+}
+
+export interface ProjectHistoryState {
+  schema_version: number;
+  cursor: number;
+  can_undo: boolean;
+  can_redo: boolean;
+  current_transaction_id: string | null;
+  entries: ProjectTransactionEntry[];
+}
+
+export interface ProjectHistoryOperationResult {
+  operation_id: string;
+  operation: 'undo' | 'redo';
+  transaction_id: string;
+  history: ProjectHistoryState;
 }
 
 async function apiError(response: Response, fallback: string): Promise<Error> {
@@ -168,6 +192,40 @@ export async function executeStudioTimelineCommand(
   );
   if (!response.ok) throw await apiError(response, 'Не удалось изменить timeline');
   return response.json();
+}
+
+export async function getProjectHistory(projectId: string): Promise<ProjectHistoryState> {
+  const response = await fetch(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/studio/history`,
+    { cache: 'no-store' },
+  );
+  if (!response.ok) throw await apiError(response, 'Не удалось загрузить историю проекта');
+  return response.json();
+}
+
+async function moveProjectHistory(
+  projectId: string,
+  operation: 'undo' | 'redo',
+): Promise<ProjectHistoryOperationResult> {
+  const response = await fetch(
+    `/api/uv/projects/${encodeURIComponent(projectId)}/studio/history/${operation}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    throw await apiError(
+      response,
+      operation === 'undo' ? 'Не удалось отменить действие' : 'Не удалось повторить действие',
+    );
+  }
+  return response.json();
+}
+
+export function undoProjectHistory(projectId: string): Promise<ProjectHistoryOperationResult> {
+  return moveProjectHistory(projectId, 'undo');
+}
+
+export function redoProjectHistory(projectId: string): Promise<ProjectHistoryOperationResult> {
+  return moveProjectHistory(projectId, 'redo');
 }
 
 export async function getStudioMLTProjection(projectId: string): Promise<StudioMLTProjection> {

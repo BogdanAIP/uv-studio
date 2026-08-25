@@ -2,22 +2,20 @@
 
 This is the durable queue behind the single handoff in `NEXT_TASK.md`. It does not authorize parallel implementation slices.
 
-D-063 is the current product-composition authority. Recipe/Stage/Product-Orchestrator work below is compatibility migration work unless explicitly described otherwise.
+D-064 and D-065 are the current product-composition and shared-production-semantics authorities. Recipe/Stage/Product-Orchestrator work below is compatibility migration work unless explicitly described otherwise.
 
-## P0 — Studio v2 editor spine
+## P0 — Shared production semantics / first micro-drama proof
 
-Active slice: `studio-v2-editor-spine` / PR #60.
+Next slice after Stage 12 lifecycle closure: `studio-v2-micro-drama-production-semantics`.
 
 Required proof:
 
-- generalize the existing D-033 `ProjectEditor` foundation into the normal Studio shell;
-- introduce one canonical UV-owned multitrack Timeline/Track/Clip document in Project Store;
-- add bounded timeline commands shared by GUI and programmatic callers;
-- import existing project-owned media into the Media Bin and add it to the timeline without recipe or Stage 8 authority;
-- close/reopen with identical canonical timeline state;
-- derive MLT engine state from the UV timeline rather than making MLT canonical;
-- produce a deterministic registered export/result;
-- preserve schema-v1 recipe projects behind compatibility paths.
+- shared Scene/Shot/Take/accepted-take contracts under `production/`;
+- micro-drama Story/Characters/Locations/continuity extensions referencing shared identities;
+- multiple Takes and one explicit accepted Take for a Shot;
+- accepted project-owned material projected to canonical Timeline through one transaction;
+- product-level undo/redo without split production/reference/timeline state;
+- one semantic command path shared by GUI, Agent, scripts and MCP callers.
 
 Freeze during this slice:
 
@@ -27,16 +25,16 @@ Freeze during this slice:
 - no second timeline engine;
 - no Agent-only mutation route.
 
-## P0 — Application transactions / undo boundary
+## P0 — Application transactions / undo boundary — active PR #65
 
-Next slice after editor-spine merge:
+Implemented under review:
 
-- introduce file-first `ProjectUnitOfWork` or equivalent transaction authority;
-- group multistep project/timeline mutations atomically;
-- add durable transaction identity for product-level undo/redo;
-- prove rollback does not leave split canonical state;
-- keep GUI, Agent, scripts and MCP on the same handlers;
-- replace central dispatch switches with registries/services where required by the growing command set.
+- file-first `ProjectUnitOfWork` with prepared journals and restart recovery;
+- one commit across production JSON, project references/assets and canonical Timeline;
+- durable portable transaction identity and project-level undo/redo;
+- exact rollback proof with no split canonical state;
+- shared timeline commands plus HTTP/Studio UI history controls;
+- transactional source-media and Studio-export registration.
 
 ## P1 — User-visible Model Registry
 
