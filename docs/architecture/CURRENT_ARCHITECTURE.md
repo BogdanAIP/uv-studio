@@ -6,6 +6,7 @@
 **Agent Harness donor/factoring decision:** D-066  
 **Product Truth verification decision:** D-067  
 **Desktop update/version decision:** D-068  
+**Stateful generative continuation decision:** D-069  
 **Editor foundation:** D-033
 
 This document is the primary architecture entry point for new development. Historical recovery documents, Recipe Registry flows, Product Orchestrator projections and numbered Stage workspaces are not competing target architectures.
@@ -118,6 +119,10 @@ Long-running, cost-bearing or externally mutating generation must be retry-safe.
 
 A provider-neutral `GenerationContract` constrains what a generation attempt may change. It should express fixed constraints, editable variables, forbidden changes and approved project references/keyframes where applicable. Provider adapters translate this semantic contract into provider-specific prompts/options; provider prompt text is not canonical production truth.
 
+For stateful/sequential generation, `GenerationContract` may also carry a provider-neutral `continuation_source_reference_id` pointing to prior project media. An execution offer must explicitly advertise `generation.continuation` before that field is accepted. The parent reference participates in the normalized request/idempotency digest and is recorded as parent -> child lineage in generated-media provenance.
+
+Continuation lineage is durable project truth; model-private execution state is not. KV/attention caches, latents, provider session handles, sliding history windows and anchor-frame caches remain adapter-owned, disposable optimizations. Losing such runtime state may reduce performance but must not erase or reinterpret the durable generation chain. InfinityEdit is a technology donor/candidate adapter for this pattern, not a required runtime or product authority. See D-069.
+
 ## Agent Harness donor boundary — D-066
 
 JarvisHub is the reference architecture/method donor for the future UV Studio Agent Harness.
@@ -203,7 +208,7 @@ For a feature declared user-visible and ready on `main`:
 
 Internal infrastructure may intentionally have no UI, but must be explicitly non-user-visible/not-ready rather than silently counted as product functionality.
 
-Current documentation is also product truth. `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `CURRENT_ARCHITECTURE.md`, authority indexes and machine-readable feature contracts must agree on narrow checkable facts. CI should validate explicit markers/references/contracts rather than attempt brittle semantic interpretation of arbitrary prose.
+Current documentation is also product truth. `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `CURRENT_ARCHITECTURE.md`, authority indexes and machine-readable feature contracts must agree on narrow machine-checkable facts. CI should validate explicit markers/references/contracts rather than attempt brittle semantic interpretation of arbitrary prose.
 
 See `docs/architecture/PRODUCT_TRUTH_CONTRACT.md`.
 
@@ -265,6 +270,7 @@ A tool may be especially useful in one direction without becoming a separate pro
 15. Do not declare a user-visible feature ready on `main` when its Product Truth Contract has an unresolved backend/frontend/evidence gap.
 16. Current architecture/project-context documents must distinguish as-built from target state and keep machine-checkable current facts synchronized.
 17. Stable desktop releases must update the maintained installation in place by default; clean-install success never substitutes for N-1 -> N upgrade proof.
+18. Do not persist provider-private continuation cache/latent/session state as canonical project data; sequential generation must be reconstructible from durable project media lineage and request provenance.
 
 ## Current implementation boundary after Stage 13
 
@@ -283,7 +289,7 @@ Stages 12 and 13 now provide the concrete lower foundation for generation and la
 - the shared Scene/Shot/Take contracts are proven outside micro-drama through the commercial direction;
 - Studio UI and browser tests prove the rich production path with real media.
 
-D-067 and D-068 are accepted target contracts, not claims that Product Truth contract validators or the desktop Update Service are already implemented.
+D-067, D-068 and D-069 are accepted target contracts; D-069's continuation lineage seam is being incorporated into the active Stage-14 generation foundation, while a real InfinityEdit/Helios adapter and continuation UI remain future Product Truth work.
 
 The next implementation slice is `studio-v2-model-registry-job-manager-generation`: user-visible Model Registry, project-scoped retry-safe Job Manager, bounded GenerationContract and first named generation -> Take candidate flow. It is also the first new major feature expected to satisfy the Product Truth contract shape across backend, frontend and E2E. Full Planner/Memory/Skills/Subagents remain later Agent Harness work.
 
@@ -303,4 +309,4 @@ They are **compatibility/migration code** unless a later accepted decision expli
 - useful targeted-edit, dubbing, music, continuity and media adapters should be extracted/reused rather than discarded;
 - legacy projects may remain readable/editable in an explicit compatibility mode without being assigned a fake Production Direction.
 
-See `docs/architecture/README.md`, D-064, D-065, D-066, D-067 and D-068.
+See `docs/architecture/README.md`, D-064, D-065, D-066, D-067, D-068 and D-069.
