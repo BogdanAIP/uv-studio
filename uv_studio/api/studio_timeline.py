@@ -23,6 +23,11 @@ from uv_studio.editor.timeline_commands import (
     TimelineCommandService,
     TrimClipCommand,
 )
+from uv_studio.production.directions import (
+    ProductionDirectionNotFound,
+    get_production_direction,
+    list_production_directions,
+)
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import (
     ProjectAlreadyExists,
@@ -41,8 +46,19 @@ class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ProductionDirectionPayload(_StrictModel):
+    direction_id: str
+    title: str
+    description: str
+    primary_input_label: str
+    workspace_sections: list[str]
+    default_tools: list[str]
+    featured: bool
+
+
 class CreateStudioProjectPayload(_StrictModel):
     title: str = Field(min_length=1, max_length=500)
+    direction_id: str = Field(min_length=1, max_length=128)
 
 
 class TimelineClipPayload(_StrictModel):
@@ -173,7 +189,14 @@ def _translate(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project already exists")
     if isinstance(
         exc,
-        (ProjectValidationError, TimelineCommandError, TimelineError, StudioMLTError, StudioRenderError),
+        (
+            ProjectValidationError,
+            ProductionDirectionNotFound,
+            TimelineCommandError,
+            TimelineError,
+            StudioMLTError,
+            StudioRenderError,
+        ),
     ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, CapabilityToolUnavailable):
@@ -191,30 +214,48 @@ def _translate(exc: Exception) -> HTTPException:
     )
 
 
+@router.get("/studio/directions", response_model=list[ProductionDirectionPayload])
+def get_studio_production_directions() -> list[ProductionDirectionPayload]:
+    """Return the product-level production directions available to new Studio projects."""
+
+    return [
+        ProductionDirectionPayload.model_validate(direction.to_dict())
+        for direction in list_production_directions()
+    ]
+
+
 @router.post("/studio", response_model=ProjectPayload, status_code=status.HTTP_201_CREATED)
 def create_studio_project(
     request: CreateStudioProjectPayload,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
-    """Create a Studio-first project without exposing recipe selection to the user.
+    """Create one Studio project with a product-level production direction.
 
-    Project schema v1 still requires ``recipe_id``. ``studio_v2`` is neutral
-    compatibility metadata only: Studio state, commands and rendering do not read it.
+    Direction affects production composition and UI context, not the underlying
+    project/timeline engine. Project schema v1 still requires ``recipe_id``;
+    ``studio_v2`` remains neutral compatibility metadata only.
     """
 
     try:
+        direction = get_production_direction(request.direction_id)
         project = store.create_project(
             title=request.title,
             recipe_id=_STUDIO_COMPAT_RECIPE_ID,
             extensions={
                 _STUDIO_EXTENSION_KEY: {
-                    "schema_version": 1,
-                    "product_model": "studio_first",
+                    "schema_version": 2,
+                    "product_model": "production_directions",
+                    "direction_id": direction.direction_id,
                 }
             },
         )
         return ProjectPayload.model_validate(project.to_dict())
-    except (ProjectValidationError, ProjectAlreadyExists, ProjectStoreError) as exc:
+    except (
+        ProductionDirectionNotFound,
+        ProjectValidationError,
+        ProjectAlreadyExists,
+        ProjectStoreError,
+    ) as exc:
         raise _translate(exc) from exc
 
 
