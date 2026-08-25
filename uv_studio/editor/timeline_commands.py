@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, replace
+from functools import wraps
 from typing import Any
 
 from uv_studio.projects.models import ProjectValidationError, validate_identifier
@@ -145,6 +146,17 @@ class TimelineCommandResult:
         }
 
 
+def _serialized_timeline_command(method):
+    """Hold the project-store lock across each timeline read/modify/commit."""
+
+    @wraps(method)
+    def wrapped(service, *args, **kwargs):
+        with service.project_store._lock:
+            return method(service, *args, **kwargs)
+
+    return wrapped
+
+
 class TimelineCommandService:
     """Single mutation authority for the canonical Studio timeline."""
 
@@ -193,6 +205,7 @@ class TimelineCommandService:
             raise TimelineCommandError(str(exc)) from exc
         return transaction.transaction_id
 
+    @_serialized_timeline_command
     def create_track(self, project_id: str, command: CreateTrackCommand) -> TimelineCommandResult:
         if not isinstance(command, CreateTrackCommand):
             raise TimelineCommandError("create_track requires CreateTrackCommand")
@@ -221,6 +234,7 @@ class TimelineCommandService:
             timeline=updated,
         )
 
+    @_serialized_timeline_command
     def add_clip(self, project_id: str, command: AddClipCommand) -> TimelineCommandResult:
         if not isinstance(command, AddClipCommand):
             raise TimelineCommandError("add_clip requires AddClipCommand")
@@ -257,6 +271,7 @@ class TimelineCommandService:
             timeline=updated,
         )
 
+    @_serialized_timeline_command
     def move_clip(self, project_id: str, command: MoveClipCommand) -> TimelineCommandResult:
         if not isinstance(command, MoveClipCommand):
             raise TimelineCommandError("move_clip requires MoveClipCommand")
@@ -287,6 +302,7 @@ class TimelineCommandService:
             timeline=updated,
         )
 
+    @_serialized_timeline_command
     def trim_clip(self, project_id: str, command: TrimClipCommand) -> TimelineCommandResult:
         if not isinstance(command, TrimClipCommand):
             raise TimelineCommandError("trim_clip requires TrimClipCommand")
@@ -321,6 +337,7 @@ class TimelineCommandService:
             timeline=updated,
         )
 
+    @_serialized_timeline_command
     def remove_clip(self, project_id: str, command: RemoveClipCommand) -> TimelineCommandResult:
         if not isinstance(command, RemoveClipCommand):
             raise TimelineCommandError("remove_clip requires RemoveClipCommand")

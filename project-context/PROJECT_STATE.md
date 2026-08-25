@@ -39,7 +39,7 @@ The slice now contains the complete application-foundation path under review:
 8. timeline commands, media registration and Studio export registration routed through the shared transaction authority;
 9. HTTP history/undo/redo plus Studio UI controls backed by canonical project history rather than browser-local state.
 
-Local proof currently passes 435 core tests, 228 API tests, frontend lint/build and high-severity dependency audit. Exact-head required checks remain the merge authority.
+Local proof currently passes 436 core tests, 228 API tests, frontend lint/build and high-severity dependency audit. Exact-head required checks remain the merge authority.
 
 ## Compatibility rule
 

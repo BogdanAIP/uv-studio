@@ -17,7 +17,7 @@ STUDIO_PRODUCT_MODEL = "production_directions"
 
 LEGACY_STUDIO_FIRST_SCHEMA_VERSION = 1
 LEGACY_STUDIO_FIRST_PRODUCT_MODEL = "studio_first"
-LEGACY_PRODUCTION_DIRECTIONS_SCHEMA_VERSION = 2
+PR63_PRODUCTION_DIRECTIONS_SCHEMA_VERSION = 2
 
 ProjectIdentityKind = Literal["modern_direction", "legacy_compatibility", "invalid_recovery"]
 CompatibilityKind = Literal[
@@ -115,12 +115,12 @@ def _is_legacy_studio_first(value: object) -> bool:
     )
 
 
-def _legacy_direction_v2(value: object) -> str | None:
+def _pr63_direction_v2(value: object) -> str | None:
     if not isinstance(value, Mapping):
         return None
     if set(value) != {"schema_version", "product_model", "direction_id"}:
         return None
-    if value.get("schema_version") != LEGACY_PRODUCTION_DIRECTIONS_SCHEMA_VERSION:
+    if value.get("schema_version") != PR63_PRODUCTION_DIRECTIONS_SCHEMA_VERSION:
         return None
     if value.get("product_model") != STUDIO_PRODUCT_MODEL:
         return None
@@ -173,16 +173,11 @@ def classify_project_identity(project: ProjectDocument) -> ProjectIdentityProjec
             ),
         )
 
-    legacy_direction = _legacy_direction_v2(raw_studio)
-    if legacy_direction is not None:
+    pr63_direction = _pr63_direction_v2(raw_studio)
+    if pr63_direction is not None:
         return ProjectIdentityProjection(
-            kind="legacy_compatibility",
-            direction_id=legacy_direction,
-            compatibility_kind="production_directions_v2",
-            reason=(
-                "pre-typed Production Direction metadata used schema_version 2; "
-                "explicit identity migration is required before direction-domain commands"
-            ),
+            kind="modern_direction",
+            direction_id=pr63_direction,
         )
 
     if not isinstance(raw_studio, Mapping):
@@ -211,6 +206,11 @@ def require_modern_studio_identity(project: ProjectDocument) -> StudioProjectIde
         )
     raw = project.extensions[STUDIO_EXTENSION_KEY]
     assert isinstance(raw, Mapping)
+    pr63_direction = _pr63_direction_v2(raw)
+    if pr63_direction is not None:
+        # PR #63 created this exact, already-valid Production Direction shape.
+        # Normalize its typed view without rewriting portable project bytes.
+        return StudioProjectIdentity(direction_id=pr63_direction)
     return StudioProjectIdentity.from_mapping(raw)
 
 

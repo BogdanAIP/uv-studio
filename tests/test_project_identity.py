@@ -39,7 +39,7 @@ class ProjectIdentityTests(unittest.TestCase):
         self.assertEqual(identity.direction_id, "micro_drama")
         self.assertEqual(classify_project_identity(project).kind, "modern_direction")
 
-    def test_pretyped_schema_version_two_is_explicit_legacy_compatibility(self) -> None:
+    def test_pr63_schema_version_two_remains_a_modern_direction(self) -> None:
         project = self.store.create_project(
             title="PR63-era",
             recipe_id=STUDIO_COMPAT_RECIPE_ID,
@@ -52,12 +52,14 @@ class ProjectIdentityTests(unittest.TestCase):
                 }
             },
         )
-        projection = classify_project_identity(project)
-        self.assertEqual(projection.kind, "legacy_compatibility")
-        self.assertEqual(projection.compatibility_kind, "production_directions_v2")
+        reloaded = ProjectStore(self.store.root).load_project(project.project_id)
+        projection = classify_project_identity(reloaded)
+        self.assertEqual(projection.kind, "modern_direction")
+        self.assertIsNone(projection.compatibility_kind)
         self.assertEqual(projection.direction_id, "commercial")
-        with self.assertRaises(StudioIdentityError):
-            require_modern_studio_identity(project)
+        identity = require_modern_studio_identity(reloaded)
+        self.assertEqual(identity.direction_id, "commercial")
+        self.assertEqual(identity.schema_version, 1)
 
     def test_tampered_unknown_direction_is_invalid_recovery(self) -> None:
         project = self.store.create_project(

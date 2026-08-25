@@ -46,6 +46,8 @@ Schema v1 still requires `recipe_id`; modern Studio projects use neutral compati
 
 Modern Studio identity is validated as a typed invariant on load, update and archive-import boundaries. Generic mutation cannot silently replace a valid Production Direction or convert compatibility identity into modern identity. Legacy and invalid projects remain explicit compatibility/recovery states rather than receiving a guessed direction.
 
+The exact schema-v2 Production Direction shape created by PR #63 remains a valid modern direction and is normalized to the current typed identity view without rewriting project bytes. New projects write the independent typed identity schema v1.
+
 Changing Production Direction in the future, if supported, should be an explicit semantic migration operation rather than an arbitrary `extensions` patch.
 
 ## Atomicity and transactions

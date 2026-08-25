@@ -137,6 +137,11 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     setProject(projectValue);
     setTimeline(timelineValue);
     setHistory(historyValue);
+    setLatestRender(current =>
+      current && projectValue.artifacts.some(artifact => artifact.id === current.artifact.id)
+        ? current
+        : null,
+    );
     setSelectedSourceId(current =>
       current && projectValue.sources.some(source => source.id === current)
         ? current
