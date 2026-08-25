@@ -1,7 +1,23 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "studio-v2-model-registry-job-manager-generation",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Implement the first truthful named-model generation vertical: backend-owned Model Registry, project-scoped retry-safe Job/Attempt lifecycle, provider-neutral GenerationContract, generated project media and Take candidate, Studio UI state, Product Truth contract and browser E2E through existing production/transaction authorities.",
+    "base_branch": "main",
+    "branch": "stage-14/model-registry-job-manager-generation",
+    "pull_request": null,
+    "write_scope": [
+      "uv_studio/**",
+      "frontend/**",
+      "tests/**",
+      "docs/**",
+      "project-context/**",
+      "ARCHITECTURE_PRINCIPLES.md"
+    ]
+  },
   "last_completed": {
     "id": "jarvishub-agent-donor-architecture",
     "pull_request": 67,
