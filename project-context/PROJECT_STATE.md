@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: architecture-authority-cleanup -->
 
 **Updated:** 2026-08-25
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-Active draft chore:
+Active review chore:
 
 - PR #64 — `chore: consolidate architecture authority`;
 - slice `architecture-authority-cleanup`;
