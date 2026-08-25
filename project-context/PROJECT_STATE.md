@@ -1,140 +1,108 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-editor-spine -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-production-directions -->
 
-**Updated:** 2026-08-24
+**Updated:** 2026-08-25
 
 **Repository:** `BogdanAIP/uv-studio`
 
 ## Current lifecycle
 
-Studio v2 editor-spine is merged and the repository is back in the explicit `idle` lifecycle required by D-038.
+Active draft slice:
 
-Completed slice:
+- PR #63 — `stage 11: restore Studio production directions`;
+- branch `stage-11/studio-v2-production-directions`;
+- base `main` at `44b5483a956a72b4532839b8f4222c1433bed8e4`;
+- previous completed slice: PR #61 `studio-v2-editor-spine`, merge `5be716ed44ac00f7d13cafb8b4ed038ddc24878b`.
 
-- PR #61 — `stage 10: establish Studio v2 editor spine`;
-- exact review head `713d55c0f8d6f8de09df12db07e74b2d39ef4f79`;
-- merge commit `5be716ed44ac00f7d13cafb8b4ed038ddc24878b`;
-- exact review CI run #2918 passed the complete permanent check set on Ubuntu and Windows;
-- review threads: none.
-
-The next declared handoff is `studio-v2-application-transactions`. It is not active until a new slice is initialized from this idle `main`.
-
-PR #59 was intentionally closed without merge after product review rejected the recipe/workspace/wizard-centered direction. PR #60 was a short-lived branch-name/lifecycle mismatch and was superseded without merge by #61. Neither is a maintained product baseline.
+The current slice corrects product composition before `studio-v2-application-transactions` begins.
 
 ## Architecture conclusion
 
-D-063 is the current long-term product-composition authority.
+D-064 is the current long-term product-composition authority. D-063 remains accepted for the shared Studio Core it established, but its prohibition on meaningful top-level production-direction choice is superseded.
 
-UV Studio is being developed as a **Studio-first professional video/AI editing workspace**:
+UV Studio is being developed as a **local-first AI production studio with multiple Production Directions over one shared Studio Core**.
 
-- the project is the primary product object, not a recipe;
-- normal Studio composition is Media Bin + Preview + Inspector/AI Tools + multitrack Timeline;
-- GUI, Agent, scripts and MCP converge on the same UV-owned semantic/application commands;
-- Project Store remains canonical;
-- MLT is a derived editor-engine projection, never project truth;
-- FFmpeg remains the first deterministic local export path;
-- Capability Registry, D-017 and MCP remain the replaceable execution/security layer underneath a future user-visible Model Registry;
-- targeted edit, dubbing, music, continuity, slideshow/visualizer and similar proven logic migrate into contextual Studio tools instead of top-level project modes.
-
-See:
-
-- `project-context/decisions/D-063-studio-first-product-architecture.md`;
-- `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`.
-
-## What is good and retained
-
-The architecture audit found a strong lower foundation that must not be rewritten:
-
-- Project Store, project-owned paths/references, archive/migrations and integrity checks;
-- D-033 editor foundation;
-- MLT behind a UV adapter and FFmpeg deterministic media paths;
-- UV-owned editor/domain command authority;
-- Capability Registry, offer selection and exact D-017 authorization;
-- MCP discovery/binding/execution boundaries;
-- targeted-edit, dubbing/translation, continuity and music domain/review logic where it protects real invariants;
-- previously proven Windows packaging/native-host engineering, to be selectively ported from archived #59 after the Studio product spine is accepted.
-
-## What is now compatibility/legacy
-
-Do not grow these as the long-term product center:
-
-- new-project identity based on `recipe_id`;
-- recipe-by-recipe Product Orchestrator growth;
-- Stage 6/Stage 8 as user-facing product structure;
-- specialized project workspaces when a contextual Studio tool can own the action;
-- legacy `/execution-plan` as a second modern truth;
-- old VideoClaw `/api/pipelines`, `/api/tasks`, `/api/sessions`, `/api/models`, `/api/project/*` frontend clients;
-- donor-era frontend `modelRegistry.ts` as the future model architecture.
-
-Compatibility code remains until callers are proven migrated; this is a strangler migration, not a delete-first rewrite.
-
-## Completed slice — Studio v2 editor spine
-
-PR #61 established the first real Studio-first vertical:
+Canonical composition:
 
 ```text
 Project
- -> Media Bin
- -> import existing image/video/audio
- -> shared UV timeline command
- -> canonical timeline/main.json
- -> close/reopen
- -> Preview/Timeline
- -> derived MLT projection
- -> bounded deterministic FFmpeg export
- -> registered project-owned export
+ -> Production Direction
+ -> direction-specific production documents where needed
+ -> shared Studio Core
+      Media / Assets
+      Preview / Canvas
+      Inspector / AI Tools
+      canonical Timeline
+      Project Unit of Work / Undo-Redo
+      Model Registry / Jobs
+      Agent / Commands
+      Export
 ```
 
-Merged properties:
+The initial Production Directions are:
 
-- Studio project creation no longer asks for recipe selection;
-- Studio runtime does not read a recipe to decide editing or export behavior;
-- canonical multitrack Video/Audio timeline is project-owned;
-- create-track/add/move/trim/remove mutations use `TimelineCommandService`;
-- MLT projection is derived only from canonical timeline state and keeps resolved host paths out of its public summary;
-- first renderer fails closed outside one contiguous active visual track plus at most one covering audio clip;
-- registered Studio exports are streamed through a Studio-scoped project-owned endpoint;
-- `/projects/{projectId}/studio` exposes Media Bin, Preview, Inspector/AI Tools and Timeline;
-- old recipe projects remain readable through explicit compatibility links.
+- `micro_drama` — Микродрама / сюжетное видео;
+- `commercial` — Реклама / продукт;
+- `music_video` — Музыкальный клип;
+- `narrated_video` — Видео с диктором;
+- `dub_battle` — Киноозвучка / Кинобатл;
+- `free_project` — Свободный проект.
 
-Schema v1 still requires a `recipe_id`; new Studio projects therefore carry neutral `studio_v2` compatibility metadata. Timeline, MLT and Studio render execution do not branch on that value.
+These directions are not recipes or execution engines. They organize domain state, navigation, production policy and Agent context while sharing Project Store, Timeline, models/jobs, commands and export infrastructure.
 
-## Open-source reuse rule
+Operation-level features such as targeted edit, ordinary dubbing/translation, photo-to-video, visualizer, action transfer, digital human and lip-sync remain contextual Studio tools rather than top-level project identities.
 
-Reuse-first remains a core strategy and is reaffirmed by D-063.
+## What remains good and retained
 
-Correct pattern:
+PR #61 remains the correct lower product spine and is not being reverted:
 
-`candidate -> license/evidence spike -> pin -> UV adapter/command -> needed primitive -> tests -> Studio tool`
+- Project Store, project-owned paths/references, archive/migrations and integrity checks;
+- canonical `timeline/main.json`;
+- D-033 editor foundation;
+- MLT behind a UV adapter and FFmpeg deterministic media/export paths;
+- `TimelineCommandService` and the GUI = Agent = scripts = MCP command rule;
+- Capability Registry, D-017 authorization and MCP boundaries;
+- existing targeted-edit, dubbing/translation, continuity and music domain/review logic where it protects real invariants;
+- Windows packaging/native-host engineering preserved as reference from archived #59.
 
-Rejected pattern:
+The Studio shell remains common. Production Directions compose around it instead of creating separate editor applications.
 
-`donor -> copy donor application/workflow/project model -> expose it as another UV mode`
+## Current implementation in PR #63
 
-This preserves the benefits of MLT, OpenCut, FFmpeg, Whisper-family tools, MCP servers and future open-source systems without allowing donor architecture to define UV Studio.
+The draft slice currently establishes:
+
+- new `uv_studio.production` layer independent of legacy recipes;
+- backend Production Direction catalog with six first-class directions;
+- Studio project creation requiring a `direction_id` while retaining neutral schema-v1 `recipe_id=studio_v2` compatibility metadata;
+- Studio extension schema v2 with `product_model=production_directions` and the selected `direction_id`;
+- task-oriented cards on `/projects`;
+- Class-C expectations that direction cards are visible while operation-level tool cards stay absent;
+- D-064 and durable architecture instructions so future work does not collapse back to one generic editor-only project.
+
+Full direction-specific production entities are intentionally not implemented in this slice. Micro-drama characters/locations/scenes/shots/takes, commercial brief/product/concepts, Music Map composition and dub-battle dialogue/cast/takes remain subsequent domain work over the shared core.
+
+## Compatibility / legacy
+
+Do not grow these as long-term product authority:
+
+- `recipe_id` as v2 project identity;
+- new `RecipeDefinition` entries for product features;
+- recipe-by-recipe Product Orchestrator growth;
+- Stage 6/Stage 8 product navigation;
+- separate project workspaces/engines per direction;
+- legacy `/execution-plan` as modern truth;
+- donor-era VideoClaw frontend/API model taxonomy.
+
+Compatibility code remains until callers are proven migrated; this is still a strangler migration.
 
 ## Verification status
 
-Exact review head `713d55c0f8d6f8de09df12db07e74b2d39ef4f79` passed CI run #2918:
-
-- development-context — success;
-- bootstrap Ubuntu — success;
-- bootstrap Windows — success;
-- app-baseline Ubuntu — success;
-- app-baseline Windows — success.
-
-Both app-baseline jobs passed API integration, real-media tests, frontend lint/audit/build and the browser user-outcome suite. The Class-C browser path proves visible Studio-first creation, media import, timeline create/add/trim, navigation away and reopen persistence, and real local export without recipe selection or direct Project Store seeding.
-
-This automated evidence is not human installed-Windows acceptance. No such human acceptance is claimed for this slice.
-
-Historical Release #395 on archived #59 remains evidence for Windows packaging/runtime engineering only. It is **not** human product acceptance and must not be reused as proof of Studio v2 behavior.
-
-`main` branch protection remains intentionally deferred per current development direction.
+PR #63 is still draft. Exact-head CI and final review evidence are not yet claimed. Before review, the implementation, context, tests and PR body must agree and all five permanent checks must pass on the exact review head.
 
 ## Next authorized slice
 
 `studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`.
 
-That slice must initialize from idle `main` and add Project Unit of Work, atomic multistep mutations and undo/redo identity before backend-owned Model Registry, Job Manager and the first named Image AI vertical.
+That slice must make Project Unit of Work / undo-redo span production-domain documents, project assets/references and canonical timeline state rather than hardening only timeline mutations.
