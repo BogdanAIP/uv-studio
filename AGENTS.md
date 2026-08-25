@@ -11,7 +11,7 @@ Before changing files, read in this order:
 3. `project-context/NEXT_TASK.md`
 4. `docs/architecture/CURRENT_ARCHITECTURE.md`
 5. `docs/architecture/README.md` — use its authority classification before reading older architecture files
-6. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 owns Production Direction composition, D-065 owns shared production semantics, D-033 owns the editor foundation**
+6. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 owns Production Direction composition, D-065 owns shared production semantics, D-066 owns the JarvisHub Agent Harness donor/factoring boundary, D-033 owns the editor foundation**
 7. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`
 8. `ARCHITECTURE_PRINCIPLES.md`
 9. `ROADMAP.md` — historical Stage detail is subordinate to current architecture/accepted decisions
@@ -62,11 +62,22 @@ D-064 and D-065 are mandatory for new product work.
 - Agent automation uses the same Studio/Application Commands as manual UI. No Agent-only mutation authority.
 - Modern Production Direction identity must be typed/validated. Legacy recipe projects may remain explicit compatibility projects without being assigned a fake direction.
 
+## JarvisHub Agent Harness donor boundary
+
+D-066 is mandatory when designing Jobs, generation orchestration or Agent runtime work.
+
+- JarvisHub is the reference architecture/method donor for the missing autonomous Agent Harness, **not** a replacement UV project/application foundation.
+- Adapt useful patterns for persistent agent loop, Planner/Tasks, Skills, context/memory compaction, functional subagents (`explore` / `plan` / `media` / `critic`), effects/policy, trace, background execution and evaluate/repair loops.
+- Carry JarvisHub-derived reliability patterns into the Job/generation foundation now: idempotency for long-running/cost-bearing/external execution, provider-neutral `GenerationContract`, durable attempts/provenance and effects visibility.
+- Do not introduce JarvisHub Canvas-as-source-of-truth, its generic node project model, PostgreSQL/Hono application authority or a parallel Protocol Bridge/tool registry.
+- Future Agent trace/evaluations/repair records reference canonical Project/Scene/Shot/Take/asset/Timeline identities; they do not become a second source of truth.
+- Agent, GUI, scripts and MCP converge on the same commands/models/jobs/capabilities and authorization boundaries.
+
 ## Reuse-first and programmable editing
 
-`ARCHITECTURE_PRINCIPLES.md`, D-033, D-064 and D-065 are mandatory. D-063 is supporting/partially superseded history, not independent product-composition authority.
+`ARCHITECTURE_PRINCIPLES.md`, D-033, D-064, D-065 and D-066 are mandatory. D-063 is supporting/partially superseded history, not independent product-composition authority.
 
-- Search/license-check/probe credible professional open-source components before building a general editor/media primitive.
+- Search/license-check/probe credible professional open-source components before building a general editor/media/agent primitive.
 - Record a concrete rejection before replacing a suitable mature component with custom infrastructure.
 - Reuse a donor's **needed primitive behind a UV-owned boundary**; do not inherit the donor application's project/workflow model merely because its code is useful.
 - MLT remains the selected timeline/editing engine behind the UV adapter; OpenCut Classic remains a selective editor-UX donor. Do not introduce a second canonical timeline engine without a superseding evidence-backed decision.
