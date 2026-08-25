@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-application-transactions -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-micro-drama-production-semantics -->
 
 **Updated:** 2026-08-25
 
@@ -9,44 +9,43 @@
 
 ## Current lifecycle
 
-Repository development state is idle on `main` after completion of:
+Active Stage 13 rich-production slice:
 
-- slice `studio-v2-application-transactions`;
-- PR #65;
-- merge commit `3b87aa0f0d0636bd7d410c8a9212aded8ec7c7be`.
-
-No feature branch is currently active. The single authorized handoff remains `studio-v2-micro-drama-production-semantics`.
+- slice `studio-v2-micro-drama-production-semantics`;
+- branch `stage-13/studio-v2-micro-drama-production-semantics`;
+- draft PR #66;
+- base idle `main` at `84dca67a0db261f84343e18a52762bfc230d0167`;
+- last completed Stage 12 / PR #65, merge `3b87aa0f0d0636bd7d410c8a9212aded8ec7c7be`.
 
 ## Current architecture authority
 
 - **D-064** — Production Directions over one shared Studio Core.
 - **D-065** — shared Production Semantic Core beneath directions.
-- **D-033** — MLT/editor foundation; canonical Timeline remains UV-owned.
+- **D-033** — canonical Timeline remains UV-owned; MLT remains derived.
 
-Stage 12 deliberately did not add rich Scene/Shot/AI features. It made the Project/Studio boundary safe enough for those features.
+A Shot is production meaning, not a Timeline Clip. Direction-specific data may reference shared production identities but must not fork Scene/Shot/Take infrastructure.
 
-## Stage 12 implementation state
+## Stage 13 implementation state
 
-The completed slice contains the application-foundation path:
+The draft now contains the first complete backend vertical path:
 
-1. typed backend-owned Production Direction identity;
-2. backend projection of `modern_direction` / `legacy_compatibility` / `invalid_recovery`;
-3. protected Studio identity across generic PATCH/save/import boundaries;
-4. recipe-free modern Studio/media API helpers and no implicit `general_video` core creation;
-5. bounded `production/` canonical storage for future D-065 documents;
-6. file-first `ProjectUnitOfWork` with prepared journals, exact rollback, restart recovery and portable durable history;
-7. project-level undo/redo across production documents, `project.json` references/assets and `timeline/main.json`;
-8. timeline commands, media registration and Studio export registration routed through the shared transaction authority;
-9. HTTP history/undo/redo plus Studio UI controls backed by canonical project history rather than browser-local state.
+1. strict shared `Scene`, `Shot`, `Take` and accepted-take contracts in `production/semantics.json`;
+2. micro-drama-only Story, Characters, Locations and per-scene continuity/canon in `production/micro_drama.json`;
+3. one `ProductionSemanticService` command boundary for shared semantic mutations;
+4. shared Scene/Shot/Take reuse proven from the commercial direction rather than hidden inside micro-drama;
+5. `accept_take` atomically updates accepted Shot state, the accepted project-owned media reference and `timeline/main.json` through Stage-12 `ProjectUnitOfWork`;
+6. accepted Shot state stores Timeline clip binding without making production state a second timeline;
+7. recipe-neutral Studio HTTP routes expose the same semantic handlers;
+8. core and API proof covers Scene -> Shot -> multiple Takes -> micro-drama context -> accepted Take -> canonical Timeline plus durable undo/redo.
 
-The exact merged review head passed 436 core tests, 228 API tests, frontend lint/build, high-severity dependency audit and all five permanent Ubuntu/Windows CI jobs. Three review findings covering command concurrency, PR-63 identity compatibility and stale export UI state were fixed and resolved before merge.
+CI and review hardening are still required before this slice can move from draft to review.
 
 ## Compatibility rule
 
-Legacy recipe projects and pre-D-064 `studio_first` projects remain readable as explicit compatibility projects. They do not receive a fake Production Direction. Invalid/tampered Studio identity is surfaced as recovery state rather than guessed by the frontend.
+Recipe/Product Orchestrator/Stage routes remain compatibility code. Stage 13 does not add a RecipeDefinition, Product-Orchestrator graph, numbered Stage workspace, direction-private editor engine or provider-specific domain identity.
 
-Recipe/Product Orchestrator/Stage routes remain compatibility code; new Studio modules must not depend on them merely to access neutral project services.
+Legacy/compatibility projects cannot execute modern direction production commands until they have valid modern Production Direction identity.
 
 ## Next handoff
 
-From idle `main`, `studio-v2-micro-drama-production-semantics` may now prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.
+After shared production semantics are green and merged, `studio-v2-model-registry-job-manager-generation` should add the backend-owned user-visible Model Registry, project-scoped Job Manager and first named AI generation path through the same application-command and transaction authority.
