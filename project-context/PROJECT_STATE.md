@@ -11,6 +11,7 @@
 
 Active draft chore:
 
+- PR #64 — `chore: consolidate architecture authority`;
 - slice `architecture-authority-cleanup`;
 - branch `chore/architecture-authority-cleanup`;
 - base `main` at `cf0b719540e35fd10ec9a6fac8c3b905500ec35b`;
