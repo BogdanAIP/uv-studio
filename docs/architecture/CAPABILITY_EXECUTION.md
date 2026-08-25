@@ -1,20 +1,23 @@
 # UV Studio Capability Execution
 
 **Status:** CURRENT SUPPORTING TECHNICAL CONTRACT  
-**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064
+**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064 / D-066
 
 ## Purpose
 
-Capability discovery, model/offer selection, permission and execution are separate concerns.
+Model identity, Job/Attempt lifecycle, capability discovery, offer selection, permission and exact execution are separate concerns.
 
 ```text
-semantic capability
+named Model / production intent
+  -> GenerationContract where applicable
+  -> project Job / Attempt
+  -> semantic capability
   -> registry offers
-  -> explicit SelectionPolicy / named-model mapping where applicable
+  -> explicit SelectionPolicy / named-model mapping
   -> ExecutionPreparation
   -> D-017 authorization when required
   -> exact execution adapter
-  -> bounded result/provenance
+  -> project-owned result + bounded provenance
 ```
 
 Installed software or registry ordering is never permission to contact a service or spend money.
@@ -30,6 +33,41 @@ When model identity materially affects the creative result, D-064 requires a use
 ## D-017
 
 Remote/hybrid execution requires explicit remote-execution consent. Potentially-paid/paid work additionally requires the applicable external-cost acknowledgement. Grants are short-lived, one-shot, process-local and bound to the exact project/capability/offer/policy/input identity; they are never portable project state.
+
+Job idempotency does not replace D-017. Replaying an idempotent request must not silently manufacture or widen authorization. The Job Manager may reuse already recorded successful output/provenance when the normalized idempotency identity matches, but any new external execution remains subject to the normal permission contract.
+
+## Long-running execution and idempotency
+
+D-066 requires the project Job Manager to protect long-running, cost-bearing or externally mutating execution from duplicate retries/replayed requests.
+
+The UV-native contract must bind an idempotency key to a stable normalized request/context digest covering the project/semantic target, named model, selected execution mapping and generation inputs/contract.
+
+Required behavior:
+
+- same key + materially different normalized request -> conflict/fail closed;
+- equivalent work already queued/running -> do not execute a second copy;
+- equivalent work already succeeded -> reuse/return recorded result rather than rerun expensive execution;
+- deliberate new creative attempt -> receives a new attempt identity rather than masquerading as an infrastructure retry;
+- failed/cancelled history remains durable enough for provenance and later Agent trace.
+
+## Generation Contract boundary
+
+A `GenerationContract` is provider-neutral production/execution intent attached to a generation request/attempt, not a provider prompt blob.
+
+It may constrain:
+
+- fixed semantic facts/references;
+- explicitly editable variables;
+- forbidden semantic changes;
+- approved project reference/keyframe identity where applicable.
+
+Provider adapters translate the contract to provider-specific prompt/options. Canonical production identities remain in UV project state.
+
+## Effects visibility
+
+For Job orchestration and future Agent policy/trace, the command/capability layer should expose relevant effects such as project mutation, Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost-bearing execution.
+
+Effects metadata describes risk/behavior. It does not itself grant execution permission or create a parallel JarvisHub-style Protocol Bridge.
 
 ## Project filesystem boundary
 
@@ -53,5 +91,8 @@ MCP execution and D-017 integration are implemented; older discovery-only descri
 8. User-significant model identity remains visible above this layer.
 9. Generated/reviewed media must be rebound to current project identity before acceptance/materialization.
 10. Multi-document acceptance/materialization commits through Project Unit of Work rather than ad-hoc partial writes.
+11. Retry/replay of an equivalent long-running/cost-bearing generation must not execute twice.
+12. Provider prompt text must not replace provider-neutral semantic generation constraints.
+13. Job/Attempt provenance remains historical even if later semantic acceptance is undone.
 
-Historical Stage-5 hardening findings are retained in Git history and tests; they are not the current next-slice definition. Current next work is the shared micro-drama production-semantics proof described by `project-context/NEXT_TASK.md`.
+Stage 13 has completed the shared production-semantics proof. Current next work is the Model Registry + retry-safe Job Manager + GenerationContract + first named generation-to-Take-candidate flow described by `project-context/NEXT_TASK.md`.
