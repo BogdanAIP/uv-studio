@@ -4,6 +4,8 @@
 **Product-composition decision:** D-064  
 **Shared production-semantics decision:** D-065  
 **Agent Harness donor/factoring decision:** D-066  
+**Product Truth verification decision:** D-067  
+**Desktop update/version decision:** D-068  
 **Editor foundation:** D-033
 
 This document is the primary architecture entry point for new development. Historical recovery documents, Recipe Registry flows, Product Orchestrator projections and numbered Stage workspaces are not competing target architectures.
@@ -52,6 +54,7 @@ Project
        Job Manager
        Agent Harness
        Export
+       Update UI / Update Service (desktop release layer)
   -> Capability / Adapter boundaries
   -> MLT / FFmpeg / MCP / local models / optional remote tools
 ```
@@ -71,6 +74,8 @@ Not every project must instantiate every production-semantic entity. `free_proje
 - **Job Manager** owns project-scoped long-running lifecycle, retry/idempotency and durable execution/generation provenance.
 - **Agent Harness** observes and acts through the same commands/models/jobs/capabilities as manual callers; it does not own a second project graph or private mutation path.
 - **Capability Registry / D-017 / adapters** own execution availability, authorization and transport, not product identity.
+- **Product Truth Contracts** are verification metadata that bind user-visible surfaces to those canonical authorities; they do not become runtime product state.
+- **Update Service** owns installed-application update discovery/download/verification/handoff; it does not own or rewrite Project Store data except through explicit supported migrations.
 
 ## Production semantics versus Timeline
 
@@ -171,6 +176,66 @@ Where relevant, the runtime should be able to inspect effects such as:
 
 Existing locality, availability, provider/adapters and D-017 authorization remain in the current Capability layer.
 
+## Product Truth and current-documentation consistency — D-067
+
+A user-visible feature is not complete merely because one implementation layer exists.
+
+The verification shape is:
+
+```text
+Current Documentation Consistency
+        +
+Product Surface Parity
+        +
+User Outcome Proof
+        =
+Product Truth
+```
+
+A machine-readable Product Truth Contract for a user-visible feature binds at minimum its stable feature identity, canonical command/query, backend/API surface, frontend entry point, canonical state/results, relevant capability/model/job/permission dependencies and E2E proof.
+
+For a feature declared user-visible and ready on `main`:
+
+- frontend UI must not advertise a non-existent/stub canonical backend/application path;
+- backend functionality must not be counted as a completed user feature when its required product surface is absent;
+- user-significant model/cost/progress/error semantics must remain truthful across layers;
+- a real user-outcome proof must exercise the intended path through the product UI.
+
+Internal infrastructure may intentionally have no UI, but must be explicitly non-user-visible/not-ready rather than silently counted as product functionality.
+
+Current documentation is also product truth. `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `CURRENT_ARCHITECTURE.md`, authority indexes and machine-readable feature contracts must agree on narrow checkable facts. CI should validate explicit markers/references/contracts rather than attempt brittle semantic interpretation of arbitrary prose.
+
+See `docs/architecture/PRODUCT_TRUTH_CONTRACT.md`.
+
+## Desktop update/version boundary — D-068
+
+The maintained desktop product uses one normal installation identity and supports in-place updates from the UI.
+
+Target user flow:
+
+```text
+Settings / About
+ -> Check for updates
+ -> show newer version + release notes
+ -> Download and update
+ -> verify digest/signature/artifact identity
+ -> controlled app shutdown
+ -> out-of-process updater/installer replacement
+ -> migrations when required
+ -> restart
+ -> healthy startup
+```
+
+Application/runtime files are replaceable; Project Store projects, user media, intended persistent settings and other user-owned data remain separately protected.
+
+GitHub Releases may be the initial distribution source, but the application consumes bounded machine-readable update metadata rather than scraping arbitrary release pages. The updater fails closed on integrity/signature mismatch.
+
+Release evidence must include both clean install and **N-1 -> N in-place upgrade** using representative project/settings state. A successful clean installation does not prove upgrade safety.
+
+Application version, Project Store schema version and production-domain schema versions remain separate identities.
+
+See `docs/architecture/DESKTOP_UPDATES.md`.
+
 ## Direction versus tool
 
 A direction answers **what kind of production is being organized**. A tool answers **what operation should be performed inside a project**.
@@ -197,6 +262,9 @@ A tool may be especially useful in one direction without becoming a separate pro
 12. Do not give the Agent a private write path or let Agent memory/trace become canonical project state.
 13. Do not execute a replayed long-running/cost-bearing generation twice when the normalized idempotency identity is the same.
 14. Do not make provider prompt text the canonical representation of production constraints.
+15. Do not declare a user-visible feature ready on `main` when its Product Truth Contract has an unresolved backend/frontend/evidence gap.
+16. Current architecture/project-context documents must distinguish as-built from target state and keep machine-checkable current facts synchronized.
+17. Stable desktop releases must update the maintained installation in place by default; clean-install success never substitutes for N-1 -> N upgrade proof.
 
 ## Current implementation boundary after Stage 13
 
@@ -215,7 +283,11 @@ Stages 12 and 13 now provide the concrete lower foundation for generation and la
 - the shared Scene/Shot/Take contracts are proven outside micro-drama through the commercial direction;
 - Studio UI and browser tests prove the rich production path with real media.
 
-The next implementation slice is `studio-v2-model-registry-job-manager-generation`: user-visible Model Registry, project-scoped retry-safe Job Manager, bounded GenerationContract and first named generation -> Take candidate flow. Full Planner/Memory/Skills/Subagents remain later Agent Harness work.
+D-067 and D-068 are accepted target contracts, not claims that Product Truth contract validators or the desktop Update Service are already implemented.
+
+The next implementation slice is `studio-v2-model-registry-job-manager-generation`: user-visible Model Registry, project-scoped retry-safe Job Manager, bounded GenerationContract and first named generation -> Take candidate flow. It is also the first new major feature expected to satisfy the Product Truth contract shape across backend, frontend and E2E. Full Planner/Memory/Skills/Subagents remain later Agent Harness work.
+
+Desktop Update Service/UI and packaged N-1 -> N upgrade verification belong to the Stage-9 desktop release/productization work; they must not be forgotten when preserved packaging work is resumed.
 
 ## Compatibility layer
 
@@ -231,4 +303,4 @@ They are **compatibility/migration code** unless a later accepted decision expli
 - useful targeted-edit, dubbing, music, continuity and media adapters should be extracted/reused rather than discarded;
 - legacy projects may remain readable/editable in an explicit compatibility mode without being assigned a fake Production Direction.
 
-See `docs/architecture/README.md`, D-064, D-065 and D-066.
+See `docs/architecture/README.md`, D-064, D-065, D-066, D-067 and D-068.
