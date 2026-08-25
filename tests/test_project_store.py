@@ -43,13 +43,13 @@ class ProjectStoreTests(unittest.TestCase):
             self.assertTrue((self.root / "prj_test" / name).is_dir())
 
     def test_restart_can_load_existing_project(self) -> None:
-        created = self.store.create_project(title="Persistent", project_id="prj_restart")
+        created = self.store.create_project(recipe_id="general_video", title="Persistent", project_id="prj_restart")
         restarted = ProjectStore(self.root)
         loaded = restarted.load_project("prj_restart")
         self.assertEqual(loaded.to_dict(), created.to_dict())
 
     def test_update_preserves_created_at_and_changes_data(self) -> None:
-        created = self.store.create_project(title="Before", project_id="prj_update")
+        created = self.store.create_project(recipe_id="general_video", title="Before", project_id="prj_update")
         source = ProjectReference(
             id="src_1",
             kind="source",
@@ -72,7 +72,7 @@ class ProjectStoreTests(unittest.TestCase):
     def test_nested_nonportable_values_are_rejected_at_model_boundaries(self) -> None:
         bad_project_id = "prj_bad_json"
         with self.assertRaises(ProjectValidationError):
-            self.store.create_project(
+            self.store.create_project(recipe_id="general_video",
                 title="Bad JSON",
                 project_id=bad_project_id,
                 settings={"nested": [{"value": float("nan")}]},
@@ -80,14 +80,14 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertFalse((self.root / bad_project_id).exists())
 
         with self.assertRaises(ProjectValidationError):
-            self.store.create_project(
+            self.store.create_project(recipe_id="general_video",
                 title="Bad Key",
                 project_id="prj_bad_key",
                 extensions={"nested": {1: "not-portable"}},
             )
 
         with self.assertRaises(ProjectValidationError):
-            self.store.create_project(
+            self.store.create_project(recipe_id="general_video",
                 title="Bad Tuple",
                 project_id="prj_bad_tuple",
                 settings={"nested": ("python-only-array",)},
@@ -104,14 +104,14 @@ class ProjectStoreTests(unittest.TestCase):
         recursive: list[object] = []
         recursive.append(recursive)
         with self.assertRaises(ProjectValidationError):
-            self.store.create_project(
+            self.store.create_project(recipe_id="general_video",
                 title="Recursive",
                 project_id="prj_recursive",
                 settings={"value": recursive},
             )
 
     def test_update_rejects_nonfinite_value_and_preserves_previous_document(self) -> None:
-        self.store.create_project(title="Stable", project_id="prj_update_json")
+        self.store.create_project(recipe_id="general_video", title="Stable", project_id="prj_update_json")
         path = self.store.project_path("prj_update_json")
         before = path.read_bytes()
 
@@ -125,7 +125,7 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertEqual(self.store.load_project("prj_update_json").title, "Stable")
 
     def test_save_strict_writer_rejects_mutated_reference_metadata(self) -> None:
-        self.store.create_project(title="Stable", project_id="prj_save_json")
+        self.store.create_project(recipe_id="general_video", title="Stable", project_id="prj_save_json")
         reference = ProjectReference(
             id="src_mutable",
             kind="source",
@@ -144,7 +144,7 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertEqual(self.store.load_project("prj_save_json").sources[0].metadata["score"], 1.0)
 
     def test_reopen_rejects_nonfinite_json_constant(self) -> None:
-        self.store.create_project(title="Nonfinite", project_id="prj_nonfinite")
+        self.store.create_project(recipe_id="general_video", title="Nonfinite", project_id="prj_nonfinite")
         path = self.store.project_path("prj_nonfinite")
         data = json.loads(path.read_text(encoding="utf-8"))
         data["settings"] = {"nested": {"value": float("nan")}}
@@ -155,9 +155,9 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertIn("non-finite", str(caught.exception).lower())
 
     def test_duplicate_project_is_rejected(self) -> None:
-        self.store.create_project(title="One", project_id="prj_duplicate")
+        self.store.create_project(recipe_id="general_video", title="One", project_id="prj_duplicate")
         with self.assertRaises(ProjectAlreadyExists):
-            self.store.create_project(title="Two", project_id="prj_duplicate")
+            self.store.create_project(recipe_id="general_video", title="Two", project_id="prj_duplicate")
 
     def test_missing_project_is_explicit(self) -> None:
         with self.assertRaises(ProjectNotFound):
@@ -165,7 +165,7 @@ class ProjectStoreTests(unittest.TestCase):
 
     def test_project_id_traversal_is_rejected(self) -> None:
         with self.assertRaises(ProjectValidationError):
-            self.store.create_project(title="Bad", project_id="../escape")
+            self.store.create_project(recipe_id="general_video", title="Bad", project_id="../escape")
         with self.assertRaises(ProjectValidationError):
             self.store.load_project("..\\escape")
 
@@ -176,7 +176,7 @@ class ProjectStoreTests(unittest.TestCase):
             ProjectReference(id="src_bad2", kind="source", path="C:\\outside.mp4")
 
     def test_resolve_project_file_rechecks_allowed_root_after_symlink_resolution(self) -> None:
-        project = self.store.create_project(title="Symlink boundary", project_id="prj_symlink")
+        project = self.store.create_project(recipe_id="general_video", title="Symlink boundary", project_id="prj_symlink")
         project_dir = self.store.project_directory(project.project_id)
         private = project_dir / "tasks" / "private.json"
         private.write_text('{"secret": true}\n', encoding="utf-8")
@@ -195,14 +195,14 @@ class ProjectStoreTests(unittest.TestCase):
             )
 
     def test_malformed_json_is_rejected(self) -> None:
-        self.store.create_project(title="Broken", project_id="prj_broken")
+        self.store.create_project(recipe_id="general_video", title="Broken", project_id="prj_broken")
         path = self.store.project_path("prj_broken")
         path.write_text("{not-json", encoding="utf-8")
         with self.assertRaises(ProjectStoreError):
             self.store.load_project("prj_broken")
 
     def test_newer_schema_is_rejected(self) -> None:
-        self.store.create_project(title="Future", project_id="prj_future")
+        self.store.create_project(recipe_id="general_video", title="Future", project_id="prj_future")
         path = self.store.project_path("prj_future")
         data = json.loads(path.read_text(encoding="utf-8"))
         data["schema_version"] = 999
@@ -212,7 +212,7 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertIn("newer than supported", str(caught.exception))
 
     def test_directory_id_must_match_document_id(self) -> None:
-        self.store.create_project(title="Mismatch", project_id="prj_match")
+        self.store.create_project(recipe_id="general_video", title="Mismatch", project_id="prj_match")
         path = self.store.project_path("prj_match")
         data = json.loads(path.read_text(encoding="utf-8"))
         data["project_id"] = "prj_other"
@@ -221,7 +221,7 @@ class ProjectStoreTests(unittest.TestCase):
             self.store.load_project("prj_match")
 
     def test_failed_atomic_replace_leaves_previous_document_intact(self) -> None:
-        self.store.create_project(title="Stable", project_id="prj_atomic")
+        self.store.create_project(recipe_id="general_video", title="Stable", project_id="prj_atomic")
         path = self.store.project_path("prj_atomic")
         before = path.read_bytes()
 
@@ -234,16 +234,16 @@ class ProjectStoreTests(unittest.TestCase):
         self.assertEqual(temporary_files, [])
 
     def test_list_projects_ignores_unrelated_directories(self) -> None:
-        self.store.create_project(title="Older", project_id="prj_a")
-        self.store.create_project(title="Newer", project_id="prj_b")
+        self.store.create_project(recipe_id="general_video", title="Older", project_id="prj_a")
+        self.store.create_project(recipe_id="general_video", title="Newer", project_id="prj_b")
         (self.root / "not-a-project").mkdir()
         projects = self.store.list_projects()
         self.assertEqual({item.project_id for item in projects}, {"prj_a", "prj_b"})
 
     def test_list_projects_isolates_corrupt_project_and_preserves_its_bytes(self) -> None:
-        self.store.create_project(title="Healthy A", project_id="prj_healthy_a")
-        self.store.create_project(title="Broken", project_id="prj_corrupt")
-        self.store.create_project(title="Healthy B", project_id="prj_healthy_b")
+        self.store.create_project(recipe_id="general_video", title="Healthy A", project_id="prj_healthy_a")
+        self.store.create_project(recipe_id="general_video", title="Broken", project_id="prj_corrupt")
+        self.store.create_project(recipe_id="general_video", title="Healthy B", project_id="prj_healthy_b")
         corrupt_path = self.store.project_path("prj_corrupt")
         corrupt_bytes = b"{not-json\n"
         corrupt_path.write_bytes(corrupt_bytes)

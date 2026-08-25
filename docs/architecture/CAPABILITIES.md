@@ -56,4 +56,4 @@ direction/domain intent
  -> project-owned result
 ```
 
-The next product slice is `studio-v2-application-transactions`; capability breadth is not the current architectural bottleneck.
+Stage 12 establishes the application transaction boundary. The next product slice proves shared production semantics in the micro-drama direction; capability breadth is still not the architectural bottleneck.

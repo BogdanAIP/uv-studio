@@ -49,7 +49,7 @@ class ReplacementPreparationApiTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.store = ProjectStore(self.root / "projects")
-        self.project = self.store.create_project(title="Replacement preparation")
+        self.project = self.store.create_project(recipe_id="general_video", title="Replacement preparation")
         self.project_dir = self.store.project_directory(self.project.project_id)
         (self.project_dir / "sources" / "source.mkv").write_bytes(b"source")
         self.registry = build_builtin_capability_registry()

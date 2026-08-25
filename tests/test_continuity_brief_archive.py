@@ -19,7 +19,7 @@ class ContinuityBriefArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source_store = ProjectStore(root / "source-projects")
-            project = source_store.create_project(
+            project = source_store.create_project(recipe_id="general_video",
                 title="Brief archive",
                 project_id="prj_brief",
             )

@@ -72,6 +72,29 @@ class DependencyContractTests(unittest.TestCase):
         self.assertIn("Import UV Studio server from core dependencies", text)
         self.assertIn("Import UV Studio server without vendor dependency installation", text)
 
+    def test_modern_studio_and_media_api_do_not_import_recipe_or_orchestrator_boundaries(self) -> None:
+        modern_modules = (
+            ROOT / "uv_studio" / "api" / "project_common.py",
+            ROOT / "uv_studio" / "api" / "studio_timeline.py",
+            ROOT / "uv_studio" / "api" / "project_media.py",
+        )
+        forbidden = (
+            "uv_studio.api.projects",
+            "uv_studio.api.recipes",
+            "uv_studio.orchestration",
+            "uv_studio.recipes",
+        )
+        for path in modern_modules:
+            text = path.read_text(encoding="utf-8")
+            for import_path in forbidden:
+                self.assertNotIn(import_path, text, f"{path.name} imports {import_path}")
+
+    def test_projects_ui_consumes_backend_owned_identity_projection(self) -> None:
+        text = (ROOT / "frontend" / "app" / "projects" / "page.tsx").read_text(encoding="utf-8")
+        self.assertIn("project.product_identity", text)
+        self.assertNotIn("project.extensions.studio", text)
+        self.assertNotIn("project.recipe_id === 'studio_v2'", text)
+
 
 if __name__ == "__main__":
     unittest.main()

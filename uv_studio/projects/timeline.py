@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-from .models import ProjectReference, ProjectValidationError, validate_identifier
+from .models import ProjectDocument, ProjectReference, ProjectValidationError, validate_identifier
 from .store import ProjectStore, ProjectStoreError
 
 TIMELINE_SCHEMA_VERSION = 1
@@ -335,6 +335,23 @@ class TimelineStore:
             self._validate_references(project_id, timeline)
         return timeline
 
+    def validate(
+        self,
+        project_id: str,
+        timeline: TimelineDocument,
+        *,
+        project: "ProjectDocument | None" = None,
+    ) -> TimelineDocument:
+        if not isinstance(timeline, TimelineDocument):
+            raise TimelineError("timeline validation requires TimelineDocument")
+        if timeline.timeline_id != MAIN_TIMELINE_ID:
+            raise TimelineError("only the main timeline is supported in schema v1")
+        canonical_project = project or self.project_store.load_project(project_id)
+        if canonical_project.project_id != project_id:
+            raise TimelineError("timeline project identity does not match project_id")
+        self._validate_references(project_id, timeline, project=canonical_project)
+        return timeline
+
     def save(self, project_id: str, timeline: TimelineDocument) -> TimelineDocument:
         if not isinstance(timeline, TimelineDocument):
             raise TimelineError("save requires TimelineDocument")
@@ -342,12 +359,18 @@ class TimelineStore:
             raise TimelineError("only the main timeline is supported in schema v1")
         with self.project_store._lock:
             self.project_store.load_project(project_id)
-            self._validate_references(project_id, timeline)
+            self.validate(project_id, timeline)
             self.project_store._atomic_write_json(self._path(project_id), timeline.to_dict())
         return timeline
 
-    def reference(self, project_id: str, reference_id: str) -> TimelineReference:
-        project = self.project_store.load_project(project_id)
+    def reference(
+        self,
+        project_id: str,
+        reference_id: str,
+        *,
+        project: "ProjectDocument | None" = None,
+    ) -> TimelineReference:
+        project = project or self.project_store.load_project(project_id)
         reference = next(
             (item for item in (*project.sources, *project.artifacts) if item.id == reference_id),
             None,
@@ -367,13 +390,19 @@ class TimelineStore:
             raise TimelineError(f"timeline reference must resolve to a regular project file: {reference_id!r}")
         return TimelineReference(reference=reference, path=path)
 
-    def _validate_references(self, project_id: str, timeline: TimelineDocument) -> None:
+    def _validate_references(
+        self,
+        project_id: str,
+        timeline: TimelineDocument,
+        *,
+        project: "ProjectDocument | None" = None,
+    ) -> None:
         resolved: dict[str, TimelineReference] = {}
         for track in timeline.tracks:
             for clip in track.clips:
                 item = resolved.get(clip.reference_id)
                 if item is None:
-                    item = self.reference(project_id, clip.reference_id)
+                    item = self.reference(project_id, clip.reference_id, project=project)
                     resolved[clip.reference_id] = item
                 reference = item.reference
                 if track.kind == "video" and reference.kind not in {"video", "image"}:

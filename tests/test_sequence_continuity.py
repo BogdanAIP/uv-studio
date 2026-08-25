@@ -22,7 +22,7 @@ class SequenceContinuityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Sequence continuity")
+        self.project = self.store.create_project(recipe_id="general_video", title="Sequence continuity")
         self.project_dir = self.store.project_directory(self.project.project_id)
         self.continuity = SequenceContinuityStore(self.store)
         self.source_a = self._register_video("src_a", "a.mp4", b"anchor-video", 4_000_000)

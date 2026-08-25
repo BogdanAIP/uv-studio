@@ -10,8 +10,10 @@ import {
   Loader2,
   MonitorPlay,
   Plus,
+  Redo2,
   Scissors,
   Trash2,
+  Undo2,
   Upload,
   Video,
 } from 'lucide-react';
@@ -19,17 +21,21 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from '
 import { getUVProject, type ProjectReference, type UVProject } from '@/lib/projectsApi';
 import {
   executeStudioTimelineCommand,
+  getProjectHistory,
   getStudioMLTProjection,
   getStudioTimeline,
   inferStudioMediaKind,
   renderStudioTimeline,
+  redoProjectHistory,
   studioExportMediaUrl,
   studioSourceMediaUrl,
   type StudioMLTProjection,
+  type ProjectHistoryState,
   type StudioRenderResult,
   type StudioTimeline,
   type StudioTimelineClip,
   type StudioTimelineTrack,
+  undoProjectHistory,
   uploadStudioMedia,
 } from '@/lib/timelineApi';
 
@@ -108,6 +114,7 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<UVProject | null>(null);
   const [timeline, setTimeline] = useState<StudioTimeline | null>(null);
   const [engine, setEngine] = useState<StudioMLTProjection | null>(null);
+  const [history, setHistory] = useState<ProjectHistoryState | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -122,12 +129,19 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [projectValue, timelineValue] = await Promise.all([
+    const [projectValue, timelineValue, historyValue] = await Promise.all([
       getUVProject(projectId),
       getStudioTimeline(projectId),
+      getProjectHistory(projectId),
     ]);
     setProject(projectValue);
     setTimeline(timelineValue);
+    setHistory(historyValue);
+    setLatestRender(current =>
+      current && projectValue.artifacts.some(artifact => artifact.id === current.artifact.id)
+        ? current
+        : null,
+    );
     setSelectedSourceId(current =>
       current && projectValue.sources.some(source => source.id === current)
         ? current
@@ -349,6 +363,16 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
     });
   }
 
+  function undo() {
+    if (!history?.can_undo || busy) return;
+    void mutate(() => undoProjectHistory(projectId));
+  }
+
+  function redo() {
+    if (!history?.can_redo || busy) return;
+    void mutate(() => redoProjectHistory(projectId));
+  }
+
   async function renderTimeline() {
     if (rendering || busy) return;
     setRendering(true);
@@ -397,6 +421,28 @@ export function StudioWorkspace({ projectId }: { projectId: string }) {
             <h1 className="mt-1 truncate text-xl font-semibold">{project.title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="inline-flex overflow-hidden rounded-lg border border-slate-700 bg-slate-950">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={busy || !history?.can_undo}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-300 transition hover:bg-slate-800 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-35"
+                title="Отменить последнее действие проекта"
+                aria-label="Отменить последнее действие проекта"
+              >
+                <Undo2 size={15} /> Отменить
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={busy || !history?.can_redo}
+                className="inline-flex items-center gap-1.5 border-l border-slate-700 px-3 py-2 text-slate-300 transition hover:bg-slate-800 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-35"
+                title="Повторить отменённое действие проекта"
+                aria-label="Повторить отменённое действие проекта"
+              >
+                <Redo2 size={15} /> Повторить
+              </button>
+            </div>
             <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-slate-400">
               timeline/main.json · v{timeline.schema_version}
             </span>

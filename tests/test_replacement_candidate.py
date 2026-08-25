@@ -23,7 +23,7 @@ class ReplacementCandidateTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Candidates")
+        self.project = self.store.create_project(recipe_id="general_video", title="Candidates")
         self.project_dir = self.store.project_directory(self.project.project_id)
         (self.project_dir / "sources" / "source.mkv").write_bytes(b"source")
         self.briefs = RangeContinuityBriefStore(self.store)

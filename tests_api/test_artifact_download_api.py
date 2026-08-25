@@ -17,7 +17,7 @@ class ArtifactDownloadApiTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
-        self.project = self.store.create_project(title="Artifact download")
+        self.project = self.store.create_project(recipe_id="general_video", title="Artifact download")
         self.client = TestClient(app)
 
     def tearDown(self) -> None:

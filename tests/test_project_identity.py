@@ -1,0 +1,193 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+
+from uv_studio.projects.archive import ARCHIVE_MANIFEST, export_project, import_project
+from uv_studio.projects.identity import (
+    STUDIO_COMPAT_RECIPE_ID,
+    StudioIdentityError,
+    classify_project_identity,
+    require_modern_studio_identity,
+    studio_project_extensions,
+)
+from uv_studio.projects.store import ProjectStore
+
+
+class ProjectIdentityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = ProjectStore(Path(self.tmp.name) / "projects")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_modern_identity_is_typed_and_uses_its_own_schema_version(self) -> None:
+        project = self.store.create_project(
+            title="Modern",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_modern_identity",
+            extensions=studio_project_extensions("micro_drama"),
+        )
+        identity = require_modern_studio_identity(project)
+        self.assertEqual(identity.schema_version, 1)
+        self.assertEqual(identity.product_model, "production_directions")
+        self.assertEqual(identity.direction_id, "micro_drama")
+        self.assertEqual(classify_project_identity(project).kind, "modern_direction")
+
+    def test_pr63_schema_version_two_remains_a_modern_direction(self) -> None:
+        project = self.store.create_project(
+            title="PR63-era",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_old_direction_identity",
+            extensions={
+                "studio": {
+                    "schema_version": 2,
+                    "product_model": "production_directions",
+                    "direction_id": "commercial",
+                }
+            },
+        )
+        reloaded = ProjectStore(self.store.root).load_project(project.project_id)
+        projection = classify_project_identity(reloaded)
+        self.assertEqual(projection.kind, "modern_direction")
+        self.assertIsNone(projection.compatibility_kind)
+        self.assertEqual(projection.direction_id, "commercial")
+        identity = require_modern_studio_identity(reloaded)
+        self.assertEqual(identity.direction_id, "commercial")
+        self.assertEqual(identity.schema_version, 1)
+
+    def test_tampered_unknown_direction_is_invalid_recovery(self) -> None:
+        project = self.store.create_project(
+            title="Legacy",
+            recipe_id="general_video",
+            project_id="prj_tampered_identity",
+        )
+        path = self.store.project_path(project.project_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["recipe_id"] = STUDIO_COMPAT_RECIPE_ID
+        raw["extensions"] = {
+            "studio": {
+                "schema_version": 1,
+                "product_model": "production_directions",
+                "direction_id": "unknown_direction",
+            }
+        }
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        reloaded = self.store.load_project(project.project_id)
+        projection = classify_project_identity(reloaded)
+        self.assertEqual(projection.kind, "invalid_recovery")
+        self.assertIn("unknown production direction", projection.reason or "")
+
+    def test_generic_update_cannot_change_or_remove_modern_identity(self) -> None:
+        project = self.store.create_project(
+            title="Protected",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_protected_identity",
+            extensions=studio_project_extensions("free_project"),
+        )
+        original = self.store.project_path(project.project_id).read_bytes()
+
+        with self.assertRaises(StudioIdentityError):
+            self.store.update_project(
+                project.project_id,
+                extensions=studio_project_extensions("micro_drama"),
+            )
+        self.assertEqual(self.store.project_path(project.project_id).read_bytes(), original)
+
+        with self.assertRaises(StudioIdentityError):
+            self.store.update_project(project.project_id, extensions={})
+        self.assertEqual(self.store.project_path(project.project_id).read_bytes(), original)
+
+    def test_generic_update_may_change_unrelated_metadata_while_preserving_identity(self) -> None:
+        project = self.store.create_project(
+            title="Protected",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_identity_unrelated",
+            extensions={**studio_project_extensions("free_project"), "demo": {"enabled": True}},
+        )
+        updated = self.store.update_project(
+            project.project_id,
+            title="Renamed",
+            extensions={
+                **studio_project_extensions("free_project"),
+                "demo": {"enabled": False},
+            },
+        )
+        self.assertEqual(updated.title, "Renamed")
+        self.assertFalse(updated.extensions["demo"]["enabled"])
+        self.assertEqual(classify_project_identity(updated).kind, "modern_direction")
+
+    def test_modern_identity_survives_archive_round_trip(self) -> None:
+        project = self.store.create_project(
+            title="Portable modern",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_modern_archive",
+            extensions=studio_project_extensions("commercial"),
+        )
+        archive = Path(self.tmp.name) / "modern.uvproj.zip"
+        export_project(self.store, project.project_id, archive)
+
+        imported_store = ProjectStore(Path(self.tmp.name) / "imported")
+        imported = import_project(imported_store, archive)
+        identity = require_modern_studio_identity(imported)
+        self.assertEqual(identity.direction_id, "commercial")
+        self.assertEqual(classify_project_identity(imported).kind, "modern_direction")
+
+    def test_tampered_archive_identity_is_rejected_before_canonical_commit(self) -> None:
+        project = self.store.create_project(
+            title="Portable protected",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            project_id="prj_tampered_archive",
+            extensions=studio_project_extensions("free_project"),
+        )
+        archive = Path(self.tmp.name) / "source.uvproj.zip"
+        tampered = Path(self.tmp.name) / "tampered.uvproj.zip"
+        export_project(self.store, project.project_id, archive)
+
+        with zipfile.ZipFile(archive, "r") as source:
+            project_name = "project/project.json"
+            project_data = json.loads(source.read(project_name).decode("utf-8"))
+            project_data["extensions"]["studio"]["direction_id"] = "unknown_direction"
+            project_bytes = (
+                json.dumps(project_data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+
+            manifest = json.loads(source.read(ARCHIVE_MANIFEST).decode("utf-8"))
+            record = next(item for item in manifest["files"] if item["path"] == project_name)
+            record["size"] = len(project_bytes)
+            record["sha256"] = hashlib.sha256(project_bytes).hexdigest()
+            manifest_bytes = (
+                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+
+            with zipfile.ZipFile(
+                tampered,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                allowZip64=True,
+            ) as output:
+                for info in source.infolist():
+                    if info.filename == ARCHIVE_MANIFEST:
+                        payload = manifest_bytes
+                    elif info.filename == project_name:
+                        payload = project_bytes
+                    elif info.is_dir():
+                        payload = b""
+                    else:
+                        payload = source.read(info.filename)
+                    output.writestr(info, payload)
+
+        imported_store = ProjectStore(Path(self.tmp.name) / "tampered-import")
+        with self.assertRaises(StudioIdentityError):
+            import_project(imported_store, tampered)
+        self.assertFalse(imported_store.project_path(project.project_id).parent.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

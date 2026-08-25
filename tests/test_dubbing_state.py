@@ -25,7 +25,7 @@ SOURCE_SHA256 = "a" * 64
 class DubbingStateTests(unittest.TestCase):
     def _project(self, root: Path) -> tuple[ProjectStore, str]:
         store = ProjectStore(root / "projects")
-        project = store.create_project(title="Dubbing test")
+        project = store.create_project(recipe_id="general_video", title="Dubbing test")
         source_path = store.project_directory(project.project_id) / "sources" / "source.mkv"
         source_path.write_bytes(b"project-owned-source")
         source = ProjectReference(

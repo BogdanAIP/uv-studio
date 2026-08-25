@@ -148,7 +148,7 @@ class CompressedSourceReinsertionEvidenceTests(unittest.TestCase):
     def test_mpeg4_source_exposes_whole_output_ffv1_size_and_time_cost(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Compressed reinsertion evidence")
+            project = store.create_project(recipe_id="general_video", title="Compressed reinsertion evidence")
             project_dir = store.project_directory(project.project_id)
             source = project_dir / "sources" / "compressed-source.mkv"
             replacement = project_dir / "artifacts" / "compressed-replacement.mkv"

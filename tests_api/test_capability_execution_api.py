@@ -47,7 +47,7 @@ class CapabilityExecutionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Execution API")
+        self.project = self.store.create_project(recipe_id="general_video", title="Execution API")
         self.registry = self._registry()
         self.executor = StubLocalExecutor()
         self.authorizations = OneShotAuthorizationStore()

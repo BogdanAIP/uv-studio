@@ -24,7 +24,7 @@ class SequenceContextTests(unittest.TestCase):
     def test_linked_context_exposes_only_current_approved_anchor_review_facts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Observed sequence context")
+            project = store.create_project(recipe_id="general_video", title="Observed sequence context")
             project_dir = store.project_directory(project.project_id)
 
             def register(reference_id: str, filename: str, payload: bytes, duration_us: int) -> None:

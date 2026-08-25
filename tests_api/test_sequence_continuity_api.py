@@ -19,7 +19,7 @@ class SequenceContinuityApiTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        created = self.client.post("/api/uv/projects", json={"title": "Sequence API"})
+        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Sequence API"})
         self.assertEqual(created.status_code, 201, created.text)
         self.project_id = created.json()["project_id"]
         self.project_dir = self.store.project_directory(self.project_id)

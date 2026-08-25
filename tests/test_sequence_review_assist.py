@@ -132,7 +132,7 @@ class SequenceReviewAssistTests(unittest.TestCase):
     def test_package_is_bounded_provider_neutral_and_project_relative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Assist package")
+            project = store.create_project(recipe_id="general_video", title="Assist package")
             service = self._prepare_linked_candidate(store, project.project_id)
 
             package = build_sequence_review_assist(
@@ -163,7 +163,7 @@ class SequenceReviewAssistTests(unittest.TestCase):
     def test_approved_vlm_suggestion_does_not_create_review_or_accept_take(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Assist no authority")
+            project = store.create_project(recipe_id="general_video", title="Assist no authority")
             service = self._prepare_linked_candidate(store, project.project_id)
             package = build_sequence_review_assist(
                 service,
@@ -213,7 +213,7 @@ class SequenceReviewAssistTests(unittest.TestCase):
     def test_stale_suggestion_is_rejected_after_plan_revision(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Assist stale")
+            project = store.create_project(recipe_id="general_video", title="Assist stale")
             service = self._prepare_linked_candidate(store, project.project_id)
             package = build_sequence_review_assist(
                 service,

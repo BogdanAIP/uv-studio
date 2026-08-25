@@ -109,7 +109,7 @@ class ReplacementReviewRealMediaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Replacement review real media")
+        self.project = self.store.create_project(recipe_id="general_video", title="Replacement review real media")
         self.project_dir = self.store.project_directory(self.project.project_id)
         self.source = self.project_dir / "sources" / "source.mkv"
         self.prepared = self.project_dir / "assets" / "prepared-red.mkv"

@@ -101,7 +101,7 @@ class MCPProjectOutputExecutionTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="MCP output")
+        self.project = self.store.create_project(recipe_id="general_video", title="MCP output")
         self.binding = MCPToolBinding(
             binding_id="binding_output",
             profile_id="profile_test",

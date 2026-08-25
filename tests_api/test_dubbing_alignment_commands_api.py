@@ -20,7 +20,7 @@ class DubbingAlignmentCommandsApiTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        created = self.client.post("/api/uv/projects", json={"title": "Alignment API"})
+        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Alignment API"})
         self.assertEqual(created.status_code, 201, created.text)
         self.project_id = created.json()["project_id"]
         self.source = self._source()

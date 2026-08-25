@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 
-from uv_studio.api.projects import ProjectReferencePayload, get_project_store
+from uv_studio.api.project_common import ProjectReferencePayload, get_project_store
 from uv_studio.capabilities.adapters.local_ffmpeg import LocalFFmpegAdapter
 from uv_studio.capabilities.builtin import build_builtin_capability_registry
 from uv_studio.capabilities.execution import (

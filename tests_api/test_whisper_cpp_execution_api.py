@@ -65,7 +65,7 @@ class WhisperCppExecutionApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Whisper transport")
+        self.project = self.store.create_project(recipe_id="general_video", title="Whisper transport")
         self.registry = self._registry()
         self.executor = StubWhisperExecutor()
         app.dependency_overrides[get_project_store] = lambda: self.store

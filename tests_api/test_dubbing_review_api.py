@@ -23,7 +23,7 @@ class DubbingReviewApiTests(unittest.TestCase):
         app.dependency_overrides[get_project_store] = lambda: self.store
         app.dependency_overrides[get_dubbing_loudness_measure] = lambda: self._measure_loudness
         self.client = TestClient(app)
-        created = self.client.post("/api/uv/projects", json={"title": "Dubbing review"})
+        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Dubbing review"})
         self.assertEqual(created.status_code, 201, created.text)
         self.project_id = created.json()["project_id"]
         media = ProjectSourceMediaStore(self.store)

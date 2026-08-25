@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from uv_studio.editor.timeline_commands import (
@@ -22,7 +24,7 @@ class StudioTimelineTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        project = self.store.create_project(title="Studio v2")
+        project = self.store.create_project(recipe_id="general_video", title="Studio v2")
         self.project_id = project.project_id
 
         video_path = self.store.resolve_project_file(
@@ -242,6 +244,28 @@ class StudioTimelineTests(unittest.TestCase):
                     clip_id="clip_wrong_kind",
                 ),
             )
+
+    def test_parallel_commands_do_not_lose_timeline_updates(self) -> None:
+        workers = 12
+        start = threading.Barrier(workers)
+
+        def create(index: int) -> str:
+            start.wait()
+            result = self.service.create_track(
+                self.project_id,
+                CreateTrackCommand(kind="video", track_id=f"trk_parallel_{index}"),
+            )
+            return result.transaction_id
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            transaction_ids = list(executor.map(create, range(workers)))
+
+        timeline = TimelineStore(self.store).load(self.project_id)
+        self.assertEqual(
+            {track.track_id for track in timeline.tracks},
+            {f"trk_parallel_{index}" for index in range(workers)},
+        )
+        self.assertEqual(len(set(transaction_ids)), workers)
 
 
 if __name__ == "__main__":

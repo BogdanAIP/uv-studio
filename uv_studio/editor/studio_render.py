@@ -12,15 +12,16 @@ import hashlib
 import json
 import tempfile
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
 from uv_studio.capabilities.execution import CapabilityToolFailed
-from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.models import ProjectReference, ProjectValidationError, utc_now_iso
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 from uv_studio.projects.timeline import TimelineClip, TimelineError, TimelineStore, TimelineTrack
+from uv_studio.projects.transactions import ProjectUnitOfWork
 
 from .studio_mlt import StudioMLTError, StudioMLTTimelineAdapter
 
@@ -368,9 +369,15 @@ class StudioTimelineRenderService:
                 },
             )
             project = self.project_store.load_project(project_id)
-            self.project_store.update_project(
-                project_id,
+            updated = replace(
+                project,
                 artifacts=(*project.artifacts, artifact),
+                updated_at=utc_now_iso(),
+            )
+            ProjectUnitOfWork(self.project_store).commit(
+                project_id,
+                command="register_studio_export",
+                documents={"project.json": updated.to_dict()},
             )
             return StudioRenderResult(
                 artifact=artifact,

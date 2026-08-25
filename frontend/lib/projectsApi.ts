@@ -5,6 +5,20 @@ export interface ProjectReference {
   metadata: Record<string, unknown>;
 }
 
+export type ProjectIdentityKind = 'modern_direction' | 'legacy_compatibility' | 'invalid_recovery';
+export type ProjectCompatibilityKind =
+  | 'recipe'
+  | 'studio_first'
+  | 'studio_unversioned'
+  | 'production_directions_v2';
+
+export interface ProjectIdentity {
+  kind: ProjectIdentityKind;
+  direction_id: string | null;
+  compatibility_kind: ProjectCompatibilityKind | null;
+  reason: string | null;
+}
+
 export interface UVProject {
   schema_version: number;
   project_id: string;
@@ -16,6 +30,7 @@ export interface UVProject {
   sources: ProjectReference[];
   artifacts: ProjectReference[];
   extensions: Record<string, unknown>;
+  product_identity: ProjectIdentity;
 }
 
 export type ExecutionCompatibility = 'available' | 'partial' | 'unavailable';
@@ -70,9 +85,10 @@ export interface ProjectExecutionPlan {
   } | null;
 }
 
+/** Compatibility-only recipe project creation. New Studio callers use createStudioProject(). */
 export interface CreateProjectInput {
   title: string;
-  recipe_id?: string;
+  recipe_id: string;
   settings?: Record<string, unknown>;
   extensions?: Record<string, unknown>;
 }

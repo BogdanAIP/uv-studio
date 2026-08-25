@@ -3,12 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, FolderOpen, Import, Plus, Wrench } from 'lucide-react';
-import {
-  importUVProjectArchive,
-  listUVProjects,
-  type UVProject,
-} from '@/lib/projectsApi';
+import { AlertTriangle, ArrowRight, FolderOpen, Import, Plus, Wrench } from 'lucide-react';
+import { importUVProjectArchive, listUVProjects, type UVProject } from '@/lib/projectsApi';
 import {
   createStudioProject,
   listProductionDirections,
@@ -18,19 +14,6 @@ import {
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
-}
-
-function isStudioProject(project: UVProject): boolean {
-  const studio = project.extensions.studio;
-  return project.recipe_id === 'studio_v2'
-    || (typeof studio === 'object' && studio !== null && !Array.isArray(studio));
-}
-
-function projectDirectionId(project: UVProject): string | null {
-  const studio = project.extensions.studio;
-  if (typeof studio !== 'object' || studio === null || Array.isArray(studio)) return null;
-  const value = (studio as Record<string, unknown>).direction_id;
-  return typeof value === 'string' && value ? value : null;
 }
 
 export default function ProjectsPage() {
@@ -219,25 +202,25 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {projects.map(project => {
-              const studioProject = isStudioProject(project);
-              const directionId = projectDirectionId(project);
-              const direction = directionId ? directionById.get(directionId) : null;
+              const identity = project.product_identity;
+              const modern = identity.kind === 'modern_direction';
+              const invalid = identity.kind === 'invalid_recovery';
+              const direction = identity.direction_id ? directionById.get(identity.direction_id) : null;
               return (
-                <article
-                  key={project.project_id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/55 p-5"
-                >
+                <article key={project.project_id} className="rounded-2xl border border-slate-800 bg-slate-900/55 p-5">
                   <div className="mb-5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-medium text-white">{project.title}</h2>
                       <p className="mt-1 truncate font-mono text-xs text-slate-600">{project.project_id}</p>
                     </div>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] ${
-                      studioProject
+                      modern
                         ? 'bg-sky-950 text-sky-300'
-                        : 'bg-amber-950/70 text-amber-300'
+                        : invalid
+                          ? 'bg-red-950/70 text-red-300'
+                          : 'bg-amber-950/70 text-amber-300'
                     }`}>
-                      {studioProject ? (direction?.title ?? 'Studio') : 'Старый проект'}
+                      {modern ? (direction?.title ?? identity.direction_id ?? 'Studio') : invalid ? 'Требует восстановления' : 'Старый проект'}
                     </span>
                   </div>
 
@@ -252,14 +235,21 @@ export default function ProjectsPage() {
                     </div>
                   </div>
 
-                  <Link
-                    href={`/projects/${encodeURIComponent(project.project_id)}/studio`}
-                    className="flex w-full items-center justify-between rounded-lg bg-sky-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
-                  >
-                    Открыть Studio <ArrowRight size={15} />
-                  </Link>
+                  {invalid ? (
+                    <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-xs text-red-200">
+                      <div className="flex items-center gap-2 font-medium"><AlertTriangle size={14} /> Identity проекта повреждена</div>
+                      <p className="mt-2 text-red-300/70">{identity.reason ?? 'Требуется явное восстановление identity.'}</p>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/projects/${encodeURIComponent(project.project_id)}/studio`}
+                      className="flex w-full items-center justify-between rounded-lg bg-sky-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
+                    >
+                      Открыть Studio <ArrowRight size={15} />
+                    </Link>
+                  )}
 
-                  {!studioProject && (
+                  {!modern && !invalid && (
                     <Link
                       href={`/projects/${encodeURIComponent(project.project_id)}`}
                       className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-slate-800 px-4 py-2 text-xs text-slate-500 transition hover:border-slate-600 hover:text-slate-300"

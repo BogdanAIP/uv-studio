@@ -23,7 +23,7 @@ class SequenceReviewAssistBoundsTests(unittest.TestCase):
     def test_normalize_rejects_observations_over_declared_bound(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Review assist bounds")
+            project = store.create_project(recipe_id="general_video", title="Review assist bounds")
             project_dir = store.project_directory(project.project_id)
             media = b"bounded-review-assist-video"
             media_path = project_dir / "sources" / "candidate.mp4"

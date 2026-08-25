@@ -111,7 +111,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 
 Keep atomic file persistence, strict portable JSON, path/symlink protection, project-owned refs and archive integrity.
 
-Required adaptation before rich domain work:
+Stage-12 adaptation delivered for rich domain work:
 
 - typed Studio/Production Direction identity;
 - explicit legacy compatibility mode rather than fake modern direction;
@@ -129,11 +129,11 @@ MLT stays behind UV adapter; OpenCut is a selective UI/interaction donor; UV own
 
 ### Studio/Application commands — KEEP + ADAPT
 
-Current timeline commands are a valid first family. Grow shared handler registries, direction/domain commands, transaction identity and undo/redo. No Agent-only mutation path.
+Current timeline commands are the first family and already publish transaction identity through shared undo/redo. Grow shared handler registries and direction/domain commands through the same authority; no Agent-only mutation path.
 
-### Project Unit of Work — NEXT FOUNDATION
+### Project Unit of Work — CURRENT FOUNDATION
 
-Must coordinate Studio identity/project metadata, shared production semantics, direction extensions, refs/assets, generation/take records, Timeline and undo history.
+Coordinates Studio identity/project metadata, shared production documents, refs/assets, Timeline and undo history. Future generation/take commands use the same boundary.
 
 ```text
 AcceptTake(shot_12_3, take_4)
@@ -162,17 +162,18 @@ Optional capability/model/tool source. Discovery and execution are implemented b
 
 ## 7. Modern/legacy boundary findings from 2026-08-25 audit
 
-These are mandatory preconditions for `studio-v2-application-transactions`:
+Stage 12 resolves the mandatory preconditions for rich production semantics:
 
-1. `studio_timeline.py` and `project_media.py` import neutral `ProjectPayload`/`ProjectReferencePayload`/`get_project_store` from recipe-aware `api/projects.py`; extract a recipe-free project API/core dependency boundary.
-2. Generic project POST and `ProjectStore.create_project()` retain recipe-era creation semantics/defaults; modern application code must not inherit them accidentally.
-3. Studio identity is currently arbitrary `extensions.studio` JSON; generic PATCH/import can corrupt it and Studio endpoints do not have one typed identity gate.
-4. The initial extension uses `schema_version: 2`; define an actual Studio-metadata schema version rather than treating “Studio v2” as schema semantics.
-5. Legacy projects can open the mechanical Studio editor without modern direction identity. Keep that only as explicit compatibility; direction-specific semantic commands require valid modern identity or migration.
-6. Generic frontend `projectsApi.ts` still mixes neutral project access with recipe creation/execution-plan types; split modern/core vs legacy clients before new callers grow.
-7. `studio_timeline.py` already owns direction catalog/project creation in addition to Timeline routes; split application responsibilities as the command/UoW layer grows rather than allowing a timeline API module to become the Studio god-module.
+1. modern Studio/media APIs use recipe-free common project payload and store dependencies;
+2. core project creation no longer inherits an implicit recipe-era identity;
+3. typed Studio metadata and identity-transition checks protect load, PATCH/save and import;
+4. Studio metadata has its own schema version, independent from the “Studio v2” product name;
+5. legacy and invalid projects project explicit compatibility/recovery identities rather than a fake direction;
+6. modern frontend callers are separated from legacy creation/execution-plan contracts;
+7. direction/project creation, Timeline and transaction HTTP responsibilities have distinct modules;
+8. the shared unit of work provides durable transaction identity and undo/redo without turning MLT or the browser into state authority.
 
-None requires a rewrite; they are strangler-boundary debt.
+Remaining recipe/Product-Orchestrator surfaces are compatibility strangler debt, not blockers for the shared production-semantic slice.
 
 ## 8. Legacy/migration inventory
 

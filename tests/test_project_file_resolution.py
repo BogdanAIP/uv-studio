@@ -12,7 +12,7 @@ class ProjectFileResolutionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Paths")
+        self.project = self.store.create_project(recipe_id="general_video", title="Paths")
         self.project_dir = self.store.project_directory(self.project.project_id)
 
     def tearDown(self) -> None:

@@ -41,7 +41,7 @@ class StudioTimelineRenderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        project = self.store.create_project(title="Studio Render")
+        project = self.store.create_project(recipe_id="general_video", title="Studio Render")
         self.project_id = project.project_id
 
         first_path = self.store.resolve_project_file(

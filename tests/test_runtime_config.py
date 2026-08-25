@@ -121,7 +121,7 @@ class RuntimeConfigStoreTests(unittest.TestCase):
 
         root = Path(self.tempdir.name)
         project_store = ProjectStore(root / "projects")
-        project = project_store.create_project(title="Portable project")
+        project = project_store.create_project(recipe_id="general_video", title="Portable project")
         archive_path = export_project(
             project_store,
             project.project_id,

@@ -133,7 +133,7 @@ class MLTAdapterParityRealMediaTests(unittest.TestCase):
         _tool("melt")
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="MLT adapter parity")
+            project = store.create_project(recipe_id="general_video", title="MLT adapter parity")
             project_dir = store.project_directory(project.project_id)
             source = project_dir / "sources" / "blue.mkv"
             red = project_dir / "artifacts" / "red.mkv"

@@ -54,7 +54,7 @@ class FakeWhisperRunner:
 class WhisperCppAdapterTests(unittest.TestCase):
     def _fixture(self, root: Path):
         store = ProjectStore(root / "projects")
-        project = store.create_project(title="ASR adapter")
+        project = store.create_project(recipe_id="general_video", title="ASR adapter")
         media = ProjectSourceMediaStore(store)
         allocation = media.allocate(project.project_id, "source.mp4")
         allocation.absolute_path.write_bytes(b"fake-video")

@@ -146,7 +146,7 @@ class NonDestructiveTimelineRealMediaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
-        self.project = self.store.create_project(title="Two accepted edits")
+        self.project = self.store.create_project(recipe_id="general_video", title="Two accepted edits")
         self.project_dir = self.store.project_directory(self.project.project_id)
         self.source = self.project_dir / "sources" / "blue-source.mkv"
         self.red = self.project_dir / "artifacts" / "red-replacement.mkv"

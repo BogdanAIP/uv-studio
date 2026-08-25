@@ -19,7 +19,7 @@ class EditStateArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source_store = ProjectStore(root / "source-projects")
-            project = source_store.create_project(title="Portable edits", project_id="prj_edits")
+            project = source_store.create_project(recipe_id="general_video", title="Portable edits", project_id="prj_edits")
             project_dir = source_store.project_directory(project.project_id)
             (project_dir / "sources" / "source.mkv").write_bytes(b"source-media")
             (project_dir / "artifacts" / "replace-a.mkv").write_bytes(b"replacement-a")
@@ -62,7 +62,7 @@ class EditStateArchiveTests(unittest.TestCase):
     def test_corrupt_reopened_state_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
-            project = store.create_project(title="Corrupt edit state")
+            project = store.create_project(recipe_id="general_video", title="Corrupt edit state")
             project_dir = store.project_directory(project.project_id)
             state_path = project_dir / "timeline" / "range-edits.json"
             state_path.write_text(
