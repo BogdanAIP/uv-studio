@@ -1,31 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "studio-v2-micro-drama-production-semantics",
-    "kind": "stage",
-    "roadmap_stage": "studio-v2",
-    "goal": "Prove the shared D-065 Scene/Shot/Take production-semantic core through micro-drama Story/Characters/Locations/continuity extensions and one atomic accepted-Take projection to the canonical Timeline without creating direction-private production infrastructure.",
-    "base_branch": "main",
-    "branch": "stage-13/studio-v2-micro-drama-production-semantics",
-    "pull_request": 66,
-    "write_scope": [
-      "project-context/**",
-      "docs/**",
-      "uv_studio/api/**",
-      "uv_studio/production/**",
-      "uv_studio/projects/**",
-      "frontend/**",
-      "tests/**",
-      "tests_api/**",
-      "tests_browser/**",
-      "e2e/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "studio-v2-application-transactions",
-    "pull_request": 65,
-    "merge_commit": "3b87aa0f0d0636bd7d410c8a9212aded8ec7c7be"
+    "id": "studio-v2-micro-drama-production-semantics",
+    "pull_request": 66,
+    "merge_commit": "16409d2d01ce4ca2be3eab61a02a06655650f444"
   },
   "handoff": {
     "next_slice_id": "studio-v2-model-registry-job-manager-generation",
