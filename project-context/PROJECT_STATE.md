@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: studio-v2-application-transactions -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: studio-v2-application-transactions -->
 
 **Updated:** 2026-08-25
 
@@ -9,13 +9,13 @@
 
 ## Current lifecycle
 
-Active Stage 12 foundation slice:
+Repository development state is idle on `main` after completion of:
 
 - slice `studio-v2-application-transactions`;
-- branch `stage-12/studio-v2-application-transactions`;
-- PR #65 (draft);
-- base idle `main` at `a9c3c38b05e6ed37f8efdad9e28c340fce4a4854`;
-- last completed PR #64 `architecture-authority-cleanup`, merge `e213315643bf5d0b724c23bb725f10cda0a96e95`.
+- PR #65;
+- merge commit `3b87aa0f0d0636bd7d410c8a9212aded8ec7c7be`.
+
+No feature branch is currently active. The single authorized handoff remains `studio-v2-micro-drama-production-semantics`.
 
 ## Current architecture authority
 
@@ -23,11 +23,11 @@ Active Stage 12 foundation slice:
 - **D-065** — shared Production Semantic Core beneath directions.
 - **D-033** — MLT/editor foundation; canonical Timeline remains UV-owned.
 
-The current slice does not add rich Scene/Shot/AI features yet. It first makes the Project/Studio boundary safe enough for those features.
+Stage 12 deliberately did not add rich Scene/Shot/AI features. It made the Project/Studio boundary safe enough for those features.
 
 ## Stage 12 implementation state
 
-The slice now contains the complete application-foundation path under review:
+The completed slice contains the application-foundation path:
 
 1. typed backend-owned Production Direction identity;
 2. backend projection of `modern_direction` / `legacy_compatibility` / `invalid_recovery`;
@@ -39,7 +39,7 @@ The slice now contains the complete application-foundation path under review:
 8. timeline commands, media registration and Studio export registration routed through the shared transaction authority;
 9. HTTP history/undo/redo plus Studio UI controls backed by canonical project history rather than browser-local state.
 
-Local proof currently passes 436 core tests, 228 API tests, frontend lint/build and high-severity dependency audit. Exact-head required checks remain the merge authority.
+The exact merged review head passed 436 core tests, 228 API tests, frontend lint/build, high-severity dependency audit and all five permanent Ubuntu/Windows CI jobs. Three review findings covering command concurrency, PR-63 identity compatibility and stale export UI state were fixed and resolved before merge.
 
 ## Compatibility rule
 
@@ -49,4 +49,4 @@ Recipe/Product Orchestrator/Stage routes remain compatibility code; new Studio m
 
 ## Next handoff
 
-After this transaction foundation is reviewed, merged and lifecycle-closed, `studio-v2-micro-drama-production-semantics` will prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.
+From idle `main`, `studio-v2-micro-drama-production-semantics` may now prove the shared Scene/Shot/Take contracts plus micro-drama Story/Characters/Locations/continuity extensions.
