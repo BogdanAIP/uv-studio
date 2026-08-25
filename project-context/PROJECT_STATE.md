@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: jarvishub-agent-donor-architecture -->
 
 **Updated:** 2026-08-25
@@ -9,12 +9,12 @@
 
 ## Current lifecycle
 
-Repository has an active documentation/architecture slice from the Stage-13-closed `main` state:
+Repository has an active documentation/architecture slice in review from the Stage-13-closed `main` state:
 
 - active slice `jarvishub-agent-donor-architecture`;
 - branch `chore/jarvishub-agent-donor-architecture`;
 - base `main` at `e9b249124c48203c71d386a5fc997cbbfe61e3e6`;
-- draft PR #67;
+- PR #67 is the review integration PR;
 - the implementation handoff remains `studio-v2-model-registry-job-manager-generation` from `project-context/NEXT_TASK.md`.
 
 This slice changes durable architecture/development memory only; it does not add product runtime code.
