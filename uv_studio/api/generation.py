@@ -38,6 +38,11 @@ from uv_studio.generation.service import (
     GenerationServiceError,
     UnavailableGenerationExecutor,
 )
+from uv_studio.generation.test_support import (
+    Stage14E2ETestExecutor,
+    enabled as test_generation_enabled,
+    model_registry_with_test_model,
+)
 from uv_studio.production.semantics import ProductionSemanticError
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
@@ -75,10 +80,14 @@ class GenerationRetryRequest(BaseModel):
 def get_model_registry(
     capability_registry=Depends(get_capability_registry),
 ) -> ModelRegistry:
+    if test_generation_enabled():
+        return model_registry_with_test_model(capability_registry)
     return build_builtin_model_registry(capability_registry)
 
 
 def get_generation_executor() -> GenerationExecutor:
+    if test_generation_enabled():
+        return Stage14E2ETestExecutor()
     return UnavailableGenerationExecutor()
 
 
