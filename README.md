@@ -1,25 +1,38 @@
 # UV Studio
 
-Universal Video Studio — open-source desktop/local-first video production and editing workspace.
+Universal Video Studio — open-source desktop/local-first AI video production and editing workspace.
 
 The project is built by reusing proven open-source video-production components instead of rebuilding the whole stack. The initial technical base is the modern `video-claw/video-claw` application from `HITsz-TMG/VideoClaw`, pinned and tracked as upstream.
 
 ## Product scope
 
-UV Studio should support task-specific workflows instead of one mandatory pipeline:
+UV Studio uses one shared Studio Core with multiple **Production Directions**. A direction changes how a production is organized; it does not create a separate editor engine or choose a hidden AI provider.
 
-- general video creation;
-- narrated/explainer video;
-- story video;
-- music video;
-- dubbing/translation;
-- targeted editing of an existing video range;
-- photo-to-video;
+Initial directions:
+
+- **Микродрама / сюжетное видео** — story, characters, locations, scenes, shots, takes and continuity where needed;
+- **Реклама / продукт** — brief, product, brand, audience, concepts, shots and creative variants;
+- **Музыкальный клип** — song, Music Map, sections, visual direction, shots and rhythm-aware assembly;
+- **Видео с диктором** — script, voice, semantic segments, visual plan and subtitles;
+- **Киноозвучка / Кинобатл** — source scene, characters, dialogue lines, cast, takes and final mix;
+- **Свободный проект** — unconstrained Studio work without mandatory production-domain structure.
+
+All directions share the same Project Store, Media/Assets, Preview, canonical multitrack Timeline, Inspector/AI tools, Model Registry/Job Manager direction, application commands and export infrastructure.
+
+Operation-level features remain contextual Studio tools rather than project identities, including:
+
+- targeted range editing;
+- ordinary dubbing/translation;
+- photo-to-video/slideshow;
+- visualizer;
+- action transfer;
+- talking character/digital human;
 - performance/lip-sync;
-- commercial/product video;
-- free-form projects.
+- image/video/audio generation and transforms.
 
-Music, narration, story, characters, continuity and automatic review are optional capabilities, not requirements for every project.
+Music, narration, characters, continuity and specialized review state are optional domain capabilities, not mandatory fields for every project.
+
+See D-064 for the current product-composition architecture.
 
 ## Development source of truth
 
