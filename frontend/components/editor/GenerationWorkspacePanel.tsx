@@ -23,14 +23,21 @@ interface GenerationWorkspacePanelProps {
   onProjectChanged: () => void;
 }
 
+interface GenerationRequestDraft {
+  shot_id: string;
+  model_id: string;
+  inputs: Record<string, unknown>;
+  contract: GenerationContract;
+}
+
 interface PendingConsent {
   idempotencyKey: string;
-  request: {
-    shot_id: string;
-    model_id: string;
-    inputs: Record<string, unknown>;
-    contract: GenerationContract;
-  };
+  request: GenerationRequestDraft;
+  scopes: string[];
+}
+
+interface PendingRetryConsent {
+  job: GenerationJob;
   scopes: string[];
 }
 
@@ -74,6 +81,7 @@ export function GenerationWorkspacePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingConsent, setPendingConsent] = useState<PendingConsent | null>(null);
+  const [pendingRetryConsent, setPendingRetryConsent] = useState<PendingRetryConsent | null>(null);
   const notifiedJobs = useRef(new Set<string>());
 
   const load = useCallback(async () => {
@@ -141,23 +149,38 @@ export function GenerationWorkspacePanel({
     [jobs],
   );
 
-  function requestPayload() {
-    const contract: GenerationContract = {
-      fixed_constraints: lines(fixedText),
-      editable_variables: lines(editableText),
-      forbidden_changes: lines(forbiddenText),
-      approved_reference_id: null,
-    };
+  function requestPayload(): GenerationRequestDraft {
     return {
       shot_id: selectedShotId,
       model_id: selectedModelId,
       inputs: { prompt: prompt.trim() },
-      contract,
+      contract: {
+        fixed_constraints: lines(fixedText),
+        editable_variables: lines(editableText),
+        forbidden_changes: lines(forbiddenText),
+        approved_reference_id: null,
+      },
     };
   }
 
+  function requestFromJob(job: GenerationJob): GenerationRequestDraft {
+    return {
+      shot_id: job.request.shot_id,
+      model_id: job.request.model_id,
+      inputs: job.request.inputs,
+      contract: job.request.generation_contract,
+    };
+  }
+
+  function replaceJob(updated: GenerationJob) {
+    setJobs(current => [
+      ...current.filter(job => job.job_id !== updated.job_id),
+      updated,
+    ]);
+  }
+
   async function submitPrepared(
-    request: ReturnType<typeof requestPayload>,
+    request: GenerationRequestDraft,
     idempotencyKey: string,
     authorizationToken: string | null,
   ) {
@@ -166,10 +189,7 @@ export function GenerationWorkspacePanel({
       idempotency_key: idempotencyKey,
       authorization_token: authorizationToken,
     });
-    setJobs(current => {
-      const rest = current.filter(job => job.job_id !== result.job.job_id);
-      return [...rest, result.job];
-    });
+    replaceJob(result.job);
     if (result.job.status === 'succeeded' && !notifiedJobs.current.has(result.job.job_id)) {
       notifiedJobs.current.add(result.job.job_id);
       onProjectChanged();
@@ -185,6 +205,7 @@ export function GenerationWorkspacePanel({
     setBusy(true);
     setError(null);
     setPendingConsent(null);
+    setPendingRetryConsent(null);
     try {
       const request = requestPayload();
       const prepared = await prepareGeneration(projectId, request);
@@ -233,8 +254,7 @@ export function GenerationWorkspacePanel({
     setBusy(true);
     setError(null);
     try {
-      const updated = await cancelGeneration(projectId, job.job_id);
-      setJobs(current => current.map(item => item.job_id === updated.job_id ? updated : item));
+      replaceJob(await cancelGeneration(projectId, job.job_id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось отменить генерацию');
     } finally {
@@ -242,32 +262,50 @@ export function GenerationWorkspacePanel({
     }
   }
 
-  async function retry(job: GenerationJob) {
+  async function beginRetry(job: GenerationJob) {
     if (busy || job.status !== 'failed') return;
     setBusy(true);
     setError(null);
+    setPendingConsent(null);
+    setPendingRetryConsent(null);
     try {
       const prepared = await prepareGenerationRetry(projectId, job.job_id);
-      let token: string | null = null;
       if (prepared.authorization.authorization_required) {
-        const request = {
-          shot_id: job.request.shot_id,
-          model_id: job.request.model_id,
-          inputs: job.request.inputs,
-          contract: job.request.generation_contract,
-        };
-        const authorized = await authorizeGeneration(
-          projectId,
-          request,
-          prepared.authorization.consent_required,
-        );
-        token = authorized.authorization_token;
+        setPendingRetryConsent({
+          job,
+          scopes: prepared.authorization.consent_required,
+        });
+        return;
       }
-      await retryGeneration(projectId, job.job_id, token);
-      const nextJobs = await listGenerationJobs(projectId);
-      setJobs(nextJobs);
+      await retryGeneration(projectId, job.job_id, null);
+      setJobs(await listGenerationJobs(projectId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось повторить генерацию');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRetry() {
+    if (!pendingRetryConsent || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const request = requestFromJob(pendingRetryConsent.job);
+      const authorized = await authorizeGeneration(
+        projectId,
+        request,
+        pendingRetryConsent.scopes,
+      );
+      await retryGeneration(
+        projectId,
+        pendingRetryConsent.job.job_id,
+        authorized.authorization_token,
+      );
+      setPendingRetryConsent(null);
+      setJobs(await listGenerationJobs(projectId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось подтвердить повторный запуск');
     } finally {
       setBusy(false);
     }
@@ -445,6 +483,36 @@ export function GenerationWorkspacePanel({
         </button>
       )}
 
+      {pendingRetryConsent ? (
+        <div className="mt-3 rounded-xl border border-amber-800/70 bg-amber-950/25 p-3">
+          <p className="text-xs font-medium text-amber-200">Повторная попытка снова требует разрешения</p>
+          <p className="mt-1 text-[11px] text-amber-300/80">
+            Это повтор выполнения того же Job, а не новый творческий вариант.
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-[11px] text-amber-300/80">
+            {pendingRetryConsent.scopes.map(scope => <li key={scope}>{scopeLabel(scope)}</li>)}
+          </ul>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmRetry()}
+              disabled={busy}
+              className="rounded-lg bg-amber-300 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+            >
+              Подтвердить повторный запуск
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingRetryConsent(null)}
+              disabled={busy}
+              className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 disabled:opacity-40"
+            >
+              Не повторять
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? (
         <div className="mt-3 rounded-lg border border-red-900/70 bg-red-950/30 px-3 py-2 text-xs text-red-200">
           {error}
@@ -458,7 +526,7 @@ export function GenerationWorkspacePanel({
         ) : (
           <div className="mt-2 space-y-2">
             {latestJobs.map(job => {
-              const attempt = job.attempts.at(-1) ?? null;
+              const attempt = job.attempts.length > 0 ? job.attempts[job.attempts.length - 1] : null;
               return (
                 <div key={job.job_id} className="rounded-lg border border-slate-800 bg-slate-950/45 px-3 py-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -491,7 +559,7 @@ export function GenerationWorkspacePanel({
                       {job.status === 'failed' ? (
                         <button
                           type="button"
-                          onClick={() => void retry(job)}
+                          onClick={() => void beginRetry(job)}
                           disabled={busy}
                           className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-400 disabled:opacity-40"
                         >
