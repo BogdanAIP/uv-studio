@@ -1,7 +1,21 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "jarvishub-agent-donor-architecture",
+    "kind": "chore",
+    "roadmap_stage": "studio-v2",
+    "goal": "Record JarvisHub as the reference donor for UV Studio's future agent harness and carry its proven idempotency, effects, generation-contract and trace patterns into the next Model Registry/Job Manager/generation slice without replacing UV-owned project, production, timeline or transaction authority.",
+    "base_branch": "main",
+    "branch": "chore/jarvishub-agent-donor-architecture",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      "docs/**",
+      "AGENTS.md",
+      "UPSTREAM.md"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-micro-drama-production-semantics",
     "pull_request": 66,
