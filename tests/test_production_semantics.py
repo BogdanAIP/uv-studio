@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
+from unittest import mock
 
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.production.micro_drama import (
@@ -254,6 +257,56 @@ class ProductionSemanticServiceTests(unittest.TestCase):
                     ),
                 ),
             )
+
+    def test_parallel_semantic_commands_serialize_read_modify_commit(self) -> None:
+        project_id = self.project.project_id
+        first_loaded = Event()
+        release_first = Event()
+        second_started = Event()
+        second_entered_load = Event()
+        load_count = 0
+        original_load = self.service._load_semantics
+
+        def controlled_load(target_project_id: str):
+            nonlocal load_count
+            state = original_load(target_project_id)
+            load_count += 1
+            if load_count == 1:
+                first_loaded.set()
+                self.assertTrue(release_first.wait(timeout=5))
+            else:
+                second_entered_load.set()
+            return state
+
+        def create_second_scene():
+            second_started.set()
+            return self.service.create_scene(
+                project_id,
+                scene_id="scene_parallel_b",
+                title="Parallel B",
+            )
+
+        with mock.patch.object(self.service, "_load_semantics", side_effect=controlled_load):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(
+                    self.service.create_scene,
+                    project_id,
+                    scene_id="scene_parallel_a",
+                    title="Parallel A",
+                )
+                self.assertTrue(first_loaded.wait(timeout=5))
+                second = pool.submit(create_second_scene)
+                self.assertTrue(second_started.wait(timeout=5))
+                self.assertFalse(second_entered_load.wait(timeout=0.2))
+                release_first.set()
+                first.result(timeout=5)
+                second.result(timeout=5)
+
+        state = self.service.state(project_id)
+        self.assertEqual(
+            {scene.scene_id for scene in state.scenes},
+            {"scene_parallel_a", "scene_parallel_b"},
+        )
 
 
 if __name__ == "__main__":
