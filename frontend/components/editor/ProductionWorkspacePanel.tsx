@@ -22,7 +22,17 @@ function timelineEnd(timeline: StudioTimeline): number {
   );
 }
 
-export function ProductionWorkspacePanel({ projectId }: { projectId: string }) {
+interface ProductionWorkspacePanelProps {
+  projectId: string;
+  refreshRevision: number;
+  onProjectChanged: () => void;
+}
+
+export function ProductionWorkspacePanel({
+  projectId,
+  refreshRevision,
+  onProjectChanged,
+}: ProductionWorkspacePanelProps) {
   const [project, setProject] = useState<UVProject | null>(null);
   const [timeline, setTimeline] = useState<StudioTimeline | null>(null);
   const [history, setHistory] = useState<ProjectHistoryState | null>(null);
@@ -64,7 +74,7 @@ export function ProductionWorkspacePanel({ projectId }: { projectId: string }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, refreshRevision]);
 
   const visualSources = useMemo(
     () => project?.sources.filter(source => source.kind === 'video' || source.kind === 'image') ?? [],
@@ -74,6 +84,11 @@ export function ProductionWorkspacePanel({ projectId }: { projectId: string }) {
     () => visualSources.find(source => source.id === selectedSourceId) ?? null,
     [selectedSourceId, visualSources],
   );
+
+  const handleProjectChanged = useCallback(async () => {
+    await refresh();
+    onProjectChanged();
+  }, [onProjectChanged, refresh]);
 
   if (loading) {
     return (
@@ -131,7 +146,7 @@ export function ProductionWorkspacePanel({ projectId }: { projectId: string }) {
           selectedSource={selectedSource}
           timelineDurationUs={timelineEnd(timeline)}
           historyCursor={history.cursor}
-          onProjectChanged={refresh}
+          onProjectChanged={handleProjectChanged}
         />
       </div>
     </div>
