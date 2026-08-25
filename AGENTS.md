@@ -9,13 +9,17 @@ Before changing files, read in this order:
 1. `project-context/ACTIVE_SLICE.json`
 2. `project-context/PROJECT_STATE.md`
 3. `project-context/NEXT_TASK.md`
-4. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 is the current product-composition authority; D-063 remains the shared-Studio-core foundation it refines**
-5. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md` when present
-6. `ARCHITECTURE_PRINCIPLES.md`
-7. `ROADMAP.md` (historical stage detail is subordinate to later accepted decisions such as D-064)
-8. `UPSTREAM.md`
-9. the active PR if `lifecycle_state` is `draft` or `review`, including diff/checks/unresolved threads
-10. recent commits on `main`
+4. `docs/architecture/CURRENT_ARCHITECTURE.md`
+5. `docs/architecture/README.md` — use its authority classification before reading older architecture files
+6. `project-context/DECISIONS.md` and detailed decisions linked from current state — **D-064 is the current product-composition authority; D-033 is the editor foundation**
+7. `docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md`
+8. `ARCHITECTURE_PRINCIPLES.md`
+9. `ROADMAP.md` — historical Stage detail is subordinate to current architecture/accepted decisions
+10. `UPSTREAM.md`
+11. the active PR if `lifecycle_state` is `draft` or `review`, including diff/checks/unresolved threads
+12. recent commits on `main`
+
+Documents classified as `HISTORICAL`, `HISTORICAL SNAPSHOT` or `COMPATIBILITY` in `docs/architecture/README.md` are evidence/migration references only. Do not turn their old recipe/Product Orchestrator/Stage recommendations back into forward architecture unless a new accepted decision explicitly does so.
 
 Run `python tools/validate_development_context.py` before implementation.
 
@@ -33,8 +37,10 @@ Never continue work on a merged branch. A new slice starts only from an idle `ma
 
 - `ACTIVE_SLICE.json` owns lifecycle, active branch/PR identity when present, last completed merge identity, write scope, coordination policy, required checks and one handoff.
 - `PROJECT_STATE.md` describes the product as it exists now, verified behavior and current risks.
+- `docs/architecture/CURRENT_ARCHITECTURE.md` owns the compact current architecture shape.
+- `docs/architecture/README.md` classifies architecture documents as current, foundational, compatibility or historical.
 - `NEXT_TASK.md` describes exactly one continuation target.
-- `PROJECT_HISTORY.md`, decision records, merged/archived PRs and Git history hold completed detail.
+- `PROJECT_HISTORY.md`, superseded decision records, archived PRs and Git history hold completed/historical detail.
 - Exact active-head SHAs/check conclusions remain live GitHub facts.
 
 ## Production Directions over one Studio Core
@@ -53,7 +59,7 @@ D-064 is mandatory for new product work.
 
 ## Reuse-first and programmable editing
 
-`ARCHITECTURE_PRINCIPLES.md`, D-033, D-063 and D-064 are mandatory.
+`ARCHITECTURE_PRINCIPLES.md`, D-033 and D-064 are mandatory. D-063 is supporting/partially superseded history, not independent product-composition authority.
 
 - Search/license-check/probe credible professional open-source components before building a general editor/media primitive.
 - Record a concrete rejection before replacing a suitable mature component with custom infrastructure.
