@@ -11,6 +11,7 @@ from uv_studio.projects.models import ProjectValidationError, validate_identifie
 
 GENERATION_CONTRACT_SCHEMA_VERSION = 1
 MODEL_DEFINITION_SCHEMA_VERSION = 1
+GENERATION_FEATURE_CONTINUATION = "generation.continuation"
 _MAX_CONSTRAINTS = 64
 _MAX_TEXT = 4000
 
@@ -61,6 +62,7 @@ class GenerationContract:
     editable_variables: tuple[str, ...] = ()
     forbidden_changes: tuple[str, ...] = ()
     approved_reference_id: str | None = None
+    continuation_source_reference_id: str | None = None
     schema_version: int = GENERATION_CONTRACT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -83,15 +85,15 @@ class GenerationContract:
             "forbidden_changes",
             _text_tuple(self.forbidden_changes, field_name="forbidden_changes"),
         )
-        if self.approved_reference_id is not None:
+        for field_name in ("approved_reference_id", "continuation_source_reference_id"):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
             try:
-                normalized = validate_identifier(
-                    self.approved_reference_id,
-                    field_name="approved_reference_id",
-                )
+                normalized = validate_identifier(value, field_name=field_name)
             except ProjectValidationError as exc:
                 raise GenerationValidationError(str(exc)) from exc
-            object.__setattr__(self, "approved_reference_id", normalized)
+            object.__setattr__(self, field_name, normalized)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +102,7 @@ class GenerationContract:
             "editable_variables": list(self.editable_variables),
             "forbidden_changes": list(self.forbidden_changes),
             "approved_reference_id": self.approved_reference_id,
+            "continuation_source_reference_id": self.continuation_source_reference_id,
         }
 
     @classmethod
@@ -112,6 +115,7 @@ class GenerationContract:
             "editable_variables",
             "forbidden_changes",
             "approved_reference_id",
+            "continuation_source_reference_id",
         }
         unknown = set(data).difference(allowed)
         if unknown:
@@ -128,6 +132,7 @@ class GenerationContract:
             editable_variables=tuple(data.get("editable_variables", ())),
             forbidden_changes=tuple(data.get("forbidden_changes", ())),
             approved_reference_id=data.get("approved_reference_id"),
+            continuation_source_reference_id=data.get("continuation_source_reference_id"),
         )
 
 
@@ -195,6 +200,7 @@ class ModelDefinition:
                 "locality": offer.locality.value,
                 "cost_class": offer.cost_class.value,
                 "asynchronous": offer.asynchronous,
+                "features": list(offer.features),
             }
         return result
 
