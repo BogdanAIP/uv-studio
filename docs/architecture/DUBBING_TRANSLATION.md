@@ -1,66 +1,38 @@
 # Dubbing and Translation Architecture
 
-## Current status
+**Status:** CURRENT SUPPORTING DOMAIN CONTRACT  
+**Product role under D-064:** contextual Studio tool; distinct from `dub_battle`
 
-Stage 5 implementation is merged through PR #32. Dubbing composes the existing UV Project Store, Command API, Capability Registry, Review/Accept and render foundations; it does not create a second project or timeline model.
-
-## Canonical workflow
+## Canonical reusable workflow
 
 ```text
 project-owned source
-  -> imported transcript or whisper.cpp ASR draft
-  -> explicit transcript acceptance
-  -> optional manual/Argos translation draft
-  -> imported/recorded speech or D-017-authorized TTS
-  -> PreparedAudio / PreparedSpeech
-  -> optional WhisperX alignment draft
-  -> timing + loudness evidence
-  -> explicit Review
-  -> explicit AcceptedDubbingEdit
-  -> deterministic accepted visual+dubbing render
-  -> browser preview/export
-  -> optional WebVTT artifact
+ -> transcript / ASR draft
+ -> explicit transcript acceptance
+ -> optional translation draft
+ -> imported/recorded/synthesized speech
+ -> alignment/timing/loudness evidence
+ -> explicit Review
+ -> accepted dubbing state
+ -> deterministic render / subtitles
 ```
 
-Draft-producing model operations do not directly mutate accepted state.
+Draft-producing model operations do not directly mutate accepted state. Bindings remain project/source/script/audio identity-based; credentials and raw engine state stay outside portable project state.
 
-## Implemented reusable stack
+## Reusable implementation
 
-- **whisper.cpp** — local/free baseline for `speech.transcribe`;
-- **Argos Translate** — optional local/free `text.translate` adapter when runtime/language packages exist;
-- **Edge TTS** — reused remote/free synthesis path, still requiring D-017 remote consent;
-- **WhisperX** — optional heavy local-cache `audio.align` precision layer with no hidden downloads;
-- **FFmpeg/FFprobe** — deterministic probing, loudness evidence and final media composition;
-- **MLT** — existing editor/timeline projection engine behind the UV adapter;
-- **WebVTT exporter** — built-in deterministic subtitle projection from current canonical script/timing state.
+The repository contains tested local/optional components including whisper.cpp transcription, optional Argos translation, D-017-authorized remote synthesis compatibility, optional WhisperX alignment, FFmpeg/FFprobe media composition/evidence, MLT projection and deterministic WebVTT export.
 
-Optional model/runtime packages remain outside portable project state.
+Only execution modes backed by current capability evidence are advertised; unavailable separation/mix behavior remains fail-closed.
 
-## Canonical state
+## D-064 placement
 
-Typed/versioned state includes transcript, translation, PreparedSpeech, forced alignment, review and accepted dubbing. Bindings use exact project/source/script/audio identity; provider credentials and raw engine state are excluded.
+Ordinary dubbing/translation is a contextual tool that may be invoked inside any suitable Production Direction. It must migrate onto the shared Studio/Application Command + Project Unit of Work boundary rather than define a separate project engine.
 
-## Review/accept boundary
+`dub_battle` is different: it is a Production Direction organized around source scene, characters, dialogue, cast, recording takes and final mix. It may reuse this domain implementation without making ordinary dubbing a top-level project identity.
 
-D-035 requires server-owned timing/audio evidence plus explicit human content-fidelity and synchronization confirmation before approval. Accepted same-source dubbing ranges cannot overlap. Only `replace_source_audio_range` is currently executable; background-preserving/mix policies remain fail-closed pending D-036 separation evidence.
+## Current architectural debt
 
-## Rendering
+Existing dubbing state/API/UI is valuable compatibility/domain code, but some paths predate the modern Studio Core. Migration should preserve tested review/integrity behavior while moving user-facing actions into direction/tool surfaces and coordinated transactions.
 
-`video.render_dubbing` accepts canonical source identity, derives current accepted visual+dubbing decisions server-side, maps source-time dubbing through preceding visual edit duration deltas and replaces only accepted audio ranges. Real-media tests verify original audio before/after the target range and replacement audio inside it on Windows and Ubuntu.
-
-## Subtitles
-
-WebVTT export derives text/timestamps from current transcript or exact translation state, supports overlapping dialogue cues, escapes cue text and writes only a registered project-owned subtitle artifact downloadable through the bounded artifact route.
-
-## Post-merge hardening before Stage 6
-
-The audit after PR #32 identified correctness/quality gaps that are intentionally tracked as the next slice rather than hidden as “Stage 6 work”:
-
-- Review recency/current semantics must not use lexical UUID order;
-- an existing translation ID must not change target language/dubbing identity;
-- newly synthesized speech must become the explicit selected take;
-- mutation-vs-binding checks require transaction-sized locking;
-- critical accepted-media identity checks must verify current bytes where stored SHA is trusted;
-- browser E2E is still required by the roadmap user-outcome gate.
-
-These are targeted hardening items; they do not reopen the Stage 5 architecture or the D-033 editor-foundation choice.
+Historical Stage-5 hardening lists and PR-specific status are retained in Git history; they are not the current next-slice plan.

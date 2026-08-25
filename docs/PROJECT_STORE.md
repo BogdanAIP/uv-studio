@@ -1,63 +1,59 @@
 # UV Studio Project Store
 
+**Status:** CURRENT FOUNDATIONAL CONTRACT  
+**Product authority:** D-064 / `docs/architecture/CURRENT_ARCHITECTURE.md`
+
 UV Studio owns canonical project state independently of chat sessions, VideoClaw sessions and editor-engine files.
 
 ## Current role
 
-Project Store is the product authority for:
+Project Store owns:
 
 - versioned `project.json` metadata;
-- project-owned source/media references;
-- typed workflow state under `timeline/` and `reviews/`;
-- project artifacts/exports;
-- portable `.uvproj.zip` archive export/import;
-- atomic local persistence and schema migration checks.
+- project-owned source/asset/artifact references;
+- versioned production/domain documents;
+- canonical timeline and review state;
+- portable `.uvproj.zip` archive import/export;
+- strict project-relative path/integrity boundaries and atomic single-file persistence.
 
-MLT project data, FFmpeg commands, provider credentials and host-specific runtime configuration are not canonical project state.
+MLT state, FFmpeg commands, provider credentials and machine runtime configuration are not canonical project state.
 
-## Project layout
+## Layout
 
 ```text
-projects/
-└── prj_<id>/
-    ├── project.json
-    ├── sources/
-    ├── assets/
-    ├── tasks/
-    ├── artifacts/
-    ├── timeline/
-    ├── reviews/
-    └── exports/
+projects/prj_<id>/
+  project.json
+  sources/
+  assets/
+  tasks/
+  artifacts/
+  timeline/
+  reviews/
+  exports/
 ```
 
-The default development root is `data/projects/`; `UV_STUDIO_PROJECTS_DIR` can move it.
+Direction-specific documents should use deliberate versioned project-owned files rather than turning `project.json` into one universal film schema.
 
-## `project.json`
+## Project identity and Production Direction
 
-The universal schema remains deliberately small. It holds project identity/title/recipe, timestamps, general settings, source/artifact references and namespaced extensions. Specialized edit/dubbing/review state uses dedicated typed/versioned documents instead of making every workflow field mandatory in one universal JSON object.
+Schema v1 still requires `recipe_id`; modern Studio projects use neutral compatibility value `studio_v2`. Under D-064, the meaningful product composition is Studio metadata containing `product_model=production_directions` and a known `direction_id`.
 
-## References and paths
+**Current debt:** the v1 `extensions` mapping is generic JSON and the generic project update API can replace it. Creation validates `direction_id`, but the Project Store does not yet enforce Studio identity as a typed invariant on every modern load/update/import path. Before rich direction-domain/Agent work relies on it, the next application-foundation slice must introduce a validated Studio identity boundary and prevent arbitrary generic mutation from silently changing/corrupting it.
 
-`ProjectReference.path` is canonical project-relative data using `/` separators. Absolute paths, parent traversal and path escape are rejected. File-consuming operations additionally restrict allowed top-level roots and resolved symlinks.
+Changing Production Direction in the future, if supported, should be an explicit semantic migration operation rather than an arbitrary `extensions` patch.
 
-Source and prepared-audio APIs register project-owned files with media facts such as duration/size/hash. Current audit debt: critical Review/Accept/render boundaries must verify current file bytes where stored SHA identity is relied on; metadata hash alone must not become proof that a file was never externally changed.
+## Atomicity and transactions
 
-## Atomicity and concurrency
+Current Project Store writes use atomic replacement and an in-process re-entrant lock, preventing partial individual JSON writes. This is **not** a multi-document transaction.
 
-Metadata/state writers use atomic replacement and a process-local re-entrant Project Store lock for coordinated updates. Atomic file replacement prevents partial JSON writes.
+The next `ProjectUnitOfWork` foundation must coordinate one semantic operation across production/domain documents, references/assets, generation/take state, timeline and undo history with rollback on failure. MLT remains derived.
 
-The current product assumes one backend process owns a Project Store. Multi-process concurrency is not yet a support claim; if introduced later it requires explicit inter-process locking/revision semantics rather than relying on the current in-process lock.
+## Compatibility debt
 
-## Portable archives
+`ProjectStore.create_project()` and generic project APIs still carry recipe-era creation semantics/defaults. Modern Studio creation uses the dedicated Production Direction path, but the lower foundation should stop making `general_video` the implicit default so new backend/application code cannot accidentally create legacy identity.
 
-Project archive export/import is implemented. See `docs/PROJECT_ARCHIVES.md` for manifest hashing, traversal/symlink checks, staged validation and atomic import behavior.
+Legacy projects/imports remain readable until migration/caller proof supports removal.
 
-## Current APIs/UI
+## Portability and security
 
-UV-owned project APIs support create/list/read/update plus archive import/export and project-owned media workflows. The canonical frontend exposes `/projects` and `/projects/[projectId]`.
-
-The complete legacy VideoClaw FastAPI application is not the Project Store runtime authority and is not mounted by default.
-
-## Remaining general hardening
-
-`settings`, `extensions` and generic reference `metadata` intentionally remain flexible JSON-like mappings. Durable feature-specific state should continue to use explicit typed/versioned models. A future hardening slice should recursively reject non-finite/non-JSON/non-portable values before persistence without turning the small universal schema into one giant media ontology.
+`ProjectReference.path` is canonical project-relative data. Absolute paths, traversal and symlink escape are rejected; file-consuming operations additionally restrict allowed roots. Project archives use staged validation/integrity checks before atomic import. See `docs/PROJECT_ARCHIVES.md`.

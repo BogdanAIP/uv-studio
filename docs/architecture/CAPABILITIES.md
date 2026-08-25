@@ -1,14 +1,17 @@
 # UV Studio Capability Registry
 
+**Status:** CURRENT SUPPORTING TECHNICAL CONTRACT  
+**Product authority:** `CURRENT_ARCHITECTURE.md` / D-064
+
 ## Purpose
 
-Recipes/workflows depend on provider-neutral semantic capability IDs. `CapabilityRegistry` describes replaceable implementations without making registry metadata itself permission to execute.
+`CapabilityRegistry` describes provider-neutral semantic operations and replaceable execution offers. It sits **below** Production Directions, Studio tools and the future user-visible Model Registry. Capability metadata answers *how an operation can be executed*; it does not define project identity, production navigation or creative model choice.
 
 ```text
-Recipe / workflow
+Production Direction / Studio Tool / Application Command
+  -> optional user-visible Model selection
   -> semantic capability_id
-  -> CapabilityRegistry
-  -> CapabilityOffer
+  -> CapabilityRegistry / CapabilityOffer
   -> SelectionPolicy
   -> execution preparation / D-017 when required
   -> exact adapter
@@ -16,44 +19,41 @@ Recipe / workflow
 
 ## Current model
 
-- `CapabilityDefinition`: semantic operation, operation kind and input/output media kinds.
-- `AdapterDefinition`: implementation family such as local FFmpeg, direct MCP or exact native compatibility.
-- `CapabilityOffer`: one implementation of one capability with availability, locality, cost class and feature metadata.
+- `CapabilityDefinition` — semantic operation and typed input/output kinds.
+- `AdapterDefinition` — implementation family such as local FFmpeg, direct MCP or exact compatibility adapter.
+- `CapabilityOffer` — one implementation with availability, locality, cost class and bounded feature metadata.
 
-Provider credentials and portable project state do not live in these definitions.
+Credentials, provider secrets and machine-only runtime state do not enter portable project state.
 
 ## Current implementation families
 
-UV Studio currently has product-owned adapters for, among other operations:
+The repository has product-owned capability/adapters for deterministic FFmpeg/FFprobe media work, MLT projection behind the UV editor boundary, direct MCP discovery/execution, exact bounded VideoClaw compatibility, local whisper.cpp transcription, optional Argos translation, optional WhisperX alignment, WebVTT export and other tested domain operations.
 
-- FFmpeg/FFprobe deterministic media probing/range/edit/render/loudness work;
-- MLT editor/timeline projection behind the UV editor adapter;
-- direct MCP discovery/execution through explicit bindings;
-- exact native VideoClaw Edge TTS compatibility;
-- local whisper.cpp speech transcription;
-- optional local Argos Translate;
-- optional local-cache WhisperX alignment;
-- deterministic WebVTT subtitle export;
-- browser-preview projection from authoritative rendered artifacts.
-
-Optional runtimes can report `configuration_required`; absence must not trigger hidden installation/download or silent remote fallback.
+Optional runtimes may report `configuration_required`; absence must not cause hidden installation, hidden remote fallback or hidden spend.
 
 ## Selection and permission
 
-Offer ordering is convenience metadata. It is not authorization.
+Registry order is convenience metadata, not authorization.
 
-`local_free_first` may choose only `available + local + free`. Remote/hybrid or paid-capable offers require explicit policies and D-017 consent/cost handling as applicable.
-
-See `CAPABILITY_EXECUTION.md` and decisions D-013 through D-020.
+- `local_free_first` may choose only `available + local + free`.
+- explicit/pinned selection may target a known offer.
+- remote or non-free execution remains subject to D-017 and the exact execution contract.
+- a future Model Registry may map named creative models onto capabilities/offers, but Capability Registry itself must not hide user-significant model choice.
 
 ## Project-file boundary
 
-Adapters receive portable project identity/semantic inputs. Any translation to host filesystem paths is owned by the exact adapter/binding and restricted to approved Project Store roots. Generic callers do not receive a raw shell/FFmpeg surface.
+Adapters receive portable project identity and bounded semantic inputs. Translation to host paths occurs only inside the exact adapter/binding and remains constrained to allowed Project Store roots. Generic callers never receive a raw shell/FFmpeg command surface.
 
-## Reuse-first rule
+## D-064 boundary
 
-Before adding a new media/editor capability, evaluate mature professional open-source implementations. UV-owned custom code should normally be orchestration, typed contracts, validation and adapters around reusable components rather than a new general-purpose media engine.
+Do not add a RecipeDefinition or Production-Direction-specific capability stack. Directions and tools reuse the same capability layer. New product work should normally flow:
 
-## Current gaps
+```text
+direction/domain intent
+ -> Studio/Application Command or Tool Service
+ -> Model/Capability selection
+ -> bounded execution
+ -> project-owned result
+```
 
-The registry/execution architecture is established; current work is not “build Stage 3 execution”. Remaining work is capability breadth, stronger quality/integrity evidence and later provider additions. The next product hardening slice specifically closes Stage 5 correctness/browser user gates before Stage 6 continuity adds new semantic review/continuity capabilities.
+The next product slice is `studio-v2-application-transactions`; capability breadth is not the current architectural bottleneck.
