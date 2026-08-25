@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: architecture-authority-cleanup -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: architecture-authority-cleanup -->
 
 **Updated:** 2026-08-25
 
@@ -9,15 +9,12 @@
 
 ## Current lifecycle
 
-Active review chore:
+Idle after the architecture-authority cleanup:
 
-- PR #64 — `chore: consolidate architecture authority`;
-- slice `architecture-authority-cleanup`;
-- branch `chore/architecture-authority-cleanup`;
-- base `main` at `cf0b719540e35fd10ec9a6fac8c3b905500ec35b`;
-- previous completed slice: PR #63 `studio-v2-production-directions`, merge `4ff135ecd059acbce0fa8ff428ada8a47f6bc57b`.
-
-This chore changes repository architecture memory/authority and next-slice boundaries, not runtime behavior.
+- PR #64 — `chore: consolidate architecture authority` — merged;
+- completed slice `architecture-authority-cleanup`;
+- merge commit `e213315643bf5d0b724c23bb725f10cda0a96e95`;
+- next authorized slice: `studio-v2-application-transactions`.
 
 ## Current architecture authority
 
@@ -69,6 +66,6 @@ Legacy projects may remain explicitly readable/editable in compatibility mode wi
 
 ## Next authorized product slice
 
-`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`, remains next after this cleanup closes. It first hardens modern Studio identity/dependency/storage boundaries, then establishes Project Unit of Work + undo/redo across shared production semantics, direction extensions, assets and Timeline.
+`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`, is now authorized from this idle `main`. It first hardens modern Studio identity/dependency/storage boundaries, then establishes Project Unit of Work + undo/redo across shared production semantics, direction extensions, assets and Timeline.
 
 The first rich direction afterward is micro-drama, used to prove the **shared** Scene/Shot/Take model plus Story/Characters/Locations/continuity extensions. Then Model Registry, Job Manager and named AI generation follow through the same command/transaction authority.
