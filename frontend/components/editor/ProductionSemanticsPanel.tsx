@@ -61,6 +61,37 @@ function seconds(us: number): string {
   return (us / 1_000_000).toFixed(us % 1_000_000 === 0 ? 0 : 2);
 }
 
+interface ContinuityDraft {
+  sceneId: string;
+  locationId: string;
+  characterIds: string[];
+  canonFactsText: string;
+  notes: string;
+}
+
+const EMPTY_CONTINUITY_DRAFT: ContinuityDraft = {
+  sceneId: '',
+  locationId: '',
+  characterIds: [],
+  canonFactsText: '',
+  notes: '',
+};
+
+function continuityDraft(
+  sceneId: string,
+  entries: MicroDramaSceneContinuity[],
+): ContinuityDraft {
+  if (!sceneId) return EMPTY_CONTINUITY_DRAFT;
+  const saved = entries.find(item => item.scene_id === sceneId);
+  return {
+    sceneId,
+    locationId: saved?.location_id ?? '',
+    characterIds: saved?.character_ids ?? [],
+    canonFactsText: saved?.canon_facts.join('\n') ?? '',
+    notes: saved?.notes ?? '',
+  };
+}
+
 interface ProductionSemanticsPanelProps {
   projectId: string;
   project: UVProject;
@@ -102,13 +133,9 @@ export function ProductionSemanticsPanel({
   const [characterDescription, setCharacterDescription] = useState('');
   const [locationName, setLocationName] = useState('');
   const [locationDescription, setLocationDescription] = useState('');
-  const [continuitySceneId, setContinuitySceneId] = useState('');
-  const [continuityLocationId, setContinuityLocationId] = useState('');
-  const [continuityCharacterIds, setContinuityCharacterIds] = useState<string[]>([]);
-  const [canonFactsText, setCanonFactsText] = useState('');
-  const [continuityNotes, setContinuityNotes] = useState('');
+  const [continuityForm, setContinuityForm] = useState<ContinuityDraft>(EMPTY_CONTINUITY_DRAFT);
 
-  const hydrateMicroDrama = useCallback((document: MicroDramaDocument) => {
+  const hydrateMicroDrama = useCallback((document: MicroDramaDocument, sceneIds: string[]) => {
     setMicroDrama(document);
     setStoryTitle(document.story?.title ?? '');
     setStoryPremise(document.story?.premise ?? '');
@@ -116,6 +143,12 @@ export function ProductionSemanticsPanel({
     setCharacters(document.characters);
     setLocations(document.locations);
     setContinuity(document.scene_continuity);
+    setContinuityForm(current => {
+      const sceneId = current.sceneId && sceneIds.includes(current.sceneId)
+        ? current.sceneId
+        : sceneIds[0] ?? '';
+      return continuityDraft(sceneId, document.scene_continuity);
+    });
   }, []);
 
   const load = useCallback(async () => {
@@ -131,15 +164,12 @@ export function ProductionSemanticsPanel({
         ? current
         : productionValue.shots[0]?.shot_id ?? '',
     );
-    setContinuitySceneId(current =>
-      current && productionValue.scenes.some(scene => scene.scene_id === current)
-        ? current
-        : productionValue.scenes[0]?.scene_id ?? '',
-    );
     if (isMicroDrama) {
-      hydrateMicroDrama(await getMicroDramaDocument(projectId));
+      const document = await getMicroDramaDocument(projectId);
+      hydrateMicroDrama(document, productionValue.scenes.map(scene => scene.scene_id));
     } else {
       setMicroDrama(null);
+      setContinuityForm(EMPTY_CONTINUITY_DRAFT);
     }
   }, [hydrateMicroDrama, isMicroDrama, projectId]);
 
@@ -161,21 +191,6 @@ export function ProductionSemanticsPanel({
       window.clearTimeout(timer);
     };
   }, [historyCursor, load]);
-
-  useEffect(() => {
-    if (!continuitySceneId) {
-      setContinuityLocationId('');
-      setContinuityCharacterIds([]);
-      setCanonFactsText('');
-      setContinuityNotes('');
-      return;
-    }
-    const current = continuity.find(item => item.scene_id === continuitySceneId);
-    setContinuityLocationId(current?.location_id ?? '');
-    setContinuityCharacterIds(current?.character_ids ?? []);
-    setCanonFactsText(current?.canon_facts.join('\n') ?? '');
-    setContinuityNotes(current?.notes ?? '');
-  }, [continuity, continuitySceneId]);
 
   const referenceById = useCallback((referenceId: string): ProjectReference | null => {
     return project.sources.find(item => item.id === referenceId)
@@ -282,11 +297,7 @@ export function ProductionSemanticsPanel({
     if (!name) return;
     setCharacters(current => [
       ...current,
-      {
-        character_id: createId('char'),
-        name,
-        description: characterDescription.trim(),
-      },
+      { character_id: createId('char'), name, description: characterDescription.trim() },
     ]);
     setCharacterName('');
     setCharacterDescription('');
@@ -298,7 +309,10 @@ export function ProductionSemanticsPanel({
       ...item,
       character_ids: item.character_ids.filter(id => id !== characterId),
     })));
-    setContinuityCharacterIds(current => current.filter(id => id !== characterId));
+    setContinuityForm(current => ({
+      ...current,
+      characterIds: current.characterIds.filter(id => id !== characterId),
+    }));
   }
 
   function addLocation() {
@@ -306,11 +320,7 @@ export function ProductionSemanticsPanel({
     if (!name) return;
     setLocations(current => [
       ...current,
-      {
-        location_id: createId('loc'),
-        name,
-        description: locationDescription.trim(),
-      },
+      { location_id: createId('loc'), name, description: locationDescription.trim() },
     ]);
     setLocationName('');
     setLocationDescription('');
@@ -321,15 +331,23 @@ export function ProductionSemanticsPanel({
     setContinuity(current => current.map(item => (
       item.location_id === locationId ? { ...item, location_id: null } : item
     )));
-    if (continuityLocationId === locationId) setContinuityLocationId('');
+    setContinuityForm(current => ({
+      ...current,
+      locationId: current.locationId === locationId ? '' : current.locationId,
+    }));
+  }
+
+  function selectContinuityScene(sceneId: string) {
+    setContinuityForm(continuityDraft(sceneId, continuity));
   }
 
   function toggleContinuityCharacter(characterId: string) {
-    setContinuityCharacterIds(current =>
-      current.includes(characterId)
-        ? current.filter(item => item !== characterId)
-        : [...current, characterId],
-    );
+    setContinuityForm(current => ({
+      ...current,
+      characterIds: current.characterIds.includes(characterId)
+        ? current.characterIds.filter(item => item !== characterId)
+        : [...current.characterIds, characterId],
+    }));
   }
 
   function saveMicroDrama() {
@@ -342,19 +360,19 @@ export function ProductionSemanticsPanel({
       return;
     }
 
-    const canonFacts = canonFactsText
+    const canonFacts = continuityForm.canonFactsText
       .split('\n')
       .map(item => item.trim())
       .filter(Boolean);
-    const nextContinuity = continuitySceneId
+    const nextContinuity = continuityForm.sceneId
       ? [
-          ...continuity.filter(item => item.scene_id !== continuitySceneId),
+          ...continuity.filter(item => item.scene_id !== continuityForm.sceneId),
           {
-            scene_id: continuitySceneId,
-            character_ids: continuityCharacterIds,
-            location_id: continuityLocationId || null,
+            scene_id: continuityForm.sceneId,
+            character_ids: continuityForm.characterIds,
+            location_id: continuityForm.locationId || null,
             canon_facts: Array.from(new Set(canonFacts)),
-            notes: continuityNotes.trim(),
+            notes: continuityForm.notes.trim(),
           },
         ]
       : continuity;
@@ -371,7 +389,9 @@ export function ProductionSemanticsPanel({
           scene_continuity: nextContinuity,
         },
       });
-      if (result.micro_drama) hydrateMicroDrama(result.micro_drama);
+      if (result.micro_drama && production) {
+        hydrateMicroDrama(result.micro_drama, production.scenes.map(scene => scene.scene_id));
+      }
     });
   }
 
@@ -408,7 +428,7 @@ export function ProductionSemanticsPanel({
           </div>
           <h2 className="mt-2 text-base font-semibold text-slate-200">Сцены, кадры и дубли</h2>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
-            Кадр хранит производственный замысел и варианты дублей. Timeline остаётся монтажным представлением и получает только принятый материал.
+            Кадр хранит производственный замысел и варианты дублей. Timeline получает только принятый материал.
           </p>
         </div>
         <button
@@ -421,67 +441,47 @@ export function ProductionSemanticsPanel({
         </button>
       </div>
 
-      {error ? (
-        <div className="mt-3 rounded-xl border border-red-900/70 bg-red-950/35 px-3 py-2 text-xs text-red-200">
+      {error && (
+        <div className="mt-3 rounded-lg border border-red-900/70 bg-red-950/30 px-3 py-2 text-xs text-red-200">
           {error}
         </div>
-      ) : null}
+      )}
 
-      <div className="mt-4 grid gap-3 xl:grid-cols-3">
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <p className="text-xs font-medium text-slate-300">1. Сцена</p>
           <input
-            aria-label="Название новой сцены"
+            aria-label="Название production-сцены"
             value={sceneTitle}
             onChange={event => setSceneTitle(event.target.value)}
-            placeholder="Например: Встреча в кафе"
-            className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500"
+            placeholder="Например: Встреча на платформе"
+            className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-600"
           />
           <textarea
-            aria-label="Описание новой сцены"
+            aria-label="Краткое описание production-сцены"
             value={sceneSummary}
             onChange={event => setSceneSummary(event.target.value)}
             placeholder="Что происходит в сцене"
             rows={2}
-            className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-sky-500"
+            className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-600"
           />
           <button
             type="button"
             onClick={createScene}
             disabled={busy || !sceneTitle.trim()}
-            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 hover:border-sky-600 disabled:opacity-35"
+            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-400 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
           >
-            {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Добавить сцену
+            <Plus size={13} /> Создать сцену
           </button>
-          <div className="mt-3 space-y-1.5">
-            {production.scenes.map(scene => (
-              <button
-                type="button"
-                key={scene.scene_id}
-                onClick={() => {
-                  setShotSceneId(scene.scene_id);
-                  setContinuitySceneId(scene.scene_id);
-                }}
-                className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
-                  shotSceneId === scene.scene_id
-                    ? 'border-sky-700 bg-sky-950/30 text-sky-200'
-                    : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <span className="block truncate">{scene.title}</span>
-                <span className="mt-1 block font-mono text-[9px] text-slate-600">{scene.shot_ids.length} shots</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
           <p className="text-xs font-medium text-slate-300">2. Кадр</p>
           <select
-            aria-label="Сцена для нового кадра"
+            aria-label="Сцена для кадра"
             value={shotSceneId}
             onChange={event => setShotSceneId(event.target.value)}
-            className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-sky-500"
+            className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-600"
           >
             <option value="">Выберите сцену</option>
             {production.scenes.map(scene => (
@@ -489,58 +489,30 @@ export function ProductionSemanticsPanel({
             ))}
           </select>
           <textarea
-            aria-label="Замысел нового кадра"
+            aria-label="Замысел production-кадра"
             value={shotIntent}
             onChange={event => setShotIntent(event.target.value)}
-            placeholder="Крупность, действие, камера, драматургическая цель…"
-            rows={3}
-            className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-sky-500"
+            placeholder="Крупность, действие, камера, смысл"
+            rows={2}
+            className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-600"
           />
-          <p className="mt-2 text-[10px] leading-4 text-slate-600">
-            {selectedVisualSource
-              ? `Выбранное медиа станет референсом: ${referenceLabel(selectedVisualSource)}`
-              : 'Можно создать кадр без медиа-референса.'}
-          </p>
           <button
             type="button"
             onClick={createShot}
             disabled={busy || !shotSceneId || !shotIntent.trim()}
-            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 hover:border-sky-600 disabled:opacity-35"
+            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-400 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
           >
-            <Plus size={13} /> Добавить кадр
+            <Plus size={13} /> Создать кадр
           </button>
-          <div className="mt-3 space-y-1.5">
-            {production.shots.map(shot => {
-              const scene = production.scenes.find(item => item.scene_id === shot.scene_id);
-              return (
-                <button
-                  type="button"
-                  key={shot.shot_id}
-                  onClick={() => setTakeShotId(shot.shot_id)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left ${
-                    takeShotId === shot.shot_id
-                      ? 'border-violet-700 bg-violet-950/25'
-                      : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="block text-[10px] text-slate-600">{scene?.title ?? shot.scene_id}</span>
-                  <span className="mt-1 block line-clamp-2 text-xs text-slate-300">{shot.intent}</span>
-                  <span className="mt-1 block font-mono text-[9px] text-slate-600">
-                    {shot.take_ids.length} takes · {shot.accepted_take_id ? 'accepted' : 'not accepted'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-          <p className="text-xs font-medium text-slate-300">3. Дубли и принятие</p>
+          <p className="text-xs font-medium text-slate-300">3. Дубль</p>
           <select
-            aria-label="Кадр для нового дубля"
+            aria-label="Кадр для дубля"
             value={takeShotId}
             onChange={event => setTakeShotId(event.target.value)}
-            className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-violet-500"
+            className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-600"
           >
             <option value="">Выберите кадр</option>
             {production.shots.map(shot => (
@@ -549,97 +521,122 @@ export function ProductionSemanticsPanel({
           </select>
           <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-500">
             {selectedVisualSource ? (
-              <span className="flex items-center gap-2 text-slate-300">
-                <Video size={13} className="text-violet-300" />
-                <span className="min-w-0 truncate">{referenceLabel(selectedVisualSource)}</span>
+              <span className="inline-flex items-center gap-2 text-slate-300">
+                <Video size={13} /> {referenceLabel(selectedVisualSource)}
               </span>
-            ) : (
-              'Выберите видео или изображение в Media Bin.'
-            )}
+            ) : 'Сначала выберите видео или изображение выше.'}
           </div>
           <button
             type="button"
             onClick={registerTake}
             disabled={busy || !takeShotId || !selectedVisualSource}
-            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-800/70 py-2 text-xs text-violet-200 hover:border-violet-600 disabled:opacity-35"
+            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sky-400 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
           >
-            <Plus size={13} /> Добавить как дубль
+            <Plus size={13} /> Добавить выбранное медиа как дубль
           </button>
-
-          <div className="mt-3 space-y-2">
-            {production.shots.map(shot => {
-              const takes = shot.take_ids
-                .map(takeId => production.takes.find(item => item.take_id === takeId) ?? null)
-                .filter((item): item is ProductionTake => item !== null);
-              if (takes.length === 0) return null;
-              return (
-                <div key={shot.shot_id} className="rounded-lg border border-slate-800 bg-slate-950/55 p-2.5">
-                  <p className="line-clamp-1 text-[10px] text-slate-500">{shot.intent}</p>
-                  <div className="mt-2 space-y-1.5">
-                    {takes.map(take => {
-                      const reference = referenceById(take.reference_id);
-                      const accepted = shot.accepted_take_id === take.take_id;
-                      return (
-                        <div key={take.take_id} className="flex items-center gap-2 rounded-md border border-slate-800 px-2 py-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs text-slate-300">{take.label || reference?.id || take.take_id}</p>
-                            <p className="mt-0.5 font-mono text-[9px] text-slate-700">
-                              {reference ? `${reference.kind} · ${takeDuration(reference) ? `${seconds(takeDuration(reference) ?? 0)}s` : 'duration?'}` : 'reference missing'}
-                            </p>
-                          </div>
-                          {accepted ? (
-                            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-800/70 bg-emerald-950/35 px-2 py-1 text-[10px] text-emerald-300">
-                              <Check size={11} /> Принят
-                            </span>
-                          ) : shot.accepted_take_id ? null : (
-                            <button
-                              type="button"
-                              onClick={() => acceptTake(shot, take)}
-                              disabled={busy || !takeDuration(reference)}
-                              className="rounded-md bg-emerald-400 px-2 py-1 text-[10px] font-semibold text-slate-950 hover:bg-emerald-300 disabled:opacity-35"
-                              title={`Добавить в конец timeline с ${seconds(timelineDurationUs)} сек`}
-                            >
-                              Принять
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
 
+      <div className="mt-4 space-y-3">
+        {production.scenes.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-6 text-center text-xs text-slate-600">
+            Создайте первую сцену — затем внутри неё появятся кадры и варианты дублей.
+          </div>
+        ) : production.scenes.map(scene => {
+          const shots = production.shots.filter(shot => shot.scene_id === scene.scene_id);
+          return (
+            <div key={scene.scene_id} className="rounded-xl border border-slate-800 bg-slate-950/35 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-200">{scene.title}</p>
+                  {scene.summary && <p className="mt-1 text-xs text-slate-500">{scene.summary}</p>}
+                </div>
+                <span className="font-mono text-[10px] text-slate-700">{scene.scene_id}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {shots.length === 0 ? (
+                  <p className="text-xs text-slate-600">В сцене пока нет кадров.</p>
+                ) : shots.map(shot => {
+                  const takes = production.takes.filter(take => take.shot_id === shot.shot_id);
+                  return (
+                    <div key={shot.shot_id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-slate-300">{shot.intent}</p>
+                        {shot.accepted_take_id ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/50 px-2 py-1 text-[10px] text-emerald-300">
+                            <Check size={11} /> Принят
+                          </span>
+                        ) : null}
+                      </div>
+                      {takes.length === 0 ? (
+                        <p className="mt-2 text-[11px] text-slate-600">Дублей ещё нет.</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {takes.map(take => {
+                            const accepted = shot.accepted_take_id === take.take_id;
+                            return (
+                              <div key={take.take_id} className="flex flex-col gap-2 rounded-lg border border-slate-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs text-slate-300">{take.label || take.take_id}</p>
+                                  <p className="mt-1 font-mono text-[9px] text-slate-700">{take.take_id}</p>
+                                </div>
+                                {accepted ? (
+                                  <span className="text-[10px] text-emerald-300">
+                                    Timeline: {shot.timeline_clip_ids.join(', ') || 'привязка создана'}
+                                  </span>
+                                ) : shot.accepted_take_id ? (
+                                  <span className="text-[10px] text-slate-600">Другой дубль уже принят</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    aria-label={`Принять дубль ${take.label || take.take_id}`}
+                                    onClick={() => acceptTake(shot, take)}
+                                    disabled={busy}
+                                    className="rounded-lg border border-emerald-800 px-3 py-1.5 text-[10px] text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                                  >
+                                    Принять в Timeline
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {isMicroDrama && microDrama ? (
-        <div className="mt-4 border-t border-slate-800 pt-4">
+        <div className="mt-5 border-t border-slate-800 pt-4">
           <div className="flex items-center gap-2">
-            <BookOpen size={16} className="text-amber-300" />
+            <BookOpen size={15} className="text-amber-300" />
             <div>
-              <p className="text-sm font-medium text-slate-200">Мини-драма: история и канон</p>
-              <p className="mt-0.5 text-[10px] text-slate-600">Эти данные расширяют общие Scene/Shot/Take, а не заменяют их.</p>
+              <p className="text-sm font-medium text-slate-200">История и непрерывность</p>
+              <p className="mt-0.5 text-xs text-slate-600">Расширение направления micro-drama поверх общих Scene / Shot / Take.</p>
             </div>
           </div>
 
-          <div className="mt-3 grid gap-3 xl:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
               <p className="text-xs text-slate-400">История</p>
               <input
                 aria-label="Название истории"
                 value={storyTitle}
                 onChange={event => setStoryTitle(event.target.value)}
                 placeholder="Название"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-amber-600"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
-              <textarea
-                aria-label="Премиса истории"
+              <input
+                aria-label="Завязка истории"
                 value={storyPremise}
                 onChange={event => setStoryPremise(event.target.value)}
-                placeholder="Премиса"
-                rows={2}
-                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
+                placeholder="Завязка / premise"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
               <textarea
                 aria-label="Синопсис истории"
@@ -647,82 +644,82 @@ export function ProductionSemanticsPanel({
                 onChange={event => setStorySynopsis(event.target.value)}
                 placeholder="Краткий синопсис"
                 rows={3}
-                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
+                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-              <div className="flex items-center gap-2 text-xs text-slate-400"><UserRound size={13} /> Персонажи</div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <p className="flex items-center gap-2 text-xs text-slate-400"><UserRound size={13} /> Персонажи</p>
               <input
-                aria-label="Имя нового персонажа"
+                aria-label="Имя персонажа"
                 value={characterName}
                 onChange={event => setCharacterName(event.target.value)}
-                placeholder="Имя персонажа"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-amber-600"
+                placeholder="Имя"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
               <input
-                aria-label="Описание нового персонажа"
+                aria-label="Описание персонажа"
                 value={characterDescription}
                 onChange={event => setCharacterDescription(event.target.value)}
-                placeholder="Короткое описание"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
+                placeholder="Внешность / роль / состояние"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
               <button
                 type="button"
                 onClick={addCharacter}
                 disabled={!characterName.trim()}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-[11px] text-slate-300 hover:border-amber-700 disabled:opacity-35"
+                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
               >
                 <Plus size={12} /> Добавить персонажа
               </button>
               <div className="mt-2 space-y-1">
                 {characters.map(character => (
-                  <div key={character.character_id} className="flex items-center gap-2 rounded-md border border-slate-800 px-2 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-300">{character.name}</span>
+                  <div key={character.character_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
+                    <span className="truncate text-[11px] text-slate-400">{character.name}</span>
                     <button
                       type="button"
-                      onClick={() => removeCharacter(character.character_id)}
                       aria-label={`Удалить персонажа ${character.name}`}
-                      className="text-slate-600 hover:text-red-300"
+                      onClick={() => removeCharacter(character.character_id)}
+                      className="text-slate-700 hover:text-red-400"
                     ><X size={12} /></button>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-              <div className="flex items-center gap-2 text-xs text-slate-400"><MapPin size={13} /> Локации</div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <p className="flex items-center gap-2 text-xs text-slate-400"><MapPin size={13} /> Локации</p>
               <input
-                aria-label="Название новой локации"
+                aria-label="Название локации"
                 value={locationName}
                 onChange={event => setLocationName(event.target.value)}
-                placeholder="Название локации"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none focus:border-amber-600"
+                placeholder="Название"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
               <input
-                aria-label="Описание новой локации"
+                aria-label="Описание локации"
                 value={locationDescription}
                 onChange={event => setLocationDescription(event.target.value)}
-                placeholder="Короткое описание"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
+                placeholder="Вид, свет, важный реквизит"
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
               />
               <button
                 type="button"
                 onClick={addLocation}
                 disabled={!locationName.trim()}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-[11px] text-slate-300 hover:border-amber-700 disabled:opacity-35"
+                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
               >
                 <Plus size={12} /> Добавить локацию
               </button>
               <div className="mt-2 space-y-1">
                 {locations.map(location => (
-                  <div key={location.location_id} className="flex items-center gap-2 rounded-md border border-slate-800 px-2 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-slate-300">{location.name}</span>
+                  <div key={location.location_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
+                    <span className="truncate text-[11px] text-slate-400">{location.name}</span>
                     <button
                       type="button"
-                      onClick={() => removeLocation(location.location_id)}
                       aria-label={`Удалить локацию ${location.name}`}
-                      className="text-slate-600 hover:text-red-300"
+                      onClick={() => removeLocation(location.location_id)}
+                      className="text-slate-700 hover:text-red-400"
                     ><X size={12} /></button>
                   </div>
                 ))}
@@ -735,8 +732,8 @@ export function ProductionSemanticsPanel({
             <div className="mt-2 grid gap-2 lg:grid-cols-2">
               <select
                 aria-label="Сцена для непрерывности"
-                value={continuitySceneId}
-                onChange={event => setContinuitySceneId(event.target.value)}
+                value={continuityForm.sceneId}
+                onChange={event => selectContinuityScene(event.target.value)}
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
               >
                 <option value="">Выберите сцену</option>
@@ -746,9 +743,9 @@ export function ProductionSemanticsPanel({
               </select>
               <select
                 aria-label="Локация сцены"
-                value={continuityLocationId}
-                onChange={event => setContinuityLocationId(event.target.value)}
-                disabled={!continuitySceneId}
+                value={continuityForm.locationId}
+                onChange={event => setContinuityForm(current => ({ ...current, locationId: event.target.value }))}
+                disabled={!continuityForm.sceneId}
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
               >
                 <option value="">Локация не задана</option>
@@ -758,15 +755,17 @@ export function ProductionSemanticsPanel({
               </select>
             </div>
             {characters.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {characters.map(character => {
-                  const active = continuityCharacterIds.includes(character.character_id);
+                  const active = continuityForm.characterIds.includes(character.character_id);
                   return (
                     <button
                       type="button"
                       key={character.character_id}
+                      aria-label={`Персонаж continuity ${character.name}`}
+                      aria-pressed={active}
                       onClick={() => toggleContinuityCharacter(character.character_id)}
-                      disabled={!continuitySceneId}
+                      disabled={!continuityForm.sceneId}
                       className={`rounded-full border px-2 py-1 text-[10px] ${
                         active
                           ? 'border-amber-700 bg-amber-950/40 text-amber-200'
@@ -781,18 +780,18 @@ export function ProductionSemanticsPanel({
             ) : null}
             <textarea
               aria-label="Канонические факты сцены"
-              value={canonFactsText}
-              onChange={event => setCanonFactsText(event.target.value)}
-              disabled={!continuitySceneId}
+              value={continuityForm.canonFactsText}
+              onChange={event => setContinuityForm(current => ({ ...current, canonFactsText: event.target.value }))}
+              disabled={!continuityForm.sceneId}
               placeholder="Один канонический факт на строку"
               rows={3}
               className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
             />
             <textarea
               aria-label="Заметки по непрерывности сцены"
-              value={continuityNotes}
-              onChange={event => setContinuityNotes(event.target.value)}
-              disabled={!continuitySceneId}
+              value={continuityForm.notes}
+              onChange={event => setContinuityForm(current => ({ ...current, notes: event.target.value }))}
+              disabled={!continuityForm.sceneId}
               placeholder="Костюм, реквизит, состояние персонажей, свет…"
               rows={2}
               className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
@@ -801,13 +800,22 @@ export function ProductionSemanticsPanel({
               type="button"
               onClick={saveMicroDrama}
               disabled={busy}
-              className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-200 disabled:opacity-40"
+              className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
             >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Сохранить историю и канон
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Сохранить историю и непрерывность
             </button>
           </div>
         </div>
       ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-3 font-mono text-[10px] text-slate-700">
+        <span>production/semantics.json · v{production.schema_version}</span>
+        <span>{production.scenes.length} scenes</span>
+        <span>{production.shots.length} shots</span>
+        <span>{production.takes.length} takes</span>
+        <span>timeline end {seconds(timelineDurationUs)}s</span>
+      </div>
     </section>
   );
 }
