@@ -194,7 +194,14 @@ class MicroDramaProductionBrowserOutcome(unittest.TestCase):
             page.get_by_role("button", name="Персонаж continuity Алекс", exact=True).click()
             page.get_by_label("Канонические факты сцены", exact=True).fill("Алекс носит красный шарф")
             page.get_by_label("Заметки по непрерывности сцены", exact=True).fill("Сохранять холодный синий свет")
-            page.get_by_role("button", name="Сохранить историю и непрерывность", exact=True).click()
+            with page.expect_response(
+                lambda response: (
+                    "/studio/production/commands" in response.url
+                    and response.request.method == "POST"
+                )
+            ) as saved_context:
+                page.get_by_role("button", name="Сохранить историю и непрерывность", exact=True).click()
+            self.assertEqual(saved_context.value.status, 201)
 
             micro = _api_json("GET", _project_path(project_id, "/studio/production/micro-drama"))
             self.assertEqual(micro["story"]["title"], "Последний поезд")
