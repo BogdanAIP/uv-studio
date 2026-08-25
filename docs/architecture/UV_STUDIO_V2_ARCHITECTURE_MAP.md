@@ -1,6 +1,6 @@
 # UV Studio v2 — architecture map and migration inventory
 
-**Status:** active architecture map under D-064 + D-065  
+**Status:** active architecture map under D-064 + D-065 + D-066  
 **Date:** 2026-08-25
 
 This is the practical migration map for a coherent local-first AI production studio without rewriting proven foundations.
@@ -9,21 +9,26 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Diagnosis
 
-The repository has a strong lower spine:
+The repository now has a concrete lower production spine:
 
 ```text
 Project Store
+ -> Production Directions
+ -> shared Scene / Shot / Take semantics
  -> Studio/Application Commands
- -> MLT / FFmpeg / domain tools / Capability execution
- -> local runtimes / MCP / optional external providers
+ -> ProjectUnitOfWork / durable Undo-Redo
+ -> canonical Timeline
+ -> Capability execution / MLT / FFmpeg / domain tools
 ```
 
-Two product-composition errors were corrected:
+Two earlier product-composition errors were corrected:
 
 1. recipe/workspace proliferation — separate recipe orchestration/workspaces pretending to be products;
 2. generic-editor overcorrection — one Media/Preview/Timeline shell with insufficient production semantics.
 
-D-064 restores meaningful Production Directions. D-065 prevents the correction from creating six parallel domain models by sharing genuinely common Scene/Shot/Take semantics.
+D-064 restored meaningful Production Directions. D-065 prevented six parallel domain models by sharing genuinely common Scene/Shot/Take semantics. Stage 13 has now implemented and tested that shared production-semantic path.
+
+The next missing layer is reliable named-model generation/jobs, followed by an autonomous Agent Harness. D-066 designates JarvisHub as the reference architecture/method donor for that Agent Harness while preserving UV-owned product state.
 
 ## 2. Target architecture
 
@@ -36,7 +41,7 @@ D-064 restores meaningful Production Directions. D-065 prevents the correction f
                    organization / policy / navigation
                                  |
                    Shared Production Semantic Core
-            Sequence/Scene | Shot | Take/Accepted Take
+            Scene | Shot | Take / Accepted Take
           semantic refs | continuity | asset/timeline bindings
                                  |
                       Direction Extensions
@@ -52,14 +57,25 @@ D-064 restores meaningful Production Directions. D-065 prevents the correction f
                        Project Unit of Work
        production docs + direction extensions + assets + timeline
                                  |
-                  Tool Services / Project Job Manager
+                    Model Registry (visible)
                                  |
-                       Model Registry (visible)
+                   Project Job Manager
+          idempotency | attempts | provenance | cancellation
                                  |
                        Capability Registry
                                  |
                   Adapter / Transport Registry
                  MLT / FFmpeg / MCP / local / cloud
+
+Later Agent Harness (JarvisHub donor patterns)
+  Director runtime
+   -> context / memory / compaction
+   -> Planner / Tasks / Skills
+   -> explore / plan / media / critic
+   -> policy / effects / trace
+   -> background work via Job Manager
+   -> evaluation / dependency-aware repair
+  ALL mutations -> same Studio/Application Commands
 ```
 
 A project instantiates only the semantic/domain state it needs. The Production Semantic Core is not a mandatory giant film schema and is not a second Timeline.
@@ -86,20 +102,24 @@ Initial directions:
 
 A direction is not a `RecipeDefinition`, provider or execution engine.
 
-## 4. Shared Production Semantic Core — NEW TARGET (D-065)
+## 4. Shared Production Semantic Core — KEEP + GROW (Stage 13 implemented)
 
-Common concepts that appear across directions must have one UV-owned contract. First bounded primitives:
+Stage 13 implemented the first bounded shared primitives and the rich micro-drama proof:
 
-- optional Sequence/Scene grouping;
-- Shot independent from Timeline Clip;
-- Take/candidate + accepted-take identity;
-- project asset/generation bindings;
-- optional continuity/canon relationships;
-- accepted-production-material -> canonical Timeline binding/projection.
+- strict shared Scene / Shot / Take / accepted-Take contracts;
+- multiple candidate Takes per Shot;
+- project-owned asset/provenance bindings;
+- accepted-production-material -> canonical Timeline projection;
+- micro-drama Story / Characters / Locations / continuity/canon extensions referencing shared identities;
+- cross-direction reuse of the shared contracts from commercial;
+- application-service mutation boundary through `ProductionSemanticService`;
+- Stage-12 `ProjectUnitOfWork` across acceptance, media provenance and Timeline;
+- durable project-level Undo/Redo of acceptance projection;
+- visible Studio/browser proof with real media.
 
-Direction extensions reference these identities instead of defining private duplicate Shot/Take systems.
+Shot remains independent from Timeline Clip. Direction extensions reference shared identities instead of defining private duplicate Shot/Take systems.
 
-Preferred first proof is micro-drama, but the contracts are shared infrastructure.
+The semantic core should now grow only when new directions prove a genuinely shared production concept.
 
 ## 5. Contextual tools — NOT DIRECTIONS
 
@@ -111,13 +131,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 
 Keep atomic file persistence, strict portable JSON, path/symlink protection, project-owned refs and archive integrity.
 
-Stage-12 adaptation delivered for rich domain work:
-
-- typed Studio/Production Direction identity;
-- explicit legacy compatibility mode rather than fake modern direction;
-- no implicit `general_video` default in core creation;
-- deliberate bounded production/domain storage root or equivalent;
-- Project Unit of Work for multi-document transactions.
+Delivered foundation includes typed Studio/Production Direction identity, explicit legacy compatibility mode, bounded production/domain storage and Project Unit of Work for multi-document transactions.
 
 ### Project references/media — KEEP
 
@@ -125,57 +139,114 @@ Remain the base for Media Bin, generated assets and production bindings. Provide
 
 ### D-033 editor foundation — KEEP + EXPAND
 
-MLT stays behind UV adapter; OpenCut is a selective UI/interaction donor; UV owns canonical Timeline/commands; FFmpeg remains deterministic export substrate where used.
+MLT stays behind UV adapter; OpenCut is a selective UI/interaction donor; UV owns canonical Timeline/commands; FFmpeg remains deterministic export/media substrate where used.
 
-### Studio/Application commands — KEEP + ADAPT
+### Studio/Application Commands — KEEP + GROW
 
-Current timeline commands are the first family and already publish transaction identity through shared undo/redo. Grow shared handler registries and direction/domain commands through the same authority; no Agent-only mutation path.
+Timeline and production semantic commands are shared authority. GUI, Agent, scripts and MCP converge here. No Agent-only mutation path.
 
 ### Project Unit of Work — CURRENT FOUNDATION
 
-Coordinates Studio identity/project metadata, shared production documents, refs/assets, Timeline and undo history. Future generation/take commands use the same boundary.
+Coordinates Studio identity/project metadata, shared production documents, refs/assets, Timeline and undo history.
 
 ```text
 AcceptTake(shot_12_3, take_4)
  -> accepted Take
- -> Shot state
- -> asset/reference
- -> Timeline binding/update
+ -> asset/reference binding
+ -> Timeline projection/update
  -> one transaction / reversible undo
 ```
 
-### Capability Registry — KEEP, REFRAME
+### Capability Registry — KEEP + EXTEND EFFECT VISIBILITY
 
-Execution semantics/availability/locality/cost/authorization only. Below visible Model Registry and below production composition.
+Execution semantics/availability/locality/cost/authorization only. It remains below visible Model Registry and below production composition.
 
-### Model Registry — NEW TARGET
+D-066 adapts JarvisHub's useful action-effect pattern into the existing UV boundary rather than creating a second tool registry. Relevant future metadata may include project mutation, Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost-bearing execution.
 
-Backend-owned and user-visible for meaningful model selection; maps named models/modes onto capabilities/offers/adapters.
+### Model Registry — NEXT TARGET
 
-### Job Manager — NEW TARGET
+Backend-owned and user-visible for meaningful model selection; maps named models/modes onto capabilities/offers/adapters without making provider transport product identity.
 
-Project-scoped queued/running/succeeded/failed/cancelled generation lifecycle, cancellation/retry and exact provenance.
+### Job Manager — NEXT TARGET
+
+Project-scoped queued/running/succeeded/failed/cancelled generation lifecycle, cancellation/retry, attempts and exact provenance.
+
+D-066 adds a non-negotiable reliability requirement: long-running/cost-bearing/external execution is idempotent. Equivalent replay must not execute twice; same idempotency key with materially different normalized context fails closed.
+
+### Generation Contract — NEXT TARGET
+
+Provider-neutral constraints for a generation request/attempt associated with production intent. Initial concepts:
+
+- fixed constraints;
+- editable variables;
+- forbidden semantic changes;
+- approved project reference/keyframe identity where applicable.
+
+Adapters render the contract into provider prompts/options. Provider prompt text is not canonical production truth.
 
 ### MCP — KEEP
 
 Optional capability/model/tool source. Discovery and execution are implemented behind explicit bindings and D-017 where required. MCP is not product state.
 
-## 7. Modern/legacy boundary findings from 2026-08-25 audit
+## 7. Agent Harness — JARVISHUB DONOR, UV-OWNED IMPLEMENTATION
 
-Stage 12 resolves the mandatory preconditions for rich production semantics:
+JarvisHub (`LYL1015/JarvisHub`, pinned research commit in `UPSTREAM.md`) is the concrete professional reference for the autonomous layer UV does not yet have.
 
-1. modern Studio/media APIs use recipe-free common project payload and store dependencies;
-2. core project creation no longer inherits an implicit recipe-era identity;
-3. typed Studio metadata and identity-transition checks protect load, PATCH/save and import;
-4. Studio metadata has its own schema version, independent from the “Studio v2” product name;
-5. legacy and invalid projects project explicit compatibility/recovery identities rather than a fake direction;
-6. modern frontend callers are separated from legacy creation/execution-plan contracts;
-7. direction/project creation, Timeline and transaction HTTP responsibilities have distinct modules;
-8. the shared unit of work provides durable transaction identity and undo/redo without turning MLT or the browser into state authority.
+### Borrow/adapt
 
-Remaining recipe/Product-Orchestrator surfaces are compatibility strangler debt, not blockers for the shared production-semantic slice.
+- persistent Agent runtime / turn loop;
+- Planner + durable Task graph;
+- Skills;
+- context pipeline and compaction;
+- memory for durable agent decisions not already canonical project facts;
+- small functional subagent set: explore / plan / media / critic;
+- policy/effects inspection;
+- trace linking plans/actions/observations/artifacts/evaluations/repair to canonical project entities;
+- background work coordinated through Job Manager;
+- evaluate -> repair and dependency-aware local regeneration.
 
-## 8. Legacy/migration inventory
+### Do not import as product authority
+
+- JarvisHub Canvas as source of truth;
+- generic node graph as the UV project model;
+- PostgreSQL/Hono application shape as a new UV foundation;
+- a parallel Protocol Bridge/tool registry that duplicates Capability Registry + commands;
+- Agent memory/trace as a second canonical project state.
+
+### Target Agent data/control flow
+
+```text
+Director Agent
+ -> Context Builder
+ -> Planner / Tasks / Skills
+ -> explore / plan / media / critic
+ -> Studio/Application Commands + Model/Job/Capability services
+ -> ProjectUnitOfWork where canonical mutation is required
+ -> Production Semantics / Project Store / Timeline
+```
+
+The Agent may observe broadly but mutates canonically only through the same application boundary as the GUI.
+
+## 8. Generation lifecycle and provenance
+
+Target path for generated production material:
+
+```text
+Shot
+ -> choose named Model
+ -> GenerationContract
+ -> create idempotent Job / Attempt
+ -> Capability/Provider/Adapter execution
+ -> generated project-owned asset + provenance
+ -> Take candidate
+ -> optional evaluation / critic record
+ -> explicit AcceptTake
+ -> canonical Timeline
+```
+
+Job history and semantic acceptance are different histories. Undoing Take acceptance does not delete the generation Job/Attempt/provenance.
+
+## 9. Legacy/migration inventory
 
 - Recipe Registry — **LEGACY**; old project/import vocabulary only.
 - Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful readiness/domain logic into modern tool/direction query services.
@@ -186,11 +257,11 @@ Remaining recipe/Product-Orchestrator surfaces are compatibility strangler debt,
 - VideoClaw backend path injection — **DELETE LATER** after runtime/test/package proof.
 - archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
-## 9. Direction-domain growth
+## 10. Direction-domain growth
 
-### Micro-drama — first rich proof
+### Micro-drama — first rich proof complete
 
-Direction extensions: Story, Characters, Locations, dramaturgy. Reuse shared Scene -> Shot -> Take -> accepted Take contracts and optional continuity.
+Story, Characters, Locations and continuity/canon extensions now reuse shared Scene -> Shot -> Take -> accepted Take contracts.
 
 ### Commercial
 
@@ -208,7 +279,7 @@ Script/Narration/semantic-segment extensions; visual Shots may reuse shared cont
 
 Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics where they are truly the same concept. Ordinary dubbing remains a contextual tool.
 
-## 10. Studio UI target
+## 11. Studio UI target
 
 ```text
 +--------------------------------------------------------------------+
@@ -223,20 +294,33 @@ Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics whe
 +--------------------------------------------------------------------+
 ```
 
-## 11. Migration order
+## 12. Migration order
 
-1. Production Directions — D-064 (done at first metadata/UI spine).
-2. Architecture authority cleanup + D-065 shared production semantics (current PR #64).
+Completed/current foundation:
+
+1. Production Directions — D-064.
+2. Architecture authority cleanup + D-065 shared production semantics.
 3. Modern Studio identity/dependency boundary + Project Unit of Work + undo/redo.
-4. First rich micro-drama vertical proving **shared** Scene/Shot/Take semantics plus its direction extensions.
-5. Backend-owned visible Model Registry.
-6. Project Job Manager.
-7. First named AI generation -> candidate Take/asset -> explicit acceptance -> Timeline through normal commands.
-8. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
-9. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
-10. Retire compatibility code only after caller proof and reconcile proven Windows packaging onto accepted product shell.
+4. Rich micro-drama vertical proving shared Scene/Shot/Take semantics and direction extensions — Stage 13 complete.
 
-## 12. Invariants
+Next:
+
+5. Backend-owned visible Model Registry.
+6. Project Job Manager with idempotency + attempts + durable provenance.
+7. Provider-neutral GenerationContract.
+8. First named AI generation -> project-owned asset -> Take candidate -> explicit acceptance -> Timeline through normal commands.
+
+Then:
+
+9. Agent Harness foundation from D-066/JarvisHub patterns: context, command/tool catalog, effects/policy, trace.
+10. Planner + Tasks + Skills + functional subagents.
+11. Critic/evaluation + dependency-aware local repair.
+12. Human takeover/edit/resume and then long-form autonomous production.
+13. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
+14. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
+15. Retire compatibility code only after caller proof and reconcile proven Windows packaging onto accepted product shell.
+
+## 13. Invariants
 
 - one Project Store authority;
 - one canonical Timeline;
@@ -244,8 +328,12 @@ Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics whe
 - no RecipeDefinition as new v2 identity;
 - no separate engine/workspace per direction;
 - no Agent-only mutation path;
+- no JarvisHub Canvas/node graph as UV canonical state;
 - visible meaningful model choice;
 - remote/non-free work remains explicit/authorized;
+- retry-safe long-running/cost-bearing generation;
+- provider-neutral semantic Generation Contract above prompt rendering;
+- durable Job/Attempt provenance survives acceptance Undo;
 - local-first desktop baseline;
 - reuse mature components behind UV-owned contracts;
 - compatibility remains isolated, not silently imported into new boundaries.
