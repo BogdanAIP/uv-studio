@@ -18,7 +18,8 @@
       "frontend/**",
       "tests/**",
       "tests_api/**",
-      "tests_browser/**"
+      "tests_browser/**",
+      "e2e/**"
     ]
   },
   "last_completed": {
