@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
+from .identity import assert_project_identity_transition, require_valid_project_identity
 from .migrations import migrate_project_data
 from .models import (
     ProjectDocument,
@@ -26,6 +27,7 @@ PROJECT_DIRECTORIES = (
     "assets",
     "tasks",
     "artifacts",
+    "production",
     "timeline",
     "reviews",
     "exports",
@@ -174,7 +176,7 @@ class ProjectStore:
         self,
         *,
         title: str,
-        recipe_id: str = "general_video",
+        recipe_id: str,
         project_id: str | None = None,
         settings: Mapping[str, Any] | None = None,
         extensions: Mapping[str, Any] | None = None,
@@ -192,6 +194,7 @@ class ProjectStore:
             settings=dict(settings or {}),
             extensions=dict(extensions or {}),
         )
+        require_valid_project_identity(document)
 
         with self._lock:
             directory = self._project_dir(project_id)
@@ -234,12 +237,11 @@ class ProjectStore:
 
     def save_project(self, document: ProjectDocument) -> ProjectDocument:
         """Persist a complete project document and refresh updated_at."""
-        path = self.project_path(document.project_id)
-        if not path.is_file():
-            raise ProjectNotFound(document.project_id)
-        updated = replace(document, updated_at=utc_now_iso())
         with self._lock:
-            self._atomic_write_json(path, updated.to_dict())
+            current = self.load_project(document.project_id)
+            updated = replace(document, updated_at=utc_now_iso())
+            assert_project_identity_transition(current, updated)
+            self._atomic_write_json(self.project_path(document.project_id), updated.to_dict())
         return updated
 
     def update_project(
@@ -265,6 +267,7 @@ class ProjectStore:
                 artifacts=current.artifacts if artifacts is None else tuple(artifacts),
                 updated_at=utc_now_iso(),
             )
+            assert_project_identity_transition(current, updated)
             self._atomic_write_json(self.project_path(project_id), updated.to_dict())
             return updated
 
@@ -334,6 +337,7 @@ class ProjectStore:
         document = staged_store.load_project(project_id)
         if document.project_id != project_id:
             raise ProjectStoreError("Staged project document ID does not match destination ID")
+        require_valid_project_identity(document)
 
         with self._lock:
             if destination.exists():

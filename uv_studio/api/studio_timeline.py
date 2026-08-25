@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.api.capability_execution import get_local_ffmpeg_adapter
-from uv_studio.api.projects import ProjectPayload, ProjectReferencePayload, get_project_store
+from uv_studio.api.project_common import (
+    ProjectPayload,
+    ProjectReferencePayload,
+    get_project_store,
+    project_payload,
+)
 from uv_studio.capabilities.adapters import LocalFFmpegAdapter
 from uv_studio.capabilities.execution import CapabilityToolFailed, CapabilityToolUnavailable
 from uv_studio.editor.studio_mlt import StudioMLTError, StudioMLTTimelineAdapter
@@ -28,6 +33,7 @@ from uv_studio.production.directions import (
     get_production_direction,
     list_production_directions,
 )
+from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import (
     ProjectAlreadyExists,
@@ -38,8 +44,6 @@ from uv_studio.projects.store import (
 from uv_studio.projects.timeline import TimelineError, TimelineStore
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Studio"])
-_STUDIO_COMPAT_RECIPE_ID = "studio_v2"
-_STUDIO_EXTENSION_KEY = "studio"
 
 
 class _StrictModel(BaseModel):
@@ -229,27 +233,16 @@ def create_studio_project(
     request: CreateStudioProjectPayload,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
-    """Create one Studio project with a product-level production direction.
-
-    Direction affects production composition and UI context, not the underlying
-    project/timeline engine. Project schema v1 still requires ``recipe_id``;
-    ``studio_v2`` remains neutral compatibility metadata only.
-    """
+    """Create one modern Studio project with a validated Production Direction."""
 
     try:
         direction = get_production_direction(request.direction_id)
         project = store.create_project(
             title=request.title,
-            recipe_id=_STUDIO_COMPAT_RECIPE_ID,
-            extensions={
-                _STUDIO_EXTENSION_KEY: {
-                    "schema_version": 2,
-                    "product_model": "production_directions",
-                    "direction_id": direction.direction_id,
-                }
-            },
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions(direction.direction_id),
         )
-        return ProjectPayload.model_validate(project.to_dict())
+        return project_payload(project)
     except (
         ProductionDirectionNotFound,
         ProjectValidationError,

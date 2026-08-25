@@ -1,10 +1,14 @@
-"""HTTP endpoints for canonical UV Studio projects."""
+"""Compatibility HTTP endpoints for canonical UV Studio projects.
+
+Neutral project schemas/dependencies live in ``api.project_common`` so modern
+Studio/media modules do not import the Recipe Registry/Product Orchestrator
+merely to access Project Store services.
+"""
 
 from __future__ import annotations
 
 import os
 import tempfile
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +17,16 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.background import BackgroundTask
 
+from uv_studio.api.project_common import (
+    ProjectPayload,
+    ProjectReferencePayload,
+    get_project_store,
+    project_payload,
+)
 from uv_studio.api.recipes import get_recipe_registry
-from uv_studio.config import projects_root
 from uv_studio.orchestration.catalog import is_recipe_creatable
 from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
-from uv_studio.projects.models import ProjectDocument, ProjectValidationError
+from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import (
     ProjectAlreadyExists,
     ProjectNotFound,
@@ -30,35 +39,17 @@ router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Projects"])
 MAX_ARCHIVE_UPLOAD_BYTES = 100 * 1024**3
 
 
-class ProjectReferencePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    kind: str
-    path: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ProjectPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: int
-    project_id: str
-    title: str
-    recipe_id: str
-    created_at: str
-    updated_at: str
-    settings: dict[str, Any] = Field(default_factory=dict)
-    sources: list[ProjectReferencePayload] = Field(default_factory=list)
-    artifacts: list[ProjectReferencePayload] = Field(default_factory=list)
-    extensions: dict[str, Any] = Field(default_factory=dict)
-
-
 class CreateProjectRequest(BaseModel):
+    """Legacy/compatibility recipe project creation.
+
+    Modern Studio creation uses ``POST /api/uv/projects/studio``. Recipe identity
+    is explicit here so new callers cannot accidentally inherit ``general_video``.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=500)
-    recipe_id: str = "general_video"
+    recipe_id: str = Field(min_length=1, max_length=128)
     settings: dict[str, Any] = Field(default_factory=dict)
     extensions: dict[str, Any] = Field(default_factory=dict)
 
@@ -77,15 +68,6 @@ class UpdateProjectRequest(BaseModel):
             if getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null")
         return self
-
-
-@lru_cache(maxsize=1)
-def get_project_store() -> ProjectStore:
-    return ProjectStore(projects_root())
-
-
-def _payload(document: ProjectDocument) -> ProjectPayload:
-    return ProjectPayload.model_validate(document.to_dict())
 
 
 def _require_known_recipe(recipe_id: str) -> None:
@@ -137,7 +119,7 @@ def _temporary_archive_path(store: ProjectStore, *, prefix: str) -> Path:
 @router.get("", response_model=list[ProjectPayload])
 def list_projects(store: ProjectStore = Depends(get_project_store)) -> list[ProjectPayload]:
     try:
-        return [_payload(item) for item in store.list_projects()]
+        return [project_payload(item) for item in store.list_projects()]
     except (ProjectValidationError, ProjectStoreError) as exc:
         raise _translate_store_error(exc) from exc
 
@@ -147,6 +129,8 @@ def create_project(
     request: CreateProjectRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
+    """Create an explicit legacy/recipe compatibility project."""
+
     _require_creatable_recipe(request.recipe_id)
     try:
         document = store.create_project(
@@ -155,7 +139,7 @@ def create_project(
             settings=request.settings,
             extensions=request.extensions,
         )
-        return _payload(document)
+        return project_payload(document)
     except (ProjectValidationError, ProjectAlreadyExists, ProjectStoreError) as exc:
         raise _translate_store_error(exc) from exc
 
@@ -167,10 +151,9 @@ async def import_project_archive(
 ) -> ProjectPayload:
     """Stream one `.uvproj.zip` request body to disk, validate it, then import atomically.
 
-    Import intentionally preserves archives whose recipe ID is not installed or
-    not currently creatable in this build. This keeps project recovery
-    forward-compatible; execution can report the missing/unsupported workflow
-    instead of refusing to recover user data.
+    Legacy recipe IDs may remain unknown/uncreatable so old data is recoverable.
+    Malformed or conflicting Studio identity is rejected by the Project Store
+    staging boundary rather than being silently imported as a modern project.
     """
     content_length = request.headers.get("content-length")
     if content_length:
@@ -209,7 +192,7 @@ async def import_project_archive(
                 detail="Project archive body is empty",
             )
         document = import_project(store, upload_path)
-        return _payload(document)
+        return project_payload(document)
     except HTTPException:
         raise
     except (ProjectArchiveError, ProjectValidationError, ProjectAlreadyExists, ProjectStoreError) as exc:
@@ -245,7 +228,7 @@ def get_project(
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
     try:
-        return _payload(store.load_project(project_id))
+        return project_payload(store.load_project(project_id))
     except (ProjectValidationError, ProjectNotFound, ProjectStoreError) as exc:
         raise _translate_store_error(exc) from exc
 
@@ -267,6 +250,6 @@ def update_project(
             settings=request.settings if "settings" in changes else None,
             extensions=request.extensions if "extensions" in changes else None,
         )
-        return _payload(document)
+        return project_payload(document)
     except (ProjectValidationError, ProjectNotFound, ProjectStoreError) as exc:
         raise _translate_store_error(exc) from exc
