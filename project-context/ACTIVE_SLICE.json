@@ -1,7 +1,24 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "architecture-authority-cleanup",
+    "kind": "chore",
+    "roadmap_stage": "studio-v2",
+    "goal": "Consolidate current architecture authority around D-064 and the shared Studio Core, reclassify superseded recipe/Product Orchestrator documents as historical or compatibility evidence, and prevent future development from treating them as competing product direction.",
+    "base_branch": "main",
+    "branch": "chore/architecture-authority-cleanup",
+    "pull_request": null,
+    "write_scope": [
+      "project-context/**",
+      "docs/architecture/**",
+      "AGENTS.md",
+      "ARCHITECTURE_PRINCIPLES.md",
+      "README.md",
+      "ROADMAP.md",
+      "tests/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-production-directions",
     "pull_request": 63,

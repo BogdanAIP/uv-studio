@@ -1,6 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: architecture-authority-cleanup -->
 
 **Updated:** 2026-08-25
 
@@ -8,71 +9,54 @@
 
 ## Current lifecycle
 
-No development slice is active. `main` is the integration authority.
+Active draft chore:
 
-Last completed slice:
+- slice `architecture-authority-cleanup`;
+- branch `chore/architecture-authority-cleanup`;
+- base `main` at `cf0b719540e35fd10ec9a6fac8c3b905500ec35b`;
+- previous completed slice: PR #63 `studio-v2-production-directions`, merge `4ff135ecd059acbce0fa8ff428ada8a47f6bc57b`.
 
-- PR #63 — `studio-v2-production-directions`;
-- merge commit `4ff135ecd059acbce0fa8ff428ada8a47f6bc57b`;
-- review head `9ddd2d6df78c09160f140bb21e7bfce7fe881bb6` passed all five permanent CI jobs before merge.
+This chore runs before the next product slice and changes architecture memory, not the runtime product model.
 
-## Architecture conclusion
+## Current architecture authority
 
 D-064 is the current product-composition authority. UV Studio is a **local-first AI production studio with multiple Production Directions over one shared Studio Core**.
 
-Canonical composition:
+The cleanup must make that authority unambiguous without deleting useful historical evidence or compatibility code.
+
+Current shape:
 
 ```text
 Project
  -> Production Direction
- -> direction-specific production documents where needed
+ -> direction-specific production state
  -> shared Studio Core
       Media / Assets
       Preview / Canvas
       Inspector / AI Tools
       canonical Timeline
-      Project Unit of Work / Undo-Redo
+      Commands / Project Unit of Work
       Model Registry / Jobs
-      Agent / Commands
+      Agent
       Export
+ -> Capability / Adapter boundaries
+ -> MLT / FFmpeg / MCP / local or remote tools
 ```
 
-Current first-class Production Directions:
+## Cleanup scope
 
-- `micro_drama` — Микродрама / сюжетное видео;
-- `commercial` — Реклама / продукт;
-- `music_video` — Музыкальный клип;
-- `narrated_video` — Видео с диктором;
-- `dub_battle` — Киноозвучка / Кинобатл;
-- `free_project` — Свободный проект.
+The chore will:
 
-Production Directions are not recipes or execution engines. Operation-level features such as targeted edit, ordinary dubbing/translation, photo-to-video, visualizer, action transfer, digital human and lip-sync remain contextual Studio tools.
+- add one current architecture entry point/index;
+- clearly separate current, foundational, compatibility and historical architecture documents;
+- mark D-042 as superseded at product-composition level;
+- mark D-063 as partially superseded by D-064 while preserving its shared-Studio-Core decisions;
+- clarify D-062 so Product Orchestrator is historical recovery infrastructure, not the long-term product center;
+- reclassify Product Orchestrator, Recipe Registry, recipe execution and Product Truth Recovery documents as historical/compatibility snapshots where appropriate;
+- add a bounded regression test so stale documents cannot silently become competing current authority again.
 
-## Retained foundations
-
-- Project Store and project-owned portable state;
-- canonical `timeline/main.json`;
-- D-033 editor foundation;
-- MLT behind a UV adapter and FFmpeg deterministic media/export paths;
-- shared GUI = Agent = scripts = MCP command semantics;
-- Capability Registry, D-017 authorization and MCP boundaries;
-- existing targeted-edit, dubbing/translation, continuity and music domain/review logic where it protects real invariants;
-- compatibility code until caller/dependency proof permits retirement.
-
-## Compatibility / legacy
-
-Do not grow these as long-term product authority:
-
-- `recipe_id` as v2 project identity;
-- new `RecipeDefinition` entries for product features;
-- recipe-by-recipe Product Orchestrator growth;
-- Stage 6/Stage 8 product navigation;
-- separate project workspaces/engines per direction;
-- legacy `/execution-plan` as modern truth;
-- donor-era VideoClaw frontend/API taxonomy.
+The chore will not remove working recipe/orchestrator/domain runtime code, `recipe_id` compatibility metadata, or useful targeted-edit/dubbing/music/continuity implementations without dependency proof.
 
 ## Next authorized product slice
 
-`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`.
-
-Before that product slice begins, architecture-memory cleanup may run as a bounded chore so superseded recipe/Product Orchestrator documents cannot be mistaken for current authority. Such cleanup must preserve useful historical evidence and runtime compatibility until dependency proof supports deletion.
+`studio-v2-application-transactions`, defined by `project-context/NEXT_TASK.md`, remains next after this cleanup closes.
