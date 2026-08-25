@@ -8,7 +8,7 @@
     "goal": "Implement the first truthful named-model generation vertical: backend-owned Model Registry, project-scoped retry-safe Job/Attempt lifecycle, provider-neutral GenerationContract, generated project media and Take candidate, Studio UI state, Product Truth contract and browser E2E through existing production/transaction authorities.",
     "base_branch": "main",
     "branch": "stage-14/model-registry-job-manager-generation",
-    "pull_request": null,
+    "pull_request": 68,
     "write_scope": [
       "uv_studio/**",
       "frontend/**",
