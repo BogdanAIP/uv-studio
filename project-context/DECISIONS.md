@@ -6,6 +6,7 @@ This is the compact decision authority index. Read `docs/architecture/CURRENT_AR
 
 - **D-064 — Production Directions over shared Studio Core.** Current product-composition/direction authority.
 - **D-065 — Shared Production Semantic Core beneath Production Directions.** Current factoring authority for reusable Scene/Shot/Take/accepted-material semantics and direction extensions.
+- **D-066 — JarvisHub as the reference donor for the UV Studio Agent Harness.** Current donor/factoring authority for the future agent runtime and immediate Job Manager/generation reliability patterns; it does not replace UV-owned project/production/timeline state.
 - **D-033 — Reuse-first scriptable editor foundation.** Current editor/MLT ownership foundation.
 - **D-009 — Project Store is file-first and product-owned.** Canonical local-first project authority.
 - **D-017 — Exact one-shot execution authorization.** Current remote/non-free execution authorization boundary.
@@ -57,6 +58,7 @@ Detailed supporting records:
 - [D-043 — Optional MuseTalk lip-sync pack](decisions/D-043-musetalk-optional-lipsync-pack.md)
 - [D-064 — Production Directions over shared Studio Core](decisions/D-064-production-directions-over-shared-studio-core.md)
 - [D-065 — Shared Production Semantic Core](decisions/D-065-shared-production-semantic-core.md)
+- [D-066 — JarvisHub Agent Harness donor](decisions/D-066-jarvishub-agent-harness-donor.md)
 
 ## Partially superseded / historical product-composition decisions
 
@@ -72,4 +74,4 @@ D-002 (VideoClaw as initial base) and D-006 (provider-specific containment befor
 
 When documents disagree, use this order:
 
-`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) -> active foundational ADR for the specific concern -> compatibility/historical records.
+`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) + D-066 (Agent Harness donor/factoring) -> active foundational ADR for the specific concern -> compatibility/historical records.
