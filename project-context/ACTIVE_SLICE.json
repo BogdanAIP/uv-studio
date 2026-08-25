@@ -8,7 +8,7 @@
     "goal": "Record JarvisHub as the reference donor for UV Studio's future agent harness and carry its proven idempotency, effects, generation-contract and trace patterns into the next Model Registry/Job Manager/generation slice without replacing UV-owned project, production, timeline or transaction authority.",
     "base_branch": "main",
     "branch": "chore/jarvishub-agent-donor-architecture",
-    "pull_request": null,
+    "pull_request": 67,
     "write_scope": [
       "project-context/**",
       "docs/**",
