@@ -22,6 +22,7 @@ The previous architecture slice PR #67 merged as `f43437b7716cc5454d49595a07b616
 - **D-066** — JarvisHub is the reference architecture/method donor for the future Agent Harness; Stage 14 borrows only idempotency, GenerationContract, effects visibility and durable Job provenance patterns.
 - **D-067** — Product Truth Contract/current-document consistency; Stage 14 is the first implementation consumer.
 - **D-068** — desktop in-place updates are accepted Stage-9 release work and are out of scope here.
+- **D-069** — stateful/sequential generative continuation persists provider-neutral parent-media lineage while provider cache/latent/session state remains adapter-private; InfinityEdit is a donor/candidate adapter, not a required runtime.
 - **D-033** — canonical Timeline remains UV-owned; MLT remains derived.
 - **D-017** — exact one-shot authorization remains the remote/non-free execution boundary.
 
@@ -46,7 +47,7 @@ Stage 14 must not create a second project/timeline/production authority or a pro
 
 ### Model Registry
 
-Named model identity is backend-owned and user-visible. Provider/adapter/capability mappings are execution details beneath it. Model choice must remain visible in Studio and available to future Agent/script/MCP callers.
+Named model identity is backend-owned and user-visible. Provider/adapter/capability mappings are execution details beneath it. Model choice must remain visible in Studio and available to future Agent/script/MCP callers. Offer feature metadata is also surfaced so provider-specific capabilities such as `generation.continuation` can be checked truthfully instead of assumed.
 
 ### Job / Attempt
 
@@ -59,17 +60,22 @@ Job/Attempt history is execution history. Take acceptance is production history.
 - same idempotency key + same normalized digest: reuse queued/running/succeeded request/result and do not execute twice;
 - same key + materially different digest: conflict/fail closed;
 - fresh idempotency key: deliberate new creative Attempt, even when project/model/generation inputs are otherwise identical;
-- idempotency never bypasses or widens D-017 authorization.
+- idempotency never bypasses or widens D-017 authorization;
+- when sequential continuation is requested, the parent media reference is part of `GenerationContract` and therefore part of the normalized digest.
 
 ### GenerationContract
 
 Provider-neutral semantic constraints include fixed constraints, editable variables, forbidden semantic changes and approved project references/keyframes where applicable. Provider prompt text is not canonical production truth.
 
+Stage 14 also reserves `continuation_source_reference_id` as a provider-neutral lineage parent for later stateful/sequential generation. It is accepted only when the selected offer explicitly advertises `generation.continuation`; otherwise generation fails closed. Successful continuation records parent -> child lineage in generated-media provenance.
+
+Provider-private KV caches, latents, session handles, sliding history windows and anchor-frame caches are execution optimizations behind the adapter. They are not canonical Project Store data and are not required to reconstruct the durable generation chain.
+
 ### Product Truth
 
 The first machine-readable Product Truth Contract must bind the named-generation feature to its canonical command/API, Studio entry/model control, Job/Attempt/generated-asset/Take-candidate state and browser E2E proof.
 
-A backend-only generation path or an unwired frontend control cannot be marked ready at review.
+A backend-only generation path or an unwired frontend control cannot be marked ready at review. Continuation UI is deliberately not claimed ready in Stage 14 because no real continuation-capable model/adapter is integrated yet.
 
 ## Required user-visible proof
 
@@ -88,7 +94,7 @@ existing shared Shot
  -> Undo acceptance without deleting Job/Attempt provenance
 ```
 
-Tests must separately prove replay deduplication, same-key/different-digest conflict and fresh-key intentional reroll.
+Tests must separately prove replay deduplication, same-key/different-digest conflict and fresh-key intentional reroll. Focused service tests also prove that continuation requests are feature-gated and preserve durable lineage without introducing provider-private project state.
 
 ## Explicit non-goals
 
@@ -96,11 +102,13 @@ Tests must separately prove replay deduplication, same-key/different-digest conf
 - no JarvisHub Canvas/PostgreSQL/Hono/node project model or duplicate tool registry;
 - no desktop Update Service/UI implementation;
 - no new Production Direction or direction-private editor/timeline;
-- no provider prompt/provider identifier as canonical project meaning.
+- no provider prompt/provider identifier as canonical project meaning;
+- no InfinityEdit/Helios runtime integration or user-visible continuation workflow in Stage 14;
+- no provider-private continuation cache/latent/session state in Project Store.
 
 ## Current implementation status
 
-Draft initialization is complete and PR #68 is open. Product runtime implementation is now in progress. Until backend, frontend, Product Truth contract and E2E are implemented and verified, Model Registry/Job Manager/generation remain **not yet product-ready**.
+Draft PR #68 now contains the Model Registry/Job/GenerationContract vertical in progress plus the D-069 continuation-lineage seam. The seam is intentionally backend/contract groundwork only: no real `generation.continuation` offer is shipped to users yet. Until backend, frontend, Product Truth contract and E2E for the base named-generation vertical are fully verified, Stage 14 remains **not yet product-ready**.
 
 ## Next handoff
 
