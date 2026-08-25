@@ -169,8 +169,18 @@ class ProductionSemanticServiceTests(unittest.TestCase):
             item for item in project.artifacts if item.id == self.take_2.id
         )
         self.assertEqual(accepted_reference.metadata["production_role"], "accepted_take")
-        self.assertEqual(accepted_reference.metadata["shot_id"], "shot_1")
-        self.assertEqual(accepted_reference.metadata["take_id"], "take_2")
+        self.assertEqual(
+            accepted_reference.metadata["production_acceptances"],
+            [
+                {
+                    "shot_id": "shot_1",
+                    "take_id": "take_2",
+                    "timeline_clip_id": "clip_shot_1",
+                    "source_start_us": 500_000,
+                    "duration_us": 3_000_000,
+                }
+            ],
+        )
 
         history = ProjectUnitOfWork(self.store).history(project_id)
         last = history.entries[-1]
@@ -191,6 +201,7 @@ class ProductionSemanticServiceTests(unittest.TestCase):
             item for item in project_after_undo.artifacts if item.id == self.take_2.id
         )
         self.assertNotIn("production_role", reference_after_undo.metadata)
+        self.assertNotIn("production_acceptances", reference_after_undo.metadata)
 
         ProjectUnitOfWork(self.store).redo(project_id)
         redone = self.service.state(project_id).shot("shot_1")
@@ -202,6 +213,68 @@ class ProductionSemanticServiceTests(unittest.TestCase):
         context = self.service.micro_drama_state(project_id)
         self.assertEqual(context.story.title, "Случайная встреча")
         self.assertEqual(context.scene_continuity[0].scene_id, "scene_1")
+
+    def test_one_media_reference_can_preserve_multiple_accepted_shot_bindings(self) -> None:
+        project_id = self.project.project_id
+        self.service.create_scene(project_id, scene_id="scene_shared", title="Shared source")
+        for suffix in ("a", "b"):
+            self.service.create_shot(
+                project_id,
+                shot_id=f"shot_shared_{suffix}",
+                scene_id="scene_shared",
+                intent=f"Shared media shot {suffix}",
+            )
+            self.service.register_take(
+                project_id,
+                take_id=f"take_shared_{suffix}",
+                shot_id=f"shot_shared_{suffix}",
+                reference_id=self.take_1.id,
+            )
+
+        self.service.accept_take(
+            project_id,
+            take_id="take_shared_a",
+            timeline_start_us=0,
+            duration_us=2_000_000,
+            clip_id="clip_shared_a",
+        )
+        self.service.accept_take(
+            project_id,
+            take_id="take_shared_b",
+            timeline_start_us=2_000_000,
+            source_start_us=2_000_000,
+            duration_us=2_000_000,
+            clip_id="clip_shared_b",
+        )
+
+        reference = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        bindings = reference.metadata["production_acceptances"]
+        self.assertEqual([item["shot_id"] for item in bindings], ["shot_shared_a", "shot_shared_b"])
+        self.assertEqual([item["timeline_clip_id"] for item in bindings], ["clip_shared_a", "clip_shared_b"])
+
+        ProjectUnitOfWork(self.store).undo(project_id)
+        after_undo = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        self.assertEqual(
+            [item["shot_id"] for item in after_undo.metadata["production_acceptances"]],
+            ["shot_shared_a"],
+        )
+        self.assertIsNone(self.service.state(project_id).shot("shot_shared_b").accepted_take_id)
+
+        ProjectUnitOfWork(self.store).redo(project_id)
+        after_redo = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        self.assertEqual(len(after_redo.metadata["production_acceptances"]), 2)
 
     def test_shared_scene_shot_take_contracts_are_reusable_by_commercial(self) -> None:
         project = self.store.create_project(
