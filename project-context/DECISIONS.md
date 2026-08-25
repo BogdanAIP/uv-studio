@@ -7,6 +7,8 @@ This is the compact decision authority index. Read `docs/architecture/CURRENT_AR
 - **D-064 — Production Directions over shared Studio Core.** Current product-composition/direction authority.
 - **D-065 — Shared Production Semantic Core beneath Production Directions.** Current factoring authority for reusable Scene/Shot/Take/accepted-material semantics and direction extensions.
 - **D-066 — JarvisHub as the reference donor for the UV Studio Agent Harness.** Current donor/factoring authority for the future agent runtime and immediate Job Manager/generation reliability patterns; it does not replace UV-owned project/production/timeline state.
+- **D-067 — Product Truth Contract and current-documentation consistency.** Current verification authority for documentation freshness, backend/frontend product-surface parity and end-to-end user-outcome proof.
+- **D-068 — Desktop in-place updates and version migration.** Current release/update authority for one maintained desktop installation, Update UI/Service, verified in-place replacement and N-1 -> N upgrade evidence.
 - **D-033 — Reuse-first scriptable editor foundation.** Current editor/MLT ownership foundation.
 - **D-009 — Project Store is file-first and product-owned.** Canonical local-first project authority.
 - **D-017 — Exact one-shot execution authorization.** Current remote/non-free execution authorization boundary.
@@ -59,12 +61,14 @@ Detailed supporting records:
 - [D-064 — Production Directions over shared Studio Core](decisions/D-064-production-directions-over-shared-studio-core.md)
 - [D-065 — Shared Production Semantic Core](decisions/D-065-shared-production-semantic-core.md)
 - [D-066 — JarvisHub Agent Harness donor](decisions/D-066-jarvishub-agent-harness-donor.md)
+- [D-067 — Product Truth Contract and current-documentation consistency](decisions/D-067-product-truth-contract-and-current-doc-consistency.md)
+- [D-068 — Desktop in-place updates and version migration](decisions/D-068-desktop-in-place-updates.md)
 
 ## Partially superseded / historical product-composition decisions
 
 These records remain useful for rationale and migration evidence but are not co-equal current product authority:
 
-- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md) — Product Truth invariants remain; Product Orchestrator as long-term center is superseded.
+- [D-062 — Product Truth Recovery Gate](decisions/D-062-product-truth-recovery-gate.md) — historical recovery rationale remains; D-067 now owns the forward Product Truth verification contract.
 - [D-063 — Studio-first product architecture](decisions/D-063-studio-first-product-architecture.md) — shared Studio application/model/job/command architecture remains; prohibition on meaningful Production Direction choice is superseded by D-064.
 - [D-042 — Stage 8 composition-first additional recipes](decisions/D-042-stage-8-composition-first-additional-recipes.md) — recipe-first product composition is superseded; technical media/capability evidence remains historical reference.
 
@@ -74,4 +78,4 @@ D-002 (VideoClaw as initial base) and D-006 (provider-specific containment befor
 
 When documents disagree, use this order:
 
-`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) + D-066 (Agent Harness donor/factoring) -> active foundational ADR for the specific concern -> compatibility/historical records.
+`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) + D-066 (Agent Harness donor/factoring) + D-067 (Product Truth verification) + D-068 (desktop update/release behavior) -> active foundational ADR for the specific concern -> compatibility/historical records.
