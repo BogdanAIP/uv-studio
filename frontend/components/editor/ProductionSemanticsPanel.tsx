@@ -612,201 +612,203 @@ export function ProductionSemanticsPanel({
       </div>
 
       {isMicroDrama && microDrama ? (
-        <div className="mt-5 border-t border-slate-800 pt-4">
-          <div className="flex items-center gap-2">
-            <BookOpen size={15} className="text-amber-300" />
-            <div>
-              <p className="text-sm font-medium text-slate-200">История и непрерывность</p>
-              <p className="mt-0.5 text-xs text-slate-600">Расширение направления micro-drama поверх общих Scene / Shot / Take.</p>
+        <fieldset disabled={busy} className="m-0 min-w-0 border-0 p-0">
+          <div className="mt-5 border-t border-slate-800 pt-4">
+            <div className="flex items-center gap-2">
+              <BookOpen size={15} className="text-amber-300" />
+              <div>
+                <p className="text-sm font-medium text-slate-200">История и непрерывность</p>
+                <p className="mt-0.5 text-xs text-slate-600">Расширение направления micro-drama поверх общих Scene / Shot / Take.</p>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-              <p className="text-xs text-slate-400">История</p>
-              <input
-                aria-label="Название истории"
-                value={storyTitle}
-                onChange={event => setStoryTitle(event.target.value)}
-                placeholder="Название"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-              <input
-                aria-label="Завязка истории"
-                value={storyPremise}
-                onChange={event => setStoryPremise(event.target.value)}
-                placeholder="Завязка / premise"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+            <div className="mt-3 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="text-xs text-slate-400">История</p>
+                <input
+                  aria-label="Название истории"
+                  value={storyTitle}
+                  onChange={event => setStoryTitle(event.target.value)}
+                  placeholder="Название"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <input
+                  aria-label="Завязка истории"
+                  value={storyPremise}
+                  onChange={event => setStoryPremise(event.target.value)}
+                  placeholder="Завязка / premise"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <textarea
+                  aria-label="Синопсис истории"
+                  value={storySynopsis}
+                  onChange={event => setStorySynopsis(event.target.value)}
+                  placeholder="Краткий синопсис"
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="flex items-center gap-2 text-xs text-slate-400"><UserRound size={13} /> Персонажи</p>
+                <input
+                  aria-label="Имя персонажа"
+                  value={characterName}
+                  onChange={event => setCharacterName(event.target.value)}
+                  placeholder="Имя"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <input
+                  aria-label="Описание персонажа"
+                  value={characterDescription}
+                  onChange={event => setCharacterDescription(event.target.value)}
+                  placeholder="Внешность / роль / состояние"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={addCharacter}
+                  disabled={!characterName.trim()}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
+                >
+                  <Plus size={12} /> Добавить персонажа
+                </button>
+                <div className="mt-2 space-y-1">
+                  {characters.map(character => (
+                    <div key={character.character_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
+                      <span className="truncate text-[11px] text-slate-400">{character.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Удалить персонажа ${character.name}`}
+                        onClick={() => removeCharacter(character.character_id)}
+                        className="text-slate-700 hover:text-red-400"
+                      ><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <p className="flex items-center gap-2 text-xs text-slate-400"><MapPin size={13} /> Локации</p>
+                <input
+                  aria-label="Название локации"
+                  value={locationName}
+                  onChange={event => setLocationName(event.target.value)}
+                  placeholder="Название"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <input
+                  aria-label="Описание локации"
+                  value={locationDescription}
+                  onChange={event => setLocationDescription(event.target.value)}
+                  placeholder="Вид, свет, важный реквизит"
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={addLocation}
+                  disabled={!locationName.trim()}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
+                >
+                  <Plus size={12} /> Добавить локацию
+                </button>
+                <div className="mt-2 space-y-1">
+                  {locations.map(location => (
+                    <div key={location.location_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
+                      <span className="truncate text-[11px] text-slate-400">{location.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Удалить локацию ${location.name}`}
+                        onClick={() => removeLocation(location.location_id)}
+                        className="text-slate-700 hover:text-red-400"
+                      ><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
+              <p className="text-xs text-slate-400">Непрерывность выбранной сцены</p>
+              <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                <select
+                  aria-label="Сцена для непрерывности"
+                  value={continuityForm.sceneId}
+                  onChange={event => selectContinuityScene(event.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
+                >
+                  <option value="">Выберите сцену</option>
+                  {production.scenes.map(scene => (
+                    <option key={scene.scene_id} value={scene.scene_id}>{scene.title}</option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Локация сцены"
+                  value={continuityForm.locationId}
+                  onChange={event => setContinuityForm(current => ({ ...current, locationId: event.target.value }))}
+                  disabled={!continuityForm.sceneId}
+                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
+                >
+                  <option value="">Локация не задана</option>
+                  {locations.map(location => (
+                    <option key={location.location_id} value={location.location_id}>{location.name}</option>
+                  ))}
+                </select>
+              </div>
+              {characters.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {characters.map(character => {
+                    const active = continuityForm.characterIds.includes(character.character_id);
+                    return (
+                      <button
+                        type="button"
+                        key={character.character_id}
+                        aria-label={`Персонаж continuity ${character.name}`}
+                        aria-pressed={active}
+                        onClick={() => toggleContinuityCharacter(character.character_id)}
+                        disabled={!continuityForm.sceneId}
+                        className={`rounded-full border px-2 py-1 text-[10px] ${
+                          active
+                            ? 'border-amber-700 bg-amber-950/40 text-amber-200'
+                            : 'border-slate-700 text-slate-500 hover:border-slate-600'
+                        } disabled:opacity-40`}
+                      >
+                        {character.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <textarea
+                aria-label="Канонические факты сцены"
+                value={continuityForm.canonFactsText}
+                onChange={event => setContinuityForm(current => ({ ...current, canonFactsText: event.target.value }))}
+                disabled={!continuityForm.sceneId}
+                placeholder="Один канонический факт на строку"
+                rows={3}
+                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
               />
               <textarea
-                aria-label="Синопсис истории"
-                value={storySynopsis}
-                onChange={event => setStorySynopsis(event.target.value)}
-                placeholder="Краткий синопсис"
-                rows={3}
-                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-              <p className="flex items-center gap-2 text-xs text-slate-400"><UserRound size={13} /> Персонажи</p>
-              <input
-                aria-label="Имя персонажа"
-                value={characterName}
-                onChange={event => setCharacterName(event.target.value)}
-                placeholder="Имя"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-              <input
-                aria-label="Описание персонажа"
-                value={characterDescription}
-                onChange={event => setCharacterDescription(event.target.value)}
-                placeholder="Внешность / роль / состояние"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-              <button
-                type="button"
-                onClick={addCharacter}
-                disabled={!characterName.trim()}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
-              >
-                <Plus size={12} /> Добавить персонажа
-              </button>
-              <div className="mt-2 space-y-1">
-                {characters.map(character => (
-                  <div key={character.character_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
-                    <span className="truncate text-[11px] text-slate-400">{character.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`Удалить персонажа ${character.name}`}
-                      onClick={() => removeCharacter(character.character_id)}
-                      className="text-slate-700 hover:text-red-400"
-                    ><X size={12} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-              <p className="flex items-center gap-2 text-xs text-slate-400"><MapPin size={13} /> Локации</p>
-              <input
-                aria-label="Название локации"
-                value={locationName}
-                onChange={event => setLocationName(event.target.value)}
-                placeholder="Название"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-              <input
-                aria-label="Описание локации"
-                value={locationDescription}
-                onChange={event => setLocationDescription(event.target.value)}
-                placeholder="Вид, свет, важный реквизит"
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-amber-600"
-              />
-              <button
-                type="button"
-                onClick={addLocation}
-                disabled={!locationName.trim()}
-                className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-300 disabled:opacity-40"
-              >
-                <Plus size={12} /> Добавить локацию
-              </button>
-              <div className="mt-2 space-y-1">
-                {locations.map(location => (
-                  <div key={location.location_id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1.5">
-                    <span className="truncate text-[11px] text-slate-400">{location.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`Удалить локацию ${location.name}`}
-                      onClick={() => removeLocation(location.location_id)}
-                      className="text-slate-700 hover:text-red-400"
-                    ><X size={12} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3">
-            <p className="text-xs text-slate-400">Непрерывность выбранной сцены</p>
-            <div className="mt-2 grid gap-2 lg:grid-cols-2">
-              <select
-                aria-label="Сцена для непрерывности"
-                value={continuityForm.sceneId}
-                onChange={event => selectContinuityScene(event.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600"
-              >
-                <option value="">Выберите сцену</option>
-                {production.scenes.map(scene => (
-                  <option key={scene.scene_id} value={scene.scene_id}>{scene.title}</option>
-                ))}
-              </select>
-              <select
-                aria-label="Локация сцены"
-                value={continuityForm.locationId}
-                onChange={event => setContinuityForm(current => ({ ...current, locationId: event.target.value }))}
+                aria-label="Заметки по непрерывности сцены"
+                value={continuityForm.notes}
+                onChange={event => setContinuityForm(current => ({ ...current, notes: event.target.value }))}
                 disabled={!continuityForm.sceneId}
-                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
+                placeholder="Костюм, реквизит, состояние персонажей, свет…"
+                rows={2}
+                className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
+              />
+              <button
+                type="button"
+                onClick={saveMicroDrama}
+                disabled={busy}
+                className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
               >
-                <option value="">Локация не задана</option>
-                {locations.map(location => (
-                  <option key={location.location_id} value={location.location_id}>{location.name}</option>
-                ))}
-              </select>
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                Сохранить историю и непрерывность
+              </button>
             </div>
-            {characters.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {characters.map(character => {
-                  const active = continuityForm.characterIds.includes(character.character_id);
-                  return (
-                    <button
-                      type="button"
-                      key={character.character_id}
-                      aria-label={`Персонаж continuity ${character.name}`}
-                      aria-pressed={active}
-                      onClick={() => toggleContinuityCharacter(character.character_id)}
-                      disabled={!continuityForm.sceneId}
-                      className={`rounded-full border px-2 py-1 text-[10px] ${
-                        active
-                          ? 'border-amber-700 bg-amber-950/40 text-amber-200'
-                          : 'border-slate-700 text-slate-500 hover:border-slate-600'
-                      } disabled:opacity-40`}
-                    >
-                      {character.name}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-            <textarea
-              aria-label="Канонические факты сцены"
-              value={continuityForm.canonFactsText}
-              onChange={event => setContinuityForm(current => ({ ...current, canonFactsText: event.target.value }))}
-              disabled={!continuityForm.sceneId}
-              placeholder="Один канонический факт на строку"
-              rows={3}
-              className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
-            />
-            <textarea
-              aria-label="Заметки по непрерывности сцены"
-              value={continuityForm.notes}
-              onChange={event => setContinuityForm(current => ({ ...current, notes: event.target.value }))}
-              disabled={!continuityForm.sceneId}
-              placeholder="Костюм, реквизит, состояние персонажей, свет…"
-              rows={2}
-              className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-amber-600 disabled:opacity-40"
-            />
-            <button
-              type="button"
-              onClick={saveMicroDrama}
-              disabled={busy}
-              className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-300 px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
-            >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-              Сохранить историю и непрерывность
-            </button>
           </div>
-        </div>
+        </fieldset>
       ) : null}
 
       <div className="mt-3 flex flex-wrap gap-3 font-mono text-[10px] text-slate-700">
