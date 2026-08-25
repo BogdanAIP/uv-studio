@@ -29,6 +29,7 @@ from uv_studio.api.dubbing_review_current import router as dubbing_review_curren
 from uv_studio.api.edit_state import router as edit_state_router  # noqa: E402
 from uv_studio.api.editor_commands import router as editor_commands_router  # noqa: E402
 from uv_studio.api.execution import router as execution_router  # noqa: E402
+from uv_studio.api.generation import router as generation_router  # noqa: E402
 from uv_studio.api.mcp import router as mcp_router  # noqa: E402
 from uv_studio.api.music_analysis_assist import router as music_analysis_assist_router  # noqa: E402
 from uv_studio.api.music_assembly import router as music_assembly_router  # noqa: E402
@@ -80,6 +81,7 @@ async def enforce_trusted_browser_origin(request: Request, call_next):
 app.include_router(configuration_router)
 app.include_router(capabilities_router)
 app.include_router(capability_execution_router)
+app.include_router(generation_router)
 app.include_router(mcp_router)
 app.include_router(qwen_mm_router)
 app.include_router(recipes_router)
