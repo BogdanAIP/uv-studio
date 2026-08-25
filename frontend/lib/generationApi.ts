@@ -7,6 +7,7 @@ export interface NamedModelExecution {
   locality: 'local' | 'remote' | 'hybrid';
   cost_class: 'free' | 'potentially_paid' | 'paid';
   asynchronous: boolean;
+  features: string[];
 }
 
 export interface NamedModel {
@@ -26,6 +27,7 @@ export interface GenerationContract {
   editable_variables: string[];
   forbidden_changes: string[];
   approved_reference_id?: string | null;
+  continuation_source_reference_id?: string | null;
 }
 
 export interface GenerationAttempt {
