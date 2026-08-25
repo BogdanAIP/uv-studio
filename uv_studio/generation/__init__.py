@@ -10,6 +10,7 @@ from .jobs import (
     GenerationExecutionAttempt,
 )
 from .models import (
+    GENERATION_FEATURE_CONTINUATION,
     GenerationContract,
     GenerationValidationError,
     ModelDefinition,
@@ -19,6 +20,7 @@ from .models import (
 )
 
 __all__ = [
+    "GENERATION_FEATURE_CONTINUATION",
     "GenerationContract",
     "GenerationExecutionAttempt",
     "GenerationJob",
