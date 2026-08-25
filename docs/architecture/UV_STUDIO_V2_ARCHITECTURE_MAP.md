@@ -1,6 +1,6 @@
 # UV Studio v2 — architecture map and migration inventory
 
-**Status:** active architecture map under D-064 + D-065 + D-066  
+**Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068  
 **Date:** 2026-08-25
 
 This is the practical migration map for a coherent local-first AI production studio without rewriting proven foundations.
@@ -29,6 +29,8 @@ Two earlier product-composition errors were corrected:
 D-064 restored meaningful Production Directions. D-065 prevented six parallel domain models by sharing genuinely common Scene/Shot/Take semantics. Stage 13 has now implemented and tested that shared production-semantic path.
 
 The next missing layer is reliable named-model generation/jobs, followed by an autonomous Agent Harness. D-066 designates JarvisHub as the reference architecture/method donor for that Agent Harness while preserving UV-owned product state.
+
+D-067 adds a permanent Product Truth verification layer so backend, frontend, current docs and E2E evidence cannot silently describe different products. D-068 adds the desktop release update contract: one maintained installation, in-place update UI/Service and N-1 -> N upgrade evidence.
 
 ## 2. Target architecture
 
@@ -67,6 +69,9 @@ The next missing layer is reliable named-model generation/jobs, followed by an a
                   Adapter / Transport Registry
                  MLT / FFmpeg / MCP / local / cloud
 
+Cross-cutting Product Truth verification (D-067)
+  current docs <-> feature contracts <-> backend <-> frontend <-> E2E
+
 Later Agent Harness (JarvisHub donor patterns)
   Director runtime
    -> context / memory / compaction
@@ -76,6 +81,13 @@ Later Agent Harness (JarvisHub donor patterns)
    -> background work via Job Manager
    -> evaluation / dependency-aware repair
   ALL mutations -> same Studio/Application Commands
+
+Desktop release layer (D-068)
+  Settings/About Update UI
+   -> Update Service
+   -> verified release manifest/artifact
+   -> out-of-process updater/installer
+   -> one maintained UV Studio installation
 ```
 
 A project instantiates only the semantic/domain state it needs. The Production Semantic Core is not a mandatory giant film schema and is not a second Timeline.
@@ -184,6 +196,25 @@ Provider-neutral constraints for a generation request/attempt associated with pr
 
 Adapters render the contract into provider prompts/options. Provider prompt text is not canonical production truth.
 
+### Product Truth Contracts — NEW VERIFICATION TARGET
+
+D-067 adds machine-readable verification metadata for user-visible features. A Product Truth Contract connects feature identity to the canonical command/query, backend/API surface, frontend entry, canonical state/dependencies and end-to-end proof.
+
+It is not runtime product authority. Its job is to catch:
+
+- current-documentation drift;
+- backend features advertised as ready without required UI;
+- frontend controls without canonical backend behavior;
+- missing user-outcome proof.
+
+The next named-model generation slice is the first required consumer.
+
+### Desktop Update Service — STAGE-9 TARGET
+
+D-068 requires a visible Update UI/Service and one maintained installed application identity. Initial distribution may use GitHub Releases plus bounded machine-readable update metadata and verified artifacts.
+
+Release proof includes clean installation and a separate N-1 -> N in-place upgrade scenario with representative project/settings state.
+
 ### MCP — KEEP
 
 Optional capability/model/tool source. Discovery and execution are implemented behind explicit bindings and D-017 where required. MCP is not product state.
@@ -246,7 +277,42 @@ Shot
 
 Job history and semantic acceptance are different histories. Undoing Take acceptance does not delete the generation Job/Attempt/provenance.
 
-## 9. Legacy/migration inventory
+## 9. Product Truth verification flow
+
+D-067 adds the cross-layer gate:
+
+```text
+Current docs / lifecycle markers
+            |
+     Product Truth Contract
+       /       |        \
+ command/API frontend   E2E
+       \       |        /
+        user-visible outcome
+```
+
+Merge-time readiness is truthful only when the declared references exist and the user-visible feature has no unresolved backend/frontend parity gap.
+
+Do not attempt broad natural-language semantic linting. Use explicit contract fields, markers and deterministic repository-reference checks.
+
+## 10. Desktop update flow
+
+D-068 keeps application replacement separate from user project data:
+
+```text
+installed version N
+ -> Check for updates
+ -> verified manifest/artifact for N+1
+ -> explicit user update action
+ -> out-of-process replacement / rollback-safe handoff
+ -> restart N+1
+ -> supported migrations
+ -> healthy project open
+```
+
+Normal stable updates replace the maintained installation rather than create a new side-by-side copy. Historical/dev copies are not destructively merged automatically.
+
+## 11. Legacy/migration inventory
 
 - Recipe Registry — **LEGACY**; old project/import vocabulary only.
 - Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful readiness/domain logic into modern tool/direction query services.
@@ -257,7 +323,7 @@ Job history and semantic acceptance are different histories. Undoing Take accept
 - VideoClaw backend path injection — **DELETE LATER** after runtime/test/package proof.
 - archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
-## 10. Direction-domain growth
+## 12. Direction-domain growth
 
 ### Micro-drama — first rich proof complete
 
@@ -279,7 +345,7 @@ Script/Narration/semantic-segment extensions; visual Shots may reuse shared cont
 
 Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics where they are truly the same concept. Ordinary dubbing remains a contextual tool.
 
-## 11. Studio UI target
+## 13. Studio UI target
 
 ```text
 +--------------------------------------------------------------------+
@@ -292,9 +358,15 @@ Source-scene/dialogue/cast/mix extensions; reuse shared Scene/Take semantics whe
 +--------------------+---------------------------+-------------------+
 |                         Multitrack Timeline                         |
 +--------------------------------------------------------------------+
+
+Settings / About
+  -> current version
+  -> Check for updates
+  -> release notes / progress
+  -> Restart and update
 ```
 
-## 12. Migration order
+## 14. Migration order
 
 Completed/current foundation:
 
@@ -309,18 +381,20 @@ Next:
 6. Project Job Manager with idempotency + attempts + durable provenance.
 7. Provider-neutral GenerationContract.
 8. First named AI generation -> project-owned asset -> Take candidate -> explicit acceptance -> Timeline through normal commands.
+9. Product Truth Contract + deterministic parity/reference checks for that user-visible generation path.
 
 Then:
 
-9. Agent Harness foundation from D-066/JarvisHub patterns: context, command/tool catalog, effects/policy, trace.
-10. Planner + Tasks + Skills + functional subagents.
-11. Critic/evaluation + dependency-aware local repair.
-12. Human takeover/edit/resume and then long-form autonomous production.
-13. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
-14. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
-15. Retire compatibility code only after caller proof and reconcile proven Windows packaging onto accepted product shell.
+10. Agent Harness foundation from D-066/JarvisHub patterns: context, command/tool catalog, effects/policy, trace.
+11. Planner + Tasks + Skills + functional subagents.
+12. Critic/evaluation + dependency-aware local repair.
+13. Human takeover/edit/resume and then long-form autonomous production.
+14. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
+15. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
+16. Retire compatibility code only after caller proof.
+17. Reconcile proven Windows packaging onto the accepted product shell and implement D-068 Update Service/UI, signed/verified artifacts and N-1 -> N upgrade proof before maintained desktop release.
 
-## 13. Invariants
+## 15. Invariants
 
 - one Project Store authority;
 - one canonical Timeline;
@@ -334,6 +408,10 @@ Then:
 - retry-safe long-running/cost-bearing generation;
 - provider-neutral semantic Generation Contract above prompt rendering;
 - durable Job/Attempt provenance survives acceptance Undo;
+- user-visible ready features require Product Truth backend/frontend/evidence agreement;
+- current project/architecture docs distinguish as-built from future and agree on machine-checkable facts;
+- stable desktop update defaults to one maintained installation identity;
+- clean install and N-1 -> N upgrade are separate release proofs;
 - local-first desktop baseline;
 - reuse mature components behind UV-owned contracts;
 - compatibility remains isolated, not silently imported into new boundaries.
