@@ -47,6 +47,12 @@ def _constant_string(node: ast.AST | None) -> str | None:
     return None
 
 
+def _insertion_value(text: str, offset: int, compact: str) -> str:
+    """Avoid trailing whitespace when the existing call/dict starts multiline."""
+    next_char = text[offset : offset + 1]
+    return compact if next_char in {"\n", "\r"} else compact + " "
+
+
 def _migrate_file(path: Path) -> bool:
     original = path.read_text(encoding="utf-8")
     text = original
@@ -64,8 +70,9 @@ def _migrate_file(path: Path) -> bool:
         # are preserved byte-for-byte.
         if isinstance(node.func, ast.Attribute) and node.func.attr == "create_project":
             if not any(keyword.arg == "recipe_id" for keyword in node.keywords):
+                offset = _call_open_paren(text, node) + 1
                 insertions.append(
-                    (_call_open_paren(text, node) + 1, 'recipe_id="general_video", ')
+                    (offset, _insertion_value(text, offset, 'recipe_id="general_video",'))
                 )
 
         # Compatibility HTTP project creation used by old API tests.
@@ -80,8 +87,9 @@ def _migrate_file(path: Path) -> bool:
         keys = {_constant_string(key) for key in json_keyword.value.keys if key is not None}
         if "recipe_id" in keys:
             continue
+        offset = _dict_open_brace(text, json_keyword.value) + 1
         insertions.append(
-            (_dict_open_brace(text, json_keyword.value) + 1, '"recipe_id": "general_video", ')
+            (offset, _insertion_value(text, offset, '"recipe_id": "general_video",'))
         )
 
     # Apply all AST-coordinate edits before any content-specific replacements so
