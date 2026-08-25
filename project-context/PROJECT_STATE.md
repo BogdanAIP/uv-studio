@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-application-transactions -->
 
 **Updated:** 2026-08-25
