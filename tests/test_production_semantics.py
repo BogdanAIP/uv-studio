@@ -1,0 +1,386 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from threading import Event
+from unittest import mock
+
+from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.production.micro_drama import (
+    Character,
+    Location,
+    MicroDramaDocument,
+    SceneContinuity,
+    Story,
+)
+from uv_studio.production.semantics import ProductionSemanticError
+from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
+from uv_studio.projects.models import ProjectReference
+from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
+from uv_studio.projects.timeline import MAIN_TIMELINE_PATH, TimelineStore
+from uv_studio.projects.transactions import ProjectUnitOfWork
+
+
+class ProductionSemanticServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = ProjectStore(Path(self.tmp.name) / "projects")
+        self.project = self.store.create_project(
+            title="Micro drama",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("micro_drama"),
+            project_id="prj_micro_drama",
+        )
+        self.take_1 = self._video_reference(
+            self.project.project_id,
+            reference_id="asset_take_1",
+            filename="take_1.mp4",
+            body=b"take-one",
+            duration_us=4_000_000,
+        )
+        self.take_2 = self._video_reference(
+            self.project.project_id,
+            reference_id="asset_take_2",
+            filename="take_2.mp4",
+            body=b"take-two",
+            duration_us=5_000_000,
+        )
+        self.store.update_project(
+            self.project.project_id,
+            artifacts=(self.take_1, self.take_2),
+        )
+        self.service = ProductionSemanticService(self.store)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _video_reference(
+        self,
+        project_id: str,
+        *,
+        reference_id: str,
+        filename: str,
+        body: bytes,
+        duration_us: int,
+    ) -> ProjectReference:
+        path = self.store.resolve_project_file(
+            project_id,
+            f"assets/{filename}",
+            allowed_roots=("assets",),
+        )
+        path.write_bytes(body)
+        return ProjectReference(
+            id=reference_id,
+            kind="video",
+            path=f"assets/{filename}",
+            metadata={"duration_us": duration_us},
+        )
+
+    def test_micro_drama_scene_shot_take_acceptance_is_one_atomic_timeline_projection(self) -> None:
+        project_id = self.project.project_id
+
+        self.service.create_scene(
+            project_id,
+            scene_id="scene_1",
+            title="Встреча",
+            summary="Героиня замечает незнакомца.",
+        )
+        self.service.create_shot(
+            project_id,
+            shot_id="shot_1",
+            scene_id="scene_1",
+            intent="Средний план, напряжённый первый взгляд.",
+            reference_ids=(self.take_1.id,),
+        )
+        self.service.register_take(
+            project_id,
+            take_id="take_1",
+            shot_id="shot_1",
+            reference_id=self.take_1.id,
+            label="Спокойный вариант",
+        )
+        self.service.register_take(
+            project_id,
+            take_id="take_2",
+            shot_id="shot_1",
+            reference_id=self.take_2.id,
+            label="Более напряжённый вариант",
+        )
+        self.service.set_micro_drama_context(
+            project_id,
+            MicroDramaDocument(
+                story=Story(
+                    title="Случайная встреча",
+                    premise="Одна встреча меняет решение героини.",
+                ),
+                characters=(
+                    Character(
+                        character_id="char_anna",
+                        name="Анна",
+                        description="Главная героиня",
+                    ),
+                ),
+                locations=(
+                    Location(
+                        location_id="loc_cafe",
+                        name="Кафе",
+                        description="Вечерний интерьер",
+                    ),
+                ),
+                scene_continuity=(
+                    SceneContinuity(
+                        scene_id="scene_1",
+                        character_ids=("char_anna",),
+                        location_id="loc_cafe",
+                        canon_facts=("У Анны красный шарф",),
+                    ),
+                ),
+            ),
+        )
+
+        accepted = self.service.accept_take(
+            project_id,
+            take_id="take_2",
+            timeline_start_us=0,
+            source_start_us=500_000,
+            duration_us=3_000_000,
+            track_id="trk_story",
+            clip_id="clip_shot_1",
+        )
+
+        self.assertEqual(accepted.command, "production.accept_take")
+        self.assertTrue(accepted.transaction_id.startswith("tx_"))
+        shot = accepted.production.shot("shot_1")
+        self.assertEqual(shot.take_ids, ("take_1", "take_2"))
+        self.assertEqual(shot.accepted_take_id, "take_2")
+        self.assertEqual(shot.timeline_clip_ids, ("clip_shot_1",))
+
+        timeline = TimelineStore(self.store).load(project_id, validate_references=True)
+        self.assertEqual(timeline.tracks[0].track_id, "trk_story")
+        clip = timeline.tracks[0].clips[0]
+        self.assertEqual(clip.reference_id, self.take_2.id)
+        self.assertEqual(clip.source_start_us, 500_000)
+        self.assertEqual(clip.duration_us, 3_000_000)
+
+        project = self.store.load_project(project_id)
+        accepted_reference = next(
+            item for item in project.artifacts if item.id == self.take_2.id
+        )
+        self.assertEqual(accepted_reference.metadata["production_role"], "accepted_take")
+        self.assertEqual(
+            accepted_reference.metadata["production_acceptances"],
+            [
+                {
+                    "shot_id": "shot_1",
+                    "take_id": "take_2",
+                    "timeline_clip_id": "clip_shot_1",
+                    "source_start_us": 500_000,
+                    "duration_us": 3_000_000,
+                }
+            ],
+        )
+
+        history = ProjectUnitOfWork(self.store).history(project_id)
+        last = history.entries[-1]
+        self.assertEqual(last.transaction_id, accepted.transaction_id)
+        self.assertEqual(last.command, "production.accept_take")
+        self.assertEqual(
+            set(last.changed_paths),
+            {PROJECT_FILENAME, "production/semantics.json", MAIN_TIMELINE_PATH},
+        )
+
+        ProjectUnitOfWork(self.store).undo(project_id)
+        undone = self.service.state(project_id).shot("shot_1")
+        self.assertIsNone(undone.accepted_take_id)
+        self.assertEqual(undone.timeline_clip_ids, ())
+        self.assertEqual(TimelineStore(self.store).load(project_id).tracks, ())
+        project_after_undo = self.store.load_project(project_id)
+        reference_after_undo = next(
+            item for item in project_after_undo.artifacts if item.id == self.take_2.id
+        )
+        self.assertNotIn("production_role", reference_after_undo.metadata)
+        self.assertNotIn("production_acceptances", reference_after_undo.metadata)
+
+        ProjectUnitOfWork(self.store).redo(project_id)
+        redone = self.service.state(project_id).shot("shot_1")
+        self.assertEqual(redone.accepted_take_id, "take_2")
+        self.assertEqual(
+            TimelineStore(self.store).load(project_id).tracks[0].clips[0].clip_id,
+            "clip_shot_1",
+        )
+        context = self.service.micro_drama_state(project_id)
+        self.assertEqual(context.story.title, "Случайная встреча")
+        self.assertEqual(context.scene_continuity[0].scene_id, "scene_1")
+
+    def test_one_media_reference_can_preserve_multiple_accepted_shot_bindings(self) -> None:
+        project_id = self.project.project_id
+        self.service.create_scene(project_id, scene_id="scene_shared", title="Shared source")
+        for suffix in ("a", "b"):
+            self.service.create_shot(
+                project_id,
+                shot_id=f"shot_shared_{suffix}",
+                scene_id="scene_shared",
+                intent=f"Shared media shot {suffix}",
+            )
+            self.service.register_take(
+                project_id,
+                take_id=f"take_shared_{suffix}",
+                shot_id=f"shot_shared_{suffix}",
+                reference_id=self.take_1.id,
+            )
+
+        self.service.accept_take(
+            project_id,
+            take_id="take_shared_a",
+            timeline_start_us=0,
+            duration_us=2_000_000,
+            clip_id="clip_shared_a",
+        )
+        self.service.accept_take(
+            project_id,
+            take_id="take_shared_b",
+            timeline_start_us=2_000_000,
+            source_start_us=2_000_000,
+            duration_us=2_000_000,
+            clip_id="clip_shared_b",
+        )
+
+        reference = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        bindings = reference.metadata["production_acceptances"]
+        self.assertEqual([item["shot_id"] for item in bindings], ["shot_shared_a", "shot_shared_b"])
+        self.assertEqual([item["timeline_clip_id"] for item in bindings], ["clip_shared_a", "clip_shared_b"])
+
+        ProjectUnitOfWork(self.store).undo(project_id)
+        after_undo = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        self.assertEqual(
+            [item["shot_id"] for item in after_undo.metadata["production_acceptances"]],
+            ["shot_shared_a"],
+        )
+        self.assertIsNone(self.service.state(project_id).shot("shot_shared_b").accepted_take_id)
+
+        ProjectUnitOfWork(self.store).redo(project_id)
+        after_redo = next(
+            item
+            for item in self.store.load_project(project_id).artifacts
+            if item.id == self.take_1.id
+        )
+        self.assertEqual(len(after_redo.metadata["production_acceptances"]), 2)
+
+    def test_shared_scene_shot_take_contracts_are_reusable_by_commercial(self) -> None:
+        project = self.store.create_project(
+            title="Commercial",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("commercial"),
+            project_id="prj_commercial",
+        )
+        reference = self._video_reference(
+            project.project_id,
+            reference_id="asset_product_take",
+            filename="product_take.mp4",
+            body=b"product",
+            duration_us=2_000_000,
+        )
+        self.store.update_project(project.project_id, artifacts=(reference,))
+        service = ProductionSemanticService(self.store)
+
+        service.create_scene(
+            project.project_id,
+            scene_id="scene_product",
+            title="Product reveal",
+        )
+        service.create_shot(
+            project.project_id,
+            shot_id="shot_product",
+            scene_id="scene_product",
+            intent="Macro product reveal.",
+        )
+        service.register_take(
+            project.project_id,
+            take_id="take_product",
+            shot_id="shot_product",
+            reference_id=reference.id,
+        )
+
+        state = service.state(project.project_id)
+        self.assertEqual(state.scene("scene_product").shot_ids, ("shot_product",))
+        self.assertEqual(state.shot("shot_product").take_ids, ("take_product",))
+        with self.assertRaisesRegex(
+            ProductionSemanticError,
+            "requires direction_id='micro_drama'",
+        ):
+            service.micro_drama_state(project.project_id)
+
+    def test_micro_drama_continuity_must_reference_shared_scene(self) -> None:
+        with self.assertRaisesRegex(ProductionSemanticError, "unknown shared scene"):
+            self.service.set_micro_drama_context(
+                self.project.project_id,
+                MicroDramaDocument(
+                    scene_continuity=(
+                        SceneContinuity(scene_id="scene_missing"),
+                    ),
+                ),
+            )
+
+    def test_parallel_semantic_commands_serialize_read_modify_commit(self) -> None:
+        project_id = self.project.project_id
+        first_loaded = Event()
+        release_first = Event()
+        second_started = Event()
+        second_entered_load = Event()
+        load_count = 0
+        original_load = self.service._load_semantics
+
+        def controlled_load(target_project_id: str):
+            nonlocal load_count
+            state = original_load(target_project_id)
+            load_count += 1
+            if load_count == 1:
+                first_loaded.set()
+                self.assertTrue(release_first.wait(timeout=5))
+            else:
+                second_entered_load.set()
+            return state
+
+        def create_second_scene():
+            second_started.set()
+            return self.service.create_scene(
+                project_id,
+                scene_id="scene_parallel_b",
+                title="Parallel B",
+            )
+
+        with mock.patch.object(self.service, "_load_semantics", side_effect=controlled_load):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(
+                    self.service.create_scene,
+                    project_id,
+                    scene_id="scene_parallel_a",
+                    title="Parallel A",
+                )
+                self.assertTrue(first_loaded.wait(timeout=5))
+                second = pool.submit(create_second_scene)
+                self.assertTrue(second_started.wait(timeout=5))
+                self.assertFalse(second_entered_load.wait(timeout=0.2))
+                release_first.set()
+                first.result(timeout=5)
+                second.result(timeout=5)
+
+        state = self.service.state(project_id)
+        self.assertEqual(
+            {scene.scene_id for scene in state.scenes},
+            {"scene_parallel_a", "scene_parallel_b"},
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

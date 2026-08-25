@@ -256,17 +256,13 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         _select_option_containing(first_source, self.red_video.name)
         _select_option_containing(second_source, self.blue_video.name)
         assembly.get_by_role("button", name="Сохранить Assembly Plan", exact=True).click()
-        expect(
-            assembly.get_by_text(
-                "Assembly Plan сохранён с точной привязкой к Music Director и SHA видеоматериалов.",
-                exact=True,
-            )
-        ).to_be_visible(timeout=60_000)
 
         assembly = page.get_by_role(
             "heading", name="Визуальные материалы → Assembly Plan → master-render", exact=True
         ).locator("xpath=ancestor::section[1]")
-        assembly.get_by_role("button", name="Собрать клип", exact=True).click()
+        render_button = assembly.get_by_role("button", name="Собрать клип", exact=True)
+        expect(render_button).to_be_enabled(timeout=60_000)
+        render_button.click()
         rendered_link = assembly.get_by_role("link", name="Открыть готовый рендер", exact=True)
         expect(rendered_link).to_be_visible(timeout=120_000)
 

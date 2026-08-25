@@ -1,3 +1,4 @@
+import { notifyStudioProjectChanged } from './projectEvents';
 import type { ProjectReference, UVProject } from './projectsApi';
 
 export type StudioMediaKind = 'video' | 'image' | 'audio';
@@ -191,7 +192,9 @@ export async function executeStudioTimelineCommand(
     },
   );
   if (!response.ok) throw await apiError(response, 'Не удалось изменить timeline');
-  return response.json();
+  const result: StudioTimelineCommandResult = await response.json();
+  notifyStudioProjectChanged(projectId);
+  return result;
 }
 
 export async function getProjectHistory(projectId: string): Promise<ProjectHistoryState> {
@@ -217,7 +220,9 @@ async function moveProjectHistory(
       operation === 'undo' ? 'Не удалось отменить действие' : 'Не удалось повторить действие',
     );
   }
-  return response.json();
+  const result: ProjectHistoryOperationResult = await response.json();
+  notifyStudioProjectChanged(projectId);
+  return result;
 }
 
 export function undoProjectHistory(projectId: string): Promise<ProjectHistoryOperationResult> {
@@ -243,7 +248,9 @@ export async function renderStudioTimeline(projectId: string): Promise<StudioRen
     { method: 'POST' },
   );
   if (!response.ok) throw await apiError(response, 'Не удалось экспортировать Studio timeline');
-  return response.json();
+  const result: StudioRenderResult = await response.json();
+  notifyStudioProjectChanged(projectId);
+  return result;
 }
 
 export async function uploadStudioMedia(
@@ -262,7 +269,9 @@ export async function uploadStudioMedia(
     },
   );
   if (!response.ok) throw await apiError(response, 'Не удалось импортировать медиафайл');
-  return response.json();
+  const reference: ProjectReference = await response.json();
+  notifyStudioProjectChanged(projectId);
+  return reference;
 }
 
 export function studioSourceMediaUrl(
