@@ -78,7 +78,7 @@
   "availability": {
     "requires_available_offer": true,
     "default_behavior": "Named models whose execution mapping is configuration_required or unavailable remain visible with the reason and cannot be launched.",
-    "proof_transport": "Browser/API outcome proof uses the env-gated Stage14E2ETestExecutor; that model and executor are absent from the normal catalog unless UV_STUDIO_E2E_TEST_GENERATION=1."
+    "proof_transport": "Browser/API outcome proof uses the env-gated test-only Stage14E2ETestExecutor; that model and executor are absent from the normal catalog unless UV_STUDIO_E2E_TEST_GENERATION=1."
   },
   "evidence": {
     "browser_e2e": {
