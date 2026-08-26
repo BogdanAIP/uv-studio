@@ -1,82 +1,79 @@
 # UV Studio — Current Architecture
 
 **Status:** CURRENT AUTHORITY  
-**Product-composition decision:** D-064  
-**Shared production-semantics decision:** D-065  
-**Agent Harness donor/factoring decision:** D-066  
-**Product Truth verification decision:** D-067  
-**Desktop update/version decision:** D-068  
-**Stateful generative continuation decision:** D-069  
+**Date:** 2026-08-26  
+**Product composition:** D-064  
+**Shared production semantics:** D-065  
+**Agent Harness factoring:** D-066  
+**Product Truth:** D-067  
+**Desktop updates:** D-068  
+**Stateful generation lineage:** D-069  
 **Editor foundation:** D-033
 
-This document is the primary architecture entry point for new development. Historical recovery documents, Recipe Registry flows, Product Orchestrator projections and numbered Stage workspaces are not competing target architectures.
+This document describes the current UV Studio target and the concrete implementation boundary. Historical Recipe Registry, Product Orchestrator and numbered Stage workspaces remain compatibility/migration code unless a later accepted decision explicitly promotes them.
 
 ## Product definition
 
-UV Studio is a **local-first AI production studio with multiple Production Directions over one shared production/application core**.
+UV Studio is a **local-first AI production studio with multiple Production Directions over one shared project, production, editor and execution core**.
 
-A Production Direction describes how a kind of production is organized: navigation, policies, specialized domain documents and Agent context. It does not create a separate editor engine, project store, timeline authority, execution stack or duplicate common Scene/Shot/Take semantics.
+Production Directions organize work; they do not create separate project stores, timelines, editor engines, model registries or private Scene/Shot/Take systems.
 
-Initial directions:
+Initial directions remain:
 
-- `micro_drama` — micro-drama / story production;
-- `commercial` — advertising / product video;
-- `music_video` — music-video production;
-- `narrated_video` — narrated/explainer video;
-- `dub_battle` — cinematic revoicing / dub battle;
-- `free_project` — free-form Studio project.
+- `micro_drama`;
+- `commercial`;
+- `music_video`;
+- `narrated_video`;
+- `dub_battle`;
+- `free_project`.
 
-## Canonical shape
+## Canonical authority stack
 
 ```text
-Project
-  -> Production Direction
-       organization / navigation / policy / Agent context
-  -> Shared Production Semantic Core (optional per project)
-       Sequence / Scene
-       Shot
-       Take / Candidate / Accepted Take
-       semantic references / continuity / canon
-       production-to-asset and production-to-timeline bindings
-  -> Direction Extensions
-       micro-drama: story / characters / locations / dramaturgy
-       commercial: brief / product / brand / audience / concepts
-       music-video: song / Music Map / sections / visual direction
-       narrated: script / narration / semantic segments
-       dub-battle: source scene / dialogue / cast / mix policy
-  -> Shared Studio Core
-       Media / Assets
-       Preview / Canvas
-       Inspector / AI Tools
-       canonical Timeline
-       Studio/Application Commands
-       Project Unit of Work / Undo-Redo
-       Model Registry
-       Job Manager
-       Agent Harness
-       Export
-       Update UI / Update Service (desktop release layer)
-  -> Capability / Adapter boundaries
-  -> MLT / FFmpeg / MCP / local models / optional remote tools
+Project Store
+ -> Production Direction
+ -> Shared Production Semantic Core
+      Scene / Shot / Take / Accepted Take
+ -> Direction-specific documents
+ -> Shared Studio Core
+      Media / Preview / Inspector / canonical Timeline
+ -> Studio / Application Commands
+ -> ProjectUnitOfWork / durable Undo-Redo
+ -> Model Registry
+ -> Generation Job Manager / GenerationContract
+ -> Agent Harness
+      Context / Catalog / Policy / Trace              [Stage 15 merged]
+      Planner / durable Tasks / Skills                [Stage 16 active draft]
+      functional Subagents                            [later D-066 layer 3]
+      background Agent execution                      [later layer 4]
+      evaluate / repair                               [later layer 5]
+      takeover / edit / resume                        [later layer 6]
+      long-form autonomy                              [later layer 7]
+ -> Capability Registry / D-017 / adapters
+ -> MLT / FFmpeg / MCP / local / optional remote execution
 ```
 
-Not every project must instantiate every production-semantic entity. `free_project` may remain Media/Assets/Timeline-only; a commercial may use Shots/Takes without a Story; a music video can group shared Shots under Music Map sections.
+Cross-cutting verification:
+
+```text
+current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
+```
 
 ## Canonical authorities
 
 - **Project Store** owns portable project state and project-owned references.
-- **Production Direction identity** is typed Studio metadata and selects organization/policy, not execution engine.
-- **Shared Production Semantic Core** owns reusable Scene/Shot/Take/accepted-material identities where needed.
-- **Direction Extensions** own genuinely direction-specific data while referencing shared identities for common concepts.
-- **Canonical Timeline** is UV-owned assembly state; MLT is derived behind the D-033 adapter.
-- **Studio/Application Commands** are the shared semantic mutation boundary for GUI, Agent, scripts and MCP.
-- **Project Unit of Work** owns atomic multi-document mutations and durable undo/redo across production semantics, project references/assets and Timeline.
-- **Model Registry** owns user-visible named model identity and maps it onto lower execution capabilities/providers.
-- **Job Manager** owns project-scoped long-running lifecycle, retry/idempotency and durable execution/generation provenance.
-- **Agent Harness** observes and acts through the same commands/models/jobs/capabilities as manual callers; it does not own a second project graph or private mutation path.
-- **Capability Registry / D-017 / adapters** own execution availability, authorization and transport, not product identity.
-- **Product Truth Contracts** are verification metadata that bind user-visible surfaces to those canonical authorities; they do not become runtime product state.
-- **Update Service** owns installed-application update discovery/download/verification/handoff; it does not own or rewrite Project Store data except through explicit supported migrations.
+- **Production Direction identity** selects production organization/policy, not an execution engine.
+- **Shared Production Semantic Core** owns reusable Scene/Shot/Take/accepted-material identities.
+- **Direction Extensions** own genuinely direction-specific data while referencing shared identities.
+- **Canonical Timeline** is UV-owned assembly state; MLT remains derived behind the D-033 adapter.
+- **Studio/Application Commands** are the semantic mutation boundary for GUI, Agent, scripts and MCP.
+- **ProjectUnitOfWork** owns canonical multi-document mutations and durable Undo/Redo.
+- **Model Registry** owns meaningful named-model identity above provider/adapter transport.
+- **Generation Job Manager** owns project-scoped generation lifecycle, idempotency, attempts and execution provenance.
+- **Agent Harness** orchestrates work over the same commands/models/jobs/capabilities; it never owns a second project graph or private mutation path.
+- **Capability Registry / D-017 / adapters** own execution availability, effects, authorization and transport.
+- **Product Truth Contracts** are verification metadata, not runtime product state.
+- **Update Service** remains the accepted future desktop release authority for in-place updates; it is not implemented by the current Agent slices.
 
 ## Production semantics versus Timeline
 
@@ -84,243 +81,183 @@ A Shot is not a Timeline Clip.
 
 ```text
 Shot
-  -> intent / references / continuity
-  -> generated/imported candidate Takes
-  -> accepted Take
-  -> project-owned asset
-  -> one or more Timeline clips for assembly
+ -> intent / references / continuity
+ -> imported or generated candidate Takes
+ -> accepted Take
+ -> project-owned media
+ -> Timeline projection / assembly clips
 ```
 
-This gives the Agent/UI a production-level model without creating a second canonical timeline.
+Stage 13 proved the shared Scene -> Shot -> Take -> accepted Take -> canonical Timeline path with ProjectUnitOfWork, Undo/Redo and reuse outside micro-drama.
 
-Stage 13 implemented the first complete shared vertical path: Scene -> Shot -> multiple Takes -> direction context -> accepted Take -> project-owned media provenance -> canonical Timeline, including project-level Undo/Redo and cross-direction reuse of the shared contracts.
+## Named generation — Stage 14 merged foundation
 
-## Generation and long-running work
-
-Generated media is not accepted production state merely because a model returned a file.
-
-Stage 14 implements this flow:
+The implemented generation path is:
 
 ```text
-Shot / production intent
-  -> choose named Model
-  -> GenerationContract
-  -> project-scoped Job / execution Attempt
-  -> Capability / Provider / Adapter execution
-  -> project-owned generated asset + provenance
-  -> Take candidate
-  -> explicit acceptance command
-  -> canonical Timeline projection
+Shot
+ -> named Model
+ -> GenerationContract
+ -> idempotent project Job / Attempt
+ -> Capability / Provider / Adapter execution
+ -> project-owned generated artifact + provenance
+ -> Take candidate
+ -> explicit acceptance
+ -> canonical Timeline
 ```
 
-The backend-owned `ModelRegistry` separates user-visible model identity from provider/adapter/capability mapping. The project-scoped `GenerationJobManager` persists queued/running/succeeded/failed/cancelled generation state under the existing project `tasks/` authority. The Job/Attempt layer records what was requested and executed; Take acceptance records production meaning. Undoing Take acceptance does not erase the historical generation Job/Attempt or its provenance.
+Important invariants:
 
-Long-running, cost-bearing or externally mutating generation is retry-safe. The Job Manager uses a UV-native idempotency contract that binds an idempotency key to a stable normalized request/context digest: same key + same digest reuses the Job/result; same key + different digest fails closed; a fresh key explicitly permits an intentional creative reroll even when normalized creative inputs are identical.
+- same idempotency key + same normalized request digest reuses the Job;
+- same key + different digest fails closed;
+- a fresh key permits intentional creative reroll;
+- restart never silently replays abandoned external work;
+- D-017 remains separate from idempotency and is required for every fresh remote/non-free execution that needs consent;
+- provider prompt text and provider-private cache/session/latent state are not canonical project truth;
+- D-069 continuation uses durable project media lineage, while provider-private continuation state remains disposable.
 
-D-017 remains separate from idempotency. A fresh external/cost-bearing execution still requires the normal exact one-shot authorization; replay of an already-created Job does not consume a fresh grant.
+A real InfinityEdit/Helios adapter and visible Continue/Edit surface are not currently claimed.
 
-A provider-neutral `GenerationContract` constrains what a generation attempt may change. It expresses fixed constraints, editable variables, forbidden changes and approved project references/keyframes where applicable. Provider adapters translate this semantic contract into provider-specific prompts/options; provider prompt text is not canonical production truth.
+## Agent Harness layer 1 — Stage 15 merged
 
-For stateful/sequential generation, `GenerationContract` may also carry a provider-neutral `continuation_source_reference_id` pointing to prior project media. An execution offer must explicitly advertise `generation.continuation` before that field is accepted. The parent reference participates in the normalized request/idempotency digest and is recorded as parent -> child lineage in generated-media provenance.
+PR #69 implemented the first D-066 layer and was lifecycle-closed before Stage 16 opened.
 
-Continuation lineage is durable project truth; model-private execution state is not. KV/attention caches, latents, provider session handles, sliding history windows and anchor-frame caches remain adapter-owned, disposable optimizations. Losing such runtime state may reduce performance but must not erase or reinterpret the durable generation chain. InfinityEdit is a technology donor/candidate adapter for this pattern, not a required runtime or product authority. See D-069.
+### Context Builder
 
-Stage 14 intentionally does not ship a real continuation-capable offer or Continue/Edit UI. That later user-visible workflow needs its own Product Truth record and browser proof.
+`AgentContextBuilder` creates a deterministic bounded observation from canonical Project / Production / Timeline / Model / Job authorities. It uses bounded nested collections and omitted counts; it does not copy the project into an Agent-owned graph.
 
-## Agent Harness donor boundary — D-066
+### Existing-authority action catalog
 
-JarvisHub is the reference architecture/method donor for the future UV Studio Agent Harness.
+`AgentActionCatalog` exposes stable metadata only over existing UV authorities:
 
-Borrow/adapt its proven patterns for:
+- ProductionSemanticService actions;
+- TimelineCommandService actions;
+- named generation through GenerationService.
 
-- persistent agent runtime/turn loop;
-- Planner + durable Tasks;
-- Skills;
-- context pipeline, memory and compaction;
-- a small functional subagent set such as explore / plan / media / critic;
-- action/tool effects and policy;
-- inspectable trace;
-- background execution;
-- evaluate -> repair loops and dependency-aware local repair.
+The catalog exposes effects, authority, input contract, Job Manager routing and possible D-017 routing. There is no generic `project.write_file`, shell, Python or arbitrary provider command.
 
-Do **not** adopt JarvisHub's Canvas-as-source-of-truth, generic node project model, PostgreSQL/Hono application authority or duplicate tool/protocol layer. UV Studio already has its own canonical project/production/timeline/transaction/capability authorities.
+### Policy
 
-The future runtime shape is therefore:
+Agent policy projects existing availability/locality/cost/`CapabilityEffects`/D-017 facts. It may report that consent is required but cannot grant consent.
+
+### Inspectable trace
+
+`AgentTraceStore` keeps append-only project-scoped execution history under the existing `tasks/` authority. Trace binds context digest, action/policy/effects, canonical identities, result references and sanitized failures while excluding raw prompts, authorization tokens, secrets, absolute host paths and provider-private state.
+
+### Execution seam
+
+`AgentHarness` delegates canonical mutation to the same Production/Timeline/Generation services used by other callers. Stage 15 proved success and failure tracing, unavailable models, D-017 separation, bounded context and restart/reopen.
+
+## Agent Harness layer 2 — Stage 16 active draft
+
+Current active slice: `studio-v2-agent-planner-durable-tasks-skills`, PR #70.
+
+The active implementation adds orchestration above Stage 15 without changing canonical authorities:
 
 ```text
-Human UI / Chat / scripts / MCP          Director Agent
-              |                    explore / plan / media / critic
-              +--------------------------+
-                         |
-              Studio/Application Commands
-                         |
-                 Project Unit of Work
-             /             |              \
- Production Semantics   Project Store   Timeline
-                         |
-                  Model Registry
-                         |
-                    Job Manager
-                         |
-                Capability / Adapters
-                         |
-           local / MCP / optional remote
+bounded goal
+ -> Stage-15 Context + Action Catalog + Policy
+ -> AgentPlanner validates structured proposal
+ -> AgentPlanRecord
+ -> durable dependency-aware AgentTaskRecord state
+ -> bounded Skill expansion
+ -> foreground AgentTaskCoordinator
+ -> AgentHarness
+ -> existing UV application authorities
+ -> Stage-15 trace + canonical result references
 ```
 
-Agent trace, evaluation and repair records reference canonical Project/Scene/Shot/Take/asset/Timeline identities. They are history/observations over project truth, not a second source of truth.
+### Planner
+
+The Planner contract is structured and UV-validated rather than hidden free-form reasoning. It validates bounded step/task counts, stable IDs, action/Skill identities, portable inputs, dependency references, cycles, policy availability and canonical context binding.
+
+A future model may propose this structured plan; UV validation remains deterministic and authoritative.
+
+### Durable Agent Tasks
+
+Plans and task records use the existing project `tasks/` root via `ProjectTaskRecordStore`. Agent Tasks are orchestration state, not Generation Jobs, production truth or Undo history.
+
+Current bounded state machine:
+
+```text
+planned -> ready -> running -> succeeded
+   |         |          |-> failed
+   |         |-> cancelled
+   |-> cancelled
+```
+
+Dependencies unlock only after success. A failure does not falsely unlock downstream tasks or mark the plan successful.
+
+### Skills
+
+Skills are reusable bounded procedures over approved Agent catalog actions. The first architecture-proof Skill is `production.scene_with_shot`, which expands into `production.create_scene` followed by dependent `production.create_shot`.
+
+Skills derive their effects/authority envelope from underlying catalog actions and do not gain shell, Python, arbitrary filesystem/provider or D-017 bypass rights.
+
+### Foreground execution boundary
+
+Stage 16 intentionally executes one runnable task in the foreground through `AgentHarness`. Functional subagents, background workers, evaluate/repair and long-form autonomy remain later D-066 layers.
+
+The Stage-16 draft is internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
+
+## D-066 sequence after the active slice
+
+Once Stage 16 is reviewed, merged and lifecycle-closed, the accepted order remains:
+
+1. **functional subagents** — small bounded `explore / plan / media / critic` roles over the Planner/Task/Skill contracts;
+2. **background Agent work** coordinated through existing Job Manager boundaries;
+3. **critic/evaluation + dependency-aware repair**;
+4. **human takeover/edit/resume**;
+5. **long-form autonomous production** only after all prior boundaries are proven.
+
+Do not collapse these into Stage 16.
 
 ## Capability/effects boundary
 
-JarvisHub's useful action-effect pattern is adapted into existing UV-owned command/capability metadata instead of creating a competing Protocol Bridge.
+`CapabilityEffects` / resolved offer effects remain the single effects source for both Agent policy and Skills. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
 
-`CapabilityEffects` and `CapabilityRegistry.effects_for_offer()` expose inspectable flags for:
+No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority is introduced.
 
-- project mutation;
-- Timeline mutation;
-- media generation;
-- destructive behavior;
-- long-running behavior;
-- reversibility;
-- cost-bearing execution.
+## Product Truth — D-067
 
-Resolved offer effects are exposed through the existing capability-offers API. Media-generation/long-running facts are derived from the canonical capability/offer contract, while actual locality/cost permission remains the selected offer plus D-017. No second JarvisHub-style tool registry is introduced.
+A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-## Product Truth and current-documentation consistency — D-067
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–16 remain explicitly internal unless a later slice adds a real Studio Agent surface and corresponding Product Truth/browser evidence.
 
-A user-visible feature is not complete merely because one implementation layer exists.
+## Desktop updates — D-068
 
-The verification shape is:
-
-```text
-Current Documentation Consistency
-        +
-Product Surface Parity
-        +
-User Outcome Proof
-        =
-Product Truth
-```
-
-Machine-readable Product Truth records live under `docs/architecture/product-truth/*.json`. `uv_studio/product_truth.py` validates exact source references instead of interpreting Markdown semantics. For a ready user-visible feature the schema binds stable feature identity, canonical domain method, backend/API route, frontend component and declared controls, canonical state/results, dependencies, visible states and browser/API proof identifiers.
-
-For a feature declared user-visible and ready on `main`:
-
-- frontend UI must not advertise a non-existent/stub canonical backend/application path;
-- backend functionality must not be counted as a completed user feature when its required product surface is absent;
-- declared domain/API/frontend/evidence references must resolve deterministically;
-- user-significant model/cost/progress/error semantics must remain truthful across layers;
-- a real user-outcome proof must exercise the intended path through the product UI.
-
-Internal infrastructure may intentionally have no UI, but must be explicitly non-user-visible/not-ready rather than silently counted as product functionality.
-
-Current documentation is also product truth. `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, `CURRENT_ARCHITECTURE.md`, authority indexes and machine-readable feature contracts must agree on narrow machine-checkable facts. CI validates explicit markers/references/contracts rather than attempting brittle semantic interpretation of arbitrary prose.
-
-The first implemented record is `docs/architecture/product-truth/generate-shot-take.json`. It binds the Stage-14 visible named-model generation surface to `GenerationService.submit`, its FastAPI route, Job/Attempt + artifact + Take state and the API/browser tests that prove the outcome. Normal models with unavailable or `configuration_required` offers remain visibly blocked; the successful CI proof transport is explicitly env-gated and test-only.
-
-See `docs/architecture/PRODUCT_TRUTH_CONTRACT.md`.
-
-## Desktop update/version boundary — D-068
-
-The maintained desktop product uses one normal installation identity and supports in-place updates from the UI.
-
-Target user flow:
-
-```text
-Settings / About
- -> Check for updates
- -> show newer version + release notes
- -> Download and update
- -> verify digest/signature/artifact identity
- -> controlled app shutdown
- -> out-of-process updater/installer replacement
- -> migrations when required
- -> restart
- -> healthy startup
-```
-
-Application/runtime files are replaceable; Project Store projects, user media, intended persistent settings and other user-owned data remain separately protected.
-
-GitHub Releases may be the initial distribution source, but the application consumes bounded machine-readable update metadata rather than scraping arbitrary release pages. The updater fails closed on integrity/signature mismatch.
-
-Release evidence must include both clean install and **N-1 -> N in-place upgrade** using representative project/settings state. A successful clean installation does not prove upgrade safety.
-
-Application version, Project Store schema version and production-domain schema versions remain separate identities.
-
-See `docs/architecture/DESKTOP_UPDATES.md`.
+The accepted desktop target remains one maintained installation with visible check/update/restart flow, verified artifacts and N-1 -> N upgrade proof. This remains separate release/productization work and must not be mixed into Agent orchestration.
 
 ## Direction versus tool
 
-A direction answers **what kind of production is being organized**. A tool answers **what operation should be performed inside a project**.
+A Direction answers **what production is being organized**. A tool/action answers **what operation occurs inside that project**.
 
-Directions: micro-drama, commercial, music video, narrated video, dub battle, free project.
-
-Contextual tools: targeted edit, ordinary dubbing/translation, photo-to-video/slideshow, visualizer, action transfer, talking character, lip-sync, background replacement, image/video/audio generation.
-
-A tool may be especially useful in one direction without becoming a separate project identity.
+Contextual operations such as targeted edit, dubbing/translation, slideshow, visualizer, talking character, lip-sync, image/video/audio generation and continuation remain tools/capabilities even when a direction gives them prominent UI.
 
 ## Rules for new work
 
-1. Do not add a `RecipeDefinition` to ship a new product direction or feature.
-2. Do not grow Product Orchestrator recipe-by-recipe as the target application architecture.
-3. Do not add a numbered Stage workspace as normal product navigation.
-4. Do not create a second canonical project/timeline state.
-5. Do not create a direction-specific editor engine.
-6. Do not create parallel direction-specific Scene/Shot/Take schemas when the semantic concept is shared.
-7. Do not hide user-significant model choice behind capability selection.
-8. GUI, Agent, scripts and MCP must converge on the same application/domain commands.
-9. Reuse mature media/editor/model/agent components behind UV-owned boundaries rather than copying their application model.
-10. Keep compatibility paths until call-site/dependency proof permits deletion.
-11. Modern Studio identity must be validated independently from compatibility `recipe_id` and generic extensions mutation.
-12. Do not give the Agent a private write path or let Agent memory/trace become canonical project state.
-13. Do not execute a replayed long-running/cost-bearing generation twice when the normalized idempotency identity is the same.
-14. Do not make provider prompt text the canonical representation of production constraints.
-15. Do not declare a user-visible feature ready on `main` when its Product Truth Contract has an unresolved backend/frontend/evidence gap.
-16. Current architecture/project-context documents must distinguish as-built from target state and keep machine-checkable current facts synchronized.
-17. Stable desktop releases must update the maintained installation in place by default; clean-install success never substitutes for N-1 -> N upgrade proof.
-18. Do not persist provider-private continuation cache/latent/session state as canonical project data; sequential generation must be reconstructible from durable project media lineage and request provenance.
-
-## Current implementation boundary after Stage 14
-
-Stages 12 through 14 now provide the concrete lower foundation for generation and later autonomy:
-
-- modern Studio/project-media APIs use recipe-free common project contracts;
-- modern Production Direction identity has a typed load/update/import gate with explicit compatibility and recovery projections;
-- bounded `production/` storage owns strict shared semantics and direction documents;
-- `ProjectUnitOfWork` coordinates strict canonical JSON with prepared journals, exact rollback/recovery and durable project-level undo/redo;
-- timeline commands plus source/export reference registration use the shared transaction authority;
-- shared `Scene`, `Shot`, `Take` and accepted-Take contracts are implemented in `production/semantics.json`;
-- micro-drama Story/Characters/Locations/continuity extensions are implemented in `production/micro_drama.json`;
-- `ProductionSemanticService` is the shared semantic mutation boundary;
-- Take acceptance can atomically span production state, project-owned media provenance and canonical Timeline;
-- Undo/Redo preserves a single project history across production and Timeline;
-- the shared Scene/Shot/Take contracts are proven outside micro-drama through the commercial direction;
-- the backend-owned Model Registry separates named model choice from provider transport;
-- project-scoped generation Jobs/Attempts persist retry-safe execution history and idempotency provenance;
-- `GenerationContract` preserves provider-neutral semantic constraints, including D-069 continuation parent lineage;
-- generated media is registered as project-owned material before it becomes a shared Take candidate;
-- Studio UI exposes named model/Shot/prompt/contract controls and truthful queued/running/succeeded/failed/cancelled/result states;
-- offer-resolved effects metadata is available from the existing Capability Registry/API for future policy/trace consumers;
-- `docs/architecture/product-truth/generate-shot-take.json` plus `uv_studio/product_truth.py` provide the first machine-readable D-067 parity contract;
-- API and cross-platform browser tests prove named generation -> Take -> acceptance -> canonical Timeline -> Undo without deleting Job provenance.
-
-D-069's durable continuation-lineage seam is implemented as backend/contract groundwork only. A real InfinityEdit/Helios adapter, real `generation.continuation` offer and user-visible Continue/Edit workflow remain future Product Truth work.
-
-The full Planner/Memory/Skills/Subagents Agent Harness remains later work. The next post-Stage-14 implementation slice is selected only after this PR is merged and lifecycle-closed so the handoff is based on current `main`, not speculative parallel architecture.
-
-Desktop Update Service/UI and packaged N-1 -> N upgrade verification remain Stage-9 desktop release/productization work; clean-install success must never be treated as upgrade proof.
+1. Do not add RecipeDefinition as new v2 product identity.
+2. Do not create a separate engine/workspace per Production Direction.
+3. Do not create a second canonical Project Store or Timeline.
+4. Do not duplicate shared Scene/Shot/Take semantics per direction.
+5. GUI, Agent, scripts and MCP converge on the same application/domain commands.
+6. Do not give the Agent or a Skill a private project-write path.
+7. Agent context/plan/task/trace are orchestration/inspection state over canonical identities, not canonical production state.
+8. Generation Job/Attempt history remains separate from Agent Task orchestration state.
+9. Remote/non-free execution remains explicit and D-017-authorized where required.
+10. Provider prompts, secrets, reusable authorization and provider-private continuation caches never become portable Project/Agent state.
+11. Current docs must distinguish merged/as-built state from active draft/future state.
+12. Do not claim autonomous product readiness from internal Agent infrastructure alone.
 
 ## Compatibility layer
 
-The repository still contains old recipe, Product Orchestrator, Stage 8 and donor-era paths because supported historical projects/domain implementations may depend on them.
+Still present as compatibility/migration code unless separately promoted:
 
-They are **compatibility/migration code** unless a later accepted decision explicitly promotes something back into current architecture:
+- schema-v1 `recipe_id`;
+- Recipe Registry;
+- Product Orchestrator and legacy `/execution-plan`;
+- Stage 6/8 workspace UI;
+- donor-era clients and runtime paths still needed by supported callers;
+- targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-- schema-v1 `recipe_id` is compatibility metadata;
-- Recipe Registry is not the v2 product taxonomy;
-- Product Orchestrator is not the long-term product center;
-- legacy `/execution-plan` is not current application truth;
-- Stage 6/8 workspaces are not the template for new direction UI;
-- useful targeted-edit, dubbing, music, continuity and media adapters should be extracted/reused rather than discarded;
-- legacy projects may remain readable/editable in an explicit compatibility mode without being assigned a fake Production Direction.
-
-See `docs/architecture/README.md`, D-064, D-065, D-066, D-067, D-068 and D-069.
+Compatibility code may remain readable/editable while new architecture continues on the authorities defined above.
