@@ -1,6 +1,6 @@
 # Agent Harness foundation — Stage 15
 
-**Status:** draft implementation under PR #69  
+**Status:** review implementation under PR #69  
 **Date:** 2026-08-26  
 **Decision authority:** D-066 + D-017
 
@@ -28,13 +28,14 @@ canonical Project / Production / Timeline / Model / Job state
 - modern Production Direction identity;
 - Project identity/title/update time and bounded project-owned reference identities;
 - shared Scene/Shot/Take state, with an optional Shot target;
-- canonical Timeline track/clip identities;
+- bounded target Take identities and bounded Shot reference/Take/Timeline-clip identity lists, each with omitted counts;
+- canonical Timeline summary with bounded track identities and bounded per-track clip identities, with omitted counts;
 - visible named Model Registry descriptions;
-- bounded Job/Attempt status and durable output identities.
+- bounded Job identities and bounded per-Job Attempt status/provenance identities, with omitted counts.
 
 The context intentionally does **not** copy project `settings`/`extensions`, raw Job requests, provider prompts, reusable authorization tokens, provider-private cache/session/latent state, arbitrary project files or absolute host paths.
 
-The snapshot has a stable SHA-256 digest so a trace can bind an action to the observed canonical state without persisting a second copy of that state.
+The snapshot has a stable SHA-256 digest so a trace can bind an action to the observed canonical state without persisting a second copy of that state. Large projects remain observations of bounded collections rather than a complete Agent-owned duplicate graph.
 
 ## Existing-authority action catalog
 
@@ -51,7 +52,7 @@ The snapshot has a stable SHA-256 digest so a trace can bind an action to the ob
 - `timeline.remove_clip`;
 - `generation.submit`.
 
-Unknown actions fail closed. In particular, there is no generic `project.write_file`, shell, Python or arbitrary provider command hidden behind the Agent catalog.
+Each relevant entry exposes its existing authority, bounded input fields/effects and machine-readable Job Manager / possible D-017 routing facts. Unknown actions fail closed. In particular, there is no generic `project.write_file`, shell, Python or arbitrary provider command hidden behind the Agent catalog.
 
 ## Effects and policy
 
@@ -70,28 +71,34 @@ Each record contains only bounded inspection facts:
 - trace/project/time identity;
 - context digest;
 - action identity;
-- digest of non-secret action input;
+- digest of non-secret accepted action input, or a fixed rejected-input digest when validation fails;
 - canonical project/target/result identities;
+- affected Scene/Shot/Take/reference identities for successful production mutations;
 - resolved policy/effects facts;
 - success/failure status;
 - transaction, Job, Attempt, output, Take, track or clip references where applicable;
 - bounded sanitized failure type/message.
 
-Trace is execution history, not canonical Production/Timeline truth. Raw action arguments, prompts and authorization tokens are not persisted. Portable-state validation rejects sensitive keys and absolute host-path leakage.
+Trace is execution history, not canonical Production/Timeline truth. Raw action arguments, prompts and authorization tokens are not persisted. Portable-state validation rejects sensitive keys and absolute host-path leakage. Context-construction and portable-input validation failures are also traced when the project-scoped trace authority can be resolved, without persisting the rejected values.
 
 ## Bounded execution proof
 
 `tests/test_agent_harness.py` proves:
 
 1. deterministic context construction without leaking settings/extensions;
-2. deterministic catalog and fail-closed unknown actions;
-3. a successful Agent action using the existing `ProductionSemanticService` transaction path;
-4. durable trace reopening through a fresh `ProjectStore` instance;
-5. failed existing commands leave a failure trace without false success state;
-6. unknown actions cannot become a direct project-file write;
-7. token/absolute-host-path data is rejected from portable trace/context state;
-8. unavailable generation fails before Job creation;
-9. remote/non-free generation still requires the exact D-017 one-shot authorization and the token is not recorded in trace.
+2. nested Timeline collections remain bounded with explicit omitted counts;
+3. deterministic catalog and fail-closed unknown actions;
+4. a successful Agent action using the existing `ProductionSemanticService` transaction path;
+5. success trace contains the affected canonical production identities rather than relying on raw action input;
+6. durable trace reopening through a fresh `ProjectStore` instance;
+7. failed existing commands leave a failure trace without false success state;
+8. context/input validation failures leave sanitized failure traces without storing rejected host-path values;
+9. unknown actions cannot become a direct project-file write;
+10. token/absolute-host-path data is rejected from portable trace/context state;
+11. unavailable generation fails before Job creation;
+12. remote/non-free generation still requires the exact D-017 one-shot authorization and the token is not recorded in trace.
+
+`tests/test_agent_catalog_contract.py` additionally proves machine-readable Job Manager and possible-D-017 routing facts for catalog entries.
 
 ## Explicitly deferred by D-066
 

@@ -51,6 +51,11 @@ from .models import (
 _MAX_CONTEXT_REFERENCES = 100
 _MAX_CONTEXT_JOBS = 100
 _MAX_CONTEXT_MODELS = 100
+_MAX_CONTEXT_TARGET_TAKES = 50
+_MAX_CONTEXT_SHOT_IDENTITIES = 100
+_MAX_CONTEXT_TIMELINE_TRACKS = 50
+_MAX_CONTEXT_TIMELINE_CLIPS_PER_TRACK = 100
+_MAX_CONTEXT_JOB_ATTEMPTS = 20
 
 
 def _mutating(*, timeline: bool = False, destructive: bool = False) -> CapabilityEffects:
@@ -202,12 +207,37 @@ class AgentContextBuilder:
         shot_payload: dict[str, Any] | None = None
         scene_payload: dict[str, Any] | None = None
         take_payloads: list[dict[str, Any]] = []
+        target_takes_omitted = 0
         if shot_id is not None:
             shot = production.shot(shot_id)
             scene = production.scene(shot.scene_id)
             target_kind = "shot"
             target_id = shot.shot_id
-            shot_payload = shot.to_dict()
+
+            reference_ids, reference_ids_omitted = self._bounded(
+                list(shot.reference_ids),
+                _MAX_CONTEXT_SHOT_IDENTITIES,
+            )
+            take_ids, take_ids_omitted = self._bounded(
+                list(shot.take_ids),
+                _MAX_CONTEXT_TARGET_TAKES,
+            )
+            timeline_clip_ids, timeline_clip_ids_omitted = self._bounded(
+                list(shot.timeline_clip_ids),
+                _MAX_CONTEXT_SHOT_IDENTITIES,
+            )
+            shot_payload = {
+                "shot_id": shot.shot_id,
+                "scene_id": shot.scene_id,
+                "intent": shot.intent,
+                "reference_ids": reference_ids,
+                "reference_ids_omitted": reference_ids_omitted,
+                "take_ids": take_ids,
+                "take_ids_omitted": take_ids_omitted,
+                "accepted_take_id": shot.accepted_take_id,
+                "timeline_clip_ids": timeline_clip_ids,
+                "timeline_clip_ids_omitted": timeline_clip_ids_omitted,
+            }
             scene_payload = {
                 "scene_id": scene.scene_id,
                 "title": scene.title,
@@ -219,61 +249,76 @@ class AgentContextBuilder:
                     "reference_id": take.reference_id,
                     "label": take.label,
                 }
-                for take in (production.take(take_id) for take_id in shot.take_ids)
+                for take in (production.take(take_id) for take_id in take_ids)
             ]
+            target_takes_omitted = take_ids_omitted
 
+        references_source = sorted(
+            (*project.sources, *project.artifacts),
+            key=lambda item: item.id,
+        )
+        references_omitted = max(0, len(references_source) - _MAX_CONTEXT_REFERENCES)
         references = [
             {"id": item.id, "kind": item.kind, "path": item.path}
-            for item in sorted(
-                (*project.sources, *project.artifacts),
-                key=lambda item: item.id,
+            for item in references_source[:_MAX_CONTEXT_REFERENCES]
+        ]
+
+        tracks_omitted = max(0, len(timeline.tracks) - _MAX_CONTEXT_TIMELINE_TRACKS)
+        tracks: list[dict[str, Any]] = []
+        for track in timeline.tracks[:_MAX_CONTEXT_TIMELINE_TRACKS]:
+            clip_ids, clip_ids_omitted = self._bounded(
+                [clip.clip_id for clip in track.clips[:_MAX_CONTEXT_TIMELINE_CLIPS_PER_TRACK]],
+                _MAX_CONTEXT_TIMELINE_CLIPS_PER_TRACK,
             )
-        ]
-        references, references_omitted = self._bounded(
-            references,
-            _MAX_CONTEXT_REFERENCES,
-        )
+            # The slice above avoids materializing an unbounded identity list; omitted
+            # count is derived from the canonical collection length.
+            clip_ids_omitted = max(
+                clip_ids_omitted,
+                len(track.clips) - _MAX_CONTEXT_TIMELINE_CLIPS_PER_TRACK,
+            )
+            tracks.append(
+                {
+                    "track_id": track.track_id,
+                    "kind": track.kind,
+                    "title": track.title,
+                    "clip_ids": clip_ids,
+                    "clip_ids_omitted": clip_ids_omitted,
+                }
+            )
 
-        tracks = [
-            {
-                "track_id": track.track_id,
-                "kind": track.kind,
-                "title": track.title,
-                "clip_ids": [clip.clip_id for clip in track.clips],
-            }
-            for track in timeline.tracks
-        ]
-
+        models = self.model_registry.list()
+        models_omitted = max(0, len(models) - _MAX_CONTEXT_MODELS)
         model_items = [
             self.model_registry.describe(model.model_id)
-            for model in self.model_registry.list()
+            for model in models[:_MAX_CONTEXT_MODELS]
         ]
-        model_items, models_omitted = self._bounded(
-            model_items,
-            _MAX_CONTEXT_MODELS,
-        )
 
-        job_items = [
-            {
-                "job_id": job.job_id,
-                "request_digest": job.request_digest,
-                "status": job.status.value,
-                "created_at": job.created_at,
-                "updated_at": job.updated_at,
-                "attempts": [
-                    {
-                        "attempt_id": attempt.attempt_id,
-                        "retry_index": attempt.retry_index,
-                        "status": attempt.status.value,
-                        "output_reference_id": attempt.output_reference_id,
-                        "take_id": attempt.take_id,
-                    }
-                    for attempt in job.attempts
-                ],
-            }
-            for job in self.jobs.list(project_id)
-        ]
-        job_items, jobs_omitted = self._bounded(job_items, _MAX_CONTEXT_JOBS)
+        jobs = self.jobs.list(project_id)
+        jobs_omitted = max(0, len(jobs) - _MAX_CONTEXT_JOBS)
+        job_items: list[dict[str, Any]] = []
+        for job in jobs[:_MAX_CONTEXT_JOBS]:
+            attempts_omitted = max(0, len(job.attempts) - _MAX_CONTEXT_JOB_ATTEMPTS)
+            attempts = [
+                {
+                    "attempt_id": attempt.attempt_id,
+                    "retry_index": attempt.retry_index,
+                    "status": attempt.status.value,
+                    "output_reference_id": attempt.output_reference_id,
+                    "take_id": attempt.take_id,
+                }
+                for attempt in job.attempts[:_MAX_CONTEXT_JOB_ATTEMPTS]
+            ]
+            job_items.append(
+                {
+                    "job_id": job.job_id,
+                    "request_digest": job.request_digest,
+                    "status": job.status.value,
+                    "created_at": job.created_at,
+                    "updated_at": job.updated_at,
+                    "attempts": attempts,
+                    "attempts_omitted": attempts_omitted,
+                }
+            )
 
         content = {
             "project": {
@@ -291,11 +336,13 @@ class AgentContextBuilder:
                 "target_scene": scene_payload,
                 "target_shot": shot_payload,
                 "target_takes": take_payloads,
+                "target_takes_omitted": target_takes_omitted,
             },
             "timeline": {
                 "timeline_id": timeline.timeline_id,
                 "track_count": len(timeline.tracks),
                 "tracks": tracks,
+                "tracks_omitted": tracks_omitted,
             },
             "models": {
                 "items": model_items,
@@ -498,11 +545,40 @@ class AgentHarness:
         return refs
 
     @staticmethod
+    def _affected_canonical_references(
+        action_id: str,
+        inputs: Mapping[str, Any],
+        result: Any,
+    ) -> tuple[str, ...]:
+        fields_by_action = {
+            "production.create_scene": ("scene_id",),
+            "production.create_shot": ("scene_id", "shot_id"),
+            "production.register_take": ("shot_id", "take_id", "reference_id"),
+            "production.accept_take": ("take_id",),
+        }
+        values = [
+            inputs[field_name]
+            for field_name in fields_by_action.get(action_id, ())
+            if isinstance(inputs.get(field_name), str) and inputs[field_name]
+        ]
+        if action_id == "production.accept_take":
+            take_id = inputs.get("take_id")
+            production = getattr(result, "production", None)
+            if isinstance(take_id, str) and production is not None:
+                try:
+                    values.append(production.take(take_id).shot_id)
+                except Exception:
+                    pass
+        return tuple(dict.fromkeys(values))
+
+    @staticmethod
     def _canonical_references(
         snapshot: AgentContextSnapshot,
         result_references: Mapping[str, str],
+        affected_references: tuple[str, ...] = (),
     ) -> tuple[str, ...]:
         values = [snapshot.project_id, snapshot.target_id]
+        values.extend(affected_references)
         values.extend(result_references.values())
         # Preserve deterministic first occurrence while avoiding duplicate project target.
         return tuple(dict.fromkeys(values))
@@ -520,6 +596,78 @@ class AgentHarness:
             action_id=action_id,
             model_id=model_id if isinstance(model_id, str) else None,
         )
+
+    def _failure_policy(self, action_id: str, exc: Exception) -> AgentPolicyProjection:
+        try:
+            effects = self.catalog.get(action_id).effects
+        except AgentUnknownAction:
+            effects = CapabilityEffects()
+        return AgentPolicyProjection(
+            action_id=action_id,
+            available=False,
+            reason=safe_error_message(exc),
+            locality="unknown",
+            cost_class="unknown",
+            authorization_required=False,
+            consent_required=(),
+            effects=effects,
+        )
+
+    def _minimal_failure_snapshot(self, project_id: str) -> AgentContextSnapshot:
+        project = self.project_store.load_project(project_id)
+        return AgentContextSnapshot(
+            project_id=project.project_id,
+            target_kind="project",
+            target_id=project.project_id,
+            content={
+                "observation": {
+                    "state": "preparation_failed",
+                    "detail": "full context was not available; rejected values were not persisted",
+                }
+            },
+        )
+
+    def _append_preparation_failure(
+        self,
+        *,
+        project_id: str,
+        action_id: str,
+        snapshot: AgentContextSnapshot | None,
+        exc: Exception,
+    ) -> None:
+        """Best-effort trace for failures before normal policy/dispatch begins.
+
+        The rejected input itself is never hashed or persisted. If the project cannot
+        be resolved, there is no project-scoped trace authority available and the
+        original exception remains authoritative.
+        """
+
+        try:
+            failure_snapshot = snapshot or self._minimal_failure_snapshot(project_id)
+            policy = self._failure_policy(action_id, exc)
+            input_digest = stable_digest(
+                {
+                    "rejected_inputs": True,
+                    "error_type": exc.__class__.__name__,
+                }
+            )
+            record = AgentTraceRecord(
+                trace_id=f"agent_trace_{uuid.uuid4().hex}",
+                project_id=project_id,
+                created_at=utc_now_iso(),
+                context_digest=failure_snapshot.digest,
+                action_id=action_id,
+                input_digest=input_digest,
+                canonical_references=self._canonical_references(failure_snapshot, {}),
+                policy=policy,
+                status=AgentTraceStatus.FAILED,
+                error_type=exc.__class__.__name__,
+                error_message=safe_error_message(exc),
+            )
+            self.traces.append(record)
+        except Exception:
+            # Never replace the original preparation failure with trace bookkeeping.
+            return
 
     def _invoke(
         self,
@@ -564,20 +712,30 @@ class AgentHarness:
         inputs: Mapping[str, Any],
         target_shot_id: str | None = None,
     ) -> Any:
-        if not isinstance(inputs, Mapping):
-            raise AgentPortableStateError("Agent action inputs must be a JSON object")
+        snapshot: AgentContextSnapshot | None = None
+        try:
+            if not isinstance(inputs, Mapping):
+                raise AgentPortableStateError("Agent action inputs must be a JSON object")
 
-        snapshot = self.context.build(project_id, shot_id=target_shot_id)
-        traceable_inputs = self._traceable_inputs(inputs)
-        input_digest = stable_digest(
-            {
-                "action_id": action_id,
-                "inputs": portable_json(
-                    traceable_inputs,
-                    field_name="Agent action inputs",
-                ),
-            }
-        )
+            snapshot = self.context.build(project_id, shot_id=target_shot_id)
+            traceable_inputs = self._traceable_inputs(inputs)
+            input_digest = stable_digest(
+                {
+                    "action_id": action_id,
+                    "inputs": portable_json(
+                        traceable_inputs,
+                        field_name="Agent action inputs",
+                    ),
+                }
+            )
+        except Exception as exc:
+            self._append_preparation_failure(
+                project_id=project_id,
+                action_id=action_id,
+                snapshot=snapshot,
+                exc=exc,
+            )
+            raise
 
         try:
             policy = self._policy_for_inputs(
@@ -681,6 +839,11 @@ class AgentHarness:
             raise
 
         result_references = self._canonical_result_references(result)
+        affected_references = self._affected_canonical_references(
+            action_id,
+            inputs,
+            result,
+        )
         record = AgentTraceRecord(
             trace_id=f"agent_trace_{uuid.uuid4().hex}",
             project_id=project_id,
@@ -691,6 +854,7 @@ class AgentHarness:
             canonical_references=self._canonical_references(
                 snapshot,
                 result_references,
+                affected_references,
             ),
             policy=policy,
             status=AgentTraceStatus.SUCCEEDED,

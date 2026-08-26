@@ -35,7 +35,9 @@ from uv_studio.generation.models import (
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.production.semantics import ProductionSemanticError
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
+from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.store import ProjectStore
+from uv_studio.projects.timeline import TimelineClip, TimelineDocument, TimelineStore, TimelineTrack
 
 
 class AgentHarnessTests(unittest.TestCase):
@@ -151,6 +153,60 @@ class AgentHarnessTests(unittest.TestCase):
         self.assertNotIn('"settings"', encoded)
         self.assertNotIn('"extensions"', encoded)
 
+    def test_context_bounds_nested_timeline_identity_collections(self) -> None:
+        asset_path = self.store.resolve_project_file(
+            self.project.project_id,
+            "assets/bounded.mp4",
+            allowed_roots=("assets",),
+        )
+        asset_path.write_bytes(b"bounded")
+        reference = ProjectReference(
+            id="asset_bounded",
+            kind="video",
+            path="assets/bounded.mp4",
+            metadata={"duration_us": 1_000_000},
+        )
+        self.store.update_project(self.project.project_id, artifacts=(reference,))
+
+        clips = tuple(
+            TimelineClip(
+                clip_id=f"clip_bounded_{index}",
+                reference_id=reference.id,
+                timeline_start_us=index * 1_000,
+                source_start_us=0,
+                duration_us=1_000,
+            )
+            for index in range(110)
+        )
+        tracks = (
+            TimelineTrack(
+                track_id="trk_bounded_0",
+                kind="video",
+                title="Bounded 0",
+                clips=clips,
+            ),
+            *tuple(
+                TimelineTrack(
+                    track_id=f"trk_bounded_{index}",
+                    kind="video",
+                    title=f"Bounded {index}",
+                )
+                for index in range(1, 60)
+            ),
+        )
+        TimelineStore(self.store).save(
+            self.project.project_id,
+            TimelineDocument(tracks=tracks),
+        )
+
+        snapshot = self.harness.context.build(self.project.project_id, shot_id="shot_1")
+        timeline = snapshot.content["timeline"]
+        self.assertEqual(timeline["track_count"], 60)
+        self.assertEqual(len(timeline["tracks"]), 50)
+        self.assertEqual(timeline["tracks_omitted"], 10)
+        self.assertEqual(len(timeline["tracks"][0]["clip_ids"]), 100)
+        self.assertEqual(timeline["tracks"][0]["clip_ids_omitted"], 10)
+
     def test_catalog_is_deterministic_and_unknown_actions_fail_closed(self) -> None:
         actions = self.harness.catalog.list()
         ids = tuple(item.action_id for item in actions)
@@ -197,6 +253,8 @@ class AgentHarnessTests(unittest.TestCase):
         self.assertEqual(trace.action_id, "production.create_shot")
         self.assertEqual(trace.result_references["transaction_id"], result.transaction_id)
         self.assertIn("shot_1", trace.canonical_references)
+        self.assertIn("shot_2", trace.canonical_references)
+        self.assertIn("scene_1", trace.canonical_references)
         self.assertNotIn("Created through bounded Agent Harness", json.dumps(trace.to_dict()))
 
         reopened = AgentHarness(
@@ -225,6 +283,35 @@ class AgentHarnessTests(unittest.TestCase):
         self.assertEqual(trace.action_id, "production.create_shot")
         self.assertEqual(trace.result_references, {})
         self.assertEqual(trace.error_type, "ProductionSemanticError")
+
+    def test_context_and_input_validation_failures_are_traced_without_rejected_values(self) -> None:
+        with self.assertRaises(ProductionSemanticError):
+            self.harness.execute(
+                project_id=self.project.project_id,
+                action_id="production.create_scene",
+                target_shot_id="shot_missing_context",
+                inputs={"scene_id": "scene_never_created", "title": "Never created"},
+            )
+        context_failure = self.harness.traces.list(self.project.project_id)[-1]
+        self.assertEqual(context_failure.status, AgentTraceStatus.FAILED)
+        self.assertEqual(context_failure.action_id, "production.create_scene")
+        self.assertEqual(context_failure.error_type, "ProductionSemanticError")
+        self.assertIn(self.project.project_id, context_failure.canonical_references)
+
+        rejected_path = r"C:\Users\agent\private\prompt.txt"
+        with self.assertRaises(AgentPortableStateError):
+            self.harness.execute(
+                project_id=self.project.project_id,
+                action_id="production.create_scene",
+                target_shot_id="shot_1",
+                inputs={"scene_id": "scene_rejected", "title": rejected_path},
+            )
+        input_failure = self.harness.traces.list(self.project.project_id)[-1]
+        self.assertEqual(input_failure.status, AgentTraceStatus.FAILED)
+        self.assertEqual(input_failure.error_type, "AgentPortableStateError")
+        self.assertNotIn(rejected_path, json.dumps(input_failure.to_dict()))
+        with self.assertRaises(ProductionSemanticError):
+            self.production.state(self.project.project_id).scene("scene_rejected")
 
     def test_unknown_action_is_traced_and_cannot_become_direct_project_write(self) -> None:
         with self.assertRaises(AgentUnknownAction):
