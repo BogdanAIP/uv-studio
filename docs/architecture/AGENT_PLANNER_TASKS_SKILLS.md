@@ -13,7 +13,7 @@ bounded production goal
  -> Stage-15 Context Builder + Action Catalog + policy
  -> AgentPlanner validates structured proposal
  -> AgentPlanRecord + durable AgentTaskRecord state
- -> bounded Skills expand only into approved catalog actions
+ -> bounded versioned Skills expand only into approved catalog actions
  -> AgentTaskCoordinator executes foreground runnable work
  -> Stage-15 AgentHarness
  -> existing Production / Timeline / Generation authorities
@@ -26,18 +26,11 @@ This layer deliberately does not add a second project graph, command registry, p
 
 `AgentPlanner` persists no hidden/free-form reasoning. It validates a strict sequence of `AgentPlanStepProposal` values and produces a bounded `AgentPlanRecord`.
 
-The contract enforces:
-
-- bounded proposed/expanded task counts and portable payload size;
-- stable plan/step/task identities;
-- exactly one approved `action_id` or bounded `skill_id` per step;
-- explicit dependency identities with missing-dependency, duplicate and cycle rejection;
-- Stage-15 context digest and canonical-reference binding;
-- existing Agent Action Catalog input fields and policy availability;
-- fail-closed unknown actions/Skills;
-- no persisted authorization tokens, secrets or absolute host paths.
+The contract enforces bounded proposed/expanded task counts and payload size, stable plan/step/task identities, exactly one approved action or Skill per step, explicit acyclic dependencies, Stage-15 context-digest/canonical-reference binding, catalog input/policy validation, and fail-closed rejection of unknown authorities, secrets, authorization tokens and absolute host paths.
 
 Unavailable/configuration-required generation is rejected at planning time. D-017-required but otherwise available execution remains visible as authorization-required; planning never grants authorization.
+
+Plan descriptors are append-only. Runtime inspection derives one authoritative plan status from durable task states rather than persisting a second mutable status copy. `AgentPlanExecutionState` exposes that status plus stable `created_at` and derived `updated_at` timestamps, so restart/reopen inspection remains deterministic without duplicated truth.
 
 ## Durable Agent Tasks
 
@@ -54,16 +47,20 @@ planned -> ready -> running -> succeeded
 
 A dependent task becomes ready only after every dependency succeeds. Failed work never silently unlocks downstream tasks. Successful tasks are terminal, preventing accidental re-execution such as duplicate generation submission.
 
+On restart/reopen, an abandoned persisted `running` task is reconciled fail-closed to `failed` with an explicit interruption reason. It is never silently replayed. This keeps external/cost-bearing retry authority with the existing Generation Job Manager and D-017 rather than inventing Agent-level retry semantics.
+
 Task records keep orchestration facts only: project/plan/task/Skill/action identity, timestamps/status, resulting Stage-15 trace ID, canonical/result references and sanitized failures. They do not copy provider prompts, authorization tokens, provider-private runtime state or canonical production data.
 
 ## Skills
 
-`AgentSkillCatalog` is a bounded reusable-procedure catalog over existing Agent actions. The proof Skill `production.scene_with_shot` expands to:
+`AgentSkillCatalog` is a bounded reusable-procedure catalog over existing Agent actions. Its public description carries `schema_version=1` together with stable Skill ID, purpose, bounded input fields, allowed action IDs, derived effects/policy envelope, Job Manager routing, possible D-017 requirement and underlying authorities.
+
+The proof Skill `production.scene_with_shot` expands to:
 
 1. `production.create_scene`;
 2. dependent `production.create_shot`.
 
-Skill effects, authorities, Job Manager routing and possible D-017 requirement derive from the underlying action definitions. Skills cannot introduce shell, Python, arbitrary filesystem access, arbitrary provider calls or actions absent from the Agent catalog.
+Skills cannot introduce shell, Python, arbitrary filesystem access, arbitrary provider calls or actions absent from the Agent catalog.
 
 ## Foreground execution
 
@@ -83,15 +80,7 @@ For an action accepting D-017 authorization, `authorization_token` is execution-
 
 Stage 16 keeps the Stage-15 `AgentTraceStore` as the sole execution-trace authority. A small correlation proxy enriches the `AgentTraceRecord` before that same store appends it.
 
-The trace therefore directly contains canonical references to:
-
-- project/target entities from Stage 15;
-- affected/result identities from Stage 15;
-- `plan_id`;
-- `task_id`;
-- optional `skill_id`.
-
-The durable task record also points back to the resulting `trace_id`. This gives bidirectional inspection without another trace schema/store.
+The trace directly links the Stage-15 project/target/affected/result identities with `plan_id`, `task_id` and optional `skill_id`; the durable task record points back to the resulting `trace_id`. This gives inspectable plan -> task/Skill -> action -> policy/effects -> canonical result linkage without another trace store or hidden reasoning log.
 
 ## Generation and D-017
 
@@ -109,19 +98,22 @@ Generation continues to use the existing Model Registry, Generation Service, Job
 `tests/test_agent_planning.py` and `tests/test_agent_stage16_runtime.py` cover:
 
 1. bounded Skill expansion into dependency-ordered tasks;
-2. dependency blocking and promotion;
-3. restart/reopen from a fresh Project Store/runtime;
-4. cycle/missing-dependency/unknown action/unknown Skill rejection;
-5. secret/host-path and invalid state-transition rejection;
-6. durable failed task state without downstream unlock;
-7. unavailable generation rejection;
-8. D-017-required execution failure without authorization and without Job creation;
-9. generation task replay protection / one Job identity;
-10. direct plan/task/Skill correlation in the same Stage-15 trace;
-11. local generation submit without explicitly supplying a null authorization token;
-12. no authorization token persisted in plan/task state.
+2. Skill schema metadata and derived effects/authority envelope;
+3. dependency blocking and promotion;
+4. restart/reopen from a fresh Project Store/runtime;
+5. abandoned `running` reconciliation to explicit failed/interrupted state without replay;
+6. derived plan status plus created/updated inspection timestamps;
+7. cycle/missing-dependency/unknown action/unknown Skill rejection;
+8. secret/host-path and invalid state-transition rejection;
+9. durable failed task state without downstream unlock;
+10. unavailable generation rejection;
+11. D-017-required execution failure without authorization and without Job creation;
+12. generation task replay protection / one Job identity;
+13. direct plan/task/Skill correlation in the same Stage-15 trace;
+14. local generation submit without explicitly supplying a null authorization token;
+15. no authorization token persisted in plan/task state.
 
-Draft exact head `092a4e5e8acd667d50a6df1c29e18052157fdefa` passed all five permanent CI jobs in one PR-event run, including unit suites and browser E2E on Ubuntu and Windows. Review-state exact-head verification is required again before merge.
+Draft exact head `092a4e5e8acd667d50a6df1c29e18052157fdefa` passed all five permanent CI jobs in one PR-event run, including unit suites and browser E2E on Ubuntu and Windows. The subsequent review refinements above require a fresh exact-head review gate before merge.
 
 ## Known limitations
 

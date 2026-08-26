@@ -12,14 +12,12 @@ from .models import (
     AgentUnknownAction,
 )
 from .orchestration import (
-    AgentPlanExecutionState,
     AgentPlanRecord,
     AgentPlanStatus,
     AgentPlanStepProposal,
     AgentPlanStore,
     AgentPlanner,
     AgentPlanningError,
-    AgentSkillCatalog,
     AgentSkillDefinition,
     AgentSkillError,
     AgentTaskBlocked,
@@ -29,9 +27,15 @@ from .orchestration import (
     AgentTaskStatus,
     AgentTaskStore,
 )
-from .stage16_runtime import AgentTaskCoordinator
+from .stage16_runtime import (
+    AGENT_SKILL_SCHEMA_VERSION,
+    AgentPlanExecutionState,
+    AgentSkillCatalog,
+    AgentTaskCoordinator,
+)
 
 __all__ = [
+    "AGENT_SKILL_SCHEMA_VERSION",
     "AgentActionCatalog",
     "AgentActionDefinition",
     "AgentContextBuilder",

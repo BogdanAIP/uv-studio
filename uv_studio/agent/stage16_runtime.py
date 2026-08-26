@@ -1,9 +1,9 @@
-"""Stage-16 execution refinements over the durable Agent Task coordinator.
+"""Stage-16 runtime refinements over the durable Agent Task coordinator.
 
 This module keeps one Stage-15 AgentTraceStore and one AgentHarness execution path.
-It only adds orchestration correlation before append and supplies the execution-only
-``authorization_token=None`` default required by GenerationService.submit when a
-plan intentionally persists no authorization token.
+It adds orchestration correlation before trace append, a stable Skill schema envelope,
+derived plan inspection timestamps/status, fail-closed restart reconciliation for
+abandoned running tasks, and execution-only authorization defaults.
 """
 
 from __future__ import annotations
@@ -14,11 +14,53 @@ from dataclasses import replace
 from typing import Any, Iterator, Mapping
 
 from .models import AgentTraceRecord
-from .orchestration import AgentTaskCoordinator as _BaseAgentTaskCoordinator
+from .orchestration import (
+    AgentPlanExecutionState as _BaseAgentPlanExecutionState,
+    AgentPlanner,
+    AgentSkillCatalog as _BaseAgentSkillCatalog,
+    AgentTaskCoordinator as _BaseAgentTaskCoordinator,
+    AgentTaskStateError,
+    AgentTaskStatus,
+)
+
+AGENT_SKILL_SCHEMA_VERSION = 1
+
+
+class AgentSkillCatalog(_BaseAgentSkillCatalog):
+    """Public Skill catalog with stable schema metadata around bounded Skills."""
+
+    schema_version = AGENT_SKILL_SCHEMA_VERSION
+
+    def describe(self, skill_id: str) -> dict[str, Any]:
+        result = super().describe(skill_id)
+        return {
+            "schema_version": self.schema_version,
+            **result,
+        }
+
+
+class AgentPlanExecutionState(_BaseAgentPlanExecutionState):
+    """Derived durable inspection view over append-only plan + mutable task state."""
+
+    @property
+    def created_at(self) -> str:
+        return self.plan.created_at
+
+    @property
+    def updated_at(self) -> str:
+        values = [self.plan.created_at]
+        values.extend(task.updated_at for task in self.tasks)
+        return max(values)
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result["created_at"] = self.created_at
+        result["updated_at"] = self.updated_at
+        return result
 
 
 class _CorrelatingTraceStore:
-    """Proxy the existing append-only trace store with bounded correlation refs."""
+    """Proxy the existing append-only trace store with bounded orchestration refs."""
 
     def __init__(self, base: Any) -> None:
         self._base = base
@@ -58,10 +100,27 @@ class _CorrelatingTraceStore:
 
 
 class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
-    """Public Stage-16 coordinator with trace correlation and execution-only auth."""
+    """Public Stage-16 coordinator with restart, trace and auth refinements."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        harness: Any,
+        *,
+        planner: Any | None = None,
+        plan_store: Any | None = None,
+        task_store: Any | None = None,
+    ) -> None:
+        if planner is None:
+            planner = AgentPlanner(
+                harness,
+                skills=AgentSkillCatalog(harness.catalog),
+            )
+        super().__init__(
+            harness,
+            planner=planner,
+            plan_store=plan_store,
+            task_store=task_store,
+        )
         current = self.harness.traces
         if isinstance(current, _CorrelatingTraceStore):
             self._correlated_traces = current
@@ -69,6 +128,29 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
             correlated = _CorrelatingTraceStore(current)
             self.harness.traces = correlated
             self._correlated_traces = correlated
+
+    def state(self, project_id: str, plan_id: str) -> AgentPlanExecutionState:
+        """Reopen a plan fail-closed: abandoned running tasks are never replayed."""
+
+        with self.project_store._lock:
+            plan = self.plans.get(project_id, plan_id)
+            for record in self.tasks.list_by_plan(project_id, plan.plan_id):
+                if record.status is not AgentTaskStatus.RUNNING:
+                    continue
+                interruption = AgentTaskStateError(
+                    "Agent Task was interrupted before durable completion; automatic replay is disabled"
+                )
+                self.tasks.transition(
+                    record,
+                    AgentTaskStatus.FAILED,
+                    error=interruption,
+                )
+            state = super().state(project_id, plan.plan_id)
+            return AgentPlanExecutionState(
+                plan=state.plan,
+                tasks=state.tasks,
+                status=state.status,
+            )
 
     def execute_task(
         self,

@@ -5,7 +5,9 @@ import unittest
 from pathlib import Path
 
 from uv_studio.agent import (
+    AGENT_SKILL_SCHEMA_VERSION,
     AgentHarness,
+    AgentPlanStatus,
     AgentPlanStepProposal,
     AgentSkillCatalog,
     AgentTaskCoordinator,
@@ -33,7 +35,8 @@ from uv_studio.projects.store import ProjectStore
 class AgentStage16RuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.store = ProjectStore(Path(self.tmp.name) / "projects")
+        self.projects_root = Path(self.tmp.name) / "projects"
+        self.store = ProjectStore(self.projects_root)
         self.project = self.store.create_project(
             title="Stage 16 runtime",
             recipe_id=STUDIO_COMPAT_RECIPE_ID,
@@ -95,6 +98,17 @@ class AgentStage16RuntimeTests(unittest.TestCase):
             ),
         )
 
+    def test_skill_catalog_exposes_stable_schema_metadata(self) -> None:
+        harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
+        catalog = AgentSkillCatalog(harness.catalog)
+        description = catalog.describe(AgentSkillCatalog.SCENE_WITH_SHOT)
+        self.assertEqual(description["schema_version"], AGENT_SKILL_SCHEMA_VERSION)
+        self.assertEqual(description["skill_id"], AgentSkillCatalog.SCENE_WITH_SHOT)
+        self.assertEqual(
+            description["action_ids"],
+            ["production.create_scene", "production.create_shot"],
+        )
+
     def test_skill_execution_correlates_plan_task_and_skill_in_stage15_trace(self) -> None:
         harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
         coordinator = AgentTaskCoordinator(harness)
@@ -133,6 +147,53 @@ class AgentStage16RuntimeTests(unittest.TestCase):
         self.assertIn("setup.scene", trace.canonical_references)
         self.assertIn(AgentSkillCatalog.SCENE_WITH_SHOT, trace.canonical_references)
         self.assertIn("scene_trace_link", trace.canonical_references)
+        inspection = current.to_dict()
+        self.assertEqual(inspection["status"], AgentPlanStatus.ACTIVE.value)
+        self.assertEqual(inspection["created_at"], current.plan.created_at)
+        self.assertEqual(inspection["updated_at"], current.updated_at)
+
+    def test_reopen_fails_abandoned_running_task_without_replay(self) -> None:
+        harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
+        coordinator = AgentTaskCoordinator(harness)
+        state = coordinator.create_plan(
+            project_id=self.project.project_id,
+            goal="Prove fail-closed restart reconciliation",
+            proposals=(
+                AgentPlanStepProposal(
+                    step_id="scene",
+                    action_id="production.create_scene",
+                    inputs={
+                        "scene_id": "scene_interrupted",
+                        "title": "Interrupted scene",
+                    },
+                ),
+            ),
+            plan_id="agent_plan_interrupted",
+        )
+        ready = state.tasks[0]
+        coordinator.tasks.transition(ready, AgentTaskStatus.RUNNING)
+
+        reopened_store = ProjectStore(self.projects_root)
+        reopened_harness = AgentHarness(
+            reopened_store,
+            ModelRegistry(CapabilityRegistry()),
+        )
+        reopened = AgentTaskCoordinator(reopened_harness)
+        recovered = reopened.state(self.project.project_id, state.plan.plan_id)
+        task = recovered.tasks[0]
+
+        self.assertEqual(task.status, AgentTaskStatus.FAILED)
+        self.assertEqual(recovered.status, AgentPlanStatus.FAILED)
+        self.assertIsNone(task.trace_id)
+        self.assertIn("interrupted", task.error_message.lower())
+        self.assertEqual(
+            len(reopened_harness.traces.list(self.project.project_id)),
+            0,
+        )
+        self.assertEqual(
+            len(ProductionSemanticService(reopened_store).state(self.project.project_id).scenes),
+            0,
+        )
 
     def test_generation_submit_supplies_execution_only_null_authorization_by_default(self) -> None:
         production = ProductionSemanticService(self.store)
@@ -178,6 +239,7 @@ class AgentStage16RuntimeTests(unittest.TestCase):
         completed = coordinator.state(self.project.project_id, state.plan.plan_id)
         task = completed.tasks[0]
         self.assertEqual(task.status, AgentTaskStatus.SUCCEEDED)
+        self.assertEqual(completed.status, AgentPlanStatus.SUCCEEDED)
         trace = next(
             item
             for item in harness.traces.list(self.project.project_id)
