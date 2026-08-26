@@ -233,6 +233,8 @@ class AgentActionDefinition:
     input_fields: tuple[str, ...]
     effects: CapabilityEffects = field(default_factory=CapabilityEffects)
     requires_model: bool = False
+    uses_job_manager: bool | None = None
+    authorization_may_be_required: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.action_id, str) or not re.fullmatch(
@@ -262,6 +264,26 @@ class AgentActionDefinition:
         if not isinstance(self.requires_model, bool):
             raise AgentPortableStateError("requires_model must be boolean")
 
+        # Stage 15 has one model-bound action: generation.submit. It necessarily
+        # enters the existing Job Manager and can reach D-017 depending on the
+        # selected offer. Keep explicit overrides available for future actions.
+        uses_job_manager = self.requires_model if self.uses_job_manager is None else self.uses_job_manager
+        authorization_may_be_required = (
+            self.requires_model
+            if self.authorization_may_be_required is None
+            else self.authorization_may_be_required
+        )
+        if not isinstance(uses_job_manager, bool):
+            raise AgentPortableStateError("uses_job_manager must be boolean")
+        if not isinstance(authorization_may_be_required, bool):
+            raise AgentPortableStateError("authorization_may_be_required must be boolean")
+        object.__setattr__(self, "uses_job_manager", uses_job_manager)
+        object.__setattr__(
+            self,
+            "authorization_may_be_required",
+            authorization_may_be_required,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "action_id": self.action_id,
@@ -270,6 +292,8 @@ class AgentActionDefinition:
             "authority": self.authority,
             "input_fields": list(self.input_fields),
             "effects": self.effects.to_dict(),
+            "uses_job_manager": self.uses_job_manager,
+            "authorization_may_be_required": self.authorization_may_be_required,
             "requires_model": self.requires_model,
         }
 
