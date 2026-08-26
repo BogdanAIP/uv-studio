@@ -18,6 +18,7 @@ PRODUCT_TRUTH_SCHEMA_VERSION = 1
 PRODUCT_TRUTH_DIRECTORY = Path("docs/architecture/product-truth")
 _FEATURE_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _FRONTEND_SYMBOL_TEMPLATE = r"\b(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+{symbol}\b|\b(?:export\s+)?const\s+{symbol}\b"
+_FRONTEND_ROUTE_PARAMETER_RE = re.compile(r"\{[^{}]+\}")
 _REQUIRED_VISIBLE_STATES = frozenset(
     {"model_choice", "queued", "running", "succeeded", "failed", "cancelled", "take_candidate"}
 )
@@ -193,6 +194,21 @@ def _require_fastapi_route(
     )
 
 
+def _read_frontend_text(path: Path, location: str) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ProductTruthError(f"cannot read frontend reference {path}: {exc}") from exc
+
+
+def _require_frontend_symbol(path: Path, symbol: str, location: str) -> str:
+    text = _read_frontend_text(path, location)
+    pattern = re.compile(_FRONTEND_SYMBOL_TEMPLATE.format(symbol=re.escape(symbol)))
+    if pattern.search(text) is None:
+        raise ProductTruthError(f"{location} frontend symbol does not resolve: {symbol!r}")
+    return text
+
+
 def _require_frontend_surface(
     path: Path,
     *,
@@ -200,16 +216,80 @@ def _require_frontend_surface(
     controls: Sequence[str],
     location: str,
 ) -> None:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise ProductTruthError(f"cannot read frontend reference {path}: {exc}") from exc
-    pattern = re.compile(_FRONTEND_SYMBOL_TEMPLATE.format(symbol=re.escape(symbol)))
-    if pattern.search(text) is None:
-        raise ProductTruthError(f"{location} frontend symbol does not resolve: {symbol!r}")
+    text = _require_frontend_symbol(path, symbol, location)
     for control in controls:
         if control not in text:
             raise ProductTruthError(f"{location} declared control is absent from frontend: {control!r}")
+
+
+def _normalized_declared_frontend_route(route: str, location: str) -> str:
+    value = _text(route, location)
+    if not value.startswith("/") or "?" in value or "#" in value:
+        raise ProductTruthError(f"{location} must be an absolute product route without query/fragment")
+    normalized = _FRONTEND_ROUTE_PARAMETER_RE.sub("{}", value)
+    if "{" in normalized or "}" in normalized:
+        raise ProductTruthError(f"{location} contains malformed route parameters")
+    return normalized.rstrip("/") or "/"
+
+
+def _next_route_for_entry(relative_path: str, location: str) -> str:
+    parts = PurePosixPath(relative_path).parts
+    prefix = ("frontend", "app")
+    if parts[:2] != prefix or parts[-1] not in {"page.tsx", "page.ts", "page.jsx", "page.js"}:
+        raise ProductTruthError(f"{location} must reference a Next app page under frontend/app")
+    route_parts: list[str] = []
+    for part in parts[2:-1]:
+        if part.startswith("(") and part.endswith(")"):
+            continue
+        if part.startswith("@"):
+            continue
+        if part.startswith("[") and part.endswith("]"):
+            route_parts.append("{}")
+        else:
+            route_parts.append(part)
+    return "/" + "/".join(route_parts) if route_parts else "/"
+
+
+def _validate_frontend_mount_chain(
+    root: Path,
+    value: Any,
+    *,
+    route: str,
+    surface_path: Path,
+    surface_symbol: str,
+    location: str,
+) -> None:
+    if not isinstance(value, list) or not value:
+        raise ProductTruthError(f"{location} must be a nonempty JSON array")
+    resolved: list[tuple[str, Path, str, str]] = []
+    for index, item in enumerate(value):
+        item_location = f"{location}[{index}]"
+        reference = _object(item, item_location)
+        _exact_keys(reference, location=item_location, expected={"path", "symbol"})
+        relative = _text(reference["path"], f"{item_location}.path")
+        path = _repo_file(root, relative, f"{item_location}.path")
+        symbol = _text(reference["symbol"], f"{item_location}.symbol")
+        text = _require_frontend_symbol(path, symbol, item_location)
+        resolved.append((relative, path, symbol, text))
+
+    declared_route = _normalized_declared_frontend_route(route, f"{location}.route")
+    actual_route = _next_route_for_entry(resolved[0][0], f"{location}[0].path")
+    if actual_route != declared_route:
+        raise ProductTruthError(
+            f"{location} route entry resolves to {actual_route!r}, not declared {declared_route!r}"
+        )
+
+    for index, (_relative, _path, _symbol, text) in enumerate(resolved[:-1]):
+        next_symbol = resolved[index + 1][2]
+        if re.search(rf"\b{re.escape(next_symbol)}\b", text) is None:
+            raise ProductTruthError(
+                f"{location}[{index}] does not mount/reference next symbol {next_symbol!r}"
+            )
+
+    if resolved[-1][1] != surface_path or resolved[-1][2] != surface_symbol:
+        raise ProductTruthError(
+            f"{location} must terminate at the declared frontend surface {surface_symbol!r}"
+        )
 
 
 def _validate_dependency(root: Path, value: Any, location: str) -> None:
@@ -320,16 +400,25 @@ def validate_product_truth_contract(
     _exact_keys(
         frontend,
         location=f"{location}.canonical.frontend",
-        expected={"path", "symbol", "route", "controls"},
+        expected={"path", "symbol", "route", "mount_chain", "controls"},
     )
     frontend_path = _repo_file(root, frontend["path"], f"{location}.canonical.frontend.path")
+    frontend_symbol = _text(frontend["symbol"], f"{location}.canonical.frontend.symbol")
     controls = _string_list(frontend["controls"], f"{location}.canonical.frontend.controls")
-    _text(frontend["route"], f"{location}.canonical.frontend.route")
+    frontend_route = _text(frontend["route"], f"{location}.canonical.frontend.route")
     _require_frontend_surface(
         frontend_path,
-        symbol=_text(frontend["symbol"], f"{location}.canonical.frontend.symbol"),
+        symbol=frontend_symbol,
         controls=controls,
         location=f"{location}.canonical.frontend",
+    )
+    _validate_frontend_mount_chain(
+        root,
+        frontend["mount_chain"],
+        route=frontend_route,
+        surface_path=frontend_path,
+        surface_symbol=frontend_symbol,
+        location=f"{location}.canonical.frontend.mount_chain",
     )
 
     _string_list(canonical["state"], f"{location}.canonical.state")
