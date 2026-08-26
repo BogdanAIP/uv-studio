@@ -20,6 +20,24 @@
       "path": "frontend/components/editor/GenerationWorkspacePanel.tsx",
       "symbol": "GenerationWorkspacePanel",
       "route": "/projects/{project_id}/studio",
+      "mount_chain": [
+        {
+          "path": "frontend/app/projects/[projectId]/studio/page.tsx",
+          "symbol": "StudioProjectPage"
+        },
+        {
+          "path": "frontend/components/editor/StudioProjectWorkspace.tsx",
+          "symbol": "StudioProjectWorkspace"
+        },
+        {
+          "path": "frontend/components/editor/ProductionWorkspacePanel.tsx",
+          "symbol": "ProductionWorkspacePanel"
+        },
+        {
+          "path": "frontend/components/editor/GenerationWorkspacePanel.tsx",
+          "symbol": "GenerationWorkspacePanel"
+        }
+      ],
       "controls": [
         "Кадр для генерации",
         "Модель генерации",
