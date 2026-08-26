@@ -48,6 +48,10 @@ class AgentStage16RuntimeTests(unittest.TestCase):
         self.tmp.cleanup()
 
     @staticmethod
+    def _empty_registry() -> ModelRegistry:
+        return ModelRegistry(CapabilityRegistry())
+
+    @staticmethod
     def _local_generation_registry() -> ModelRegistry:
         capability = CapabilityDefinition(
             "image.generate",
@@ -98,8 +102,29 @@ class AgentStage16RuntimeTests(unittest.TestCase):
             ),
         )
 
+    def _scene_plan(
+        self,
+        coordinator: AgentTaskCoordinator,
+        *,
+        plan_id: str,
+        step_id: str = "scene",
+        scene_id: str = "scene_runtime",
+    ):
+        return coordinator.create_plan(
+            project_id=self.project.project_id,
+            goal="Create one bounded scene",
+            proposals=(
+                AgentPlanStepProposal(
+                    step_id=step_id,
+                    action_id="production.create_scene",
+                    inputs={"scene_id": scene_id, "title": scene_id},
+                ),
+            ),
+            plan_id=plan_id,
+        )
+
     def test_skill_catalog_exposes_stable_schema_metadata(self) -> None:
-        harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
+        harness = AgentHarness(self.store, self._empty_registry())
         catalog = AgentSkillCatalog(harness.catalog)
         description = catalog.describe(AgentSkillCatalog.SCENE_WITH_SHOT)
         self.assertEqual(description["schema_version"], AGENT_SKILL_SCHEMA_VERSION)
@@ -108,9 +133,71 @@ class AgentStage16RuntimeTests(unittest.TestCase):
             description["action_ids"],
             ["production.create_scene", "production.create_shot"],
         )
+        self.assertFalse(description["uses_job_manager"])
+        self.assertFalse(description["authorization_may_be_required"])
+
+    def test_custom_plan_id_is_discovered_by_plan_store_list(self) -> None:
+        harness = AgentHarness(self.store, self._empty_registry())
+        coordinator = AgentTaskCoordinator(harness)
+        state = self._scene_plan(
+            coordinator,
+            plan_id="custom_plan",
+            scene_id="scene_custom_plan",
+        )
+
+        plan_ids = tuple(
+            plan.plan_id for plan in coordinator.plans.list(self.project.project_id)
+        )
+        self.assertIn(state.plan.plan_id, plan_ids)
+        self.assertIn("custom_plan", plan_ids)
+
+    def test_reopen_repairs_partial_initial_task_set_without_reset(self) -> None:
+        harness = AgentHarness(self.store, self._empty_registry())
+        coordinator = AgentTaskCoordinator(harness)
+        plan = coordinator.planner.build(
+            project_id=self.project.project_id,
+            goal="Recover an interrupted plan/task initialization",
+            proposals=(
+                AgentPlanStepProposal(
+                    step_id="setup",
+                    skill_id=AgentSkillCatalog.SCENE_WITH_SHOT,
+                    inputs={
+                        "scene_id": "scene_partial_init",
+                        "title": "Partial initialization",
+                        "shot_id": "shot_partial_init",
+                        "intent": "Recovered dependent shot",
+                    },
+                ),
+            ),
+            plan_id="custom_partial_plan",
+        )
+        coordinator.plans.append(plan)
+        records = coordinator.tasks.initialize(plan)
+        first_before = records[0]
+        missing = records[1]
+        coordinator.tasks.records.path(
+            self.project.project_id,
+            missing.record_id,
+        ).unlink()
+
+        reopened_store = ProjectStore(self.projects_root)
+        reopened_harness = AgentHarness(reopened_store, self._empty_registry())
+        reopened = AgentTaskCoordinator(reopened_harness)
+        recovered = reopened.state(self.project.project_id, plan.plan_id)
+
+        self.assertEqual(len(recovered.tasks), 2)
+        self.assertEqual(recovered.tasks[0].task_id, "setup.scene")
+        self.assertEqual(recovered.tasks[0].record_id, first_before.record_id)
+        self.assertEqual(recovered.tasks[0].status, AgentTaskStatus.READY)
+        self.assertEqual(recovered.tasks[1].task_id, "setup.shot")
+        self.assertEqual(recovered.tasks[1].status, AgentTaskStatus.PLANNED)
+        self.assertIn(
+            plan.plan_id,
+            tuple(item.plan_id for item in reopened.plans.list(self.project.project_id)),
+        )
 
     def test_skill_execution_correlates_plan_task_and_skill_in_stage15_trace(self) -> None:
-        harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
+        harness = AgentHarness(self.store, self._empty_registry())
         coordinator = AgentTaskCoordinator(harness)
         state = coordinator.create_plan(
             project_id=self.project.project_id,
@@ -153,31 +240,18 @@ class AgentStage16RuntimeTests(unittest.TestCase):
         self.assertEqual(inspection["updated_at"], current.updated_at)
 
     def test_reopen_fails_abandoned_running_task_without_replay(self) -> None:
-        harness = AgentHarness(self.store, ModelRegistry(CapabilityRegistry()))
+        harness = AgentHarness(self.store, self._empty_registry())
         coordinator = AgentTaskCoordinator(harness)
-        state = coordinator.create_plan(
-            project_id=self.project.project_id,
-            goal="Prove fail-closed restart reconciliation",
-            proposals=(
-                AgentPlanStepProposal(
-                    step_id="scene",
-                    action_id="production.create_scene",
-                    inputs={
-                        "scene_id": "scene_interrupted",
-                        "title": "Interrupted scene",
-                    },
-                ),
-            ),
+        state = self._scene_plan(
+            coordinator,
             plan_id="agent_plan_interrupted",
+            scene_id="scene_interrupted",
         )
         ready = state.tasks[0]
         coordinator.tasks.transition(ready, AgentTaskStatus.RUNNING)
 
         reopened_store = ProjectStore(self.projects_root)
-        reopened_harness = AgentHarness(
-            reopened_store,
-            ModelRegistry(CapabilityRegistry()),
-        )
+        reopened_harness = AgentHarness(reopened_store, self._empty_registry())
         reopened = AgentTaskCoordinator(reopened_harness)
         recovered = reopened.state(self.project.project_id, state.plan.plan_id)
         task = recovered.tasks[0]
@@ -186,14 +260,81 @@ class AgentStage16RuntimeTests(unittest.TestCase):
         self.assertEqual(recovered.status, AgentPlanStatus.FAILED)
         self.assertIsNone(task.trace_id)
         self.assertIn("interrupted", task.error_message.lower())
-        self.assertEqual(
-            len(reopened_harness.traces.list(self.project.project_id)),
-            0,
-        )
+        self.assertEqual(len(reopened_harness.traces.list(self.project.project_id)), 0)
         self.assertEqual(
             len(ProductionSemanticService(reopened_store).state(self.project.project_id).scenes),
             0,
         )
+
+    def test_mixed_succeeded_and_cancelled_tasks_make_terminal_plan(self) -> None:
+        harness = AgentHarness(self.store, self._empty_registry())
+        coordinator = AgentTaskCoordinator(harness)
+        state = coordinator.create_plan(
+            project_id=self.project.project_id,
+            goal="Finish with one success and one explicit cancellation",
+            proposals=(
+                AgentPlanStepProposal(
+                    step_id="keep",
+                    action_id="production.create_scene",
+                    inputs={"scene_id": "scene_keep", "title": "Keep"},
+                ),
+                AgentPlanStepProposal(
+                    step_id="skip",
+                    action_id="production.create_scene",
+                    inputs={"scene_id": "scene_skip", "title": "Skip"},
+                ),
+            ),
+            plan_id="agent_plan_mixed_terminal",
+        )
+        coordinator.cancel_task(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="skip",
+        )
+        coordinator.execute_task(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="keep",
+        )
+        completed = coordinator.state(self.project.project_id, state.plan.plan_id)
+        statuses = {task.task_id: task.status for task in completed.tasks}
+        self.assertEqual(statuses["keep"], AgentTaskStatus.SUCCEEDED)
+        self.assertEqual(statuses["skip"], AgentTaskStatus.CANCELLED)
+        self.assertEqual(completed.status, AgentPlanStatus.CANCELLED)
+        self.assertEqual(coordinator.runnable(self.project.project_id, state.plan.plan_id), ())
+
+    def test_cancelling_dependency_cancels_planned_descendants(self) -> None:
+        harness = AgentHarness(self.store, self._empty_registry())
+        coordinator = AgentTaskCoordinator(harness)
+        state = coordinator.create_plan(
+            project_id=self.project.project_id,
+            goal="Cancel an impossible dependent chain",
+            proposals=(
+                AgentPlanStepProposal(
+                    step_id="setup",
+                    skill_id=AgentSkillCatalog.SCENE_WITH_SHOT,
+                    inputs={
+                        "scene_id": "scene_cancel_chain",
+                        "title": "Cancel chain",
+                        "shot_id": "shot_cancel_chain",
+                        "intent": "Must never run",
+                    },
+                ),
+            ),
+            plan_id="agent_plan_cancel_chain",
+        )
+        coordinator.cancel_task(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="setup.scene",
+        )
+        completed = coordinator.state(self.project.project_id, state.plan.plan_id)
+        self.assertEqual(
+            tuple(task.status for task in completed.tasks),
+            (AgentTaskStatus.CANCELLED, AgentTaskStatus.CANCELLED),
+        )
+        self.assertEqual(completed.status, AgentPlanStatus.CANCELLED)
+        self.assertEqual(coordinator.runnable(self.project.project_id, state.plan.plan_id), ())
 
     def test_generation_submit_supplies_execution_only_null_authorization_by_default(self) -> None:
         production = ProductionSemanticService(self.store)
