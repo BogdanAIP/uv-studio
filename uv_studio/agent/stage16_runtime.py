@@ -191,9 +191,17 @@ class _CorrelatingTraceStore:
             f"uv_agent_trace_correlation_{id(self)}",
             default=(),
         )
+        self._expected_input_digest: ContextVar[str | None] = ContextVar(
+            f"uv_agent_expected_input_digest_{id(self)}",
+            default=None,
+        )
 
     @contextmanager
-    def correlate(self, *references: str | None) -> Iterator[None]:
+    def correlate(
+        self,
+        *references: str | None,
+        expected_input_digest: str | None = None,
+    ) -> Iterator[None]:
         normalized = list(
             dict.fromkeys(
                 reference for reference in references if isinstance(reference, str) and reference
@@ -211,18 +219,38 @@ class _CorrelatingTraceStore:
                 )
                 if typed not in normalized:
                     normalized.append(typed)
-        token = self._correlation.set(tuple(normalized))
+        correlation_token = self._correlation.set(tuple(normalized))
+        digest_token = self._expected_input_digest.set(expected_input_digest)
         try:
             yield
         finally:
-            self._correlation.reset(token)
+            self._expected_input_digest.reset(digest_token)
+            self._correlation.reset(correlation_token)
 
     def append(self, record: AgentTraceRecord):
         correlation = self._correlation.get()
         if not correlation:
             return self._base.append(record)
+
         references = tuple(dict.fromkeys((*record.canonical_references, *correlation)))
-        return self._base.append(replace(record, canonical_references=references))
+        replacement = replace(record, canonical_references=references)
+
+        expected_input_digest = self._expected_input_digest.get()
+        if (
+            expected_input_digest is not None
+            and record.status is AgentTraceStatus.FAILED
+            and record.error_type is not None
+        ):
+            preparation_failure_digest = stable_digest(
+                {
+                    "rejected_inputs": True,
+                    "error_type": record.error_type,
+                }
+            )
+            if record.input_digest == preparation_failure_digest:
+                replacement = replace(replacement, input_digest=expected_input_digest)
+
+        return self._base.append(replacement)
 
     def list(self, project_id: str) -> tuple[AgentTraceRecord, ...]:
         return self._base.list(project_id)
@@ -363,7 +391,13 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
                 effective_runtime_inputs = dict(runtime_inputs)
                 effective_runtime_inputs["authorization_token"] = None
 
-        with self._correlated_traces.correlate(plan.plan_id, spec.task_id, spec.skill_id):
+        expected_input_digest = self._expected_input_digest(spec)
+        with self._correlated_traces.correlate(
+            plan.plan_id,
+            spec.task_id,
+            spec.skill_id,
+            expected_input_digest=expected_input_digest,
+        ):
             return super().execute_task(
                 project_id=project_id,
                 plan_id=plan.plan_id,
