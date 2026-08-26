@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: studio-v2-agent-context-command-catalog-trace -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: studio-v2-agent-context-command-catalog-trace -->
 
 **Updated:** 2026-08-26
 
@@ -9,28 +9,30 @@
 
 ## Current lifecycle
 
-Stage 15 is active in review on branch `stage-15/agent-context-command-catalog-trace`, created from lifecycle-closed `main` commit `ff644f3bfc9cbf27b13d6742207951dfb0470cf2`, with PR #69 ready for review.
+`main` is lifecycle-closed and idle after Stage 15 / PR #69.
 
-Goal: deliver only the first bounded Agent Harness layer from D-066 — canonical Context Builder, catalog over existing UV command/model/job/capability authorities, effects/policy projection, append-only inspectable trace and one bounded execution seam through the existing application authority.
+- merged PR: #69 `stage 15: agent context, command catalog and trace`;
+- exact reviewed head: `a0d6eec7b9cad723aad9d38fc5af2c820b536c1a`;
+- merge commit: `273b5ea8f979cf759cfbf6510e1215a55e98d9c9`;
+- exact-head CI runs #3328 and #3329 passed all five permanent jobs on Ubuntu/Windows, including unit/API, real-media, frontend and browser user-outcome suites;
+- all four inline review findings were fixed, answered and resolved before merge.
 
-Stage 14 / PR #68 merged as `daa9381f45e136f7e406ac29888f8ac597da3f79` and was lifecycle-closed to idle before this branch was created. Planner, durable Tasks, Skills, subagents, background Agent orchestration, evaluation/repair and long-form autonomy remain out of scope.
-
-Implementation/refinement head `6cf999203e17d458914ec1b248c29bc097bf45c0` passed all five permanent CI jobs, including browser E2E on Ubuntu and Windows. The review-state head must independently pass the same exact-head gate before merge, with no unresolved review threads.
+No implementation slice is currently active. The declared handoff is `studio-v2-agent-planner-durable-tasks-skills`, which is D-066 Agent Harness layer 2.
 
 ## Current architecture authority
 
 - **D-064** — Production Directions over one shared Studio Core.
 - **D-065** — shared Production Semantic Core beneath directions.
-- **D-066** — JarvisHub is the Agent Harness architecture/method donor; UV retains canonical project/application authority.
+- **D-066** — JarvisHub is the Agent Harness architecture/method donor; UV retains canonical project/application authority and defines the bounded Agent-layer order.
 - **D-067** — Product Truth Contract/current-document consistency.
 - **D-068** — desktop in-place updates remain accepted Stage-9 release work.
 - **D-069** — sequential generative continuation persists provider-neutral media lineage while provider cache/latent/session state remains adapter-private.
 - **D-033** — canonical Timeline/editor foundation.
 - **D-017** — exact one-shot authorization for remote/non-free execution.
 
-## As-built foundation through Stage 14
+## As-built foundation through Stage 15
 
-Stages 12–14 provide the lower production and generation spine consumed by this slice:
+Stages 12–15 now provide the production, generation and first Agent-Harness foundation:
 
 1. typed Production Direction identity and bounded project/production storage;
 2. shared `Scene`, `Shot`, `Take` and accepted-Take semantics across directions;
@@ -39,63 +41,49 @@ Stages 12–14 provide the lower production and generation spine consumed by thi
 5. transactional accepted-Take projection into Timeline while preserving project media provenance;
 6. backend-owned user-visible Model Registry above capability/provider transport;
 7. project-scoped durable generation Job/Attempt records under the existing `tasks/` authority;
-8. exact idempotency and durable retry/failure history;
+8. exact generation idempotency, retry/failure history and restart reconciliation without hidden provider replay;
 9. D-017 exact authorization for remote/non-free execution;
 10. provider-neutral `GenerationContract`, including feature-gated D-069 continuation parent lineage;
 11. generated output becomes project-owned media and a shared Take candidate before semantic acceptance;
-12. resolved `CapabilityEffects` are available through the existing Capability Registry for Agent policy/trace projection;
-13. the first machine-readable Product Truth record binds the named-generation domain/API/frontend/state/evidence path;
-14. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable.
+12. resolved `CapabilityEffects` remain the single execution-effects source for Agent policy;
+13. machine-readable Product Truth binds the named-generation domain/API/frontend/state/evidence path;
+14. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable;
+15. `AgentContextBuilder` derives bounded deterministic context from canonical Project/Production/Timeline/Model/Job state without copying the project into an Agent graph;
+16. `AgentActionCatalog` exposes stable metadata only over existing Production/Timeline/Generation authorities, including Job Manager and possible D-017 routing facts;
+17. Agent policy projects existing availability/locality/cost/effects/authorization facts without adding a second permission system;
+18. `AgentTraceStore` persists append-only project-scoped inspection history linked to canonical identities, excluding secrets, reusable authorization, host paths, provider prompts and private caches;
+19. `AgentHarness` executes only through existing UV services and records both success and sanitized failure outcomes;
+20. context nesting is bounded with omitted counts; production success traces retain affected canonical Scene/Shot/Take/reference identities; pre-policy context/input failures leave failure trace when project trace storage is available.
 
-## Stage-15 as-built bounded contracts
+## Stage-15 boundary that remains authoritative
 
-This slice does not create another project, command, tool, model or permission authority.
+The Agent foundation is internal infrastructure, not a user-visible autonomous Agent claim.
 
-### Context Builder
+It does **not** create:
 
-A compact deterministic observation is built from canonical Project, Production, Timeline, Model Registry and Job Manager state. Context references canonical identities and bounded summaries rather than copying arbitrary project files, provider prompts, secrets, absolute host paths or provider-private runtime state.
+- a second project graph or canonical state;
+- a private Agent project-write path;
+- a duplicate JarvisHub-style tool/protocol/permission authority;
+- Planner, durable Agent Tasks or Skills yet;
+- functional subagents yet;
+- background Agent execution, evaluate/repair or long-form autonomy yet.
 
-### Existing-command/tool catalog
+All future Agent layers must continue to invoke the same Studio/Application Commands, Model Registry, Job Manager, Capability Registry and D-017 boundaries as GUI/scripts/MCP.
 
-Stable Agent-facing action metadata resolves only to existing UV-owned services. Production and Timeline mutations continue through their existing command services; named generation continues through the existing generation/model/job/capability stack. Catalog metadata includes the canonical authority, bounded input fields, effects, whether a model is required, whether the action uses Job Manager and whether D-017 authorization may be required. Unknown actions fail closed.
+## Next handoff
 
-### Effects / policy
+`studio-v2-agent-planner-durable-tasks-skills`
 
-Policy consumes existing `CapabilityEffects`, offer availability/locality/cost and D-017 authorization facts. It projects those facts for inspection but does not create a second permission system or allow the Agent to self-authorize remote/non-free work.
-
-### Inspectable trace
-
-Append-only project-scoped trace records are persisted under existing bounded project task storage. Trace links context/input digests, canonical identities, action/policy/effects, invocation outcome and Job/Attempt/transaction references. Trace is execution history rather than canonical production state and rejects authorization tokens, secret material, absolute host paths and arbitrary non-portable state.
-
-### Bounded execution proof
-
-Agent Harness execution uses the same existing semantic command/service boundaries as other callers. Successful canonical mutations return the existing transaction/Job identity into trace; failed existing commands and unknown actions leave inspectable failure trace without fabricating canonical success. Unavailable generation remains unavailable before Job creation, and remote/non-free generation still requires exact D-017 authorization.
-
-## Explicit non-goals still in force
-
-- no Planner or durable Agent Task graph;
-- no Skills runtime;
-- no functional subagents (`explore`, `plan`, `media`, `critic`) yet;
-- no Agent-only project write path;
-- no duplicate JarvisHub-style tool registry or protocol bridge;
-- no automatic background Agent replay through Job Manager;
-- no evaluation/repair loop or long-form autonomy;
-- no provider-private cache/latent/session state in Project Store;
-- no desktop Update Service/UI implementation;
-- no claim that a real continuation-capable provider is integrated;
-- no new user-facing Agent readiness claim unless a real Studio surface and D-067 evidence are added.
-
-## Active slice
-
-`studio-v2-agent-context-command-catalog-trace`
+Implement D-066 layer 2 only:
 
 ```text
-canonical Project / Production / Timeline / Model / Job observation
- -> UV-owned Context Builder
- -> deterministic catalog over existing UV authorities
- -> effects / policy projection
- -> bounded execution through existing service
- -> append-only inspectable project trace
+bounded user/production goal
+ -> Stage-15 Context Builder + Action Catalog
+ -> Planner produces a validated bounded plan
+ -> durable project-scoped Agent Tasks with explicit dependencies/state
+ -> reusable bounded Skills expand only into approved catalog actions/tasks
+ -> task execution continues through AgentHarness / existing UV authorities
+ -> append-only trace links plan/task/skill execution to canonical identities
 ```
 
-The current `project-context/NEXT_TASK.md` remains the exact scope contract for this active review until the slice is merged and lifecycle-closed.
+Functional subagents (`explore`, `plan`, `media`, `critic`), background work, evaluation/repair, human takeover/edit/resume and long-form autonomy remain later D-066 layers.

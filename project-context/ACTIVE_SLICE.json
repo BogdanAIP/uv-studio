@@ -1,28 +1,14 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "studio-v2-agent-context-command-catalog-trace",
-    "kind": "stage",
-    "roadmap_stage": "studio-v2",
-    "goal": "Implement the first bounded UV-owned Agent Harness layer: canonical Context Builder, deterministic catalog over existing Studio/Application Commands and model/job/capability authorities, effects/policy projection, append-only project-scoped inspectable trace, and one bounded execution seam through existing UV authority without Planner/Tasks/Skills/Subagents.",
-    "base_branch": "main",
-    "branch": "stage-15/agent-context-command-catalog-trace",
-    "pull_request": 69,
-    "write_scope": [
-      "uv_studio/**",
-      "tests/**",
-      "docs/**",
-      "project-context/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "studio-v2-model-registry-job-manager-generation",
-    "pull_request": 68,
-    "merge_commit": "daa9381f45e136f7e406ac29888f8ac597da3f79"
+    "id": "studio-v2-agent-context-command-catalog-trace",
+    "pull_request": 69,
+    "merge_commit": "273b5ea8f979cf759cfbf6510e1215a55e98d9c9"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-agent-context-command-catalog-trace",
+    "next_slice_id": "studio-v2-agent-planner-durable-tasks-skills",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

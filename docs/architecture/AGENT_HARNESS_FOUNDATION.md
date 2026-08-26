@@ -1,7 +1,8 @@
 # Agent Harness foundation — Stage 15
 
-**Status:** review implementation under PR #69  
+**Status:** implemented and merged in PR #69  
 **Date:** 2026-08-26  
+**Merge commit:** `273b5ea8f979cf759cfbf6510e1215a55e98d9c9`  
 **Decision authority:** D-066 + D-017
 
 ## Purpose
@@ -100,9 +101,11 @@ Trace is execution history, not canonical Production/Timeline truth. Raw action 
 
 `tests/test_agent_catalog_contract.py` additionally proves machine-readable Job Manager and possible-D-017 routing facts for catalog entries.
 
+The final exact reviewed head `a0d6eec7b9cad723aad9d38fc5af2c820b536c1a` passed all five permanent CI jobs on Ubuntu and Windows, including browser E2E. Four automated review findings were fixed and resolved before merge.
+
 ## Explicitly deferred by D-066
 
-This stage does **not** implement:
+Stage 15 does **not** implement:
 
 - Planner;
 - durable Agent Task graph;
@@ -114,4 +117,16 @@ This stage does **not** implement:
 - an Agent-specific canonical write path;
 - a user-facing Agent readiness/product claim.
 
-Those remain separate later slices and must build on this context/catalog/policy/trace foundation rather than bypass it.
+## Next D-066 layer
+
+After Stage 15 lifecycle closure, the next bounded slice is `studio-v2-agent-planner-durable-tasks-skills`:
+
+```text
+Stage-15 Context / Catalog / Policy / Trace
+ -> Planner
+ -> durable Agent Tasks
+ -> Skills
+ -> execution only through AgentHarness / existing UV authorities
+```
+
+Functional subagents remain the following separate D-066 layer. Background work, evaluate/repair, human takeover/edit/resume and long-form autonomy remain later still.
