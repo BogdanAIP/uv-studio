@@ -9,6 +9,7 @@ This is the compact decision authority index. Read `docs/architecture/CURRENT_AR
 - **D-066 — JarvisHub as the reference donor for the UV Studio Agent Harness.** Current donor/factoring authority for the future agent runtime and immediate Job Manager/generation reliability patterns; it does not replace UV-owned project/production/timeline state.
 - **D-067 — Product Truth Contract and current-documentation consistency.** Current verification authority for documentation freshness, backend/frontend product-surface parity and end-to-end user-outcome proof.
 - **D-068 — Desktop in-place updates and version migration.** Current release/update authority for one maintained desktop installation, Update UI/Service, verified in-place replacement and N-1 -> N upgrade evidence.
+- **D-069 — Stateful generative continuation uses durable lineage, not provider state.** Current authority for sequential/continuation generation lineage, `generation.continuation` feature gating and the boundary that keeps provider cache/latent/session state outside Project Store truth.
 - **D-033 — Reuse-first scriptable editor foundation.** Current editor/MLT ownership foundation.
 - **D-009 — Project Store is file-first and product-owned.** Canonical local-first project authority.
 - **D-017 — Exact one-shot execution authorization.** Current remote/non-free execution authorization boundary.
@@ -63,6 +64,7 @@ Detailed supporting records:
 - [D-066 — JarvisHub Agent Harness donor](decisions/D-066-jarvishub-agent-harness-donor.md)
 - [D-067 — Product Truth Contract and current-documentation consistency](decisions/D-067-product-truth-contract-and-current-doc-consistency.md)
 - [D-068 — Desktop in-place updates and version migration](decisions/D-068-desktop-in-place-updates.md)
+- [D-069 — Stateful generative continuation lineage](decisions/D-069-stateful-generative-continuation-lineage.md)
 
 ## Partially superseded / historical product-composition decisions
 
@@ -78,4 +80,4 @@ D-002 (VideoClaw as initial base) and D-006 (provider-specific containment befor
 
 When documents disagree, use this order:
 
-`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) + D-066 (Agent Harness donor/factoring) + D-067 (Product Truth verification) + D-068 (desktop update/release behavior) -> active foundational ADR for the specific concern -> compatibility/historical records.
+`CURRENT_ARCHITECTURE.md` -> D-064 (product direction) + D-065 (shared production semantics) + D-066 (Agent Harness donor/factoring) + D-067 (Product Truth verification) + D-068 (desktop update/release behavior) + D-069 (stateful generative continuation lineage) -> active foundational ADR for the specific concern -> compatibility/historical records.

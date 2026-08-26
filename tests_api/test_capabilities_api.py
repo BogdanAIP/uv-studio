@@ -39,6 +39,9 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(local["locality"], "local")
         self.assertEqual(local["adapter"]["kind"], "local")
         self.assertIn(local["availability"], {"available", "unavailable"})
+        self.assertTrue(local["effects"]["generates_media"])
+        self.assertFalse(local["effects"]["cost_bearing"])
+        self.assertFalse(local["effects"]["destructive"])
 
     def test_native_generation_offer_is_configuration_required(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.generate/offers")
@@ -49,6 +52,10 @@ class CapabilitiesApiTests(unittest.TestCase):
         self.assertEqual(offer["availability"], "configuration_required")
         self.assertEqual(offer["cost_class"], "potentially_paid")
         self.assertEqual(offer["adapter"]["adapter_id"], "native_videoclaw")
+        self.assertTrue(offer["effects"]["generates_media"])
+        self.assertTrue(offer["effects"]["long_running"])
+        self.assertTrue(offer["effects"]["cost_bearing"])
+        self.assertFalse(offer["effects"]["mutates_timeline"])
 
     def test_digital_human_exposes_only_optional_local_musetalk_offer(self) -> None:
         response = self.client.get("/api/uv/capabilities/video.digital_human/offers")
@@ -70,6 +77,7 @@ class CapabilitiesApiTests(unittest.TestCase):
         detail = response.json()
         self.assertEqual(detail["offer_summary"]["total"], 1)
         self.assertEqual(detail["offer_summary"]["configuration_required"], 1)
+        self.assertIn("effects", detail)
 
         digital_human = self.client.get("/api/uv/capabilities/video.digital_human").json()
         self.assertEqual(digital_human["offer_summary"]["total"], 1)

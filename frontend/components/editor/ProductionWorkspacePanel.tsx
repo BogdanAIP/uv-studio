@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { GenerationWorkspacePanel } from '@/components/editor/GenerationWorkspacePanel';
 import { ProductionSemanticsPanel } from '@/components/editor/ProductionSemanticsPanel';
 import { getUVProject, type UVProject } from '@/lib/projectsApi';
 import {
@@ -150,6 +151,12 @@ export function ProductionWorkspacePanel({
           timelineDurationUs={timelineEnd(timeline)}
           historyCursor={history.cursor}
           onProjectChanged={handleProjectChanged}
+        />
+
+        <GenerationWorkspacePanel
+          projectId={projectId}
+          refreshRevision={refreshRevision}
+          onProjectChanged={onProjectChanged}
         />
       </div>
     </div>

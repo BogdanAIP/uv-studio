@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -104,6 +104,48 @@ def _feature_tuple(values: tuple[str, ...]) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True)
+class CapabilityEffects:
+    """Stable semantic effects for policy/trace consumers above provider offers.
+
+    Cost and locality remain offer-specific permission facts. ``cost_bearing``
+    means this semantic operation may incur external cost for at least one
+    execution mapping; D-017 still evaluates the selected offer before launch.
+    """
+
+    mutates_project: bool = False
+    mutates_timeline: bool = False
+    generates_media: bool = False
+    destructive: bool = False
+    long_running: bool = False
+    reversible: bool = False
+    cost_bearing: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "mutates_project",
+            "mutates_timeline",
+            "generates_media",
+            "destructive",
+            "long_running",
+            "reversible",
+            "cost_bearing",
+        ):
+            if not isinstance(getattr(self, field_name), bool):
+                raise CapabilityValidationError(f"effect {field_name} must be boolean")
+
+    def to_dict(self) -> dict[str, bool]:
+        return {
+            "mutates_project": self.mutates_project,
+            "mutates_timeline": self.mutates_timeline,
+            "generates_media": self.generates_media,
+            "destructive": self.destructive,
+            "long_running": self.long_running,
+            "reversible": self.reversible,
+            "cost_bearing": self.cost_bearing,
+        }
+
+
+@dataclass(frozen=True)
 class CapabilityDefinition:
     capability_id: str
     title: str
@@ -113,6 +155,7 @@ class CapabilityDefinition:
     output_kinds: tuple[MediaKind, ...]
     asynchronous: bool = False
     schema_version: int = CAPABILITY_SCHEMA_VERSION
+    effects: CapabilityEffects = field(default_factory=CapabilityEffects)
 
     def __post_init__(self) -> None:
         if self.schema_version != CAPABILITY_SCHEMA_VERSION:
@@ -137,6 +180,8 @@ class CapabilityDefinition:
             raise CapabilityValidationError("capability input/output kinds must be non-empty")
         if not isinstance(self.asynchronous, bool):
             raise CapabilityValidationError("asynchronous must be boolean")
+        if not isinstance(self.effects, CapabilityEffects):
+            raise CapabilityValidationError("effects must be CapabilityEffects")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -148,6 +193,7 @@ class CapabilityDefinition:
             "input_kinds": [item.value for item in self.input_kinds],
             "output_kinds": [item.value for item in self.output_kinds],
             "asynchronous": self.asynchronous,
+            "effects": self.effects.to_dict(),
         }
 
 

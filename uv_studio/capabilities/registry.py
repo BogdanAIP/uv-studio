@@ -7,10 +7,12 @@ from collections.abc import Iterable
 from .models import (
     AdapterDefinition,
     CapabilityDefinition,
+    CapabilityEffects,
     CapabilityOffer,
     CapabilityValidationError,
     CostClass,
     LocalityClass,
+    MediaKind,
     OfferAvailability,
     validate_capability_id,
 )
@@ -175,6 +177,28 @@ class CapabilityRegistry:
             ),
             "unavailable": sum(offer.availability is OfferAvailability.UNAVAILABLE for offer in offers),
         }
+
+    def effects_for_offer(self, offer_id: str) -> CapabilityEffects:
+        """Resolve stable semantic effects plus offer-specific execution facts.
+
+        This is the single policy/trace view for GUI, scripts, MCP and the future
+        Agent Harness. Locality and cost permissions still come from the selected
+        offer and D-017; no second Jarvis-style tool registry is introduced.
+        """
+
+        offer = self.get_offer(offer_id)
+        capability = self.get_capability(offer.capability_id)
+        base = capability.effects
+        media_outputs = {MediaKind.IMAGE, MediaKind.VIDEO, MediaKind.AUDIO}
+        return CapabilityEffects(
+            mutates_project=base.mutates_project,
+            mutates_timeline=base.mutates_timeline,
+            generates_media=base.generates_media or bool(set(capability.output_kinds) & media_outputs),
+            destructive=base.destructive,
+            long_running=base.long_running or capability.asynchronous or offer.asynchronous,
+            reversible=base.reversible,
+            cost_bearing=base.cost_bearing or offer.cost_class is not CostClass.FREE,
+        )
 
     @staticmethod
     def _offer_preference_key(offer: CapabilityOffer) -> tuple[int, int, int, str]:
