@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "feature_id": "generate-shot-take",
+  "title": "Named model generation into a shared Shot/Take workflow",
+  "user_visible": true,
+  "readiness": "ready",
+  "canonical": {
+    "domain": {
+      "path": "uv_studio/generation/service.py",
+      "class": "GenerationService",
+      "method": "submit"
+    },
+    "backend": {
+      "path": "uv_studio/api/generation.py",
+      "function": "submit_generation",
+      "http_method": "POST",
+      "route": "/api/uv/projects/{project_id}/studio/generation/jobs"
+    },
+    "frontend": {
+      "path": "frontend/components/editor/GenerationWorkspacePanel.tsx",
+      "symbol": "GenerationWorkspacePanel",
+      "route": "/projects/{project_id}/studio",
+      "controls": [
+        "Кадр для генерации",
+        "Модель генерации",
+        "Запрос для генерации",
+        "Сгенерировать дубль"
+      ]
+    },
+    "state": [
+      "project-scoped generation Job and execution Attempt records under tasks/",
+      "project-owned generated artifact with model/offer/contract provenance",
+      "shared Production Take candidate bound to the target Shot",
+      "canonical Timeline projection only after existing production.accept_take"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "model_registry",
+      "path": "uv_studio/generation/models.py",
+      "symbol": "ModelRegistry"
+    },
+    {
+      "name": "job_manager",
+      "path": "uv_studio/generation/jobs.py",
+      "symbol": "GenerationJobManager"
+    },
+    {
+      "name": "capability_registry",
+      "path": "uv_studio/capabilities/registry.py",
+      "symbol": "CapabilityRegistry"
+    },
+    {
+      "name": "execution_authorization",
+      "path": "uv_studio/capabilities/authorization.py",
+      "symbol": "OneShotAuthorizationStore"
+    },
+    {
+      "name": "production_semantics",
+      "path": "uv_studio/production/commands.py",
+      "symbol": "ProductionSemanticService"
+    },
+    {
+      "name": "project_transaction",
+      "path": "uv_studio/projects/transactions.py",
+      "symbol": "ProjectUnitOfWork"
+    }
+  ],
+  "visible_states": [
+    "model_choice",
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "take_candidate"
+  ],
+  "availability": {
+    "requires_available_offer": true,
+    "default_behavior": "Named models whose execution mapping is configuration_required or unavailable remain visible with the reason and cannot be launched.",
+    "proof_transport": "Browser/API outcome proof uses the env-gated Stage14E2ETestExecutor; that model and executor are absent from the normal catalog unless UV_STUDIO_E2E_TEST_GENERATION=1."
+  },
+  "evidence": {
+    "browser_e2e": {
+      "path": "e2e/test_named_generation_outcome.py",
+      "class": "NamedGenerationBrowserOutcome",
+      "test": "test_visible_named_model_generates_take_accepts_to_timeline_and_undo_keeps_job"
+    },
+    "api_integration": {
+      "path": "tests_api/test_generation_api.py",
+      "class": "NamedGenerationApiTests",
+      "test": "test_prepare_submit_replay_conflict_and_fresh_reroll"
+    }
+  }
+}
