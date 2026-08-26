@@ -8,7 +8,14 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from uv_studio.api.project_common import get_project_store
-from uv_studio.generation.test_support import TEST_GENERATION_ENV, TEST_MODEL_ID
+from uv_studio.generation.jobs import GenerationJobManager, generation_request_digest
+from uv_studio.generation.models import GenerationContract
+from uv_studio.generation.test_support import (
+    TEST_ADAPTER_ID,
+    TEST_GENERATION_ENV,
+    TEST_MODEL_ID,
+    TEST_OFFER_ID,
+)
 from uv_studio.projects.store import ProjectStore
 from uv_studio.server import app
 
@@ -88,6 +95,69 @@ class NamedGenerationApiTests(unittest.TestCase):
         standard = next(item for item in disabled.json() if item["model_id"] == "uv.image.standard")
         self.assertEqual(standard["execution"]["availability"], "configuration_required")
         os.environ[TEST_GENERATION_ENV] = "1"
+
+    def test_configuration_required_model_cannot_create_job(self) -> None:
+        request = {**self._request(), "model_id": "uv.image.standard"}
+        blocked = self.client.post(
+            f"/api/uv/projects/{self.project_id}/studio/generation/jobs",
+            json={**request, "idempotency_key": "idem_blocked_model"},
+        )
+        self.assertEqual(blocked.status_code, 409, blocked.text)
+        self.assertIn("configuration_required", blocked.json()["detail"])
+
+        jobs = self.client.get(
+            f"/api/uv/projects/{self.project_id}/studio/generation/jobs"
+        )
+        self.assertEqual(jobs.status_code, 200, jobs.text)
+        self.assertEqual(jobs.json(), [])
+
+    def test_retry_response_is_durably_queued_before_background_attempt(self) -> None:
+        request = self._request("retry portrait")
+        contract = GenerationContract.from_dict(request["contract"])
+        digest, normalized = generation_request_digest(
+            project_id=self.project_id,
+            shot_id=request["shot_id"],
+            model_id=TEST_MODEL_ID,
+            capability_id="image.generate",
+            offer_id=TEST_OFFER_ID,
+            adapter_id=TEST_ADAPTER_ID,
+            inputs=request["inputs"],
+            contract=contract,
+        )
+        manager = GenerationJobManager(self.store)
+        job, reused = manager.create_or_reuse(
+            project_id=self.project_id,
+            idempotency_key="idem_retry_api",
+            request_digest=digest,
+            request=normalized,
+        )
+        self.assertFalse(reused)
+        running = manager.start_execution(self.project_id, job.job_id)
+        failed = manager.fail(
+            self.project_id,
+            job.job_id,
+            attempt_id=running.current_attempt.attempt_id,
+            error="simulated provider failure",
+        )
+        self.assertEqual(failed.status.value, "failed")
+
+        retry = self.client.post(
+            f"/api/uv/projects/{self.project_id}/studio/generation/jobs/{job.job_id}/retry",
+            json={"authorization_token": None},
+        )
+        self.assertEqual(retry.status_code, 200, retry.text)
+        self.assertEqual(retry.json()["status"], "queued")
+        self.assertEqual(len(retry.json()["attempts"]), 1)
+        self.assertEqual(retry.json()["attempts"][0]["status"], "failed")
+
+        completed = self.client.get(
+            f"/api/uv/projects/{self.project_id}/studio/generation/jobs/{job.job_id}"
+        )
+        self.assertEqual(completed.status_code, 200, completed.text)
+        self.assertEqual(completed.json()["status"], "succeeded")
+        self.assertEqual(len(completed.json()["attempts"]), 2)
+        self.assertEqual(completed.json()["attempts"][0]["status"], "failed")
+        self.assertEqual(completed.json()["attempts"][1]["status"], "succeeded")
 
     def test_prepare_submit_replay_conflict_and_fresh_reroll(self) -> None:
         request = self._request()
