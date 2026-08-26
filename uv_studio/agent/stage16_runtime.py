@@ -145,7 +145,23 @@ class AgentPlanner(_BaseAgentPlanner):
 
 
 class AgentPlanStore(_BaseAgentPlanStore):
-    """Discover every durable Agent plan by record type, not filename prefix."""
+    """Append/list Agent plans with cross-runtime create-if-absent semantics."""
+
+    def append(self, plan: AgentPlanRecord):
+        if not isinstance(plan, AgentPlanRecord):
+            raise AgentPlanningError("AgentPlanStore.append requires AgentPlanRecord")
+        with self.project_store._lock:
+            self.project_store.load_project(plan.project_id)
+            try:
+                return self.records.create_if_absent(
+                    plan.project_id,
+                    plan.plan_id,
+                    plan.to_dict(),
+                )
+            except ProjectTaskRecordConflict as exc:
+                raise AgentPlanningError(
+                    f"Agent plan already exists: {plan.plan_id!r}"
+                ) from exc
 
     def list(self, project_id: str) -> tuple[AgentPlanRecord, ...]:
         with self.project_store._lock:
@@ -202,7 +218,7 @@ class AgentTaskStore(_BaseAgentTaskStore):
     def ensure_initialized(self, plan: AgentPlanRecord) -> tuple[AgentTaskRecord, ...]:
         """Complete a missing/partial initial task set after interruption."""
 
-        with self.records.project_lock(plan.project_id), self.project_store._lock:
+        with self.project_store._lock, self.records.project_lock(plan.project_id):
             existing = self.list_by_plan(plan.project_id, plan.plan_id)
             by_id: dict[str, AgentTaskRecord] = {}
             for record in existing:
@@ -497,7 +513,7 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
     def state(self, project_id: str, plan_id: str) -> AgentPlanExecutionState:
         """Reopen fail-closed only after any live foreground execution releases its lease."""
 
-        with self.tasks.records.project_lock(project_id), self.project_store._lock:
+        with self.project_store._lock, self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
             if isinstance(self.tasks, AgentTaskStore):
                 self.tasks.ensure_initialized(plan)
@@ -518,7 +534,7 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
     ) -> Any:
         """Hold the project task lease from READY through terminal durable state."""
 
-        with self.tasks.records.project_lock(project_id):
+        with self.project_store._lock, self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
             spec = plan.task(task_id)
             definition = self.harness.catalog.get(spec.action_id)
@@ -548,7 +564,7 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
     def cancel_task(self, *, project_id: str, plan_id: str, task_id: str) -> AgentTaskRecord:
         """Cancel one task and transitively cancel planned dependents it makes impossible."""
 
-        with self.tasks.records.project_lock(project_id), self.project_store._lock:
+        with self.project_store._lock, self.tasks.records.project_lock(project_id):
             selected = super().cancel_task(
                 project_id=project_id,
                 plan_id=plan_id,
