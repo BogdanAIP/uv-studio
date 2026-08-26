@@ -46,7 +46,7 @@ Each user-visible ready record identifies:
 - stable `feature_id`, title, visibility and readiness;
 - canonical domain class/method;
 - backend source/function plus exact HTTP method and route;
-- frontend source/symbol, product route and declared visible controls;
+- frontend source/symbol, exact Next route mount-chain and declared visible controls;
 - canonical state/results involved;
 - capability/model/job/authorization/transaction dependencies;
 - visible progress/failure/result states;
@@ -59,15 +59,29 @@ Representative shape:
 {
   "schema_version": 1,
   "feature_id": "generate-shot-take",
+  "title": "Named generation",
   "user_visible": true,
   "readiness": "ready",
   "canonical": {
-    "domain": {"path": "...", "class": "GenerationService", "method": "submit"},
-    "backend": {"path": "...", "function": "submit_generation", "http_method": "POST", "route": "/api/uv/..."},
-    "frontend": {"path": "...", "symbol": "GenerationWorkspacePanel", "route": "/projects/{project_id}/studio", "controls": ["Модель генерации"]},
+    "domain": {"path": "uv_studio/generation/service.py", "class": "GenerationService", "method": "submit"},
+    "backend": {"path": "uv_studio/api/generation.py", "function": "submit_generation", "http_method": "POST", "route": "/api/uv/..."},
+    "frontend": {
+      "path": "frontend/components/editor/GenerationWorkspacePanel.tsx",
+      "symbol": "GenerationWorkspacePanel",
+      "route": "/projects/{project_id}/studio",
+      "mount_chain": [
+        {"path": "frontend/app/projects/[projectId]/studio/page.tsx", "symbol": "StudioProjectPage"},
+        {"path": "frontend/components/editor/StudioProjectWorkspace.tsx", "symbol": "StudioProjectWorkspace"},
+        {"path": "frontend/components/editor/ProductionWorkspacePanel.tsx", "symbol": "ProductionWorkspacePanel"},
+        {"path": "frontend/components/editor/GenerationWorkspacePanel.tsx", "symbol": "GenerationWorkspacePanel"}
+      ],
+      "controls": ["Модель генерации"]
+    },
     "state": ["project Job/Attempt", "generated project artifact", "Take candidate"]
   },
-  "dependencies": [],
+  "dependencies": [
+    {"name": "model_registry", "path": "uv_studio/generation/models.py", "symbol": "ModelRegistry"}
+  ],
   "visible_states": ["model_choice", "queued", "running", "succeeded", "failed", "cancelled", "take_candidate"],
   "availability": {
     "requires_available_offer": true,
@@ -75,13 +89,15 @@ Representative shape:
     "proof_transport": "bounded test transport"
   },
   "evidence": {
-    "browser_e2e": {"path": "...", "class": "...", "test": "test_..."},
-    "api_integration": {"path": "...", "class": "...", "test": "test_..."}
+    "browser_e2e": {"path": "e2e/test_feature_outcome.py", "class": "FeatureBrowserOutcome", "test": "test_visible_feature_outcome"},
+    "api_integration": {"path": "tests_api/test_feature_api.py", "class": "FeatureApiTests", "test": "test_feature_api_outcome"}
   }
 }
 ```
 
 The record is verification metadata, not a second feature engine or project authority.
+
+For the frontend, validation does more than check that the final component file exists. The first `mount_chain` entry must be the declared Next `frontend/app/**/page.*` route, its dynamic segments must match the declared product route, every chain element must declare a real component/function symbol, each parent must reference the next symbol, and the chain must terminate at the declared product surface. Deleting or disconnecting the page therefore fails Product Truth even if the leaf component file survives.
 
 ### Merge rule
 
@@ -89,7 +105,7 @@ For `user_visible=true` + `readiness=ready` on `main`:
 
 - frontend without a real canonical backend/application path fails parity;
 - advertised backend functionality without the required user surface fails parity;
-- declared source symbols/routes/controls/evidence that no longer resolve fail validation;
+- declared source symbols/routes/mount-chain/controls/evidence that no longer resolve fail validation;
 - model/cost/progress/error semantics required by the contract must survive both sides;
 - backend-only infrastructure is allowed only when explicitly marked non-user-visible/not-ready.
 
@@ -126,6 +142,6 @@ Stage 14 named-model generation is the first implemented D-067 consumer. Its con
 docs/architecture/product-truth/generate-shot-take.json
 ```
 
-The record binds the visible Studio model/Shot/prompt controls to `GenerationService.submit`, the generation Job API, durable Job/Attempt + generated-artifact + Take-candidate state, the shared acceptance/Timeline authorities and the browser/API evidence that proves the path.
+The record binds the visible Studio model/Shot/prompt controls to `GenerationService.submit`, the generation Job API, the real Next Studio mount-chain, durable Job/Attempt + generated-artifact + Take-candidate state, the shared acceptance/Timeline authorities and the browser/API evidence that proves the path.
 
 D-069 continuation lineage is intentionally not marked as a separate ready user-visible feature in Stage 14: no real continuation-capable offer or Continue/Edit UI is shipped yet.
