@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-agent-context-command-catalog-trace -->
 
 **Updated:** 2026-08-26
@@ -9,11 +9,13 @@
 
 ## Current lifecycle
 
-Stage 15 is active in draft on branch `stage-15/agent-context-command-catalog-trace`, created from lifecycle-closed `main` commit `ff644f3bfc9cbf27b13d6742207951dfb0470cf2`.
+Stage 15 is active in review on branch `stage-15/agent-context-command-catalog-trace`, created from lifecycle-closed `main` commit `ff644f3bfc9cbf27b13d6742207951dfb0470cf2`, with PR #69 ready for review.
 
-Goal: implement only the first bounded Agent Harness layer from D-066 — canonical Context Builder, catalog over existing UV command/model/job/capability authorities, effects/policy projection, append-only inspectable trace and one bounded execution seam through the existing application authority.
+Goal: deliver only the first bounded Agent Harness layer from D-066 — canonical Context Builder, catalog over existing UV command/model/job/capability authorities, effects/policy projection, append-only inspectable trace and one bounded execution seam through the existing application authority.
 
 Stage 14 / PR #68 merged as `daa9381f45e136f7e406ac29888f8ac597da3f79` and was lifecycle-closed to idle before this branch was created. Planner, durable Tasks, Skills, subagents, background Agent orchestration, evaluation/repair and long-form autonomy remain out of scope.
+
+Implementation/refinement head `6cf999203e17d458914ec1b248c29bc097bf45c0` passed all five permanent CI jobs, including browser E2E on Ubuntu and Windows. The review-state head must independently pass the same exact-head gate before merge, with no unresolved review threads.
 
 ## Current architecture authority
 
@@ -45,29 +47,29 @@ Stages 12–14 provide the lower production and generation spine consumed by thi
 13. the first machine-readable Product Truth record binds the named-generation domain/API/frontend/state/evidence path;
 14. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable.
 
-## Stage-15 bounded contracts
+## Stage-15 as-built bounded contracts
 
-This slice must not create another project, command, tool, model or permission authority.
+This slice does not create another project, command, tool, model or permission authority.
 
 ### Context Builder
 
-Build a compact, deterministic observation from canonical Project, Production, Timeline, Model Registry and Job Manager state. Context references canonical identities and bounded summaries rather than copying arbitrary project files, provider prompts, secrets, absolute host paths or provider-private runtime state.
+A compact deterministic observation is built from canonical Project, Production, Timeline, Model Registry and Job Manager state. Context references canonical identities and bounded summaries rather than copying arbitrary project files, provider prompts, secrets, absolute host paths or provider-private runtime state.
 
 ### Existing-command/tool catalog
 
-Expose stable Agent-facing action metadata that resolves only to existing UV-owned services. Production and Timeline mutations continue through their existing command services; named generation continues through the existing generation/model/job/capability stack. Unknown actions fail closed.
+Stable Agent-facing action metadata resolves only to existing UV-owned services. Production and Timeline mutations continue through their existing command services; named generation continues through the existing generation/model/job/capability stack. Catalog metadata includes the canonical authority, bounded input fields, effects, whether a model is required, whether the action uses Job Manager and whether D-017 authorization may be required. Unknown actions fail closed.
 
 ### Effects / policy
 
-Consume the existing `CapabilityEffects`, offer availability/locality/cost and D-017 authorization facts. This slice may project those facts for planning/inspection but must not invent a second permission system or allow the Agent to self-authorize remote/non-free work.
+Policy consumes existing `CapabilityEffects`, offer availability/locality/cost and D-017 authorization facts. It projects those facts for inspection but does not create a second permission system or allow the Agent to self-authorize remote/non-free work.
 
 ### Inspectable trace
 
-Persist append-only, project-scoped trace records under existing bounded project storage. Trace records link context digest, canonical identities, action/policy/effects, invocation outcome and Job/Attempt/transaction references. They are execution history, not canonical production state, and must remain portable and secret/path safe.
+Append-only project-scoped trace records are persisted under existing bounded project task storage. Trace links context/input digests, canonical identities, action/policy/effects, invocation outcome and Job/Attempt/transaction references. Trace is execution history rather than canonical production state and rejects authorization tokens, secret material, absolute host paths and arbitrary non-portable state.
 
 ### Bounded execution proof
 
-At least one Agent-harness action must execute through the same existing semantic command/service used by other callers and leave a durable trace. Failure must leave a failure trace without claiming canonical success.
+Agent Harness execution uses the same existing semantic command/service boundaries as other callers. Successful canonical mutations return the existing transaction/Job identity into trace; failed existing commands and unknown actions leave inspectable failure trace without fabricating canonical success. Unavailable generation remains unavailable before Job creation, and remote/non-free generation still requires exact D-017 authorization.
 
 ## Explicit non-goals still in force
 
@@ -96,4 +98,4 @@ canonical Project / Production / Timeline / Model / Job observation
  -> append-only inspectable project trace
 ```
 
-The current `project-context/NEXT_TASK.md` remains the exact scope contract for this active draft until the slice is reviewed, merged and lifecycle-closed.
+The current `project-context/NEXT_TASK.md` remains the exact scope contract for this active review until the slice is merged and lifecycle-closed.
