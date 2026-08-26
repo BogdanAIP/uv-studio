@@ -17,7 +17,13 @@ from typing import Any, Iterator, Mapping, Sequence
 
 from uv_studio.projects.models import utc_now_iso
 
-from .models import AgentHarnessError, AgentTraceRecord, AgentTraceStatus
+from .models import (
+    AgentHarnessError,
+    AgentTraceRecord,
+    AgentTraceStatus,
+    portable_json,
+    stable_digest,
+)
 from .orchestration import (
     AGENT_PLAN_RECORD_TYPE,
     AgentPlanExecutionState as _BaseAgentPlanExecutionState,
@@ -35,6 +41,22 @@ from .orchestration import (
 )
 
 AGENT_SKILL_SCHEMA_VERSION = 1
+
+
+def _typed_correlation_reference(
+    plan_id: str,
+    task_id: str,
+    skill_id: str | None,
+) -> str:
+    digest = stable_digest(
+        {
+            "record_type": "agent_task_correlation",
+            "plan_id": plan_id,
+            "task_id": task_id,
+            "skill_id": skill_id,
+        }
+    )
+    return f"agent_corr_{digest[:32]}"
 
 
 class AgentSkillCatalog(_BaseAgentSkillCatalog):
@@ -134,8 +156,6 @@ class AgentTaskStore(_BaseAgentTaskStore):
                 self.records.write(plan.project_id, record.record_id, record.to_dict())
                 by_id[spec.task_id] = record
 
-            # If a partial initial write was interrupted after dependencies later
-            # completed, promote any newly reconstructed dependent records normally.
             return super().promote_ready(plan)
 
     def initialize(self, plan: AgentPlanRecord) -> tuple[AgentTaskRecord, ...]:
@@ -163,7 +183,7 @@ class AgentPlanExecutionState(_BaseAgentPlanExecutionState):
 
 
 class _CorrelatingTraceStore:
-    """Proxy the existing append-only trace store with bounded orchestration refs."""
+    """Proxy the existing append-only trace store with typed orchestration refs."""
 
     def __init__(self, base: Any) -> None:
         self._base = base
@@ -174,12 +194,24 @@ class _CorrelatingTraceStore:
 
     @contextmanager
     def correlate(self, *references: str | None) -> Iterator[None]:
-        normalized = tuple(
+        normalized = list(
             dict.fromkeys(
                 reference for reference in references if isinstance(reference, str) and reference
             )
         )
-        token = self._correlation.set(normalized)
+        if len(references) >= 2:
+            plan_id = references[0]
+            task_id = references[1]
+            skill_id = references[2] if len(references) >= 3 else None
+            if isinstance(plan_id, str) and plan_id and isinstance(task_id, str) and task_id:
+                typed = _typed_correlation_reference(
+                    plan_id,
+                    task_id,
+                    skill_id if isinstance(skill_id, str) and skill_id else None,
+                )
+                if typed not in normalized:
+                    normalized.append(typed)
+        token = self._correlation.set(tuple(normalized))
         try:
             yield
         finally:
@@ -240,14 +272,33 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
             return AgentPlanStatus.CANCELLED
         return AgentPlanStatus.ACTIVE
 
-    def _correlated_trace_for(self, record: AgentTaskRecord) -> AgentTraceRecord | None:
+    @staticmethod
+    def _expected_input_digest(spec: Any) -> str:
+        return stable_digest(
+            {
+                "action_id": spec.action_id,
+                "inputs": portable_json(spec.inputs, field_name="Agent action inputs"),
+            }
+        )
+
+    def _correlated_trace_for(
+        self,
+        plan: AgentPlanRecord,
+        record: AgentTaskRecord,
+    ) -> AgentTraceRecord | None:
+        spec = plan.task(record.task_id)
+        typed_reference = _typed_correlation_reference(
+            plan.plan_id,
+            spec.task_id,
+            spec.skill_id,
+        )
+        expected_input_digest = self._expected_input_digest(spec)
         candidates = [
             trace
             for trace in self.harness.traces.list(record.project_id)
             if trace.action_id == record.action_id
-            and record.plan_id in trace.canonical_references
-            and record.task_id in trace.canonical_references
-            and (record.skill_id is None or record.skill_id in trace.canonical_references)
+            and typed_reference in trace.canonical_references
+            and trace.input_digest == expected_input_digest
             and (record.started_at is None or trace.created_at >= record.started_at)
         ]
         if not candidates:
@@ -255,15 +306,15 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
         candidates.sort(key=lambda item: (item.created_at, item.trace_id))
         return candidates[-1]
 
-    def _reconcile_running(self, record: AgentTaskRecord) -> AgentTaskRecord:
-        trace = self._correlated_trace_for(record)
+    def _reconcile_running(
+        self,
+        plan: AgentPlanRecord,
+        record: AgentTaskRecord,
+    ) -> AgentTaskRecord:
+        trace = self._correlated_trace_for(plan, record)
         if trace is not None:
             if trace.status is AgentTraceStatus.SUCCEEDED:
-                return self.tasks.transition(
-                    record,
-                    AgentTaskStatus.SUCCEEDED,
-                    trace=trace,
-                )
+                return self.tasks.transition(record, AgentTaskStatus.SUCCEEDED, trace=trace)
             error = AgentTaskStateError(
                 trace.error_message or "Agent Task execution failed before durable task completion"
             )
@@ -287,7 +338,7 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
                 self.tasks.ensure_initialized(plan)
             for record in self.tasks.list_by_plan(project_id, plan.plan_id):
                 if record.status is AgentTaskStatus.RUNNING:
-                    self._reconcile_running(record)
+                    self._reconcile_running(plan, record)
             self.tasks.promote_ready(plan)
             state = super().state(project_id, plan.plan_id)
             return AgentPlanExecutionState(plan=state.plan, tasks=state.tasks, status=state.status)
