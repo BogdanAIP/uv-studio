@@ -17,6 +17,7 @@ from uv_studio.capabilities.authorization import (
     OneShotAuthorizationStore,
     prepare_execution,
 )
+from uv_studio.capabilities.models import OfferAvailability
 from uv_studio.capabilities.selection import SelectionPolicy
 from uv_studio.generation.builtin import build_builtin_model_registry
 from uv_studio.generation.jobs import (
@@ -32,7 +33,9 @@ from uv_studio.generation.models import (
     ModelRegistryError,
     UnknownModel,
 )
+from uv_studio.generation.recovery import requeue_failed_generation_job
 from uv_studio.generation.service import (
+    GenerationExecutionUnavailable,
     GenerationExecutor,
     GenerationService,
     GenerationServiceError,
@@ -299,6 +302,10 @@ def _retry_preparation(service: GenerationService, project_id: str, job_id: str)
     if not isinstance(offer_id, str):
         raise GenerationJobError("generation job lost offer identity")
     offer = service.model_registry.capability_registry.get_offer(offer_id)
+    if offer.availability is not OfferAvailability.AVAILABLE:
+        raise GenerationExecutionUnavailable(
+            f"selected model execution is {offer.availability.value}: {offer.reason}"
+        )
     return job, prepare_execution(
         project_id=project_id,
         offer=offer,
@@ -332,8 +339,9 @@ def retry_generation(
     try:
         job, preparation = _retry_preparation(service, project_id, job_id)
         service.authorizations.consume(request.authorization_token, preparation)
-        background_tasks.add_task(_schedule_run, service, project_id, job.job_id)
-        return job.to_dict()
+        queued = requeue_failed_generation_job(service.jobs, project_id, job.job_id)
+        background_tasks.add_task(_schedule_run, service, project_id, queued.job_id)
+        return queued.to_dict()
     except Exception as exc:
         _raise_generation_error(exc)
         raise AssertionError("unreachable")
