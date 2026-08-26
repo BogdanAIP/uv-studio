@@ -63,6 +63,7 @@ def list_capability_offers(capability_id: str) -> list[dict[str, Any]]:
         {
             **offer.to_dict(),
             "adapter": registry.get_adapter(offer.adapter_id).to_dict(),
+            "effects": registry.effects_for_offer(offer.offer_id).to_dict(),
         }
         for offer in offers
     ]
