@@ -23,13 +23,13 @@ from .orchestration import (
     AgentSkillDefinition,
     AgentSkillError,
     AgentTaskBlocked,
-    AgentTaskCoordinator,
     AgentTaskRecord,
     AgentTaskSpec,
     AgentTaskStateError,
     AgentTaskStatus,
     AgentTaskStore,
 )
+from .stage16_runtime import AgentTaskCoordinator
 
 __all__ = [
     "AgentActionCatalog",
