@@ -226,7 +226,7 @@ def _normalized_declared_frontend_route(route: str, location: str) -> str:
     value = _text(route, location)
     if not value.startswith("/") or "?" in value or "#" in value:
         raise ProductTruthError(f"{location} must be an absolute product route without query/fragment")
-    normalized = _FRONTEND_ROUTE_PARAMETER_RE.sub("{}", value)
+    normalized = _FRONTEND_ROUTE_PARAMETER_RE.sub(":param", value)
     if "{" in normalized or "}" in normalized:
         raise ProductTruthError(f"{location} contains malformed route parameters")
     return normalized.rstrip("/") or "/"
@@ -244,7 +244,7 @@ def _next_route_for_entry(relative_path: str, location: str) -> str:
         if part.startswith("@"):
             continue
         if part.startswith("[") and part.endswith("]"):
-            route_parts.append("{}")
+            route_parts.append(":param")
         else:
             route_parts.append(part)
     return "/" + "/".join(route_parts) if route_parts else "/"
