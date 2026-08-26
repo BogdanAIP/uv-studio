@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-model-registry-job-manager-generation -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-agent-context-command-catalog-trace -->
 
 **Updated:** 2026-08-26
 
@@ -9,15 +9,11 @@
 
 ## Current lifecycle
 
-`main` is lifecycle-closed and idle after Stage 14 / PR #68.
+Stage 15 is active in draft on branch `stage-15/agent-context-command-catalog-trace`, created from lifecycle-closed `main` commit `ff644f3bfc9cbf27b13d6742207951dfb0470cf2`.
 
-- merged PR: #68 `stage 14: model registry, jobs and named generation`;
-- exact reviewed head: `0117a622a50dd506855f8557ff6c6c0ac0124811`;
-- merge commit: `daa9381f45e136f7e406ac29888f8ac597da3f79`;
-- exact-head CI run #3306 passed all five permanent jobs on Ubuntu/Windows, including API, real-media, frontend build and browser user-outcome suites;
-- all inline review threads were resolved before merge.
+Goal: implement only the first bounded Agent Harness layer from D-066 — canonical Context Builder, catalog over existing UV command/model/job/capability authorities, effects/policy projection, append-only inspectable trace and one bounded execution seam through the existing application authority.
 
-No implementation slice is currently active. The declared handoff is `studio-v2-agent-context-command-catalog-trace`.
+Stage 14 / PR #68 merged as `daa9381f45e136f7e406ac29888f8ac597da3f79` and was lifecycle-closed to idle before this branch was created. Planner, durable Tasks, Skills, subagents, background Agent orchestration, evaluation/repair and long-form autonomy remain out of scope.
 
 ## Current architecture authority
 
@@ -32,7 +28,7 @@ No implementation slice is currently active. The declared handoff is `studio-v2-
 
 ## As-built foundation through Stage 14
 
-Stages 12–14 now provide the lower production and generation spine needed by the Agent Harness:
+Stages 12–14 provide the lower production and generation spine consumed by this slice:
 
 1. typed Production Direction identity and bounded project/production storage;
 2. shared `Scene`, `Shot`, `Take` and accepted-Take semantics across directions;
@@ -41,65 +37,63 @@ Stages 12–14 now provide the lower production and generation spine needed by t
 5. transactional accepted-Take projection into Timeline while preserving project media provenance;
 6. backend-owned user-visible Model Registry above capability/provider transport;
 7. project-scoped durable generation Job/Attempt records under the existing `tasks/` authority;
-8. exact idempotency: same key + same digest reuses, same key + different digest conflicts, fresh key permits a deliberate identical-input creative reroll;
-9. D-017 remains independent: every new remote/non-free execution requires the normal exact authorization;
+8. exact idempotency and durable retry/failure history;
+9. D-017 exact authorization for remote/non-free execution;
 10. provider-neutral `GenerationContract`, including feature-gated D-069 continuation parent lineage;
 11. generated output becomes project-owned media and a shared Take candidate before semantic acceptance;
-12. Studio generation UI exposes model/Shot/prompt/contract choice and queued/running/succeeded/failed/cancelled/result states;
-13. resolved `CapabilityEffects` are exposed through the existing Capability Registry/API for later Agent policy/trace use;
-14. the first machine-readable Product Truth record, `docs/architecture/product-truth/generate-shot-take.json`, deterministically binds domain/API/frontend mount-chain/state/evidence;
-15. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable.
+12. resolved `CapabilityEffects` are available through the existing Capability Registry for Agent policy/trace projection;
+13. the first machine-readable Product Truth record binds the named-generation domain/API/frontend/state/evidence path;
+14. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable.
 
-## Stage-14 recovery/retry guarantees
+## Stage-15 bounded contracts
 
-The final review added three important execution guarantees:
+This slice must not create another project, command, tool, model or permission authority.
 
-- a named model whose selected offer is `configuration_required` or unavailable is rejected before authorization consumption and before Job creation;
-- retry first durably transitions `failed -> queued` before the HTTP response/background execution, so Studio polling cannot lose the retry transition;
-- FastAPI startup reconciliation converts abandoned `queued`/`running` generation Jobs into explicit retryable `failed` history rather than leaving them permanently stuck.
+### Context Builder
 
-Restart reconciliation **never automatically replays provider work**. For an interrupted provider call the external outcome may be unknown; a new remote/non-free retry therefore remains explicit and goes through the ordinary D-017 boundary. Existing Attempt history is preserved.
+Build a compact, deterministic observation from canonical Project, Production, Timeline, Model Registry and Job Manager state. Context references canonical identities and bounded summaries rather than copying arbitrary project files, provider prompts, secrets, absolute host paths or provider-private runtime state.
 
-## Product Truth status
+### Existing-command/tool catalog
 
-The named-generation feature is the first implemented D-067 consumer. Its ready contract resolves to:
+Expose stable Agent-facing action metadata that resolves only to existing UV-owned services. Production and Timeline mutations continue through their existing command services; named generation continues through the existing generation/model/job/capability stack. Unknown actions fail closed.
 
-```text
-GenerationService.submit
- -> FastAPI generation route
- -> Next Studio route mount chain
- -> GenerationWorkspacePanel controls
- -> Job/Attempt + artifact + Take state
- -> API integration proof
- -> browser user-outcome proof
-```
+### Effects / policy
 
-The env-gated `Stage14E2ETestExecutor` remains test-only and absent from the normal model catalog unless `UV_STUDIO_E2E_TEST_GENERATION=1`. Normal unconfigured models remain visible but cannot be launched.
+Consume the existing `CapabilityEffects`, offer availability/locality/cost and D-017 authorization facts. This slice may project those facts for planning/inspection but must not invent a second permission system or allow the Agent to self-authorize remote/non-free work.
 
-D-069 continuation is only a durable contract/lineage seam today. There is no real `generation.continuation` provider offer or user-visible Continue/Edit workflow yet.
+### Inspectable trace
+
+Persist append-only, project-scoped trace records under existing bounded project storage. Trace records link context digest, canonical identities, action/policy/effects, invocation outcome and Job/Attempt/transaction references. They are execution history, not canonical production state, and must remain portable and secret/path safe.
+
+### Bounded execution proof
+
+At least one Agent-harness action must execute through the same existing semantic command/service used by other callers and leave a durable trace. Failure must leave a failure trace without claiming canonical success.
 
 ## Explicit non-goals still in force
 
-- no full Planner/Tasks/Skills/Subagents runtime yet;
+- no Planner or durable Agent Task graph;
+- no Skills runtime;
+- no functional subagents (`explore`, `plan`, `media`, `critic`) yet;
 - no Agent-only project write path;
-- no JarvisHub Canvas/node/PostgreSQL/Hono authority or duplicate tool registry;
+- no duplicate JarvisHub-style tool registry or protocol bridge;
+- no automatic background Agent replay through Job Manager;
+- no evaluation/repair loop or long-form autonomy;
 - no provider-private cache/latent/session state in Project Store;
-- no desktop Update Service/UI implementation in the Agent slice;
-- no claim that a real continuation-capable provider is integrated.
+- no desktop Update Service/UI implementation;
+- no claim that a real continuation-capable provider is integrated;
+- no new user-facing Agent readiness claim unless a real Studio surface and D-067 evidence are added.
 
-## Next handoff
+## Active slice
 
 `studio-v2-agent-context-command-catalog-trace`
 
-Implement only the first bounded Agent Harness layer from D-066:
-
 ```text
-canonical project/context observation
+canonical Project / Production / Timeline / Model / Job observation
  -> UV-owned Context Builder
- -> catalog of existing Studio/Application Commands + models/jobs/capabilities
- -> effects/policy inspection using existing authorities
- -> one bounded execution seam through the same commands/services
- -> append-only inspectable trace linked to canonical project identities
+ -> deterministic catalog over existing UV authorities
+ -> effects / policy projection
+ -> bounded execution through existing service
+ -> append-only inspectable project trace
 ```
 
-Do not add Planner, durable Task graphs, Skills, functional subagents or long-form autonomy until this foundation is independently proven.
+The current `project-context/NEXT_TASK.md` remains the exact scope contract for this active draft until the slice is reviewed, merged and lifecycle-closed.
