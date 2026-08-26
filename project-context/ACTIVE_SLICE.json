@@ -8,7 +8,7 @@
     "goal": "Implement D-066 Agent Harness layer 2: bounded validated Planner output, durable project-scoped Agent Tasks with dependency/state semantics, reusable bounded Skills, and foreground task execution only through the existing Stage-15 AgentHarness / UV authorities without functional subagents or background autonomy.",
     "base_branch": "main",
     "branch": "stage-16/agent-planner-durable-tasks-skills",
-    "pull_request": null,
+    "pull_request": 70,
     "write_scope": [
       "uv_studio/**",
       "tests/**",
