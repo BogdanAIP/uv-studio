@@ -17,7 +17,7 @@ from typing import Any, Iterator, Mapping, Sequence
 
 from uv_studio.projects.models import utc_now_iso
 
-from .models import AgentHarnessError, AgentTraceRecord
+from .models import AgentHarnessError, AgentTraceRecord, AgentTraceStatus
 from .orchestration import (
     AGENT_PLAN_RECORD_TYPE,
     AgentPlanExecutionState as _BaseAgentPlanExecutionState,
@@ -240,20 +240,55 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
             return AgentPlanStatus.CANCELLED
         return AgentPlanStatus.ACTIVE
 
+    def _correlated_trace_for(self, record: AgentTaskRecord) -> AgentTraceRecord | None:
+        candidates = [
+            trace
+            for trace in self.harness.traces.list(record.project_id)
+            if trace.action_id == record.action_id
+            and record.plan_id in trace.canonical_references
+            and record.task_id in trace.canonical_references
+            and (record.skill_id is None or record.skill_id in trace.canonical_references)
+            and (record.started_at is None or trace.created_at >= record.started_at)
+        ]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: (item.created_at, item.trace_id))
+        return candidates[-1]
+
+    def _reconcile_running(self, record: AgentTaskRecord) -> AgentTaskRecord:
+        trace = self._correlated_trace_for(record)
+        if trace is not None:
+            if trace.status is AgentTraceStatus.SUCCEEDED:
+                return self.tasks.transition(
+                    record,
+                    AgentTaskStatus.SUCCEEDED,
+                    trace=trace,
+                )
+            error = AgentTaskStateError(
+                trace.error_message or "Agent Task execution failed before durable task completion"
+            )
+            return self.tasks.transition(
+                record,
+                AgentTaskStatus.FAILED,
+                trace=trace,
+                error=error,
+            )
+        interruption = AgentTaskStateError(
+            "Agent Task was interrupted before durable completion; automatic replay is disabled"
+        )
+        return self.tasks.transition(record, AgentTaskStatus.FAILED, error=interruption)
+
     def state(self, project_id: str, plan_id: str) -> AgentPlanExecutionState:
-        """Reopen fail-closed and repair only missing initial task records."""
+        """Reopen fail-closed, reconcile traces and repair missing initial tasks."""
 
         with self.project_store._lock:
             plan = self.plans.get(project_id, plan_id)
             if isinstance(self.tasks, AgentTaskStore):
                 self.tasks.ensure_initialized(plan)
             for record in self.tasks.list_by_plan(project_id, plan.plan_id):
-                if record.status is not AgentTaskStatus.RUNNING:
-                    continue
-                interruption = AgentTaskStateError(
-                    "Agent Task was interrupted before durable completion; automatic replay is disabled"
-                )
-                self.tasks.transition(record, AgentTaskStatus.FAILED, error=interruption)
+                if record.status is AgentTaskStatus.RUNNING:
+                    self._reconcile_running(record)
+            self.tasks.promote_ready(plan)
             state = super().state(project_id, plan.plan_id)
             return AgentPlanExecutionState(plan=state.plan, tasks=state.tasks, status=state.status)
 

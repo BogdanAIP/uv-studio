@@ -266,6 +266,45 @@ class AgentStage16RuntimeTests(unittest.TestCase):
             0,
         )
 
+    def test_reopen_recovers_completed_correlated_trace_without_replay(self) -> None:
+        harness = AgentHarness(self.store, self._empty_registry())
+        coordinator = AgentTaskCoordinator(harness)
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_completed_before_task_write",
+            scene_id="scene_completed_before_task_write",
+        )
+        ready = state.tasks[0]
+        coordinator.tasks.transition(ready, AgentTaskStatus.RUNNING)
+        spec = state.plan.task("scene")
+        with coordinator._correlated_traces.correlate(
+            state.plan.plan_id,
+            spec.task_id,
+            spec.skill_id,
+        ):
+            harness.execute(
+                project_id=self.project.project_id,
+                action_id=spec.action_id,
+                inputs=dict(spec.inputs),
+                target_shot_id=spec.target_shot_id,
+            )
+        self.assertEqual(len(harness.traces.list(self.project.project_id)), 1)
+
+        reopened_store = ProjectStore(self.projects_root)
+        reopened_harness = AgentHarness(reopened_store, self._empty_registry())
+        reopened = AgentTaskCoordinator(reopened_harness)
+        recovered = reopened.state(self.project.project_id, state.plan.plan_id)
+        task = recovered.tasks[0]
+
+        self.assertEqual(task.status, AgentTaskStatus.SUCCEEDED)
+        self.assertEqual(recovered.status, AgentPlanStatus.SUCCEEDED)
+        self.assertIsNotNone(task.trace_id)
+        self.assertIn(state.plan.plan_id, task.canonical_references)
+        self.assertIn("scene", task.canonical_references)
+        self.assertEqual(len(reopened_harness.traces.list(self.project.project_id)), 1)
+        scenes = ProductionSemanticService(reopened_store).state(self.project.project_id).scenes
+        self.assertEqual(tuple(scene.scene_id for scene in scenes), ("scene_completed_before_task_write",))
+
     def test_mixed_succeeded_and_cancelled_tasks_make_terminal_plan(self) -> None:
         harness = AgentHarness(self.store, self._empty_registry())
         coordinator = AgentTaskCoordinator(harness)
