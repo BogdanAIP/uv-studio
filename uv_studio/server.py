@@ -7,6 +7,7 @@ the complete upstream FastAPI route table is not mounted by default.
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +40,7 @@ from uv_studio.api.music_video_review import router as music_video_review_router
 from uv_studio.api.prepared_audio import router as prepared_audio_router  # noqa: E402
 from uv_studio.api.prepared_audio_promotion import router as prepared_audio_promotion_router  # noqa: E402
 from uv_studio.api.production_semantics import router as production_semantics_router  # noqa: E402
+from uv_studio.api.project_common import get_project_store  # noqa: E402
 from uv_studio.api.project_media import router as project_media_router  # noqa: E402
 from uv_studio.api.project_transactions import router as project_transactions_router  # noqa: E402
 from uv_studio.api.project_workflow import router as project_workflow_router  # noqa: E402
@@ -53,11 +55,22 @@ from uv_studio.api.sequence_review_assist import router as sequence_review_assis
 from uv_studio.api.stage8_workspace import router as stage8_workspace_router  # noqa: E402
 from uv_studio.api.studio_timeline import router as studio_timeline_router  # noqa: E402
 from uv_studio.config import allowed_frontend_origins  # noqa: E402
+from uv_studio.generation.recovery import recover_interrupted_generation_jobs  # noqa: E402
 from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
 TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
 
-app = FastAPI(title="UV Studio", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # FastAPI BackgroundTasks are process-local rather than durable workers.
+    # Reconcile abandoned queued/running generation records before accepting
+    # requests, but never auto-replay provider work after a restart.
+    recover_interrupted_generation_jobs(get_project_store())
+    yield
+
+
+app = FastAPI(title="UV Studio", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(TRUSTED_FRONTEND_ORIGINS),
