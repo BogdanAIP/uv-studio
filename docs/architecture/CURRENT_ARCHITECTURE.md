@@ -43,7 +43,7 @@ Project Store
  -> Generation Job Manager / GenerationContract
  -> Agent Harness
       Context / Catalog / Policy / Trace              [Stage 15 merged]
-      Planner / durable Tasks / Skills                [Stage 16 active draft]
+      Planner / durable Tasks / Skills                [Stage 16 review]
       functional Subagents                            [later D-066 layer 3]
       background Agent execution                      [later layer 4]
       evaluate / repair                               [later layer 5]
@@ -148,11 +148,11 @@ Agent policy projects existing availability/locality/cost/`CapabilityEffects`/D-
 
 `AgentHarness` delegates canonical mutation to the same Production/Timeline/Generation services used by other callers. Stage 15 proved success and failure tracing, unavailable models, D-017 separation, bounded context and restart/reopen.
 
-## Agent Harness layer 2 — Stage 16 active draft
+## Agent Harness layer 2 — Stage 16 review
 
 Current active slice: `studio-v2-agent-planner-durable-tasks-skills`, PR #70.
 
-The active implementation adds orchestration above Stage 15 without changing canonical authorities:
+The implementation under review adds orchestration above Stage 15 without changing canonical authorities:
 
 ```text
 bounded goal
@@ -198,7 +198,7 @@ Skills derive their effects/authority envelope from underlying catalog actions a
 
 Stage 16 intentionally executes one runnable task in the foreground through `AgentHarness`. Functional subagents, background workers, evaluate/repair and long-form autonomy remain later D-066 layers.
 
-The Stage-16 draft is internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
+The Stage-16 review implementation is internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
 
 ## D-066 sequence after the active slice
 
@@ -246,7 +246,7 @@ Contextual operations such as targeted edit, dubbing/translation, slideshow, vis
 8. Generation Job/Attempt history remains separate from Agent Task orchestration state.
 9. Remote/non-free execution remains explicit and D-017-authorized where required.
 10. Provider prompts, secrets, reusable authorization and provider-private continuation caches never become portable Project/Agent state.
-11. Current docs must distinguish merged/as-built state from active draft/future state.
+11. Current docs must distinguish merged/as-built state from active review/future state.
 12. Do not claim autonomous product readiness from internal Agent infrastructure alone.
 
 ## Compatibility layer
