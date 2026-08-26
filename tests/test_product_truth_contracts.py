@@ -30,6 +30,10 @@ class ProductTruthContractTests(unittest.TestCase):
             "/api/uv/projects/{project_id}/studio/generation/jobs",
         )
         self.assertEqual(
+            contract["canonical"]["frontend"]["mount_chain"][0]["path"],
+            "frontend/app/projects/[projectId]/studio/page.tsx",
+        )
+        self.assertEqual(
             contract["evidence"]["browser_e2e"]["test"],
             "test_visible_named_model_generates_take_accepts_to_timeline_and_undo_keeps_job",
         )
@@ -43,6 +47,22 @@ class ProductTruthContractTests(unittest.TestCase):
 
         with self.assertRaises(ProductTruthError):
             validate_product_truth_contract(ROOT, broken, location="broken-contract")
+
+    def test_ready_contract_fails_when_declared_frontend_route_does_not_match_next_entry(self) -> None:
+        raw = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        broken = copy.deepcopy(raw)
+        broken["canonical"]["frontend"]["route"] = "/projects/{project_id}/generation"
+
+        with self.assertRaises(ProductTruthError):
+            validate_product_truth_contract(ROOT, broken, location="wrong-route-contract")
+
+    def test_ready_contract_fails_when_frontend_mount_chain_is_broken(self) -> None:
+        raw = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        broken = copy.deepcopy(raw)
+        broken["canonical"]["frontend"]["mount_chain"][2]["symbol"] = "StudioWorkspace"
+
+        with self.assertRaises(ProductTruthError):
+            validate_product_truth_contract(ROOT, broken, location="broken-mount-contract")
 
     def test_ready_contract_requires_all_visible_job_and_result_states(self) -> None:
         raw = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
