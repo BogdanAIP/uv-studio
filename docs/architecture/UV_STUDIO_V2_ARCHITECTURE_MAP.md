@@ -20,7 +20,7 @@ Project Store
  -> Generation Job Manager / GenerationContract
  -> Capability Registry / D-017 / adapters
  -> Agent Harness layer 1: Context / Catalog / Policy / Trace       [Stage 15 merged]
- -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 active draft]
+ -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 review]
 ```
 
 The old product-composition errors remain rejected:
@@ -156,11 +156,11 @@ Append-only project-scoped inspection records under the existing `tasks/` author
 
 `AgentHarness` dispatches only through existing UV services. There is no generic file-write, shell or Python action.
 
-## 7. Agent Harness layer 2 — Stage 16 ACTIVE DRAFT
+## 7. Agent Harness layer 2 — Stage 16 REVIEW
 
 Current slice: `studio-v2-agent-planner-durable-tasks-skills`, PR #70.
 
-The active implementation adds:
+The implementation under review adds:
 
 ```text
 bounded goal
@@ -277,7 +277,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 | Generation Job Manager | **KEEP** | execution provenance/idempotency/retry |
 | GenerationContract | **KEEP** | provider-neutral semantic generation constraints |
 | Stage-15 Agent foundation | **KEEP** | Context/Catalog/Policy/Trace/AgentHarness |
-| Stage-16 Planner/Tasks/Skills | **ACTIVE DRAFT** | D-066 layer 2 orchestration |
+| Stage-16 Planner/Tasks/Skills | **REVIEW** | D-066 layer 2 orchestration |
 | Product Truth | **KEEP** | cross-layer verification metadata |
 | MCP | **KEEP** | optional capability/tool transport, not product state |
 | Desktop Update Service | **FUTURE ACCEPTED** | D-068 maintained installation lifecycle |
@@ -310,7 +310,7 @@ Completed:
 9. Stage 14 first Product Truth record/proof.
 10. **Stage 15 Context Builder + Action Catalog + Policy + Trace + bounded Agent execution.**
 
-Active:
+In review:
 
 11. **Stage 16 Planner + durable Tasks + Skills.**
 
@@ -341,5 +341,5 @@ Then, in D-066 order:
 - provider-private continuation state is not Project Store truth;
 - Agent context/plan/tasks/skills/trace are bounded orchestration/inspection state over canonical identities;
 - Agent Task history does not replace Generation Job/Attempt provenance;
-- current docs distinguish merged, active draft and future work;
+- current docs distinguish merged, review and future work;
 - user-visible readiness requires D-067 parity/evidence, not implementation claims alone.
