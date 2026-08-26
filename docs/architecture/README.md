@@ -21,7 +21,9 @@ These remain valid when they do not conflict with current authority:
 
 - [`CAPABILITIES.md`](CAPABILITIES.md) — Capability Registry below Studio tools/Model Registry;
 - [`CAPABILITY_EXECUTION.md`](CAPABILITY_EXECUTION.md) — selection, authorization and bounded execution;
-- [`PRODUCT_TRUTH_CONTRACT.md`](PRODUCT_TRUTH_CONTRACT.md) — target machine-verifiable contract connecting current docs, backend/frontend surfaces and user-outcome evidence;
+- [`PRODUCT_TRUTH_CONTRACT.md`](PRODUCT_TRUTH_CONTRACT.md) — machine-verifiable D-067 contract shape connecting current docs, backend/frontend surfaces and user-outcome evidence;
+- [`product-truth/generate-shot-take.json`](product-truth/generate-shot-take.json) — first ready machine-readable Product Truth record, for Stage-14 named generation;
+- [`STAGE14_PRODUCT_TRUTH_PLAN.md`](STAGE14_PRODUCT_TRUTH_PLAN.md) — Stage-14 as-built Product Truth evidence and bounded continuation non-claim;
 - [`DESKTOP_UPDATES.md`](DESKTOP_UPDATES.md) — target Update Service/UI, in-place upgrade and N-1 -> N release proof;
 - [`MCP_ADAPTER.md`](MCP_ADAPTER.md) — current optional MCP capability/execution boundary;
 - [`DUBBING_TRANSLATION.md`](DUBBING_TRANSLATION.md) — reusable contextual dubbing-domain implementation;
