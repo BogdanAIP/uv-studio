@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import Any, Iterator, Mapping, Sequence
 
 from uv_studio.projects.models import utc_now_iso
+from uv_studio.projects.task_records import ProjectTaskRecordConflict
 
 from .models import (
     AgentHarnessError,
@@ -175,7 +176,14 @@ class AgentPlanStore(_BaseAgentPlanStore):
 
 
 class AgentTaskStore(_BaseAgentTaskStore):
-    """Recoverable initialization plus compare-and-swap durable transitions."""
+    """Recoverable initialization plus storage-level compare-and-swap transitions."""
+
+    def __init__(self, project_store: Any) -> None:
+        super().__init__(project_store)
+        self._authorized_write_expected: ContextVar[AgentTaskRecord | None] = ContextVar(
+            f"uv_agent_task_expected_write_{id(self)}",
+            default=None,
+        )
 
     @staticmethod
     def _initial_record(plan: AgentPlanRecord, spec: Any, *, now: str) -> AgentTaskRecord:
@@ -192,14 +200,9 @@ class AgentTaskStore(_BaseAgentTaskStore):
         )
 
     def ensure_initialized(self, plan: AgentPlanRecord) -> tuple[AgentTaskRecord, ...]:
-        """Complete a missing/partial initial task set after interruption.
+        """Complete a missing/partial initial task set after interruption."""
 
-        A plan is immutable and authoritative for task identities. Missing task
-        records can therefore be recreated deterministically as initial orchestration
-        state. Existing records are never reset or replayed.
-        """
-
-        with self.project_store._lock:
+        with self.records.project_lock(plan.project_id), self.project_store._lock:
             existing = self.list_by_plan(plan.project_id, plan.plan_id)
             by_id: dict[str, AgentTaskRecord] = {}
             for record in existing:
@@ -235,6 +238,36 @@ class AgentTaskStore(_BaseAgentTaskStore):
     def initialize(self, plan: AgentPlanRecord) -> tuple[AgentTaskRecord, ...]:
         return self.ensure_initialized(plan)
 
+    def write(self, record: AgentTaskRecord) -> AgentTaskRecord:
+        """Allow durable replacement only from an authorized transition CAS."""
+
+        if not isinstance(record, AgentTaskRecord):
+            raise AgentTaskStateError("AgentTaskStore.write requires AgentTaskRecord")
+        expected = self._authorized_write_expected.get()
+        if expected is None:
+            raise AgentTaskStateError(
+                "direct Agent Task writes are disabled; use transition()"
+            )
+        if (
+            expected.project_id != record.project_id
+            or expected.plan_id != record.plan_id
+            or expected.task_id != record.task_id
+            or expected.record_id != record.record_id
+        ):
+            raise AgentTaskStateError("authorized Agent Task write identity mismatch")
+        try:
+            self.records.compare_and_swap(
+                record.project_id,
+                record.record_id,
+                expected=expected.to_dict(),
+                replacement=record.to_dict(),
+            )
+        except ProjectTaskRecordConflict as exc:
+            raise AgentTaskStateError(
+                f"stale Agent Task snapshot for {record.task_id!r}; reload durable state"
+            ) from exc
+        return record
+
     def transition(
         self,
         record: AgentTaskRecord,
@@ -243,29 +276,27 @@ class AgentTaskStore(_BaseAgentTaskStore):
         trace: AgentTraceRecord | None = None,
         error: Exception | None = None,
     ) -> AgentTaskRecord:
-        """Apply one transition only to the exact durable snapshot supplied.
+        """Apply one transition through storage-level compare-and-swap."""
 
-        The full immutable record acts as the compare-and-swap version. A caller
-        holding a stale READY/PLANNED/RUNNING snapshot cannot overwrite a newer
-        durable status, timestamps, trace binding, result references, or error.
-        """
-
-        with self.project_store._lock:
-            current = super().get(record.project_id, record.plan_id, record.task_id)
-            if current.record_id != record.record_id:
-                raise AgentTaskStateError(
-                    f"stale Agent Task snapshot has replaced record identity: {record.task_id!r}"
-                )
-            if current != record:
-                raise AgentTaskStateError(
-                    f"stale Agent Task snapshot for {record.task_id!r}; reload durable state"
-                )
+        current = super().get(record.project_id, record.plan_id, record.task_id)
+        if current.record_id != record.record_id:
+            raise AgentTaskStateError(
+                f"stale Agent Task snapshot has replaced record identity: {record.task_id!r}"
+            )
+        if current != record:
+            raise AgentTaskStateError(
+                f"stale Agent Task snapshot for {record.task_id!r}; reload durable state"
+            )
+        token = self._authorized_write_expected.set(current)
+        try:
             return super().transition(
                 current,
                 status,
                 trace=trace,
                 error=error,
             )
+        finally:
+            self._authorized_write_expected.reset(token)
 
 
 class AgentPlanExecutionState(_BaseAgentPlanExecutionState):
@@ -464,9 +495,9 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
         return self.tasks.transition(record, AgentTaskStatus.FAILED, error=interruption)
 
     def state(self, project_id: str, plan_id: str) -> AgentPlanExecutionState:
-        """Reopen fail-closed, reconcile traces and repair missing initial tasks."""
+        """Reopen fail-closed only after any live foreground execution releases its lease."""
 
-        with self.project_store._lock:
+        with self.tasks.records.project_lock(project_id), self.project_store._lock:
             plan = self.plans.get(project_id, plan_id)
             if isinstance(self.tasks, AgentTaskStore):
                 self.tasks.ensure_initialized(plan)
@@ -485,36 +516,39 @@ class AgentTaskCoordinator(_BaseAgentTaskCoordinator):
         task_id: str,
         runtime_inputs: Mapping[str, Any] | None = None,
     ) -> Any:
-        plan = self.plans.get(project_id, plan_id)
-        spec = plan.task(task_id)
-        definition = self.harness.catalog.get(spec.action_id)
+        """Hold the project task lease from READY through terminal durable state."""
 
-        effective_runtime_inputs = runtime_inputs
-        if "authorization_token" in definition.input_fields:
-            if runtime_inputs is None:
-                effective_runtime_inputs = {"authorization_token": None}
-            elif "authorization_token" not in runtime_inputs:
-                effective_runtime_inputs = dict(runtime_inputs)
-                effective_runtime_inputs["authorization_token"] = None
+        with self.tasks.records.project_lock(project_id):
+            plan = self.plans.get(project_id, plan_id)
+            spec = plan.task(task_id)
+            definition = self.harness.catalog.get(spec.action_id)
 
-        expected_input_digest = self._expected_input_digest(spec)
-        with self._correlated_traces.correlate(
-            plan.plan_id,
-            spec.task_id,
-            spec.skill_id,
-            expected_input_digest=expected_input_digest,
-        ):
-            return super().execute_task(
-                project_id=project_id,
-                plan_id=plan.plan_id,
-                task_id=spec.task_id,
-                runtime_inputs=effective_runtime_inputs,
-            )
+            effective_runtime_inputs = runtime_inputs
+            if "authorization_token" in definition.input_fields:
+                if runtime_inputs is None:
+                    effective_runtime_inputs = {"authorization_token": None}
+                elif "authorization_token" not in runtime_inputs:
+                    effective_runtime_inputs = dict(runtime_inputs)
+                    effective_runtime_inputs["authorization_token"] = None
+
+            expected_input_digest = self._expected_input_digest(spec)
+            with self._correlated_traces.correlate(
+                plan.plan_id,
+                spec.task_id,
+                spec.skill_id,
+                expected_input_digest=expected_input_digest,
+            ):
+                return super().execute_task(
+                    project_id=project_id,
+                    plan_id=plan.plan_id,
+                    task_id=spec.task_id,
+                    runtime_inputs=effective_runtime_inputs,
+                )
 
     def cancel_task(self, *, project_id: str, plan_id: str, task_id: str) -> AgentTaskRecord:
         """Cancel one task and transitively cancel planned dependents it makes impossible."""
 
-        with self.project_store._lock:
+        with self.tasks.records.project_lock(project_id), self.project_store._lock:
             selected = super().cancel_task(
                 project_id=project_id,
                 plan_id=plan_id,
