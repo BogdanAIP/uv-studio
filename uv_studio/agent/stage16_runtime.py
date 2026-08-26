@@ -175,7 +175,7 @@ class AgentPlanStore(_BaseAgentPlanStore):
 
 
 class AgentTaskStore(_BaseAgentTaskStore):
-    """Recoverably initialize the task set described by an append-only plan."""
+    """Recoverable initialization plus compare-and-swap durable transitions."""
 
     @staticmethod
     def _initial_record(plan: AgentPlanRecord, spec: Any, *, now: str) -> AgentTaskRecord:
@@ -234,6 +234,38 @@ class AgentTaskStore(_BaseAgentTaskStore):
 
     def initialize(self, plan: AgentPlanRecord) -> tuple[AgentTaskRecord, ...]:
         return self.ensure_initialized(plan)
+
+    def transition(
+        self,
+        record: AgentTaskRecord,
+        status: AgentTaskStatus,
+        *,
+        trace: AgentTraceRecord | None = None,
+        error: Exception | None = None,
+    ) -> AgentTaskRecord:
+        """Apply one transition only to the exact durable snapshot supplied.
+
+        The full immutable record acts as the compare-and-swap version. A caller
+        holding a stale READY/PLANNED/RUNNING snapshot cannot overwrite a newer
+        durable status, timestamps, trace binding, result references, or error.
+        """
+
+        with self.project_store._lock:
+            current = super().get(record.project_id, record.plan_id, record.task_id)
+            if current.record_id != record.record_id:
+                raise AgentTaskStateError(
+                    f"stale Agent Task snapshot has replaced record identity: {record.task_id!r}"
+                )
+            if current != record:
+                raise AgentTaskStateError(
+                    f"stale Agent Task snapshot for {record.task_id!r}; reload durable state"
+                )
+            return super().transition(
+                current,
+                status,
+                trace=trace,
+                error=error,
+            )
 
 
 class AgentPlanExecutionState(_BaseAgentPlanExecutionState):
