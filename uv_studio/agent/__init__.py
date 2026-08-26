@@ -1,4 +1,4 @@
-"""Bounded UV-owned Agent Harness foundation from D-066."""
+"""Bounded UV-owned Agent Harness foundation and D-066 orchestration layers."""
 
 from .harness import AgentActionCatalog, AgentContextBuilder, AgentHarness, AgentTraceStore
 from .models import (
@@ -11,6 +11,25 @@ from .models import (
     AgentTraceStatus,
     AgentUnknownAction,
 )
+from .orchestration import (
+    AgentPlanExecutionState,
+    AgentPlanRecord,
+    AgentPlanStatus,
+    AgentPlanStepProposal,
+    AgentPlanStore,
+    AgentPlanner,
+    AgentPlanningError,
+    AgentSkillCatalog,
+    AgentSkillDefinition,
+    AgentSkillError,
+    AgentTaskBlocked,
+    AgentTaskCoordinator,
+    AgentTaskRecord,
+    AgentTaskSpec,
+    AgentTaskStateError,
+    AgentTaskStatus,
+    AgentTaskStore,
+)
 
 __all__ = [
     "AgentActionCatalog",
@@ -19,8 +38,25 @@ __all__ = [
     "AgentContextSnapshot",
     "AgentHarness",
     "AgentHarnessError",
+    "AgentPlanExecutionState",
+    "AgentPlanRecord",
+    "AgentPlanStatus",
+    "AgentPlanStepProposal",
+    "AgentPlanStore",
+    "AgentPlanner",
+    "AgentPlanningError",
     "AgentPolicyProjection",
     "AgentPortableStateError",
+    "AgentSkillCatalog",
+    "AgentSkillDefinition",
+    "AgentSkillError",
+    "AgentTaskBlocked",
+    "AgentTaskCoordinator",
+    "AgentTaskRecord",
+    "AgentTaskSpec",
+    "AgentTaskStateError",
+    "AgentTaskStatus",
+    "AgentTaskStore",
     "AgentTraceRecord",
     "AgentTraceStatus",
     "AgentTraceStore",
