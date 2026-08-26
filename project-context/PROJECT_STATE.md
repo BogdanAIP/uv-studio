@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: studio-v2-model-registry-job-manager-generation -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: studio-v2-model-registry-job-manager-generation -->
 
 **Updated:** 2026-08-26
 
@@ -9,122 +9,97 @@
 
 ## Current lifecycle
 
-Stage 14 is in review as PR #68 on branch `stage-14/model-registry-job-manager-generation`, created from lifecycle-closed `main` commit `03f382c29816218ca32380ac39669df2bc3fc79a`.
+`main` is lifecycle-closed and idle after Stage 14 / PR #68.
 
-Goal: deliver the first truthful named-model generation vertical over the existing Studio/Production Semantic Core: backend-owned Model Registry, project-scoped Job/Attempt lifecycle, provider-neutral GenerationContract, generated project-owned media and Take candidate, visible Studio state, Product Truth contract and browser E2E.
+- merged PR: #68 `stage 14: model registry, jobs and named generation`;
+- exact reviewed head: `0117a622a50dd506855f8557ff6c6c0ac0124811`;
+- merge commit: `daa9381f45e136f7e406ac29888f8ac597da3f79`;
+- exact-head CI run #3306 passed all five permanent jobs on Ubuntu/Windows, including API, real-media, frontend build and browser user-outcome suites;
+- all inline review threads were resolved before merge.
 
-The previous architecture slice PR #67 merged as `f43437b7716cc5454d49595a07b616b35e3f2324` after exact-head CI success and closed back to idle before this branch was created.
+No implementation slice is currently active. The declared handoff is `studio-v2-agent-context-command-catalog-trace`.
 
 ## Current architecture authority
 
 - **D-064** — Production Directions over one shared Studio Core.
 - **D-065** — shared Production Semantic Core beneath directions.
-- **D-066** — JarvisHub is the reference architecture/method donor for the future Agent Harness; Stage 14 borrows only idempotency, GenerationContract, effects visibility and durable Job provenance patterns.
-- **D-067** — Product Truth Contract/current-document consistency; Stage 14 is the first implementation consumer.
-- **D-068** — desktop in-place updates are accepted Stage-9 release work and are out of scope here.
-- **D-069** — stateful/sequential generative continuation persists provider-neutral parent-media lineage while provider cache/latent/session state remains adapter-private; InfinityEdit is a donor/candidate adapter, not a required runtime.
-- **D-033** — canonical Timeline remains UV-owned; MLT remains derived.
-- **D-017** — exact one-shot authorization remains the remote/non-free execution boundary.
+- **D-066** — JarvisHub is the Agent Harness architecture/method donor; UV retains canonical project/application authority.
+- **D-067** — Product Truth Contract/current-document consistency.
+- **D-068** — desktop in-place updates remain accepted Stage-9 release work.
+- **D-069** — sequential generative continuation persists provider-neutral media lineage while provider cache/latent/session state remains adapter-private.
+- **D-033** — canonical Timeline/editor foundation.
+- **D-017** — exact one-shot authorization for remote/non-free execution.
 
-## Existing as-built foundation
+## As-built foundation through Stage 14
 
-Stages 12 and 13 provide the lower production spine reused by Stage 14:
+Stages 12–14 now provide the lower production and generation spine needed by the Agent Harness:
 
-1. typed Production Direction identity and bounded production storage;
-2. `ProjectUnitOfWork` with prepared journal, rollback/recovery and durable project-level Undo/Redo;
-3. strict shared `Scene`, `Shot`, `Take` and accepted-Take contracts;
-4. micro-drama Story/Characters/Locations/continuity extensions;
-5. one serialized `ProductionSemanticService` command boundary;
-6. HTTP semantic handlers over the same service;
-7. shared Scene/Shot/Take semantics proven outside micro-drama;
-8. transactional `accept_take` spanning production state, project media provenance and canonical Timeline;
-9. project-level Undo/Redo of accepted-Take projection;
-10. rich shared Studio Production UI and cross-platform browser proof with real media.
+1. typed Production Direction identity and bounded project/production storage;
+2. shared `Scene`, `Shot`, `Take` and accepted-Take semantics across directions;
+3. `ProductionSemanticService` as the shared production mutation boundary;
+4. canonical Timeline plus `ProjectUnitOfWork` prepared journal, rollback/recovery and durable project Undo/Redo;
+5. transactional accepted-Take projection into Timeline while preserving project media provenance;
+6. backend-owned user-visible Model Registry above capability/provider transport;
+7. project-scoped durable generation Job/Attempt records under the existing `tasks/` authority;
+8. exact idempotency: same key + same digest reuses, same key + different digest conflicts, fresh key permits a deliberate identical-input creative reroll;
+9. D-017 remains independent: every new remote/non-free execution requires the normal exact authorization;
+10. provider-neutral `GenerationContract`, including feature-gated D-069 continuation parent lineage;
+11. generated output becomes project-owned media and a shared Take candidate before semantic acceptance;
+12. Studio generation UI exposes model/Shot/prompt/contract choice and queued/running/succeeded/failed/cancelled/result states;
+13. resolved `CapabilityEffects` are exposed through the existing Capability Registry/API for later Agent policy/trace use;
+14. the first machine-readable Product Truth record, `docs/architecture/product-truth/generate-shot-take.json`, deterministically binds domain/API/frontend mount-chain/state/evidence;
+15. cross-platform browser proof covers named generation -> Take candidate -> acceptance -> canonical Timeline -> Undo while Job provenance remains durable.
 
-Stage 14 does not create a second project/timeline/production authority or a provider-private Shot/Take model.
+## Stage-14 recovery/retry guarantees
 
-## Stage 14 as-built contracts
+The final review added three important execution guarantees:
 
-### Model Registry
+- a named model whose selected offer is `configuration_required` or unavailable is rejected before authorization consumption and before Job creation;
+- retry first durably transitions `failed -> queued` before the HTTP response/background execution, so Studio polling cannot lose the retry transition;
+- FastAPI startup reconciliation converts abandoned `queued`/`running` generation Jobs into explicit retryable `failed` history rather than leaving them permanently stuck.
 
-Named model identity is backend-owned and user-visible. Provider/adapter/capability mappings are execution details beneath it. Model choice is visible in Studio and available to programmatic callers through the same backend catalog. Offer feature metadata remains explicit, including `generation.continuation` gating where a provider actually supports it.
+Restart reconciliation **never automatically replays provider work**. For an interrupted provider call the external outcome may be unknown; a new remote/non-free retry therefore remains explicit and goes through the ordinary D-017 boundary. Existing Attempt history is preserved.
 
-### Job / Attempt
+## Product Truth status
 
-Long-running generation is project-scoped and durable with queued/running/succeeded/failed/cancelled states. Job records live under the existing project `tasks/` authority; each execution Attempt records lifecycle/output/failure without becoming Undo/Redo production state.
-
-Job/Attempt history is execution history. Take acceptance is production history. Undoing acceptance does not erase generation provenance.
-
-### Idempotency
-
-- same idempotency key + same normalized digest: reuse queued/running/succeeded request/result and do not execute twice;
-- same key + materially different digest: conflict/fail closed;
-- fresh idempotency key: deliberate new creative Job/Attempt, even when project/model/generation inputs are otherwise identical;
-- infrastructure retry after failure remains history on the same Job rather than a hidden new creative reroll;
-- idempotency never bypasses or widens D-017 authorization;
-- when sequential continuation is requested, the parent media reference is part of `GenerationContract` and therefore part of the normalized digest.
-
-### GenerationContract
-
-Provider-neutral semantic constraints include fixed constraints, editable variables, forbidden semantic changes, approved project reference identity and the bounded continuation parent identity. Provider prompt text is not canonical production truth.
-
-`continuation_source_reference_id` is accepted only when the selected offer explicitly advertises `generation.continuation`; otherwise generation fails closed. Successful continuation records parent -> child lineage in generated-media provenance.
-
-Provider-private KV caches, latents, session handles, sliding history windows and anchor-frame caches remain adapter-owned execution optimizations. They are not canonical Project Store data and are not required to reconstruct the durable generation chain.
-
-### Effects metadata
-
-`CapabilityEffects` and `CapabilityRegistry.effects_for_offer()` expose stable inspectable flags for project/Timeline mutation, generated media, destructive behavior, long-running behavior, reversibility and cost-bearing execution. Offer-resolved effects are returned by the existing capability-offers API; no parallel Agent/tool registry is introduced. D-017 still evaluates actual locality/cost permission from the selected offer.
-
-### Product Truth
-
-The first machine-readable Product Truth Contract is implemented at:
+The named-generation feature is the first implemented D-067 consumer. Its ready contract resolves to:
 
 ```text
-docs/architecture/product-truth/generate-shot-take.json
+GenerationService.submit
+ -> FastAPI generation route
+ -> Next Studio route mount chain
+ -> GenerationWorkspacePanel controls
+ -> Job/Attempt + artifact + Take state
+ -> API integration proof
+ -> browser user-outcome proof
 ```
 
-`uv_studio/product_truth.py` validates that the contract resolves to the actual `GenerationService.submit` domain method, FastAPI POST route, `GenerationWorkspacePanel` surface/control labels, canonical dependencies and declared API/browser test methods. `tests/test_product_truth_contracts.py` makes this a permanent deterministic CI invariant rather than prose interpretation.
+The env-gated `Stage14E2ETestExecutor` remains test-only and absent from the normal model catalog unless `UV_STUDIO_E2E_TEST_GENERATION=1`. Normal unconfigured models remain visible but cannot be launched.
 
-The contract is truthful about conditional execution: normal named models with `configuration_required`/unavailable offers remain visible and blocked with their reason. Successful API/browser proof uses only the explicitly env-gated test-only `Stage14E2ETestExecutor`, which is absent from the normal model catalog unless `UV_STUDIO_E2E_TEST_GENERATION=1`.
+D-069 continuation is only a durable contract/lineage seam today. There is no real `generation.continuation` provider offer or user-visible Continue/Edit workflow yet.
 
-Continuation UI is deliberately not claimed ready in Stage 14 because no real continuation-capable model/adapter is integrated yet.
+## Explicit non-goals still in force
 
-## Implemented user-visible proof
-
-```text
-existing shared Shot
- -> choose named model in Studio UI
- -> construct GenerationContract
- -> create idempotent project-scoped generation Job/Attempt
- -> expose queued/running/error/cancel/result state
- -> execute through bounded capability/adapter mapping
- -> persist project-owned generated media + provenance
- -> materialize shared Take candidate
- -> show result in Studio UI
- -> accept via existing shared production command
- -> canonical Timeline
- -> Undo acceptance without deleting Job/Attempt provenance
-```
-
-Focused unit/API tests separately prove replay deduplication, same-key/different-digest conflict, fresh-key intentional reroll, failure/retry history, effects metadata and feature-gated continuation lineage. `e2e/test_named_generation_outcome.py` begins from the visible Studio surface and proves the complete base named-generation outcome.
-
-## Explicit non-goals
-
-- no full Agent Runtime, Planner, Memory, Skills or Subagents;
-- no JarvisHub Canvas/PostgreSQL/Hono/node project model or duplicate tool registry;
-- no desktop Update Service/UI implementation;
-- no new Production Direction or direction-private editor/timeline;
-- no provider prompt/provider identifier as canonical project meaning;
-- no InfinityEdit/Helios runtime integration or user-visible continuation workflow in Stage 14;
-- no provider-private continuation cache/latent/session state in Project Store.
-
-## Current implementation status
-
-The Stage-14 implementation vertical is complete for review in PR #68: backend Model Registry, project Job/Attempt/idempotency, GenerationContract, D-017-preserving submission, generated artifact -> shared Take materialization, Studio generation surface, effects metadata, D-069 continuation lineage seam, machine-readable Product Truth registry/validator, API proof and browser user-outcome proof.
-
-An earlier implementation head `1286a51061d5f10489ca1ea48baf26e96e670af8` passed all five permanent CI jobs before the final Product Truth/effects/documentation synchronization. The exact review-state head must pass the same five checks before merge. Review is not complete until those checks are green and no unresolved review thread remains.
+- no full Planner/Tasks/Skills/Subagents runtime yet;
+- no Agent-only project write path;
+- no JarvisHub Canvas/node/PostgreSQL/Hono authority or duplicate tool registry;
+- no provider-private cache/latent/session state in Project Store;
+- no desktop Update Service/UI implementation in the Agent slice;
+- no claim that a real continuation-capable provider is integrated.
 
 ## Next handoff
 
-Merge and lifecycle-close this bounded vertical only after exact-head review verification. Once `main` is idle again, select the next Agent Harness implementation slice from the merged current architecture rather than guessing ahead.
+`studio-v2-agent-context-command-catalog-trace`
+
+Implement only the first bounded Agent Harness layer from D-066:
+
+```text
+canonical project/context observation
+ -> UV-owned Context Builder
+ -> catalog of existing Studio/Application Commands + models/jobs/capabilities
+ -> effects/policy inspection using existing authorities
+ -> one bounded execution seam through the same commands/services
+ -> append-only inspectable trace linked to canonical project identities
+```
+
+Do not add Planner, durable Task graphs, Skills, functional subagents or long-form autonomy until this foundation is independently proven.

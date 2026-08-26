@@ -1,7 +1,7 @@
 # UV Studio v2 — architecture map and migration inventory
 
-**Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068  
-**Date:** 2026-08-25
+**Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069  
+**Date:** 2026-08-26
 
 This is the practical migration map for a coherent local-first AI production studio without rewriting proven foundations.
 
@@ -9,7 +9,7 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Diagnosis
 
-The repository now has a concrete lower production spine:
+The repository now has a concrete lower production and generation spine:
 
 ```text
 Project Store
@@ -18,6 +18,8 @@ Project Store
  -> Studio/Application Commands
  -> ProjectUnitOfWork / durable Undo-Redo
  -> canonical Timeline
+ -> visible Model Registry
+ -> project Job Manager / GenerationContract
  -> Capability execution / MLT / FFmpeg / domain tools
 ```
 
@@ -26,11 +28,11 @@ Two earlier product-composition errors were corrected:
 1. recipe/workspace proliferation — separate recipe orchestration/workspaces pretending to be products;
 2. generic-editor overcorrection — one Media/Preview/Timeline shell with insufficient production semantics.
 
-D-064 restored meaningful Production Directions. D-065 prevented six parallel domain models by sharing genuinely common Scene/Shot/Take semantics. Stage 13 has now implemented and tested that shared production-semantic path.
+D-064 restored meaningful Production Directions. D-065 prevented six parallel domain models by sharing genuinely common Scene/Shot/Take semantics. Stages 13 and 14 have now implemented and tested the shared production-semantic path plus the first truthful named-generation vertical.
 
-The next missing layer is reliable named-model generation/jobs, followed by an autonomous Agent Harness. D-066 designates JarvisHub as the reference architecture/method donor for that Agent Harness while preserving UV-owned product state.
+The next missing layer is the bounded autonomous Agent Harness foundation. D-066 designates JarvisHub as the reference architecture/method donor while preserving UV-owned product state. The declared first Agent slice is `studio-v2-agent-context-command-catalog-trace`: Context Builder, existing-command/tool catalog, effects/policy projection and inspectable trace. Planner/Tasks/Skills/Subagents remain later layers.
 
-D-067 adds a permanent Product Truth verification layer so backend, frontend, current docs and E2E evidence cannot silently describe different products. D-068 adds the desktop release update contract: one maintained installation, in-place update UI/Service and N-1 -> N upgrade evidence.
+D-067 provides permanent Product Truth verification so backend, frontend, current docs and E2E evidence cannot silently describe different products. D-068 owns the later desktop release update contract. D-069 owns provider-neutral sequential-generation lineage while provider-private runtime cache/session state remains disposable.
 
 ## 2. Target architecture
 
@@ -72,14 +74,15 @@ D-067 adds a permanent Product Truth verification layer so backend, frontend, cu
 Cross-cutting Product Truth verification (D-067)
   current docs <-> feature contracts <-> backend <-> frontend <-> E2E
 
-Later Agent Harness (JarvisHub donor patterns)
-  Director runtime
-   -> context / memory / compaction
-   -> Planner / Tasks / Skills
-   -> explore / plan / media / critic
-   -> policy / effects / trace
+Agent Harness (JarvisHub donor patterns; UV-owned)
+  Context Builder / compaction
+   -> command/tool catalog over existing UV authorities
+   -> effects / policy
+   -> inspectable trace
+   -> later Planner / Tasks / Skills
+   -> later explore / plan / media / critic
    -> background work via Job Manager
-   -> evaluation / dependency-aware repair
+   -> later evaluation / dependency-aware repair
   ALL mutations -> same Studio/Application Commands
 
 Desktop release layer (D-068)
@@ -114,7 +117,7 @@ Initial directions:
 
 A direction is not a `RecipeDefinition`, provider or execution engine.
 
-## 4. Shared Production Semantic Core — KEEP + GROW (Stage 13 implemented)
+## 4. Shared Production Semantic Core — KEEP + GROW
 
 Stage 13 implemented the first bounded shared primitives and the rich micro-drama proof:
 
@@ -131,7 +134,7 @@ Stage 13 implemented the first bounded shared primitives and the rich micro-dram
 
 Shot remains independent from Timeline Clip. Direction extensions reference shared identities instead of defining private duplicate Shot/Take systems.
 
-The semantic core should now grow only when new directions prove a genuinely shared production concept.
+The semantic core should grow only when new directions prove a genuinely shared production concept.
 
 ## 5. Contextual tools — NOT DIRECTIONS
 
@@ -169,45 +172,39 @@ AcceptTake(shot_12_3, take_4)
  -> one transaction / reversible undo
 ```
 
-### Capability Registry — KEEP + EXTEND EFFECT VISIBILITY
+### Capability Registry — CURRENT FOUNDATION + EFFECT VISIBILITY
 
-Execution semantics/availability/locality/cost/authorization only. It remains below visible Model Registry and below production composition.
+Execution semantics, availability, locality, cost and D-017 authorization remain below visible Model Registry and below production composition.
 
-D-066 adapts JarvisHub's useful action-effect pattern into the existing UV boundary rather than creating a second tool registry. Relevant future metadata may include project mutation, Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost-bearing execution.
+Stage 14 implemented `CapabilityEffects` / resolved offer effects for project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost-bearing execution. This is the metadata source for the next Agent policy/trace layer; no second tool registry is needed.
 
-### Model Registry — NEXT TARGET
+### Model Registry — CURRENT FOUNDATION (Stage 14)
 
-Backend-owned and user-visible for meaningful model selection; maps named models/modes onto capabilities/offers/adapters without making provider transport product identity.
+Backend-owned and user-visible for meaningful model selection. Named model identity is separate from capability/provider/adapter transport and remains visible to GUI and programmatic callers.
 
-### Job Manager — NEXT TARGET
+### Job Manager — CURRENT FOUNDATION (Stage 14)
 
-Project-scoped queued/running/succeeded/failed/cancelled generation lifecycle, cancellation/retry, attempts and exact provenance.
+Project-scoped queued/running/succeeded/failed/cancelled generation lifecycle with exact idempotency, attempts, retry/cancellation and durable provenance.
 
-D-066 adds a non-negotiable reliability requirement: long-running/cost-bearing/external execution is idempotent. Equivalent replay must not execute twice; same idempotency key with materially different normalized context fails closed.
+Same key + same digest reuses; same key + different digest conflicts; a fresh key permits an intentional identical-input creative reroll. Restart reconciliation converts abandoned queued/running work to explicit retryable failed history without automatically replaying provider work.
 
-### Generation Contract — NEXT TARGET
+### Generation Contract — CURRENT FOUNDATION (Stage 14)
 
-Provider-neutral constraints for a generation request/attempt associated with production intent. Initial concepts:
+Provider-neutral constraints for generation attempts:
 
 - fixed constraints;
 - editable variables;
 - forbidden semantic changes;
-- approved project reference/keyframe identity where applicable.
+- approved project reference/keyframe identity;
+- feature-gated D-069 continuation parent identity.
 
-Adapters render the contract into provider prompts/options. Provider prompt text is not canonical production truth.
+Adapters render the contract into provider prompts/options. Provider prompt text and provider-private cache/session/latent state are not canonical production truth.
 
-### Product Truth Contracts — NEW VERIFICATION TARGET
+### Product Truth Contracts — CURRENT VERIFICATION FOUNDATION
 
-D-067 adds machine-readable verification metadata for user-visible features. A Product Truth Contract connects feature identity to the canonical command/query, backend/API surface, frontend entry, canonical state/dependencies and end-to-end proof.
+D-067 machine-readable verification metadata connects feature identity to canonical domain/API, frontend mount-chain and controls, canonical state/dependencies and end-to-end proof.
 
-It is not runtime product authority. Its job is to catch:
-
-- current-documentation drift;
-- backend features advertised as ready without required UI;
-- frontend controls without canonical backend behavior;
-- missing user-outcome proof.
-
-The next named-model generation slice is the first required consumer.
+The first implemented record is `docs/architecture/product-truth/generate-shot-take.json`, validated by `uv_studio/product_truth.py` and permanent unit/API/browser evidence.
 
 ### Desktop Update Service — STAGE-9 TARGET
 
@@ -249,18 +246,22 @@ JarvisHub (`LYL1015/JarvisHub`, pinned research commit in `UPSTREAM.md`) is the 
 ```text
 Director Agent
  -> Context Builder
- -> Planner / Tasks / Skills
- -> explore / plan / media / critic
+ -> command/tool catalog + effects/policy
+ -> later Planner / Tasks / Skills
+ -> later explore / plan / media / critic
  -> Studio/Application Commands + Model/Job/Capability services
  -> ProjectUnitOfWork where canonical mutation is required
  -> Production Semantics / Project Store / Timeline
+ -> append-only Agent trace over canonical identities
 ```
 
 The Agent may observe broadly but mutates canonically only through the same application boundary as the GUI.
 
-## 8. Generation lifecycle and provenance
+The next bounded slice, `studio-v2-agent-context-command-catalog-trace`, implements only Context Builder + existing-command/tool catalog + effects/policy projection + trace and proves one bounded execution through existing authorities. Planner/Tasks/Skills/Subagents are explicitly deferred.
 
-Target path for generated production material:
+## 8. Generation lifecycle and provenance — IMPLEMENTED BASE PATH
+
+Current path for generated production material:
 
 ```text
 Shot
@@ -270,16 +271,17 @@ Shot
  -> Capability/Provider/Adapter execution
  -> generated project-owned asset + provenance
  -> Take candidate
- -> optional evaluation / critic record
  -> explicit AcceptTake
  -> canonical Timeline
 ```
 
-Job history and semantic acceptance are different histories. Undoing Take acceptance does not delete the generation Job/Attempt/provenance.
+Job history and semantic acceptance are different histories. Undoing Take acceptance does not delete generation Job/Attempt/provenance.
+
+Unavailable/configuration-required model offers fail before Job creation. Retry durably returns to queued before background execution. On process restart, abandoned queued/running Jobs become explicit failed history and require an explicit retry rather than hidden provider replay.
 
 ## 9. Product Truth verification flow
 
-D-067 adds the cross-layer gate:
+D-067 cross-layer gate:
 
 ```text
 Current docs / lifecycle markers
@@ -291,7 +293,7 @@ Current docs / lifecycle markers
         user-visible outcome
 ```
 
-Merge-time readiness is truthful only when the declared references exist and the user-visible feature has no unresolved backend/frontend parity gap.
+Merge-time readiness is truthful only when declared references exist and the user-visible feature has no unresolved backend/frontend parity gap.
 
 Do not attempt broad natural-language semantic linting. Use explicit contract fields, markers and deterministic repository-reference checks.
 
@@ -372,27 +374,29 @@ Completed/current foundation:
 
 1. Production Directions — D-064.
 2. Architecture authority cleanup + D-065 shared production semantics.
-3. Modern Studio identity/dependency boundary + Project Unit of Work + undo/redo.
-4. Rich micro-drama vertical proving shared Scene/Shot/Take semantics and direction extensions — Stage 13 complete.
+3. Modern Studio identity/dependency boundary + Project Unit of Work + Undo/Redo.
+4. Rich micro-drama vertical proving shared Scene/Shot/Take semantics and direction extensions — Stage 13.
+5. Backend-owned visible Model Registry — Stage 14.
+6. Project Job Manager with exact idempotency + attempts + durable provenance/restart recovery — Stage 14.
+7. Provider-neutral GenerationContract + D-069 continuation-lineage seam — Stage 14.
+8. First named AI generation -> project-owned asset -> Take candidate -> explicit acceptance -> Timeline through normal commands — Stage 14.
+9. First Product Truth Contract + deterministic domain/API/frontend/evidence checks — Stage 14.
 
 Next:
 
-5. Backend-owned visible Model Registry.
-6. Project Job Manager with idempotency + attempts + durable provenance.
-7. Provider-neutral GenerationContract.
-8. First named AI generation -> project-owned asset -> Take candidate -> explicit acceptance -> Timeline through normal commands.
-9. Product Truth Contract + deterministic parity/reference checks for that user-visible generation path.
+10. `studio-v2-agent-context-command-catalog-trace`: Context Builder + existing-command/tool catalog + effects/policy + inspectable trace, with one bounded execution through current UV authorities.
 
 Then:
 
-10. Agent Harness foundation from D-066/JarvisHub patterns: context, command/tool catalog, effects/policy, trace.
-11. Planner + Tasks + Skills + functional subagents.
-12. Critic/evaluation + dependency-aware local repair.
-13. Human takeover/edit/resume and then long-form autonomous production.
-14. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
-15. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
-16. Retire compatibility code only after caller proof.
-17. Reconcile proven Windows packaging onto the accepted product shell and implement D-068 Update Service/UI, signed/verified artifacts and N-1 -> N upgrade proof before maintained desktop release.
+11. Planner + durable Tasks + Skills.
+12. Functional subagents: explore / plan / media / critic.
+13. Background Agent work coordinated through the existing Job Manager.
+14. Critic/evaluation + dependency-aware local repair.
+15. Human takeover/edit/resume and then long-form autonomous production.
+16. Extend commercial/music/dub-battle direction extensions reusing shared semantics.
+17. Move useful legacy targeted-edit/dubbing/music/continuity logic into modern direction/tool surfaces.
+18. Retire compatibility code only after caller proof.
+19. Reconcile proven Windows packaging onto the accepted product shell and implement D-068 Update Service/UI, signed/verified artifacts and N-1 -> N upgrade proof before maintained desktop release.
 
 ## 15. Invariants
 
@@ -406,8 +410,10 @@ Then:
 - visible meaningful model choice;
 - remote/non-free work remains explicit/authorized;
 - retry-safe long-running/cost-bearing generation;
+- interrupted provider work is never silently auto-replayed after restart;
 - provider-neutral semantic Generation Contract above prompt rendering;
 - durable Job/Attempt provenance survives acceptance Undo;
+- Agent context/trace references canonical identities rather than becoming canonical project state;
 - user-visible ready features require Product Truth backend/frontend/evidence agreement;
 - current project/architecture docs distinguish as-built from future and agree on machine-checkable facts;
 - stable desktop update defaults to one maintained installation identity;

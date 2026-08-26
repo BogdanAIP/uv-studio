@@ -1,131 +1,153 @@
 # Next Task
 
-<!-- uv-next-slice: studio-v2-model-registry-job-manager-generation -->
+<!-- uv-next-slice: studio-v2-agent-context-command-catalog-trace -->
 
 ## Goal
 
-After the current architecture documentation slice is merged and lifecycle-closed, add the backend-owned user-visible model and long-running generation layer without bypassing the shared production commands or Stage-12 transaction authority.
+Build the **first bounded UV Agent Harness foundation** now that Stage 14 has proven Models, Jobs, generation provenance, effects metadata and Product Truth.
 
-This slice is the first implementation consumer of D-066 and D-067. It must establish the reliability/provenance contracts that the later Agent Harness will depend on **and** prove the user-visible path across backend, frontend and E2E. It must **not** implement the full Agent runtime yet.
+The slice is `studio-v2-agent-context-command-catalog-trace`. It implements D-066 layer 1 only:
+
+```text
+Context Builder
+ + canonical command/tool catalog
+ + effects/policy inspection
+ + inspectable Agent trace
+```
+
+It must prove that a future autonomous runtime can observe UV Studio and invoke existing product capabilities without gaining a private project-write path. It must **not** implement Planner/Tasks/Skills/Subagents yet.
 
 ## Required direction
 
-- add a user-visible Model Registry whose canonical model identity is separate from capability/provider transport;
-- add a project-scoped Job Manager for queued/running/succeeded/failed/cancelled long-running work and durable generation-attempt provenance;
-- make long-running/cost-bearing/external generation retry-safe through a UV-native idempotency contract derived from the JarvisHub reference pattern;
-- add a bounded provider-neutral `GenerationContract` for semantic constraints that must survive provider-specific prompt/option rendering;
-- implement the first named AI generation path against an existing shared Shot/Take workflow rather than a provider-private project model;
-- preserve meaningful model choice in GUI/Agent/script/MCP callers;
-- materialize generated media as project-owned references before it can become a Take candidate or accepted material;
-- keep acceptance and Timeline projection on the existing `ProductionSemanticService` / `ProjectUnitOfWork` path;
-- expose enough capability/application-command effects metadata for later Agent policy/trace use without creating a second JarvisHub-style tool registry;
-- keep generation Job/Attempt history separate from semantic Take acceptance so Undo of acceptance does not erase generation provenance;
-- add the first machine-readable D-067 Product Truth Contract for the named-model generation feature, binding canonical command/API, Studio UI entry, state/dependencies and E2E proof;
-- expose truthful UI states for model choice, queued/running/succeeded/failed/cancelled generation and generated Take-candidate result;
-- ensure the feature is not marked ready if backend/API exists without the declared Studio surface or if the frontend advertises a path that is not wired to canonical backend behavior;
-- do not turn Capability Registry, provider names, RecipeDefinition, Product Orchestrator, frontend state or a JarvisHub Canvas/node model into product authority.
+- add a UV-owned **Context Builder** that derives bounded Agent context from existing canonical Project/Production/Timeline/Model/Job state rather than copying the whole project/chat;
+- reference canonical Project / Scene / Shot / Take / asset / Timeline identities instead of creating a second Agent graph;
+- expose one deterministic **command/tool catalog** assembled from existing Studio/Application Commands and approved model/job/capability entry points;
+- do not create a JarvisHub-style parallel Protocol Bridge or a second tool registry that competes with Capability Registry/application commands;
+- carry existing `CapabilityEffects`, locality/cost/availability and D-017 facts into a small Agent policy projection so the runtime can distinguish read-only, mutating, destructive, long-running, reversible and cost-bearing work;
+- keep authorization enforcement in the existing D-017/capability boundary; Agent policy may explain/route a requirement but cannot silently authorize it;
+- add an append-only, project-scoped **Agent Trace** that records observations, selected catalog entry, policy decision, command/model/job invocation/result/failure and canonical entity references;
+- trace is execution/history evidence, not canonical production truth and not Undo/Redo state;
+- prove at least one bounded Agent-harness execution uses the **same existing command/service path** as GUI/script/MCP rather than writing project JSON directly;
+- keep Stage-14 Job/Attempt provenance authoritative for long-running generation; trace references Job/Attempt IDs instead of duplicating provider execution history;
+- keep context/trace payloads bounded, strict portable JSON and project-relative where applicable;
+- preserve restart/reopen readability for persisted trace records;
+- use a machine-readable internal contract/test registry where useful instead of heuristic documentation parsing.
 
-## Required contracts
+## Context Builder contract
 
-### Model identity
+The first context projection should be deliberately bounded and reconstructible. At minimum it should be able to expose selected facts such as:
 
-A named model is a user-visible creative/execution choice owned by the backend Model Registry. Provider/adapter/capability offers are execution mappings beneath it.
+- project identity and Production Direction;
+- relevant Scene/Shot/Take identities and current accepted state;
+- canonical Timeline revision/summary rather than a full duplicate timeline;
+- project-owned media/reference identities relevant to the current target;
+- named Model availability and selected capability/offer effects where requested;
+- Job/Attempt status/provenance references needed to reason about current work.
 
-### Job + attempt identity
+Do not persist the whole context snapshot as a second source of truth. Durable trace may record a bounded observation/digest plus explicit canonical references needed for audit/replay reasoning.
 
-A Job is project-scoped durable long-running work. A generation Attempt records the exact named model, provider/adapter mapping, normalized inputs, Generation Contract, status, output/failure and provenance.
+## Command/tool catalog contract
 
-Retrying infrastructure must not accidentally become a new creative Attempt. Conversely, a deliberate user/Agent reroll must be able to create a new creative Attempt even when its normalized generation inputs are identical to an earlier Attempt.
+Each catalog entry must point to an existing UV-owned execution authority. The catalog should expose stable metadata such as:
 
-### Idempotency
+- stable action/command identity;
+- human-readable purpose;
+- input schema or bounded argument contract;
+- read-only versus canonical mutation behavior;
+- relevant effects/policy facts;
+- whether execution may create/use a Job;
+- whether D-017 authorization can be required;
+- canonical service/command boundary actually invoked.
 
-For the first generation path prove at minimum:
+The catalog itself does not become a new mutation engine.
 
-- an idempotency key is bound to a stable normalized request/context digest;
-- the digest includes project/semantic target, named model, selected execution mapping and generation inputs/contract;
-- same key + different normalized request fails closed as a conflict;
-- same key + matching digest already running is not executed twice;
-- same key + matching digest already succeeded returns/reuses the recorded result instead of launching duplicate expensive work;
-- a fresh idempotency key creates a deliberate new creative Attempt and may execute even when all normalized generation inputs match an earlier Attempt;
-- failure/retry history remains inspectable and distinct from deliberately starting a new creative attempt.
+## Policy boundary
 
-Idempotency deduplicates replay of one request identity; it must not globally suppress creative rerolls that happen to use identical parameters. It also does not replace D-017 authorization. Any new external execution, including a fresh-key reroll, remains subject to the normal remote/cost permission boundary.
+Policy consumes existing facts; it does not invent a second permission system.
 
-### Generation Contract
+At minimum prove:
 
-The first bounded schema should support provider-neutral equivalents of:
+- safe read-only observation can proceed without mutation authority;
+- canonical mutation is routed only through the existing application/domain command;
+- unavailable execution remains unavailable;
+- remote/non-free execution still reaches D-017 and cannot be self-approved by the Agent;
+- destructive/long-running/cost-bearing effects remain inspectable in the trace/policy decision.
 
-- fixed constraints that must remain stable;
-- one or more explicitly editable variables;
-- forbidden semantic changes;
-- approved project reference/keyframe identity where applicable.
+## Trace contract
 
-The contract references canonical UV project/production identities where possible; adapters render it into provider-specific prompts/options. Do not store provider prompt text as the semantic source of truth.
+Trace should be project-scoped, append-only and inspectable. A first record model may include:
 
-### Effects metadata
+- trace/run/step identity;
+- timestamp;
+- bounded observation/context digest;
+- canonical entity references;
+- catalog action identity;
+- policy/effects snapshot;
+- command/model/job/capability references;
+- result/failure summary;
+- links to generated Job/Attempt/asset/Take identities when relevant.
 
-Reuse/extend the current capability/application-command metadata rather than introduce a parallel Protocol Bridge. Make relevant effects inspectable where applicable, including project mutation, Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost-bearing execution.
-
-### Product Truth Contract
-
-The first contract should identify at minimum:
-
-- stable generation `feature_id` and readiness;
-- canonical application/domain command/query;
-- backend/API surface;
-- Studio frontend entry point and named-model control;
-- Job/Attempt/generated-asset/Take-candidate state involved;
-- capability/model/authorization dependencies;
-- visible progress/failure/result semantics;
-- browser E2E proof identifier.
-
-The contract is verification metadata only; it does not become another runtime feature registry or state authority.
+Do not copy complete provider prompts, secrets, host paths or provider-private caches into trace.
 
 ## Required proof
 
-At minimum prove one bounded flow such as:
+Prove a bounded flow such as:
 
 ```text
-modern Studio project + shared Shot
- -> choose named model in Studio UI
- -> construct GenerationContract
- -> create idempotent project-scoped generation Job/Attempt
- -> expose queued/running state
- -> execute through capability/provider adapter
- -> persist result + model/provider/adapter/contract provenance
- -> register generated media as project-owned Take candidate
- -> show candidate/result in Studio UI
- -> accept through shared production command
- -> project to canonical Timeline
- -> undo acceptance without corrupting Job/Attempt/provenance history
+existing modern Studio project
+ -> build context for one existing Shot
+ -> list/resolve an allowed existing action
+ -> inspect effects/policy
+ -> invoke one canonical command/service through the Agent Harness seam
+ -> canonical project state changes through the normal authority
+ -> trace records what happened and references the resulting canonical identities
+ -> reopen/reload and read the same trace
 ```
 
-Also prove:
+Also prove negative cases:
 
-- replaying the same idempotency key + matching digest cannot create a second expensive execution;
-- reusing the same idempotency key for materially different inputs is rejected;
-- using a fresh idempotency key with otherwise identical generation inputs creates a new creative Attempt and executes normally;
-- the Product Truth Contract resolves to real backend/frontend/test references;
-- the browser E2E begins from the visible Studio surface rather than manual API calls or test-only state seeding.
-
-The first implementation may use one local or test adapter; model/provider abstraction must remain explicit enough for later local and optional remote models.
-
-## JarvisHub boundary
-
-D-066 designates JarvisHub as the reference donor for the future Agent Harness. In this slice borrow only the foundations needed now: idempotency, generation constraints, action/effect visibility and traceable Job provenance.
-
-Do **not** vendor JarvisHub, introduce its Canvas-as-source-of-truth, PostgreSQL/Hono application shape, generic node project model, Planner, Memory, Skills or Subagents in this slice. Those Agent Harness layers come after the Job/generation foundation is proven.
+- an unknown/unregistered action fails closed;
+- the harness cannot request a direct project-file mutation path;
+- unavailable capability/model execution is not promoted to available;
+- D-017-required work cannot execute without the existing exact authorization;
+- trace/context cannot smuggle secrets, absolute host paths or arbitrary non-portable state;
+- a failed action leaves an inspectable failure trace without fabricating canonical success.
 
 ## Product Truth boundary
 
-D-067 requires this new user-visible generation feature to land as one coherent product capability. Backend-first or frontend-first intermediate commits are acceptable while the slice is draft, but the review/merge state must not contain a declared-ready backend/frontend parity gap.
+Most of this slice is internal infrastructure. Do not invent a user-facing Agent product claim merely to satisfy D-067.
 
-The architecture/documentation for the slice must describe as-built behavior accurately at review time rather than leave completed work phrased as future target work.
+If the slice adds a user-visible trace/context surface, give that surface an appropriate Product Truth record and browser proof. Otherwise mark the infrastructure explicitly internal/not-ready for user-visible Agent autonomy and prove it through deterministic unit/API/integration tests.
 
-## Desktop update boundary
+## JarvisHub boundary
 
-D-068 is accepted architecture but is **not** implementation scope for this generation slice. Update UI/Service, in-place installer replacement and N-1 -> N packaged upgrade proof remain Stage-9 desktop productization work.
+Use JarvisHub only as a method donor for context/policy/trace structure. UV Studio keeps its existing authorities:
+
+- Project Store;
+- Production Semantic Core;
+- canonical Timeline;
+- Studio/Application Commands;
+- ProjectUnitOfWork;
+- Model Registry;
+- Job Manager;
+- Capability Registry and D-017.
+
+Do not vendor JarvisHub or adopt Canvas-as-source-of-truth, generic node project state, PostgreSQL/Hono application authority or a duplicate Protocol Bridge.
+
+## Explicitly deferred
+
+The following are **not** part of this slice:
+
+1. Planner + durable Task graph + Skills;
+2. functional subagents (`explore`, `plan`, `media`, `critic`);
+3. automatic dependency-aware evaluate/repair loops;
+4. human takeover/edit/resume orchestration;
+5. long-form autonomous production;
+6. D-068 desktop updater implementation;
+7. a real InfinityEdit/Helios continuation adapter/UI.
+
+Those begin only after the Context Builder/catalog/policy/trace foundation is merged and lifecycle-closed.
 
 ## Entry gate
 
-Begin only after `chore/jarvishub-agent-donor-architecture` is merged and lifecycle-closed on idle `main`.
+Begin only from lifecycle-closed idle `main` after PR #68 merge commit `daa9381f45e136f7e406ac29888f8ac597da3f79` is recorded as `last_completed`.
