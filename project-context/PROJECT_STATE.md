@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-model-registry-job-manager-generation -->
 
 **Updated:** 2026-08-26
@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-Stage 14 is active as draft PR #68 on branch `stage-14/model-registry-job-manager-generation`, created from lifecycle-closed `main` commit `03f382c29816218ca32380ac39669df2bc3fc79a`.
+Stage 14 is in review as PR #68 on branch `stage-14/model-registry-job-manager-generation`, created from lifecycle-closed `main` commit `03f382c29816218ca32380ac39669df2bc3fc79a`.
 
 Goal: deliver the first truthful named-model generation vertical over the existing Studio/Production Semantic Core: backend-owned Model Registry, project-scoped Job/Attempt lifecycle, provider-neutral GenerationContract, generated project-owned media and Take candidate, visible Studio state, Product Truth contract and browser E2E.
 
@@ -78,7 +78,7 @@ Provider-private KV caches, latents, session handles, sliding history windows an
 
 ### Product Truth
 
-The first machine-readable Product Truth Contract is now implemented at:
+The first machine-readable Product Truth Contract is implemented at:
 
 ```text
 docs/architecture/product-truth/generate-shot-take.json
@@ -86,7 +86,7 @@ docs/architecture/product-truth/generate-shot-take.json
 
 `uv_studio/product_truth.py` validates that the contract resolves to the actual `GenerationService.submit` domain method, FastAPI POST route, `GenerationWorkspacePanel` surface/control labels, canonical dependencies and declared API/browser test methods. `tests/test_product_truth_contracts.py` makes this a permanent deterministic CI invariant rather than prose interpretation.
 
-The contract is truthful about conditional execution: normal named models with `configuration_required`/unavailable offers remain visible and blocked with their reason. Successful API/browser proof uses only the explicitly env-gated `Stage14E2ETestExecutor`, which is absent from the normal model catalog unless `UV_STUDIO_E2E_TEST_GENERATION=1`.
+The contract is truthful about conditional execution: normal named models with `configuration_required`/unavailable offers remain visible and blocked with their reason. Successful API/browser proof uses only the explicitly env-gated test-only `Stage14E2ETestExecutor`, which is absent from the normal model catalog unless `UV_STUDIO_E2E_TEST_GENERATION=1`.
 
 Continuation UI is deliberately not claimed ready in Stage 14 because no real continuation-capable model/adapter is integrated yet.
 
@@ -121,10 +121,10 @@ Focused unit/API tests separately prove replay deduplication, same-key/different
 
 ## Current implementation status
 
-The Stage-14 implementation vertical is present in draft PR #68: backend Model Registry, project Job/Attempt/idempotency, GenerationContract, D-017-preserving submission, generated artifact -> shared Take materialization, Studio generation surface, effects metadata, D-069 continuation lineage seam, machine-readable Product Truth registry/validator, API proof and browser user-outcome proof.
+The Stage-14 implementation vertical is complete for review in PR #68: backend Model Registry, project Job/Attempt/idempotency, GenerationContract, D-017-preserving submission, generated artifact -> shared Take materialization, Studio generation surface, effects metadata, D-069 continuation lineage seam, machine-readable Product Truth registry/validator, API proof and browser user-outcome proof.
 
-The earlier exact head `1286a51061d5f10489ca1ea48baf26e96e670af8` passed all five permanent CI jobs before the final Product Truth/effects validation commits. The current post-validation head must pass the same exact-head checks before the PR moves to review. Until that happens, Stage 14 remains **draft, implemented but not yet review-closed**.
+An earlier implementation head `1286a51061d5f10489ca1ea48baf26e96e670af8` passed all five permanent CI jobs before the final Product Truth/effects/documentation synchronization. The exact review-state head must pass the same five checks before merge. Review is not complete until those checks are green and no unresolved review thread remains.
 
 ## Next handoff
 
-The next post-Stage-14 slice is intentionally not declared here yet. Finish exact-head verification, move this bounded vertical through review/merge, synchronize the merged lifecycle back to idle, and only then select the later Agent Harness work from current architecture rather than guessing ahead.
+Merge and lifecycle-close this bounded vertical only after exact-head review verification. Once `main` is idle again, select the next Agent Harness implementation slice from the merged current architecture rather than guessing ahead.
