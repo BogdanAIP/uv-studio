@@ -22,6 +22,7 @@ from .models import (
     AgentTraceRecord,
     AgentTraceStatus,
     portable_json,
+    safe_error_message,
     stable_digest,
 )
 from .orchestration import (
@@ -29,8 +30,9 @@ from .orchestration import (
     AgentPlanExecutionState as _BaseAgentPlanExecutionState,
     AgentPlanRecord,
     AgentPlanStatus,
+    AgentPlanStepProposal,
     AgentPlanStore as _BaseAgentPlanStore,
-    AgentPlanner,
+    AgentPlanner as _BaseAgentPlanner,
     AgentPlanningError,
     AgentSkillCatalog as _BaseAgentSkillCatalog,
     AgentTaskCoordinator as _BaseAgentTaskCoordinator,
@@ -67,6 +69,78 @@ class AgentSkillCatalog(_BaseAgentSkillCatalog):
     def describe(self, skill_id: str) -> dict[str, Any]:
         result = super().describe(skill_id)
         return {"schema_version": self.schema_version, **result}
+
+
+class AgentPlanner(_BaseAgentPlanner):
+    """Bind every effective task target into validated deterministic plan context."""
+
+    def build(
+        self,
+        *,
+        project_id: str,
+        goal: str,
+        proposals: Sequence[AgentPlanStepProposal],
+        target_shot_id: str | None = None,
+        canonical_references: Sequence[str] = (),
+        plan_id: str | None = None,
+    ) -> AgentPlanRecord:
+        plan = super().build(
+            project_id=project_id,
+            goal=goal,
+            proposals=proposals,
+            target_shot_id=target_shot_id,
+            canonical_references=canonical_references,
+            plan_id=plan_id,
+        )
+
+        effective_targets = tuple(
+            sorted(
+                {
+                    task.target_shot_id
+                    for task in plan.tasks
+                    if task.target_shot_id is not None
+                }
+            )
+        )
+        if not effective_targets:
+            return plan
+
+        snapshots = []
+        for shot_id in effective_targets:
+            try:
+                snapshots.append(self.harness.context.build(project_id, shot_id=shot_id))
+            except Exception as exc:
+                raise AgentPlanningError(
+                    f"could not bind target shot {shot_id!r}: {safe_error_message(exc)}"
+                ) from exc
+
+        if len(snapshots) == 1:
+            context_digest = snapshots[0].digest
+        else:
+            context_digest = stable_digest(
+                {
+                    "target_contexts": [
+                        {
+                            "target_id": snapshot.target_id,
+                            "digest": snapshot.digest,
+                        }
+                        for snapshot in snapshots
+                    ]
+                }
+            )
+        references = tuple(
+            dict.fromkeys(
+                (
+                    *plan.canonical_references,
+                    *(snapshot.target_id for snapshot in snapshots),
+                )
+            )
+        )
+        return replace(
+            plan,
+            context_digest=context_digest,
+            canonical_references=references,
+        )
 
 
 class AgentPlanStore(_BaseAgentPlanStore):
