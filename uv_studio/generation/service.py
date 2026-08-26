@@ -139,6 +139,10 @@ class GenerationService:
         self.production.state(project_id).shot(shot_id)
         model = self.model_registry.get(model_id)
         offer = self.model_registry.capability_registry.get_offer(model.offer_id)
+        if offer.availability is not OfferAvailability.AVAILABLE:
+            raise GenerationExecutionUnavailable(
+                f"selected model execution is {offer.availability.value}: {offer.reason}"
+            )
 
         references = {item.id for item in (*project.sources, *project.artifacts)}
         if contract.approved_reference_id is not None:
