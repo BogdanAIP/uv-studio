@@ -1,7 +1,7 @@
 # UV Studio — Current Architecture
 
 **Status:** CURRENT AUTHORITY  
-**Date:** 2026-08-26  
+**Date:** 2026-08-27  
 **Product composition:** D-064  
 **Shared production semantics:** D-065  
 **Agent Harness factoring:** D-066  
@@ -43,8 +43,8 @@ Project Store
  -> Generation Job Manager / GenerationContract
  -> Agent Harness
       Context / Catalog / Policy / Trace              [Stage 15 merged]
-      Planner / durable Tasks / Skills                [Stage 16 review]
-      functional Subagents                            [later D-066 layer 3]
+      Planner / durable Tasks / Skills                [Stage 16 merged]
+      functional Subagents                            [next D-066 layer 3]
       background Agent execution                      [later layer 4]
       evaluate / repair                               [later layer 5]
       takeover / edit / resume                        [later layer 6]
@@ -148,17 +148,17 @@ Agent policy projects existing availability/locality/cost/`CapabilityEffects`/D-
 
 `AgentHarness` delegates canonical mutation to the same Production/Timeline/Generation services used by other callers. Stage 15 proved success and failure tracing, unavailable models, D-017 separation, bounded context and restart/reopen.
 
-## Agent Harness layer 2 — Stage 16 review
+## Agent Harness layer 2 — Stage 16 merged
 
-Current active slice: `studio-v2-agent-planner-durable-tasks-skills`, PR #70.
+PR #70 implemented the second D-066 layer and merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2` after exact-head CI #3442 passed all five permanent jobs and a fresh Codex review found no major issues.
 
-The implementation under review adds orchestration above Stage 15 without changing canonical authorities:
+The merged layer adds orchestration above Stage 15 without changing canonical authorities:
 
 ```text
 bounded goal
  -> Stage-15 Context + Action Catalog + Policy
  -> AgentPlanner validates structured proposal
- -> AgentPlanRecord
+ -> append-only AgentPlanRecord
  -> durable dependency-aware AgentTaskRecord state
  -> bounded Skill expansion
  -> foreground AgentTaskCoordinator
@@ -169,7 +169,7 @@ bounded goal
 
 ### Planner
 
-The Planner contract is structured and UV-validated rather than hidden free-form reasoning. It validates bounded step/task counts, stable IDs, action/Skill identities, portable inputs, dependency references, cycles, policy availability and canonical context binding.
+The Planner contract is structured and UV-validated rather than hidden free-form reasoning. It validates bounded step/task counts, stable IDs, action/Skill identities, portable inputs, dependency references, cycles, policy availability, canonical context binding and canonical prerequisites against current state/dependency closure.
 
 A future model may propose this structured plan; UV validation remains deterministic and authoritative.
 
@@ -186,7 +186,7 @@ planned -> ready -> running -> succeeded
    |-> cancelled
 ```
 
-Dependencies unlock only after success. A failure does not falsely unlock downstream tasks or mark the plan successful.
+Dependencies unlock only after success. A failure does not falsely unlock downstream tasks or mark the plan successful. Cross-runtime CAS/locking and restart reconciliation prevent stale task-state overwrites and silent replay.
 
 ### Skills
 
@@ -194,27 +194,28 @@ Skills are reusable bounded procedures over approved Agent catalog actions. The 
 
 Skills derive their effects/authority envelope from underlying catalog actions and do not gain shell, Python, arbitrary filesystem/provider or D-017 bypass rights.
 
-### Foreground execution boundary
+### Foreground execution and recovery boundary
 
-Stage 16 intentionally executes one runnable task in the foreground through `AgentHarness`. Functional subagents, background workers, evaluate/repair and long-form autonomy remain later D-066 layers.
+Stage 16 executes runnable tasks in the foreground through `AgentHarness`. It durably binds execution-time context/policy and typed task correlation before canonical/cost-bearing dispatch. Production/Timeline recovery reuses committed `ProjectUnitOfWork` evidence; generation recovery requires exact Job/idempotency/request/mapping evidence and never silently resubmits.
 
-The Stage-16 review implementation is internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
+Stage 16 remains internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
 
-## D-066 sequence after the active slice
+## D-066 next handoff and remaining order
 
-Once Stage 16 is reviewed, merged and lifecycle-closed, the accepted order remains:
+The repository is lifecycle-idle after Stage 16 closure. The one declared next handoff is **functional subagents** — bounded `explore / plan / media / critic` roles consuming the merged Context / Planner / Task / Skill contracts.
 
-1. **functional subagents** — small bounded `explore / plan / media / critic` roles over the Planner/Task/Skill contracts;
-2. **background Agent work** coordinated through existing Job Manager boundaries;
-3. **critic/evaluation + dependency-aware repair**;
-4. **human takeover/edit/resume**;
-5. **long-form autonomous production** only after all prior boundaries are proven.
+After that, the accepted order remains:
 
-Do not collapse these into Stage 16.
+1. **background Agent work** coordinated through existing Job Manager boundaries;
+2. **critic/evaluation + dependency-aware repair**;
+3. **human takeover/edit/resume**;
+4. **long-form autonomous production** only after all prior boundaries are proven.
+
+Do not collapse these layers or jump directly to long-form autonomy.
 
 ## Capability/effects boundary
 
-`CapabilityEffects` / resolved offer effects remain the single effects source for both Agent policy and Skills. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
+`CapabilityEffects` / resolved offer effects remain the single effects source for Agent policy, Skills and future subagent routing. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
 
 No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority is introduced.
 
@@ -241,12 +242,12 @@ Contextual operations such as targeted edit, dubbing/translation, slideshow, vis
 3. Do not create a second canonical Project Store or Timeline.
 4. Do not duplicate shared Scene/Shot/Take semantics per direction.
 5. GUI, Agent, scripts and MCP converge on the same application/domain commands.
-6. Do not give the Agent or a Skill a private project-write path.
-7. Agent context/plan/task/trace are orchestration/inspection state over canonical identities, not canonical production state.
+6. Do not give the Agent, a Skill or a subagent a private project-write path.
+7. Agent context/plan/task/trace/role state are orchestration/inspection state over canonical identities, not canonical production state.
 8. Generation Job/Attempt history remains separate from Agent Task orchestration state.
 9. Remote/non-free execution remains explicit and D-017-authorized where required.
 10. Provider prompts, secrets, reusable authorization and provider-private continuation caches never become portable Project/Agent state.
-11. Current docs must distinguish merged/as-built state from active review/future state.
+11. Current docs must distinguish merged/as-built state from active/future state.
 12. Do not claim autonomous product readiness from internal Agent infrastructure alone.
 
 ## Compatibility layer

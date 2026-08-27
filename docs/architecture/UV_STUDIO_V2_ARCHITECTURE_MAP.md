@@ -1,13 +1,13 @@
 # UV Studio v2 — architecture map and migration inventory
 
 **Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069  
-**Date:** 2026-08-26
+**Date:** 2026-08-27
 
 Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production, generation and first Agent-orchestration spine:
+UV Studio now has a concrete shared production, generation and two-layer Agent-orchestration spine:
 
 ```text
 Project Store
@@ -20,7 +20,8 @@ Project Store
  -> Generation Job Manager / GenerationContract
  -> Capability Registry / D-017 / adapters
  -> Agent Harness layer 1: Context / Catalog / Policy / Trace       [Stage 15 merged]
- -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 review]
+ -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 merged]
+ -> functional Subagents                                             [next D-066 layer 3]
 ```
 
 The old product-composition errors remain rejected:
@@ -54,9 +55,10 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
                     Model Registry + Job Manager
                                  |
                          Agent Harness
-       Stage 15: Context -> Catalog -> Policy -> Trace
-       Stage 16: Planner -> durable Tasks -> Skills
-       later: Subagents -> background -> evaluate/repair -> takeover -> autonomy
+       Stage 15: Context -> Catalog -> Policy -> Trace            [merged]
+       Stage 16: Planner -> durable Tasks -> Skills                [merged]
+       next: functional Subagents
+       later: background -> evaluate/repair -> takeover -> autonomy
                                  |
                        Capability Registry
                                  |
@@ -128,7 +130,7 @@ A real InfinityEdit/Helios continuation provider/UI remains later capability/pro
 
 ## 6. Agent Harness layer 1 — Stage 15 IMPLEMENTED
 
-PR #69 / merged Stage 15 supplies the internal foundation:
+PR #69 supplies the first internal foundation:
 
 ### Context Builder — KEEP
 
@@ -156,11 +158,11 @@ Append-only project-scoped inspection records under the existing `tasks/` author
 
 `AgentHarness` dispatches only through existing UV services. There is no generic file-write, shell or Python action.
 
-## 7. Agent Harness layer 2 — Stage 16 REVIEW
+## 7. Agent Harness layer 2 — Stage 16 IMPLEMENTED
 
-Current slice: `studio-v2-agent-planner-durable-tasks-skills`, PR #70.
+PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2` after final exact-head CI #3442 passed all five permanent jobs and the fresh Codex review reported no major issues.
 
-The implementation under review adds:
+The merged implementation adds:
 
 ```text
 bounded goal
@@ -174,9 +176,9 @@ bounded goal
  -> Stage-15 trace linked from durable task state
 ```
 
-### Planner — ADAPT FROM JARVISHUB METHOD, UV-OWNED CONTRACT
+### Planner — KEEP UV-OWNED CONTRACT
 
-Keep the useful planning/task factoring, but planning output is UV-validated structured data rather than a JarvisHub Canvas/node graph.
+Planning output is UV-validated structured data rather than a JarvisHub Canvas/node graph.
 
 Validation includes:
 
@@ -184,11 +186,12 @@ Validation includes:
 - stable IDs;
 - portable input payloads;
 - action/Skill catalog membership;
-- input-field contracts;
+- input-field/domain command contracts;
 - dependency existence/cycle checks;
 - Stage-15 context digest;
 - policy availability;
-- canonical reference bounds.
+- canonical reference/prerequisite checks against current state and dependency closure;
+- exclusive Shot acceptance and valid video-track prerequisites.
 
 A future model may propose this structure; deterministic UV validation remains authoritative.
 
@@ -205,7 +208,7 @@ planned -> ready -> running -> succeeded
    |-> cancelled
 ```
 
-Dependencies unlock only after success. Terminal tasks do not silently replay.
+Dependencies unlock only after success. Terminal tasks do not silently replay. Cross-runtime CAS and project task locking protect durable transitions.
 
 ### Skills — BOUNDED PROCEDURES, NOT NEW PERMISSIONS
 
@@ -217,23 +220,26 @@ First proof Skill:
 
 No Skill may introduce shell, Python, arbitrary filesystem/provider execution or D-017 bypass.
 
-### Foreground coordinator — CURRENT BOUNDARY
+### Foreground coordinator — MERGED BOUNDARY
 
-Stage 16 executes one ready task in the foreground. It links durable task state to the existing Stage-15 trace and existing canonical result identities.
+Stage 16 executes ready tasks in the foreground, binds execution-time context/policy/correlation evidence, links durable task state to existing Stage-15 trace and canonical result identities, and reconciles committed work on reopen without silent replay.
 
-Functional subagents and background execution are explicitly not part of Stage 16.
+Functional subagents and background execution are not part of Stage 16.
 
 ## 8. D-066 remaining order
 
-After Stage 16 is merged and lifecycle-closed:
+With Stage 16 merged and lifecycle-closed, the one declared next handoff is:
 
-1. **Layer 3 — functional subagents:** bounded `explore / plan / media / critic` roles consuming the Planner/Task/Skill contracts;
+1. **Layer 3 — functional subagents:** bounded `explore / plan / media / critic` roles consuming the Planner/Task/Skill contracts.
+
+Then:
+
 2. **Layer 4 — background Agent work:** coordinated through existing Job Manager boundaries without hiding external replay/cost;
 3. **Layer 5 — evaluation + dependency-aware local repair**;
 4. **Layer 6 — human takeover/edit/resume**;
 5. **Layer 7 — long-form autonomous production**.
 
-Do not jump directly from Stage 16 to long-form autonomy.
+Do not jump directly to long-form autonomy.
 
 ## 9. Product Truth — KEEP
 
@@ -277,7 +283,8 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 | Generation Job Manager | **KEEP** | execution provenance/idempotency/retry |
 | GenerationContract | **KEEP** | provider-neutral semantic generation constraints |
 | Stage-15 Agent foundation | **KEEP** | Context/Catalog/Policy/Trace/AgentHarness |
-| Stage-16 Planner/Tasks/Skills | **REVIEW** | D-066 layer 2 orchestration |
+| Stage-16 Planner/Tasks/Skills | **KEEP** | merged D-066 layer 2 orchestration |
+| Functional subagents | **NEXT** | bounded role specialization over merged Agent contracts |
 | Product Truth | **KEEP** | cross-layer verification metadata |
 | MCP | **KEEP** | optional capability/tool transport, not product state |
 | Desktop Update Service | **FUTURE ACCEPTED** | D-068 maintained installation lifecycle |
@@ -309,12 +316,9 @@ Completed:
 8. Stage 14 named generation -> project artifact -> Take -> acceptance -> Timeline.
 9. Stage 14 first Product Truth record/proof.
 10. **Stage 15 Context Builder + Action Catalog + Policy + Trace + bounded Agent execution.**
-
-In review:
-
 11. **Stage 16 Planner + durable Tasks + Skills.**
 
-Then, in D-066 order:
+Next, in D-066 order:
 
 12. functional subagents;
 13. background Agent work;
@@ -339,7 +343,7 @@ Then, in D-066 order:
 - remote/non-free execution remains explicit and authorized;
 - external/cost-bearing generation is retry/idempotency safe;
 - provider-private continuation state is not Project Store truth;
-- Agent context/plan/tasks/skills/trace are bounded orchestration/inspection state over canonical identities;
+- Agent context/plan/tasks/skills/trace/role outputs are bounded orchestration/inspection state over canonical identities;
 - Agent Task history does not replace Generation Job/Attempt provenance;
-- current docs distinguish merged, review and future work;
+- current docs distinguish merged, active and future work;
 - user-visible readiness requires D-067 parity/evidence, not implementation claims alone.

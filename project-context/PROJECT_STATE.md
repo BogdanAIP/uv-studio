@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: review -->
-<!-- uv-active-slice: studio-v2-agent-planner-durable-tasks-skills -->
+<!-- uv-context-state: idle -->
+<!-- uv-last-completed: studio-v2-agent-planner-durable-tasks-skills -->
 
 **Updated:** 2026-08-27
 
@@ -9,51 +9,66 @@
 
 ## Current lifecycle
 
-Stage 16 remains in review on branch `stage-16/agent-planner-durable-tasks-skills`, PR #70. It was opened from lifecycle-closed idle `main` commit `fdc82fbdbd518e711a5f4b36d01cdbc6745a7e40` after Stage 15 / PR #69 merged as `273b5ea8f979cf759cfbf6510e1215a55e98d9c9`.
+Stage 16 is implemented, merged in PR #70 and lifecycle-closed to idle `main`.
 
-The exact review candidate is always the PR #70 branch head containing this document; this current-authority file intentionally does not duplicate its own commit SHA because changing that literal would create a permanently self-stale follow-up commit. The latest completed exact-head evidence before this self-consistency refinement is documentation-only head `cf69e67d8fa2f5ea45ae951dee3893db9dcdeb22`, whose PR CI #3406 (`33051435225`) completed successfully across all five permanent jobs, including Ubuntu/Windows bootstrap+unit suites and both app-baseline browser E2E suites. The code-bearing parent `5a1e6e23cd6f55f8991366c7fe08dfa0b651473b` likewise passed exact-head CI #3402 (`33049944377`). Merge eligibility is determined from the actual PR head plus the seven-item review gate below, not from a copied “current SHA” literal inside that same commit.
+- merged slice: `studio-v2-agent-planner-durable-tasks-skills`;
+- final reviewed PR head: `3478bb17e21fb0f02b4a456a61baf4c0ad941c22`;
+- merge commit: `bd258b7564f864c7f5fe636cb1336515f0dacce2`;
+- exact-head CI #3442 (`33065539562`) completed successfully across all five permanent jobs, including Ubuntu/Windows unit suites and both app-baseline browser E2E suites;
+- fresh Codex review on the exact final head reported no major issues;
+- every inline review thread was resolved before merge.
 
-## Stage-16 implementation under review
+There is no active implementation branch or PR. The one declared handoff is `studio-v2-agent-functional-subagents`, described in `project-context/NEXT_TASK.md`.
 
-The D-066 layer-2 implementation provides:
+## Merged Agent Harness foundation
 
-- bounded `AgentPlanner` validation over the merged Stage-15 context/catalog/policy authorities;
-- append-only `AgentPlanRecord` descriptors with cross-runtime create-if-absent semantics and deterministic canonical target-context binding;
-- derived `AgentPlanExecutionState` status with stable created/updated inspection timestamps rather than a second persisted mutable plan-status truth;
-- durable dependency-aware `AgentTaskRecord` state under the existing project `tasks/` authority;
-- strict planned/ready/running/succeeded/failed/cancelled transitions, storage-level CAS and one cross-runtime project task lock;
-- recoverable partial task initialization, complete custom Plan-ID discovery, mixed-terminal status and dependency-aware cancellation;
-- bounded versioned `AgentSkillCatalog`, with proof Skill `production.scene_with_shot` expanding only to approved production actions;
-- foreground `AgentTaskCoordinator` execution solely through the existing `AgentHarness` and UV application authorities;
-- typed trace correlation with exact input-digest/start-window checks and preparation-failure provenance;
-- post-commit/pre-trace recovery from the existing correlated `ProjectUnitOfWork` journal and exact durable Generation Job/idempotency evidence without replay;
-- exact execution-time context binding before canonical/cost-bearing dispatch;
-- bounded append-only execution-policy evidence under the existing project `tasks/` authority so recovered traces use the policy actually used at execution time rather than stale Plan-time policy;
-- recoverable handling of ordinary success-trace persistence failure: if a committed transaction/Job already proves success, the task remains `running` for reopen reconciliation rather than being falsely terminalized as `failed`;
-- Timeline result reconstruction from committed before/after snapshots, including authority-generated track/clip IDs and the clip/track created by `production.accept_take`;
-- execution-only D-017 authorization handling: tokens never enter durable Plans, Tasks, trace-correlation evidence or execution-policy evidence;
-- dependency/cycle/unknown-authority rejection, command-level input validation, unavailable-model, D-017 and generation idempotency/replay proof.
+D-066 now has two merged internal layers:
 
-Agent Tasks remain orchestration state, not Generation Jobs, canonical production truth, Timeline truth or Undo/Redo history. Skills remain bounded procedures over approved Agent actions, not arbitrary plugins or execution rights. The small execution-evidence record is provenance attached to the existing Agent Task authority; it is not a second project graph, transaction journal, permission system or trace store.
+```text
+Stage 15
+  Context Builder
+  Action Catalog
+  Policy projection
+  Agent Trace
+  AgentHarness execution seam
 
-## Authority stack preserved
+Stage 16
+  validated Planner
+  append-only Plan descriptors
+  durable dependency-aware Agent Tasks
+  bounded versioned Skills
+  foreground task coordination
+  execution-time context/policy evidence
+  typed trace correlation
+  restart/reopen recovery without replay
+```
 
-Stage 16 reuses rather than replaces Project Store/tasks, Production Semantic Core, canonical Timeline, Studio/Application Commands, `ProjectUnitOfWork`, Stage-15 Context/Catalog/Policy/Harness/Trace, Model Registry, Generation Job/Attempt authority, Capability Registry/effects and D-017.
+Stage 16 preserves existing UV authorities rather than creating a second project or execution graph. Agent work continues to reference canonical Project / Scene / Shot / Take / media / Timeline / transaction / Generation Job identities and executes through existing Production, Timeline and Generation services.
 
-## Review gate
+## Stage-16 reliability boundary now merged
 
-Before PR #70 may merge, the actual PR head must satisfy all of the following together:
+The merged implementation includes:
 
-1. `development-context` success;
-2. Ubuntu bootstrap/unit suite success;
-3. Windows bootstrap/unit suite success;
-4. Ubuntu app-baseline including browser E2E success;
-5. Windows app-baseline including browser E2E success;
-6. no unresolved inline review threads;
-7. a fresh Codex review of that exact PR head with no new blocking finding.
+- canonical prerequisite validation before Plan persistence, including dependency-closure provisioning;
+- rejection of duplicate planned Scene/Shot identities and deterministically invalid missing Take/track/clip/media references;
+- exclusive planned `production.accept_take` per Shot and validation that dependency-created acceptance tracks are video tracks;
+- cross-runtime task CAS and project-scoped locking with one lock order and Windows contention handling;
+- append-only Plan create-if-absent semantics;
+- exact execution-time context and policy evidence before canonical/cost-bearing dispatch;
+- generation preparation binding to the exact frozen policy, model/capability/offer/adapter mapping and request digest;
+- D-017 authorization remaining execution-only and outside durable Plan/Task state;
+- typed plan/task/Skill trace correlation with exact input digest and execution window;
+- recovery from committed `ProjectUnitOfWork` and exact Generation Job evidence without silently replaying canonical or cost-bearing work;
+- reconstruction of affected Shot/track/clip identities for recovered Production/Timeline traces.
+
+Agent Tasks remain orchestration state, not canonical Production/Timeline truth, Undo/Redo history or Generation Job provenance. Skills remain bounded procedures over approved Agent catalog actions and gain no shell, Python, arbitrary filesystem/provider or private authorization path.
+
+## Next D-066 handoff
+
+The next accepted layer is **functional subagents**: bounded `explore / plan / media / critic` roles that consume the merged Context / Planner / Task / Skill contracts.
+
+This next slice must remain foreground and bounded. Background Agent work is still the following D-066 layer, followed by evaluation/repair, human takeover/edit/resume and only then long-form autonomy.
 
 ## Known limitations
 
-Execution is foreground and bounded. Functional subagents, background Agent work, critic/evaluation and repair, human takeover/edit/resume and long-form autonomy remain later D-066 layers. This slice does not claim a user-visible autonomous-Agent product surface and does not implement the unrelated desktop updater or a real continuation-provider UI.
-
-`project-context/NEXT_TASK.md` remains the exact Stage-16 scope contract until PR #70 is merged and lifecycle-closed.
+UV Studio still does not claim a user-visible autonomous-Agent product surface. Functional subagents, background execution, automatic critic/repair loops, takeover/resume orchestration and long-form autonomy remain future work. The unrelated D-068 desktop updater and a real continuation-provider UI are also outside the completed Stage-16 slice.

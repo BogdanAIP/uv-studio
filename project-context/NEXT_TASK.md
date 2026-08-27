@@ -1,195 +1,119 @@
 # Next Task
 
-<!-- uv-next-slice: studio-v2-agent-planner-durable-tasks-skills -->
+<!-- uv-next-slice: studio-v2-agent-functional-subagents -->
 
 ## Goal
 
-Build **D-066 Agent Harness layer 2** on top of the merged Stage-15 Context Builder / action catalog / policy / trace foundation.
+Build **D-066 Agent Harness layer 3: functional subagents** on top of the merged Stage-15 Context/Catalog/Policy/Trace foundation and merged Stage-16 Planner/Plan/Task/Skill contracts.
 
-The slice is `studio-v2-agent-planner-durable-tasks-skills`:
+The slice is `studio-v2-agent-functional-subagents`:
 
 ```text
-Planner
- + durable Agent Tasks
- + Skills
+bounded production goal
+ -> Agent context
+ -> functional role selection/delegation
+      explore
+      plan
+      media
+      critic
+ -> bounded role output
+ -> Stage-16 Planner / durable Tasks / Skills
+ -> Stage-15 AgentHarness
+ -> existing Production / Timeline / Generation authorities
 ```
 
-The goal is not long-form autonomy yet. It is to prove that UV Studio can convert a bounded production goal into an inspectable dependency-aware task plan, persist/reopen that plan safely, reuse bounded Skills, and execute approved tasks only through the existing Stage-15 Agent Harness and UV application authorities.
+The purpose is to prove useful specialization and delegation without adding background workers, a second project graph, private tool permissions or long-form autonomous production.
 
 ## Required direction
 
-- add a UV-owned **Planner contract** that consumes bounded Stage-15 context plus the existing deterministic action catalog;
-- a plan must reference stable canonical Project/Scene/Shot/Take/asset/Timeline identities and stable Agent catalog action IDs rather than raw project files or a second Agent graph;
-- planning output must be strict, bounded, deterministic/validatable structured data even when a future model proposes it;
-- persist **durable Agent Tasks** project-scoped under existing bounded project task storage, without replacing Generation Job/Attempt provenance or ProjectUnitOfWork history;
-- tasks must expose explicit dependency/state semantics and survive restart/reopen;
-- add **Skills** as reusable bounded procedures/templates/policies that expand only into allowed plan/task/catalog contracts; Skills are not arbitrary shell/Python/provider execution and do not gain a private project-write path;
-- task execution must call the existing `AgentHarness` / `AgentActionCatalog` path, which in turn delegates to existing Production/Timeline/Generation authorities;
-- preserve Stage-15 policy facts and D-017: planning or a Skill may explain that authorization is required but cannot mint or bypass authorization;
-- link plan/task/skill identities into inspectable Agent trace without copying raw provider prompts, secrets, authorization tokens, absolute host paths or provider-private runtime state;
-- keep execution bounded and foreground/synchronous enough for this slice to be independently testable; **background Agent workers belong to D-066 layer 4**, not this slice;
-- keep functional subagents out of this slice; they are D-066 layer 3 and must consume the Planner/Task/Skill contracts built here.
+- add a small UV-owned **functional subagent contract** with stable role IDs and versioned bounded input/output schemas;
+- roles consume the existing bounded Agent context and canonical identities rather than copying the Project into private role state;
+- roles may propose observations, structured planning input, media/model choices or critique/evaluation facts, but executable mutations must still become validated Stage-16 Plan/Task/Skill work and execute through the existing AgentHarness/application authorities;
+- role selection/delegation must be inspectable and deterministic enough to validate even when a future model supplies role output;
+- preserve D-017, Capability effects, locality/cost and Model Registry visibility exactly as existing authorities expose them;
+- carry role identity into the existing Agent trace/task correlation where useful, without creating a competing trace store;
+- keep role contexts/results bounded, portable and free of secrets, authorization tokens, absolute host paths, provider-private state and hidden model reasoning;
+- keep execution foreground for this slice. **Background Agent workers remain D-066 layer 4.**
 
-## Planner contract
+## Initial role boundaries
 
-The first Planner should produce a bounded structured plan rather than free-form hidden reasoning.
+### `explore`
 
-At minimum a plan should carry stable facts such as:
+Read/inspect bounded Project, Production, Timeline, Model, Job and trace context and return structured findings/references. It does not gain canonical mutation authority.
 
-- plan identity and schema version;
-- project identity and bounded context digest/reference set;
-- bounded user/production goal summary;
-- ordered/dependency-aware task identities;
-- action ID or Skill ID selected for each executable task;
-- canonical target references needed by the task;
-- bounded task arguments/inputs or references to reconstruct them;
-- explicit dependencies;
-- policy/effects facts needed to know whether execution is local/mutating/destructive/long-running/cost-bearing or may require D-017;
-- plan status and timestamps needed for durable inspection.
+### `plan`
 
-Planner validation must fail closed on:
+Translate a bounded production goal plus findings into a structured Stage-16-compatible plan proposal. UV-owned Planner validation remains authoritative; the role cannot persist an invalid plan or bypass Planner checks.
 
-- unknown action or Skill IDs;
-- dependency cycles;
-- missing dependencies;
-- duplicate task identities;
-- non-portable/secret/path-bearing plan payloads;
-- a task that attempts to request an authority outside the Stage-15 catalog/Skill boundary.
+### `media`
 
-A future model-backed planner may propose the structured plan, but schema/policy validation remains UV-owned and deterministic.
+Reason over canonical media/reference identities plus Model/Capability metadata and return bounded media/model/capability recommendations or generation-task inputs. It does not call providers directly or hide remote/non-free execution.
 
-## Durable Agent Task contract
+### `critic`
 
-Agent Tasks are orchestration state, not Generation Jobs and not canonical production truth.
+Evaluate bounded plan/task/result evidence and return structured findings/severity/references. In this slice it must **not** autonomously repair or mutate canonical state; evaluation + dependency-aware repair is D-066 layer 5.
 
-Use a small explicit lifecycle suitable for restart/reopen, for example bounded states equivalent to:
+## Orchestration contract
 
-```text
-planned -> ready -> running -> succeeded
-                   |-> failed
-planned/ready ---->|-> cancelled
-```
+At minimum define and prove:
 
-Exact names may be refined in implementation, but transitions must be validated and impossible states rejected.
+- stable role identity and schema version;
+- bounded canonical/context inputs;
+- explicit allowed output type(s);
+- explicit allowed downstream authority, if any;
+- deterministic validation of role output before it can influence Planner/Tasks;
+- role invocation/delegation identity linked to the parent goal/plan/task where applicable;
+- bounded error/failure representation passed to the caller rather than hidden retries;
+- no arbitrary shell, Python, filesystem, provider or permission expansion.
 
-Required properties:
-
-- project-scoped stable task identity;
-- parent plan identity;
-- explicit dependency identities;
-- action/Skill identity;
-- canonical target references;
-- durable state/timestamps;
-- result references to existing transaction/Job/Attempt/asset/Take/Timeline identities where execution creates them;
-- sanitized failure facts;
-- restart/reopen readability;
-- no hidden retry of external/cost-bearing work: underlying Generation Job idempotency and D-017 remain authoritative.
-
-Do not turn `tasks/` into a second project graph. Task records coordinate work and point back to canonical authorities.
-
-## Skills contract
-
-A Skill is a reusable bounded procedure over known UV actions/tasks, not a plugin with arbitrary execution rights.
-
-The first Skill model should expose stable metadata such as:
-
-- Skill ID and version/schema;
-- purpose;
-- bounded input contract;
-- allowed catalog action IDs and/or validated task templates;
-- declared effects/policy envelope derived from its underlying actions rather than invented independently;
-- deterministic expansion/validation rules;
-- explicit canonical authorities ultimately invoked.
-
-A Skill must not:
-
-- call shell/Python/arbitrary filesystem writes;
-- invoke an action absent from the Agent catalog;
-- widen D-017 permissions;
-- hide remote/non-free execution from policy/trace;
-- persist provider secrets/prompts/private caches as Skill state.
-
-Prefer a small built-in Skill set needed to prove the architecture over a large catalog of job-title automations.
+A role is a functional specialization inside the UV Agent Harness, not an independent application/runtime with its own project state.
 
 ## Required proof
 
-Prove at least one bounded multi-step flow such as:
+Prove at least one foreground multi-role flow such as:
 
 ```text
 existing modern Studio project
- -> build Stage-15 context for a production target
- -> Planner creates a validated plan with 2+ dependent tasks
- -> persist plan/tasks
- -> reopen from a fresh ProjectStore/Agent runtime instance
- -> determine which task is runnable from dependency state
- -> execute through AgentHarness / existing command authority
- -> mark durable task result with canonical transaction/entity references
- -> unlock and execute the dependent task
- -> trace remains inspectable and linked to plan/task/skill/canonical identities
+ -> explore returns bounded canonical findings
+ -> plan consumes those findings and proposes 2+ dependent tasks
+ -> UV Planner validates/persists the Plan and durable Tasks
+ -> media contributes a bounded model/media decision to one planned generation action
+ -> approved task executes through existing AgentHarness / Generation authority
+ -> critic inspects the resulting bounded trace/canonical evidence
+ -> role identities and canonical references remain inspectable
 ```
 
-At least one proof should execute a Skill that expands into approved catalog-backed work rather than bypassing the Planner/Task authority.
+The exact proof may use fewer roles in one chain if separate focused tests cover every role contract, but no role may bypass Stage-16 Planner/Task/Skill validation or existing execution authorities.
 
-Also prove negative cases:
+## Negative proof
 
-- dependency cycles fail closed;
-- unknown action/Skill IDs fail closed;
-- a blocked task cannot run before dependencies succeed;
-- invalid task-state transitions fail;
-- planner/Skill cannot request `project.write_file`, shell, Python or arbitrary provider execution;
-- unavailable model/capability remains unavailable;
-- D-017-required execution still fails without the existing exact one-shot authorization;
-- remote/non-free task replay cannot silently duplicate an already-created Generation Job;
-- plan/task/Skill records reject secrets, authorization tokens, absolute host paths and arbitrary non-portable state;
-- a failed task records failure without marking dependencies or the parent plan falsely successful;
-- restart/reopen preserves plan/task state and result references.
+Prove at least:
 
-## Trace integration
-
-Extend the Stage-15 trace only as needed to reference stable plan/task/Skill identities and task transitions. Do not create a second competing trace store.
-
-The trace should make it possible to answer:
-
-- which plan/task/Skill caused an action;
-- what bounded context digest/canonical target it used;
-- which catalog action and policy/effects applied;
-- which canonical transaction/Job/Attempt/entity resulted;
-- why a task failed or remained blocked.
-
-Do not persist hidden model reasoning or complete planner prompts.
+- unknown role IDs fail closed;
+- malformed/oversized role inputs or outputs fail closed;
+- role results cannot introduce secret/path-bearing/non-portable state;
+- `explore` and `critic` cannot mutate canonical state;
+- `plan` cannot persist unknown actions, dependency cycles or invalid canonical prerequisites;
+- `media` cannot call an arbitrary provider or bypass named Model/Capability/D-017 boundaries;
+- a role cannot mint authorization or widen effects/permissions;
+- failed role work produces bounded inspectable failure facts and does not silently unlock dependent executable work;
+- restart/reopen preserves any durable plan/task/trace references created after role output is accepted, without making transient role scratch state canonical project truth.
 
 ## Product Truth boundary
 
-This is still primarily internal Agent infrastructure. Do not claim user-visible autonomous production readiness unless this slice deliberately adds a real Studio surface and D-067 Product Truth/browser proof for that surface.
-
-## JarvisHub boundary
-
-JarvisHub remains a method donor for Planner/Task/Skill factoring only. UV keeps these existing authorities:
-
-- Project Store;
-- Production Semantic Core;
-- canonical Timeline;
-- Studio/Application Commands;
-- ProjectUnitOfWork;
-- Stage-15 Agent Context / Action Catalog / Policy / Trace;
-- Model Registry;
-- Job Manager;
-- Capability Registry and D-017.
-
-Do not adopt JarvisHub Canvas/node/PostgreSQL/Hono application authority or a parallel Protocol Bridge/tool/permission system.
+This remains internal Agent infrastructure unless the slice deliberately adds a real user-visible Studio Agent surface. Do not claim autonomous-product readiness from internal role orchestration alone.
 
 ## Explicitly deferred
 
-The following are **not** part of this slice:
+Not part of this slice:
 
-1. functional subagents (`explore`, `plan`, `media`, `critic`) — D-066 layer 3;
-2. background Agent work through Job Manager — layer 4;
-3. critic/evaluation + dependency-aware local repair — layer 5;
-4. human takeover/edit/resume orchestration — layer 6;
-5. long-form autonomous production — layer 7;
-6. unrelated D-068 desktop updater implementation;
-7. a real InfinityEdit/Helios continuation adapter/UI.
+1. background Agent workers / leases / heartbeats — D-066 layer 4;
+2. automatic critic/evaluation + dependency-aware repair — layer 5;
+3. human takeover/edit/resume — layer 6;
+4. long-form autonomous production — layer 7;
+5. unrelated D-068 desktop updater implementation;
+6. a real InfinityEdit/Helios continuation provider/UI.
 
 ## Entry gate
 
-Begin only from lifecycle-closed idle `main` after Stage 15 / PR #69 merge commit `273b5ea8f979cf759cfbf6510e1215a55e98d9c9` is recorded as `last_completed` and `development-context` passes on the closure head.
+Begin only from lifecycle-closed idle `main` after Stage 16 / PR #70 merge commit `bd258b7564f864c7f5fe636cb1336515f0dacce2` is recorded as `last_completed` and `development-context` passes on the closure head.

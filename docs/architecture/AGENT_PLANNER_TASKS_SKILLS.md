@@ -1,7 +1,8 @@
 # Agent Planner, durable Tasks and Skills — Stage 16
 
-**Status:** review implementation under PR #70  
+**Status:** implemented and merged in PR #70  
 **Date:** 2026-08-27  
+**Merge commit:** `bd258b7564f864c7f5fe636cb1336515f0dacce2`  
 **Decision authority:** D-066 + D-017
 
 ## Purpose
@@ -28,7 +29,9 @@ This layer does not add a second project graph, command registry, permission sys
 
 The contract enforces bounded proposed/expanded task counts and payload size, stable plan/step/task identities, exactly one approved action or Skill per step, explicit acyclic dependencies, Stage-15 context-digest/canonical-reference binding, catalog input/policy validation, and fail-closed rejection of unknown authorities, secrets, authorization tokens and absolute host paths.
 
-Every current Production/Timeline action is validated through the same bounded domain or command constructors used by runtime execution before the Plan is persisted. Generation validates required fields, named Shot/model identity, nested request inputs, Generation Contract and idempotency key. Proposal-specific target Shots are validated and deterministically bound into the Plan context.
+Every current Production/Timeline action is validated through the same bounded domain or command constructors used by runtime execution before the Plan is persisted. Canonical prerequisites are checked against current state and transitive dependency closure: missing Scene/Shot/Take/track/clip/media identities fail closed unless an allowed dependency deterministically creates the required identity. Duplicate planned outputs are rejected. `production.accept_take` additionally enforces a video target track and one planned acceptance per Shot.
+
+Generation validates required fields, named Shot/model identity, nested request inputs, Generation Contract and idempotency key. Proposal-specific target Shots are validated and deterministically bound into Plan/execution context; deferred generation targets are allowed only when dependency closure creates the exact input Shot.
 
 Unavailable/configuration-required generation is rejected at planning time. D-017-required but otherwise available execution remains visible as authorization-required; planning never grants authorization.
 
@@ -69,14 +72,14 @@ Restart/reopen reconciliation is evidence-driven:
 
 1. an already persisted correlated Stage-15 trace is authoritative;
 2. otherwise a correlated **committed** `ProjectUnitOfWork` transaction can reconstruct a Production/Timeline success trace;
-3. `generation.submit` can reconstruct success only from the exact durable Generation Job bound to the planned idempotency key and normalized request semantics;
+3. `generation.submit` can reconstruct success only from the exact durable Generation Job bound to the planned idempotency key, request digest and execution mapping evidence;
 4. if no durable completion evidence exists, the abandoned `running` task fails closed as interrupted and is never automatically replayed.
 
 This also covers ordinary success-trace persistence failures. If a canonical mutation/Generation Job is already durable but success-trace append raises an exception such as `OSError`, the coordinator does **not** write a false `FAILED` terminal task. It leaves the task `running`, so reopen can reconstruct the missing Stage-15 success trace from committed evidence without replaying the effect.
 
-Recovered traces use the exact execution-time context and execution-time policy snapshot rather than the older Plan-time values.
+Recovered traces use the exact execution-time context and execution-time policy snapshot rather than older Plan-time values. Terminal task writes accept only exact typed-correlated durable trace evidence matching project, action, planned input digest, execution window and requested terminal status.
 
-For Timeline mutations, recovery derives affected identities from validated `ProjectUnitOfWork` before/after snapshots. This includes authority-generated `track_id` / `clip_id` values for Timeline commands and the Timeline clip/track created by `production.accept_take`.
+For Timeline/Production mutations, recovery derives affected identities from validated `ProjectUnitOfWork` before/after snapshots. This includes authority-generated `track_id` / `clip_id` values for Timeline commands and the Shot/track/clip identities affected by `production.accept_take`.
 
 ## Skills
 
@@ -107,32 +110,29 @@ Generation continues to use the existing Model Registry, Generation Service, Job
 - failed authorization creates no generation Job;
 - Agent Task success does not replace Job/Attempt provenance;
 - a succeeded or recovered generation task cannot silently replay and create another Job;
+- one verified `GenerationSubmissionPreparation` is checked against the frozen Agent policy before D-017/Job commit and reused by submit;
+- append-only preparation evidence binds model, request digest and capability/offer/adapter execution mapping for recovery;
 - Job idempotency remains owned by `GenerationJobManager`.
 
-## Proof
+## Final verification
 
-Stage-16 tests now cover:
+The final reviewed PR head was `3478bb17e21fb0f02b4a456a61baf4c0ad941c22`.
 
-1. bounded Skill expansion into dependency-ordered tasks;
-2. Skill schema metadata and derived effects/authority envelope;
-3. dependency blocking/promotion and mixed terminal/cancellation behavior;
-4. restart/reopen from a fresh Project Store/runtime;
-5. recoverable partial task initialization and complete custom Plan-ID discovery;
-6. abandoned `running` fail-closed behavior when no completion evidence exists;
-7. post-commit Production/Timeline and post-submit Generation recovery without replay;
-8. ordinary success-trace `OSError` after commit remaining recoverable instead of becoming false `FAILED`;
-9. exact execution-time context recovery after dependency-driven project changes;
-10. exact execution-time policy recovery even when Model/Capability policy changes after planning;
-11. generated Timeline track/clip identity recovery, including `production.accept_take`;
-12. typed trace-correlation collision protection and preparation-failure recovery;
-13. cross-runtime task CAS, project locking, lock-order and Windows contention behavior;
-14. cycle/missing-dependency/unknown action/unknown Skill rejection;
-15. invalid/missing action-input rejection before Plan persistence;
-16. secret/host-path and invalid state-transition rejection;
-17. unavailable generation, D-017 separation and generation idempotency/replay protection.
+- exact-head CI #3442 (`33065539562`) completed successfully across all five permanent jobs;
+- Ubuntu and Windows bootstrap/unit suites passed;
+- Ubuntu and Windows app-baseline browser E2E suites passed;
+- all inline review threads were resolved;
+- the fresh Codex exact-head review reported no major issues;
+- PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2`.
 
-Every final review refinement remains subject to a fresh exact-head five-job gate before merge: development-context, Ubuntu/Windows bootstrap unit suites, and Ubuntu/Windows app-baseline including browser E2E.
+Stage-16 tests cover bounded Skill expansion, dependency ordering, restart/reopen, partial initialization recovery, exact canonical prerequisite validation, task CAS/locking, execution-time context/policy evidence, typed trace correlation, post-commit recovery, Generation mapping/idempotency/D-017 protection and the canonical Scene/Shot/Take/track/clip/media edge cases found during review.
+
+## Next D-066 layer
+
+After lifecycle closure, the next separate slice is `studio-v2-agent-functional-subagents`: bounded `explore / plan / media / critic` roles consuming the merged Context / Planner / Task / Skill contracts. Functional specialization must not introduce private mutation/tool/permission authority.
+
+Background Agent work remains layer 4; evaluate/repair remains layer 5; human takeover/edit/resume remains layer 6; long-form autonomy remains layer 7.
 
 ## Known limitations
 
-This is internal bounded Agent infrastructure, not a user-visible autonomous-production claim. Functional subagents (`explore`, `plan`, `media`, `critic`), background Agent work, evaluate/repair, human takeover/edit/resume and long-form autonomy remain later D-066 layers. The unrelated desktop updater and real continuation-provider UI are also outside Stage 16.
+This is internal bounded Agent infrastructure, not a user-visible autonomous-production claim. Functional subagents, background Agent work, evaluate/repair, human takeover/edit/resume and long-form autonomy remain later D-066 layers. The unrelated desktop updater and real continuation-provider UI are also outside Stage 16.
