@@ -85,7 +85,11 @@ class AgentStage16GenerationPolicyBindingTests(unittest.TestCase):
         self.tmp.cleanup()
 
     @staticmethod
-    def _generation_registry() -> ModelRegistry:
+    def _generation_registry(
+        *,
+        adapter_id: str = "stage16_policy_generator",
+        offer_id: str = "stage16_policy_generator.image_generate",
+    ) -> ModelRegistry:
         capability = CapabilityDefinition(
             "image.generate",
             "Image generation",
@@ -102,7 +106,7 @@ class AgentStage16GenerationPolicyBindingTests(unittest.TestCase):
             ),
         )
         adapter = AdapterDefinition(
-            "stage16_policy_generator",
+            adapter_id,
             "Stage-16 policy generator",
             "Local generation preparation consistency transport.",
             AdapterKind.LOCAL,
@@ -110,9 +114,9 @@ class AgentStage16GenerationPolicyBindingTests(unittest.TestCase):
         capabilities = CapabilityRegistry((capability,), (adapter,))
         capabilities.register_offer(
             CapabilityOffer(
-                offer_id="stage16_policy_generator.image_generate",
+                offer_id=offer_id,
                 capability_id="image.generate",
-                adapter_id="stage16_policy_generator",
+                adapter_id=adapter_id,
                 title="Stage-16 policy generator",
                 availability=OfferAvailability.AVAILABLE,
                 reason="Available for generation policy binding proof.",
@@ -129,7 +133,7 @@ class AgentStage16GenerationPolicyBindingTests(unittest.TestCase):
                     title="UV Stage-16 Policy Image",
                     description="Named model for generation policy binding.",
                     capability_id="image.generate",
-                    offer_id="stage16_policy_generator.image_generate",
+                    offer_id=offer_id,
                     output_kind=MediaKind.IMAGE,
                 ),
             ),
@@ -197,6 +201,102 @@ class AgentStage16GenerationPolicyBindingTests(unittest.TestCase):
         traces = execution_harness.traces.list(self.project.project_id)
         self.assertEqual(len(traces), 1)
         self.assertFalse(traces[0].policy.effects.long_running)
+
+    def test_recovery_does_not_attribute_old_job_after_model_execution_remap(self) -> None:
+        old_registry = self._generation_registry(
+            adapter_id="stage16_policy_generator_old",
+            offer_id="stage16_policy_generator_old.image_generate",
+        )
+        old_harness = AgentHarness(self.store, old_registry)
+        old_submission = old_harness.generation.submit(
+            project_id=self.project.project_id,
+            shot_id="shot_existing",
+            model_id="uv.image.stage16_policy",
+            inputs={"prompt": "bind preparation"},
+            contract=GenerationContract(),
+            idempotency_key="idem_generation_policy_binding",
+            authorization_token=None,
+        )
+
+        remapped_registry = self._generation_registry(
+            adapter_id="stage16_policy_generator_new",
+            offer_id="stage16_policy_generator_new.image_generate",
+        )
+        planning = AgentTaskCoordinator(AgentHarness(self.store, remapped_registry))
+        state = planning.create_plan(
+            project_id=self.project.project_id,
+            goal="Do not recover a Job from an older execution mapping",
+            proposals=(self._proposal(),),
+            plan_id="agent_plan_generation_mapping_recovery",
+        )
+
+        execution_store = ProjectStore(self.projects_root)
+        execution_harness = AgentHarness(execution_store, remapped_registry)
+        execution = AgentTaskCoordinator(execution_harness)
+        plan = execution.plans.get(self.project.project_id, state.plan.plan_id)
+        spec = plan.task("generate")
+        record = execution.tasks.get(
+            self.project.project_id,
+            plan.plan_id,
+            spec.task_id,
+        )
+        snapshot = execution_harness.context.build(
+            self.project.project_id,
+            shot_id=spec.target_shot_id,
+        )
+        payload = execution._execution_payload(spec, None)
+        policy = execution._execution_policy(self.project.project_id, spec, payload)
+        running = execution.tasks.transition(record, AgentTaskStatus.RUNNING)
+        execution._execution_evidence.append(
+            project_id=self.project.project_id,
+            plan_id=plan.plan_id,
+            task_id=spec.task_id,
+            action_id=spec.action_id,
+            skill_id=spec.skill_id,
+            context_digest=snapshot.digest,
+            input_digest=execution._expected_input_digest(spec),
+            policy=policy,
+        )
+
+        # Simulate loss after the remapped preparation was verified/persisted but
+        # before GenerationService.submit could perform its idempotency conflict check.
+        preparation = execution_harness.generation.prepare(
+            project_id=self.project.project_id,
+            shot_id="shot_existing",
+            model_id="uv.image.stage16_policy",
+            inputs={"prompt": "bind preparation"},
+            contract=GenerationContract(),
+        )
+        execution._generation_preparation_evidence.append(
+            project_id=self.project.project_id,
+            plan_id=plan.plan_id,
+            task_id=spec.task_id,
+            preparation=preparation,
+        )
+        self.assertNotEqual(
+            old_submission.job.request["execution_mapping"],
+            preparation.request["execution_mapping"],
+        )
+        self.assertNotEqual(
+            old_submission.job.request_digest,
+            preparation.request_digest,
+        )
+        self.assertEqual(running.status, AgentTaskStatus.RUNNING)
+
+        reopened_store = ProjectStore(self.projects_root)
+        reopened_harness = AgentHarness(reopened_store, remapped_registry)
+        reopened = AgentTaskCoordinator(reopened_harness)
+        reopened_state = reopened.state(self.project.project_id, plan.plan_id)
+        recovered_task = reopened_state.tasks[0]
+
+        # The old Job has the same idempotency key and semantic inputs, but its
+        # durable capability/offer/adapter mapping and request digest are different.
+        # Recovery must fail closed rather than mark this new Agent Task succeeded.
+        self.assertEqual(recovered_task.status, AgentTaskStatus.FAILED)
+        self.assertIsNone(recovered_task.trace_id)
+        jobs = reopened_harness.jobs.list(self.project.project_id)
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0].job_id, old_submission.job.job_id)
 
 
 if __name__ == "__main__":
