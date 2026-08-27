@@ -256,9 +256,6 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                     )
                     raise
 
-                before_ids = {
-                    trace.trace_id for trace in self.harness.traces.list(project_id)
-                }
                 try:
                     result = self.harness.execute(
                         project_id=project_id,
@@ -267,7 +264,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                         target_shot_id=spec.target_shot_id,
                     )
                 except Exception as exc:
-                    trace = self._trace_after(project_id, before_ids, spec.action_id)
+                    trace = self._correlated_trace_for(plan, running)
                     if trace is not None:
                         self.tasks.transition(
                             running,
@@ -288,7 +285,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                     )
                     raise
 
-                trace = self._trace_after(project_id, before_ids, spec.action_id)
+                trace = self._correlated_trace_for(plan, running)
                 if trace is None:
                     error = AgentTaskStateError(
                         "AgentHarness execution completed without an inspectable Stage-15 trace"
