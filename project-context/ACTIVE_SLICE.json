@@ -1,7 +1,21 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "studio-v2-agent-planner-durable-tasks-skills",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Implement D-066 Agent Harness layer 2: bounded validated Planner output, durable project-scoped Agent Tasks with dependency/state semantics, reusable bounded Skills, and foreground task execution only through the existing Stage-15 AgentHarness / UV authorities without functional subagents or background autonomy.",
+    "base_branch": "main",
+    "branch": "stage-16/agent-planner-durable-tasks-skills",
+    "pull_request": 70,
+    "write_scope": [
+      "uv_studio/**",
+      "tests/**",
+      "docs/**",
+      "project-context/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-agent-context-command-catalog-trace",
     "pull_request": 69,
