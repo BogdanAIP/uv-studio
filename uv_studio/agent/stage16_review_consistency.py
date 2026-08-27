@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Iterator, Mapping, Sequence
 
-from .models import AgentPolicyProjection, AgentTraceRecord
+from .models import AgentPolicyProjection, AgentTraceRecord, AgentTraceStatus
 from .orchestration import (
     AgentTaskBlocked,
     AgentTaskRecord,
@@ -266,6 +266,14 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                 except Exception as exc:
                     trace = self._correlated_trace_for(plan, running)
                     if trace is not None:
+                        if trace.status is AgentTraceStatus.SUCCEEDED:
+                            self.tasks.transition(
+                                running,
+                                AgentTaskStatus.SUCCEEDED,
+                                trace=trace,
+                            )
+                            self.tasks.promote_ready(plan)
+                            raise
                         self.tasks.transition(
                             running,
                             AgentTaskStatus.FAILED,
