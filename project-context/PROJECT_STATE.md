@@ -11,7 +11,9 @@
 
 Stage 17 is in review on branch `stage-17/agent-functional-subagents`, PR #71. The slice was created from lifecycle-closed `main` commit `145395fe58db811c39bc1099188e15c58736174f` after Stage 16 / PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2`.
 
-The final draft implementation head `dc973c90ac20ab7bac2d4145f58c5df4d69f663c` passed PR CI #3469 (`33097030757`) across all five permanent jobs: development-context, Ubuntu/Windows bootstrap unit suites, and Ubuntu/Windows app-baseline including browser user-outcome E2E.
+The current code-bearing review baseline is exact head `9af22cdcbb60501dca968fd10f12dc1d40ee6482`. PR CI #3488 (`33101350599`) passed all five permanent jobs on that exact head: `development-context`, Ubuntu/Windows bootstrap unit suites, and Ubuntu/Windows app-baseline including browser user-outcome E2E. The parallel push run #3487 had one isolated Windows named-generation browser timing failure while the same exact PR head independently passed that Windows browser suite in #3488; no code or product state changed between those runs.
+
+The fresh Codex review of earlier head `aafddd3b37476a65558d56755edd2ae440648b74` reported four follow-up findings. The code-bearing baseline above addresses them by synchronizing authoritative architecture with the active review state, distinguishing complete typed delegation references from arbitrary canonical IDs that merely share the prefix, and rejecting injected Stage-17 task coordinators that do not share the exact harness/project-store/planner authority. This metadata update records the resulting exact-head evidence; its own exact head must still pass the declared checks before merge.
 
 ## Stage-17 implementation under review
 
@@ -34,12 +36,13 @@ The implementation provides:
 - `critic` as a read-only advisory role over one exact durable Plan/Task/linked-trace set, with no automatic repair authority;
 - deterministic full-role-context consistency checks during delegation and again before Plan persistence;
 - portable, bounded, explicit-reference role inputs/outputs with fail-closed rejection of malformed, oversized, hidden-field, secret/host-path and unavailable-reference data;
-- a stable content-addressed `agent_delegate_<role>_*` identity for every validated role result;
+- a stable content-addressed `agent_delegate_<role>_<digest>` identity for every validated role result, recognized only by the complete typed role-and-digest format rather than by prefix alone;
 - delegation provenance carried through the existing durable Plan and existing Stage-15 trace path rather than through a second subagent/delegation store;
 - post-commit/pre-trace restart recovery that reconstructs the same delegation-linked success trace without replaying the committed effect;
-- fail-closed rejection of provenance-blind injected Stage-16 task coordinators.
+- shared Stage-16 task execution/recovery preservation of durable Plan provenance;
+- fail-closed task-coordinator injection unless the coordinator shares the exact Stage-17 provenance contract, AgentHarness, Project Store and Planner authority.
 
-Focused acceptance proof covers `explore -> plan -> dependent durable Tasks -> foreground execution -> media -> foreground execution -> reopen -> critic`, plus proposer failure/oversized-output rejection with no durable Plan creation and provenance-aware crash recovery.
+Focused acceptance proof covers `explore -> plan -> dependent durable Tasks -> foreground execution -> media -> foreground execution -> reopen -> critic`, plus proposer failure/oversized-output rejection with no durable Plan creation, persistence-time forged-result rejection, prefix-collision proof using canonical project ID `agent_delegate_project`, foreign-harness coordinator rejection, shared-executor provenance, and provenance-aware crash recovery.
 
 ## Authority stack preserved
 
