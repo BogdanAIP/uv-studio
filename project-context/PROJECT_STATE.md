@@ -11,7 +11,7 @@
 
 Stage 16 remains in review on branch `stage-16/agent-planner-durable-tasks-skills`, PR #70. It was opened from lifecycle-closed idle `main` commit `fdc82fbdbd518e711a5f4b36d01cdbc6745a7e40` after Stage 15 / PR #69 merged as `273b5ea8f979cf759cfbf6510e1215a55e98d9c9`.
 
-The current exact review head `5a1e6e23cd6f55f8991366c7fe08dfa0b651473b` passed exact-head CI #3402 (`33049944377`) across all five permanent jobs, including Ubuntu/Windows bootstrap+unit suites and both app-baseline browser E2E suites. All previously known review threads were resolved before the fresh Codex review of that SHA; merge remains blocked only by any new finding from that exact-head re-review until it is addressed and the resulting final head is re-verified.
+The exact review candidate is always the PR #70 branch head containing this document; this current-authority file intentionally does not duplicate its own commit SHA because changing that literal would create a permanently self-stale follow-up commit. The latest completed exact-head evidence before this self-consistency refinement is documentation-only head `cf69e67d8fa2f5ea45ae951dee3893db9dcdeb22`, whose PR CI #3406 (`33051435225`) completed successfully across all five permanent jobs, including Ubuntu/Windows bootstrap+unit suites and both app-baseline browser E2E suites. The code-bearing parent `5a1e6e23cd6f55f8991366c7fe08dfa0b651473b` likewise passed exact-head CI #3402 (`33049944377`). Merge eligibility is determined from the actual PR head plus the seven-item review gate below, not from a copied “current SHA” literal inside that same commit.
 
 ## Stage-16 implementation under review
 
@@ -42,7 +42,7 @@ Stage 16 reuses rather than replaces Project Store/tasks, Production Semantic Co
 
 ## Review gate
 
-Before PR #70 may merge, the final exact head must satisfy all of the following together:
+Before PR #70 may merge, the actual PR head must satisfy all of the following together:
 
 1. `development-context` success;
 2. Ubuntu bootstrap/unit suite success;
@@ -50,7 +50,7 @@ Before PR #70 may merge, the final exact head must satisfy all of the following 
 4. Ubuntu app-baseline including browser E2E success;
 5. Windows app-baseline including browser E2E success;
 6. no unresolved inline review threads;
-7. a fresh Codex review of that exact SHA with no new blocking finding.
+7. a fresh Codex review of that exact PR head with no new blocking finding.
 
 ## Known limitations
 
