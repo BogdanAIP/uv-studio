@@ -1,7 +1,7 @@
 # Project State
 
 <!-- uv-context-state: idle -->
-<!-- uv-active-slice: idle -->
+<!-- uv-last-completed: studio-v2-agent-functional-subagents -->
 
 **Updated:** 2026-08-27
 
