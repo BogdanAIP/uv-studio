@@ -1,10 +1,12 @@
-"""Bind generation tasks to one Shot and validate terminal task provenance.
+"""Bind generation tasks to one Shot and validate final Stage-16 provenance.
 
 A generation task may depend on an earlier task that creates its input Shot, so the
 Shot cannot always be validated as a planner-time target. Deferred validation is
 therefore permitted only when the task's dependency closure creates that same Shot.
-The public Stage-16 AgentTaskStore also accepts terminal trace evidence only when it
-is the exact durable Stage-15 trace correlated to the immutable Agent Task.
+The final Planner also rejects already-known invalid canonical prerequisites before
+Plan persistence while preserving dependency-created Scene/Shot/Take/track/clip
+chains. The public Stage-16 AgentTaskStore accepts terminal trace evidence only when
+it is the exact durable Stage-15 trace correlated to the immutable Agent Task.
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, Iterator, Mapping, Sequence
+
+from uv_studio.projects.timeline import TimelineError
 
 from .harness import AgentTraceStore
 from .models import AgentTraceRecord, AgentTraceStatus, portable_json, stable_digest
@@ -33,6 +37,26 @@ from .stage16_runtime import (
     AgentTaskStore as _RuntimeAgentTaskStore,
     _typed_correlation_reference,
 )
+
+
+_DEPENDENCY_PROVISIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "production.create_scene": (("scene", "scene_id"),),
+    "production.create_shot": (("shot", "shot_id"),),
+    "production.register_take": (("take", "take_id"),),
+    # accept_take creates the requested video track when it does not already exist.
+    "production.accept_take": (("track", "track_id"), ("clip", "clip_id")),
+    "timeline.create_track": (("track", "track_id"),),
+    "timeline.add_clip": (("clip", "clip_id"),),
+}
+
+_EXCLUSIVE_OUTPUTS: dict[str, tuple[tuple[str, str], ...]] = {
+    "production.create_scene": (("scene", "scene_id"),),
+    "production.create_shot": (("shot", "shot_id"),),
+    "production.register_take": (("take", "take_id"),),
+    "production.accept_take": (("clip", "clip_id"),),
+    "timeline.create_track": (("track", "track_id"),),
+    "timeline.add_clip": (("clip", "clip_id"),),
+}
 
 
 class _GenerationTargetContext:
@@ -62,14 +86,16 @@ class _GenerationTargetContext:
 
 
 class AgentPlanner(_GenerationPolicyAgentPlanner):
-    """Require one resolvable generation Shot, with bounded deferred creation."""
+    """Require resolvable canonical prerequisites, with bounded deferred creation."""
 
     @staticmethod
-    def _dependency_creates_shot(
-        plan: AgentPlanRecord,
-        spec: Any,
-        shot_id: str,
-    ) -> bool:
+    def _provision_value(spec: Any, field_name: str) -> Any:
+        if spec.action_id == "production.accept_take" and field_name == "track_id":
+            return spec.inputs.get("track_id", "production_video")
+        return spec.inputs.get(field_name)
+
+    @staticmethod
+    def _dependency_task_ids(plan: AgentPlanRecord, spec: Any) -> set[str]:
         by_id = {task.task_id: task for task in plan.tasks}
         pending = list(spec.dependencies)
         visited: set[str] = set()
@@ -79,13 +105,301 @@ class AgentPlanner(_GenerationPolicyAgentPlanner):
                 continue
             visited.add(dependency_id)
             dependency = by_id[dependency_id]
-            if (
-                dependency.action_id == "production.create_shot"
-                and dependency.inputs.get("shot_id") == shot_id
-            ):
-                return True
             pending.extend(dependency.dependencies)
-        return False
+        return visited
+
+    @classmethod
+    def _dependency_producer(
+        cls,
+        plan: AgentPlanRecord,
+        spec: Any,
+        entity_kind: str,
+        identity: str,
+    ) -> Any | None:
+        by_id = {task.task_id: task for task in plan.tasks}
+        for dependency_id in cls._dependency_task_ids(plan, spec):
+            dependency = by_id[dependency_id]
+            for produced_kind, field_name in _DEPENDENCY_PROVISIONS.get(
+                dependency.action_id,
+                (),
+            ):
+                if produced_kind != entity_kind:
+                    continue
+                if cls._provision_value(dependency, field_name) == identity:
+                    return dependency
+        return None
+
+    @classmethod
+    def _dependency_creates_shot(
+        cls,
+        plan: AgentPlanRecord,
+        spec: Any,
+        shot_id: str,
+    ) -> bool:
+        return cls._dependency_producer(plan, spec, "shot", shot_id) is not None
+
+    @classmethod
+    def _validate_unique_planned_outputs(cls, plan: AgentPlanRecord) -> None:
+        seen: dict[tuple[str, str], str] = {}
+        for spec in plan.tasks:
+            for entity_kind, field_name in _EXCLUSIVE_OUTPUTS.get(spec.action_id, ()):
+                identity = cls._provision_value(spec, field_name)
+                if not isinstance(identity, str) or not identity:
+                    continue
+                key = (entity_kind, identity)
+                previous = seen.get(key)
+                if previous is not None:
+                    raise AgentPlanningError(
+                        f"plan creates duplicate {entity_kind} identity {identity!r} "
+                        f"in tasks {previous!r} and {spec.task_id!r}"
+                    )
+                seen[key] = spec.task_id
+
+    def _validate_canonical_prerequisites(
+        self,
+        *,
+        project_id: str,
+        plan: AgentPlanRecord,
+    ) -> None:
+        self._validate_unique_planned_outputs(plan)
+
+        project = self.harness.project_store.load_project(project_id)
+        production = self.harness.production.state(project_id)
+        timeline = self.harness.timeline.timelines.load(
+            project_id,
+            validate_references=False,
+        )
+
+        scene_ids = {item.scene_id for item in production.scenes}
+        shot_by_id = {item.shot_id: item for item in production.shots}
+        take_by_id = {item.take_id: item for item in production.takes}
+        track_by_id = {item.track_id: item for item in timeline.tracks}
+        clip_by_id = {
+            clip.clip_id: (track, clip)
+            for track in timeline.tracks
+            for clip in track.clips
+        }
+        reference_by_id = {
+            item.id: item
+            for item in (*project.sources, *project.artifacts)
+        }
+
+        def require_existing_or_dependency(
+            spec: Any,
+            *,
+            entity_kind: str,
+            identity: str,
+            current_ids: set[str],
+            field_name: str,
+        ) -> Any | None:
+            if identity in current_ids:
+                return None
+            producer = self._dependency_producer(
+                plan,
+                spec,
+                entity_kind,
+                identity,
+            )
+            if producer is None:
+                raise AgentPlanningError(
+                    f"action {spec.action_id!r} {field_name} {identity!r} must already "
+                    "exist or be created by its dependency closure"
+                )
+            return producer
+
+        def require_reference(spec: Any, reference_id: str) -> Any:
+            reference = reference_by_id.get(reference_id)
+            if reference is None:
+                raise AgentPlanningError(
+                    f"action {spec.action_id!r} media reference {reference_id!r} "
+                    "must already be registered in the project"
+                )
+            return reference
+
+        for spec in plan.tasks:
+            action_id = spec.action_id
+            if action_id == "production.create_scene":
+                scene_id = spec.inputs["scene_id"]
+                if scene_id in scene_ids:
+                    raise AgentPlanningError(
+                        f"production.create_scene scene already exists: {scene_id!r}"
+                    )
+                continue
+
+            if action_id == "production.create_shot":
+                shot_id = spec.inputs["shot_id"]
+                if shot_id in shot_by_id:
+                    raise AgentPlanningError(
+                        f"production.create_shot shot already exists: {shot_id!r}"
+                    )
+                require_existing_or_dependency(
+                    spec,
+                    entity_kind="scene",
+                    identity=spec.inputs["scene_id"],
+                    current_ids=scene_ids,
+                    field_name="scene_id",
+                )
+                for reference_id in spec.inputs.get("reference_ids", ()):
+                    require_reference(spec, reference_id)
+                continue
+
+            if action_id == "production.register_take":
+                take_id = spec.inputs["take_id"]
+                if take_id in take_by_id:
+                    raise AgentPlanningError(
+                        f"production.register_take take already exists: {take_id!r}"
+                    )
+                require_existing_or_dependency(
+                    spec,
+                    entity_kind="shot",
+                    identity=spec.inputs["shot_id"],
+                    current_ids=set(shot_by_id),
+                    field_name="shot_id",
+                )
+                reference_id = spec.inputs["reference_id"]
+                reference = require_reference(spec, reference_id)
+                if reference.kind not in {"image", "video"}:
+                    raise AgentPlanningError(
+                        "production.register_take reference must be image/video; "
+                        f"{reference_id!r} is {reference.kind!r}"
+                    )
+                try:
+                    self.harness.timeline.timelines.reference(
+                        project_id,
+                        reference_id,
+                        project=project,
+                    )
+                except TimelineError as exc:
+                    raise AgentPlanningError(
+                        f"production.register_take reference is unavailable: {exc}"
+                    ) from exc
+                continue
+
+            if action_id == "production.accept_take":
+                take_id = spec.inputs["take_id"]
+                producer = require_existing_or_dependency(
+                    spec,
+                    entity_kind="take",
+                    identity=take_id,
+                    current_ids=set(take_by_id),
+                    field_name="take_id",
+                )
+                if take_id in take_by_id:
+                    shot_id = take_by_id[take_id].shot_id
+                elif producer is not None and producer.action_id == "production.register_take":
+                    shot_id = producer.inputs["shot_id"]
+                else:
+                    shot_id = None
+                if shot_id in shot_by_id and shot_by_id[shot_id].accepted_take_id is not None:
+                    raise AgentPlanningError(
+                        f"production.accept_take shot {shot_id!r} already accepts take "
+                        f"{shot_by_id[shot_id].accepted_take_id!r}"
+                    )
+
+                track_id = spec.inputs.get("track_id", "production_video")
+                track = track_by_id.get(track_id)
+                if track is not None and track.kind != "video":
+                    raise AgentPlanningError(
+                        "production.accept_take requires a video track; "
+                        f"{track_id!r} is {track.kind!r}"
+                    )
+                if track is None:
+                    planned_track = next(
+                        (
+                            item
+                            for item in plan.tasks
+                            if item.action_id == "timeline.create_track"
+                            and item.inputs.get("track_id") == track_id
+                        ),
+                        None,
+                    )
+                    if (
+                        planned_track is not None
+                        and planned_track.task_id
+                        not in self._dependency_task_ids(plan, spec)
+                    ):
+                        raise AgentPlanningError(
+                            f"production.accept_take track {track_id!r} is also created by "
+                            f"task {planned_track.task_id!r}; that creator must be in its "
+                            "dependency closure"
+                        )
+
+                clip_id = spec.inputs.get("clip_id")
+                if clip_id is not None and clip_id in clip_by_id:
+                    raise AgentPlanningError(
+                        f"production.accept_take clip already exists: {clip_id!r}"
+                    )
+                continue
+
+            if action_id == "timeline.create_track":
+                track_id = spec.inputs.get("track_id")
+                if track_id is not None and track_id in track_by_id:
+                    raise AgentPlanningError(
+                        f"timeline.create_track track already exists: {track_id!r}"
+                    )
+                continue
+
+            if action_id == "timeline.add_clip":
+                track_id = spec.inputs["track_id"]
+                track = track_by_id.get(track_id)
+                producer = require_existing_or_dependency(
+                    spec,
+                    entity_kind="track",
+                    identity=track_id,
+                    current_ids=set(track_by_id),
+                    field_name="track_id",
+                )
+                if track is not None:
+                    track_kind = track.kind
+                elif producer is not None and producer.action_id == "timeline.create_track":
+                    track_kind = producer.inputs["kind"]
+                elif producer is not None and producer.action_id == "production.accept_take":
+                    track_kind = "video"
+                else:
+                    track_kind = None
+
+                reference_id = spec.inputs["reference_id"]
+                reference = require_reference(spec, reference_id)
+                try:
+                    self.harness.timeline.timelines.reference(
+                        project_id,
+                        reference_id,
+                        project=project,
+                    )
+                except TimelineError as exc:
+                    raise AgentPlanningError(
+                        f"timeline.add_clip reference is unavailable: {exc}"
+                    ) from exc
+                if track_kind == "video" and reference.kind not in {"video", "image"}:
+                    raise AgentPlanningError(
+                        f"timeline.add_clip video track {track_id!r} requires image/video "
+                        f"reference; {reference_id!r} is {reference.kind!r}"
+                    )
+                if track_kind == "audio" and reference.kind != "audio":
+                    raise AgentPlanningError(
+                        f"timeline.add_clip audio track {track_id!r} requires audio "
+                        f"reference; {reference_id!r} is {reference.kind!r}"
+                    )
+
+                clip_id = spec.inputs.get("clip_id")
+                if clip_id is not None and clip_id in clip_by_id:
+                    raise AgentPlanningError(
+                        f"timeline.add_clip clip already exists: {clip_id!r}"
+                    )
+                continue
+
+            if action_id in {
+                "timeline.move_clip",
+                "timeline.remove_clip",
+                "timeline.trim_clip",
+            }:
+                require_existing_or_dependency(
+                    spec,
+                    entity_kind="clip",
+                    identity=spec.inputs["clip_id"],
+                    current_ids=set(clip_by_id),
+                    field_name="clip_id",
+                )
 
     def build(
         self,
@@ -104,6 +418,10 @@ class AgentPlanner(_GenerationPolicyAgentPlanner):
             target_shot_id=target_shot_id,
             canonical_references=canonical_references,
             plan_id=plan_id,
+        )
+        self._validate_canonical_prerequisites(
+            project_id=project_id,
+            plan=plan,
         )
         for spec in plan.tasks:
             if spec.action_id != "generation.submit":
