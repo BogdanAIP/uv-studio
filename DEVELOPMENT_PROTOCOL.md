@@ -44,7 +44,12 @@ The first branch commit may temporarily use a null PR number only until the draf
 
 ### post-merge closure
 
-A merge copies the review-state files into `main`, so merge itself is not the final lifecycle state. Before another feature slice begins, the coordinator performs a mechanical closure commit from the exact merge commit:
+A merge copies the review-state files into `main`, so merge itself is not the final lifecycle state. Before another feature slice begins, the coordinator performs a mechanical closure from the exact merge commit.
+
+When `main` is protected, closure is carried through a dedicated non-draft `chore/*` pull request rather than a direct push to `main`:
+
+1. create `chore/<completed-slice>-lifecycle-closure` from the exact merge commit;
+2. on that branch run:
 
 ```text
 python tools/close_development_context.py \
@@ -52,7 +57,20 @@ python tools/close_development_context.py \
   --merge-commit <40-char-merge-sha>
 ```
 
-The helper changes `review -> idle`, sets `active_slice=null`, records `last_completed`, rewrites the PROJECT_STATE context markers and revalidates the repository. The coordinator also adds the completed slice to `PROJECT_HISTORY.md` when needed. The closure commit must not contain product implementation changes.
+3. keep the closure PR limited to lifecycle/context/protocol corrections required to make protected-main closure executable; it must not contain product implementation changes;
+4. use the exact closure marker for the completed slice and keep the current handoff marker:
+
+```text
+<!-- uv-lifecycle-closure: <completed-slice-id> -->
+<!-- uv-next-slice: <next-slice-id> -->
+```
+
+5. keep the closure PR non-draft, target `main`, and use the normal ordered PR sections: Goal, Changes, Verification, Architecture impact, Known limitations, Next task;
+6. merge only after the permanent required checks pass and review conversations are resolved.
+
+The helper changes `review -> idle`, sets `active_slice=null`, records `last_completed`, rewrites the `PROJECT_STATE.md` context markers and revalidates the repository. The coordinator also adds the completed slice to `PROJECT_HISTORY.md` when needed.
+
+The idle-state PR exception in `validate_development_context.py` is deliberately narrow: only a non-draft canonical `chore/* -> main` PR with the exact `uv-lifecycle-closure` marker matching `last_completed.id` is accepted. An ordinary feature/change PR cannot use idle state to bypass the normal `idle -> draft -> review` lifecycle.
 
 ## 3. One slice = one branch/PR
 
@@ -84,14 +102,23 @@ Do not mix unrelated implementation into one slice. Temporary worker branches re
 
 When active it also contains exactly one `uv-active-slice`; when idle it contains exactly one `uv-last-completed`. `NEXT_TASK.md` contains exactly one `uv-next-slice`.
 
-PR bodies contain:
+Normal draft/review PR bodies contain:
 
 ```text
 <!-- uv-active-slice: <id> -->
 <!-- uv-next-slice: <id> -->
 ```
 
-and exactly these ordered sections: Goal, Changes, Verification, Architecture impact, Known limitations, Next task.
+A protected-main post-merge closure PR instead contains:
+
+```text
+<!-- uv-lifecycle-closure: <completed-slice-id> -->
+<!-- uv-next-slice: <id> -->
+```
+
+A closure PR must not contain `uv-active-slice`; a normal active-slice PR must not contain `uv-lifecycle-closure`.
+
+All PR bodies contain exactly these ordered sections: Goal, Changes, Verification, Architecture impact, Known limitations, Next task.
 
 ## 6. Review/merge discipline
 
@@ -104,7 +131,7 @@ Before Ready for review:
 - exact review head passes every required check;
 - unresolved review threads are empty.
 
-Merge using an expected head SHA where tooling supports it. After merge, close context to idle before handoff promotion.
+Merge using an expected head SHA where tooling supports it. After merge, close context to idle through the protected-main closure procedure before handoff promotion.
 
 ## 7. Multi-agent discipline
 
