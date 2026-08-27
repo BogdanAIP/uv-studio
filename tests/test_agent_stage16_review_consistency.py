@@ -62,7 +62,7 @@ class _PolicyLookupFailureCatalog:
 
 
 class _ChangingPolicyCatalog:
-    """Return a different policy on a second base lookup to prove dispatch freezing."""
+    """Return a different policy only if a second base lookup actually occurs."""
 
     def __init__(self, base: Any) -> None:
         self._base = base
@@ -78,9 +78,13 @@ class _ChangingPolicyCatalog:
             action_id=action_id,
             model_id=model_id,
         )
+        if self.calls == 1:
+            # The captured policy must remain a truthful projection of the registry.
+            # Only a forbidden second lookup would observe a divergent snapshot.
+            return policy
         return replace(
             policy,
-            effects=replace(policy.effects, reversible=(self.calls == 1)),
+            effects=replace(policy.effects, reversible=not policy.effects.reversible),
         )
 
 
@@ -322,7 +326,7 @@ class AgentStage16ReviewConsistencyTests(unittest.TestCase):
         )
         self.assertEqual(reopened.tasks[0].status, AgentTaskStatus.SUCCEEDED)
         trace = reopened_harness.traces.list(self.project.project_id)[0]
-        self.assertTrue(trace.policy.effects.reversible)
+        self.assertFalse(trace.policy.effects.reversible)
 
     def test_accept_take_recovery_preserves_affected_shot_identity(self) -> None:
         source = ProjectReference(
