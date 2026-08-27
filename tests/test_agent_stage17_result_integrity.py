@@ -26,6 +26,9 @@ from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_
 from uv_studio.projects.store import ProjectStore
 
 
+_RESERVED_TRACK_ID = "agent_delegate_media_00000000000000000000000000000000"
+
+
 class _MediaProposer:
     def propose(self, context):
         return {
@@ -36,6 +39,21 @@ class _MediaProposer:
                     "step_id": "video_track",
                     "action_id": "timeline.create_track",
                     "inputs": {"track_id": "integrity_video", "kind": "video"},
+                }
+            ],
+        }
+
+
+class _ReservedTrackProposer:
+    def propose(self, context):
+        return {
+            "summary": "Attempt to occupy the internal delegation namespace.",
+            "findings": [],
+            "proposals": [
+                {
+                    "step_id": "reserved_track",
+                    "action_id": "timeline.create_track",
+                    "inputs": {"track_id": _RESERVED_TRACK_ID, "kind": "video"},
                 }
             ],
         }
@@ -158,7 +176,7 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
             title="Typed delegation collision",
             recipe_id=STUDIO_COMPAT_RECIPE_ID,
             extensions=studio_project_extensions("micro_drama"),
-            project_id="agent_delegate_media_00000000000000000000000000000000",
+            project_id=_RESERVED_TRACK_ID,
         )
         harness = AgentHarness(self.store, self._models())
         coordinator = AgentSubagentCoordinator(harness, _MediaProposer())
@@ -175,6 +193,27 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
                 )
             )
         self.assertEqual(AgentPlanStore(self.store).list(project.project_id), ())
+
+    def test_planned_canonical_output_cannot_occupy_delegation_namespace(self) -> None:
+        coordinator = AgentSubagentCoordinator(self.harness, _ReservedTrackProposer())
+        with self.assertRaisesRegex(
+            AgentSubagentError,
+            "planned canonical output collides with the reserved functional-subagent delegation namespace",
+        ):
+            coordinator.delegate(
+                AgentSubagentRequest(
+                    role=AgentSubagentRole.MEDIA,
+                    project_id=self.project.project_id,
+                    objective="Do not let a new Timeline identity occupy internal delegation provenance",
+                )
+            )
+
+        self.assertEqual(AgentPlanStore(self.store).list(self.project.project_id), ())
+        timeline = self.harness.timeline.timelines.load(
+            self.project.project_id,
+            validate_references=False,
+        )
+        self.assertNotIn(_RESERVED_TRACK_ID, {track.track_id for track in timeline.tracks})
 
     def test_injected_task_coordinator_must_share_exact_harness_authority(self) -> None:
         foreign_store = ProjectStore(Path(self.tmp.name) / "foreign-projects")
