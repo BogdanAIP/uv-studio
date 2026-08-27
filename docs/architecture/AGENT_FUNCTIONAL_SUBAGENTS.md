@@ -50,7 +50,11 @@ This is optimistic consistency, not a long-held project lock: Stage 17 does not 
 
 Every validated role result receives one stable content-addressed reference of the form `agent_delegate_<role>_<digest>`. The identity is derived from the validated request, bounded context digest, summary, findings and proposals; it is inspection/provenance state, not a new execution authority.
 
-For accepted `plan` and `media` output, the delegation reference is carried into the existing durable Stage-16 Plan canonical references. During execution it is appended to the same Stage-15 trace correlation path already used for Plan/Task/Skill provenance. No second trace or delegation store is introduced.
+For accepted `plan` and `media` output, the delegation reference is carried into the existing durable Stage-16 Plan canonical references. The same Plan also carries a content-addressed `agent_delegate_bind_<digest>` reference derived from the Plan project/goal plus that delegation ID. Stage-17 execution classifies a typed delegation ID as functional-subagent provenance **only when the exact matching Plan binding is present**. It therefore never infers Stage-17 origin merely because an ordinary Stage-16 canonical identity happens to look like `agent_delegate_<role>_<digest>`.
+
+The binding is not a secret, signature or authorization token. It is deterministic inspection evidence that disambiguates provenance inside the existing Plan record without adding a second state store or changing canonical application authority. Role/action/policy validation remains authoritative for what may execute.
+
+During execution the verified delegation identity is appended to the same Stage-15 trace correlation path already used for Plan/Task/Skill provenance. No second trace or delegation store is introduced.
 
 The same rule applies to restart recovery. If canonical work commits and the process fails before the success trace is durable, Stage-16 reconciliation reconstructs one exact enriched trace containing the delegation reference and uses that same trace object for terminal Task validation. Recovery therefore preserves delegation provenance without replaying the committed effect.
 
@@ -64,13 +68,15 @@ The complete typed namespace is reserved at the Stage-17 boundary for non-critic
 
 The same reservation is applied to **future canonical outputs proposed by a role**. Stage 17 inspects the caller-selectable output identity fields of supported creation actions and bounded Skills before durable Plan creation, so a proposal cannot create a Scene, Shot, Take, track or clip whose identity masquerades as internal delegation provenance. `critic` remains able to read genuine durable delegation references as evidence.
 
+Ordinary Stage-16 Plans remain free to carry canonical IDs that match the typed text pattern: without the exact Plan-bound `agent_delegate_bind_*` evidence they are treated only as ordinary canonical references, not as Stage-17 origin.
+
 ## Execution reference budget
 
 `AgentPlanRecord` and terminal `AgentTaskRecord` each cap canonical references at 128. Shared Stage-16 execution adds bounded task correlation, execution context, affected canonical identities and result identities after planning.
 
 The final Planner therefore limits durable Plan canonical references to **112**, reserving 16 slots for execution-time provenance. The shared executor repeats the same check immediately before dispatch, so an older or externally persisted Plan above the execution-safe limit is rejected while its Task is still `READY`, before execution evidence, canonical mutation or cost-bearing provider dispatch can begin.
 
-This boundary is shared Stage-16 execution safety rather than Stage-17-only bookkeeping: Stage 17 delegation provenance consumes the existing Plan reference path and must remain compatible with the same bounded terminal Task/Trace contract.
+This boundary is shared Stage-16 execution safety rather than Stage-17-only bookkeeping: Stage 17 delegation provenance and its Plan binding consume the existing Plan reference path and must remain compatible with the same bounded terminal Task/Trace contract.
 
 ## Reference and portability rules
 
@@ -100,7 +106,7 @@ Stage 17 uses the repository's permanent exact-head gate before merge:
 
 The authoritative exact code-bearing SHA and CI run are recorded in `project-context/PROJECT_STATE.md` and PR #71 after the final code/docs head is green.
 
-Focused Stage-17 tests prove bounded multi-role flow, Plan/Task/Trace delegation provenance, shared-executor execution and recovery, reopen, post-commit/pre-trace crash recovery without replay, malformed/oversized/unknown-role rejection, result-integrity and role revalidation, complete namespace collision handling for existing and proposed canonical identities, exact-harness dependency-injection boundaries, and execution-reference budgeting including a legacy oversized Plan rejected before dispatch.
+Focused Stage-17 tests prove bounded multi-role flow, Plan/Task/Trace delegation provenance, shared-executor execution and recovery, reopen, post-commit/pre-trace crash recovery without replay, malformed/oversized/unknown-role rejection, result-integrity and role revalidation, complete namespace collision handling for existing and proposed canonical identities, Plan-bound provenance classification that ignores unbound delegation-looking Stage-16 canonical IDs, exact-harness dependency-injection boundaries, and execution-reference budgeting including a legacy oversized Plan rejected before dispatch.
 
 ## Product Truth boundary
 
