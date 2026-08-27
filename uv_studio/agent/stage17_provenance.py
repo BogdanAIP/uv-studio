@@ -12,7 +12,7 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, Sequence
 
 from .models import AgentHarnessError, AgentTraceRecord, safe_error_message, stable_digest
 from .orchestration import (
@@ -38,12 +38,44 @@ _DELEGATION_REFERENCE_PATTERN = re.compile(
     r"^agent_delegate_(?:explore|plan|media|critic)_[0-9a-f]{32}$"
 )
 
+# Canonical identities that can be selected by current bounded Agent proposals.
+# Server-generated identities are outside this map because callers cannot choose
+# them. Keep Skills explicit so validation covers their expanded canonical outputs
+# before any durable Plan or canonical mutation exists.
+_RESERVED_ACTION_OUTPUT_FIELDS: dict[str, tuple[str, ...]] = {
+    "production.create_scene": ("scene_id",),
+    "production.create_shot": ("shot_id",),
+    "production.register_take": ("take_id",),
+    "production.accept_take": ("track_id", "clip_id"),
+    "timeline.create_track": ("track_id",),
+    "timeline.add_clip": ("clip_id",),
+}
+_RESERVED_SKILL_OUTPUT_FIELDS: dict[str, tuple[str, ...]] = {
+    "production.scene_with_shot": ("scene_id", "shot_id"),
+}
+
 
 def _is_delegation_reference(value: Any) -> bool:
     return (
         isinstance(value, str)
         and _DELEGATION_REFERENCE_PATTERN.fullmatch(value) is not None
     )
+
+
+def _validate_reserved_proposal_outputs(proposals: Sequence[Any]) -> None:
+    for proposal in proposals:
+        if proposal.action_id is not None:
+            fields = _RESERVED_ACTION_OUTPUT_FIELDS.get(proposal.action_id, ())
+        else:
+            fields = _RESERVED_SKILL_OUTPUT_FIELDS.get(proposal.skill_id or "", ())
+        for field_name in fields:
+            value = proposal.inputs.get(field_name)
+            if _is_delegation_reference(value):
+                raise AgentSubagentError(
+                    "planned canonical output collides with the reserved "
+                    "functional-subagent delegation namespace: "
+                    f"{field_name}={value!r}"
+                )
 
 
 def _proposal_payload(result: _BaseAgentSubagentResult) -> list[dict[str, Any]]:
@@ -297,6 +329,7 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
             raise AgentSubagentError(
                 f"invalid functional subagent output: {safe_error_message(exc)}"
             ) from exc
+        _validate_reserved_proposal_outputs(base.proposals)
         delegation_id = _delegation_id(base)
         validated_plan = base.validated_plan
         if validated_plan is not None:
@@ -332,13 +365,14 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
         if not result.proposals:
             raise AgentSubagentError("functional subagent result has no plan proposals")
 
-        # Revalidate the role envelope at the persistence boundary. A frozen result
-        # can still be reconstructed by another in-process caller; content-addressed
-        # provenance is not an authorization mechanism and must not replace role checks.
+        # Revalidate both the role envelope and reserved canonical-output namespace at
+        # the persistence boundary. A frozen result can still be reconstructed by an
+        # in-process caller; content-addressed provenance is not authorization.
         self._validate_role_output(
             self.catalog.get(result.request.role),
             tuple(result.proposals),
         )
+        _validate_reserved_proposal_outputs(result.proposals)
         expected_delegation_id = _delegation_id(result)
         if result.delegation_id != expected_delegation_id:
             raise AgentSubagentError(
