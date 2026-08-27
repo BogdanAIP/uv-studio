@@ -11,9 +11,9 @@
 
 Stage 17 is in review on branch `stage-17/agent-functional-subagents`, PR #71. The slice was created from lifecycle-closed `main` commit `145395fe58db811c39bc1099188e15c58736174f` after Stage 16 / PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2`.
 
-The current code-bearing review baseline is exact head `7c8280721d96e7822d3c56e08e00ff6cb3868349`. PR CI #3495 (`33104177080`) passed all five permanent jobs on that exact head: `development-context`, Ubuntu/Windows bootstrap unit suites, and Ubuntu/Windows app-baseline including browser user-outcome E2E.
+The final code/docs review baseline is exact head `1467bd3c97511f8349b574d00a6029e8e98b3fe7`. PR CI #3518 (`33108215878`) passed all five permanent jobs on that exact head: `development-context`, Ubuntu/Windows bootstrap unit suites, and Ubuntu/Windows app-baseline including both browser user-outcome E2E suites.
 
-Codex review of `10643bd160c65b8d8df690266390725d5d0dd6eb` reported two final P2 findings: a complete typed `agent_delegate_<role>_<digest>` string was still a valid canonical identity and could collide with delegation provenance, and a standalone injected Planner could be bound to a foreign AgentHarness. The code-bearing baseline above addresses both: Stage 17 reserves the complete typed delegation namespace from non-critic canonical role context before proposal or durable Plan creation, and any explicitly supplied Planner must share the exact AgentHarness authority. Regression proof covers both fail-closed boundaries and same-harness Planner injection. No additional Codex review is required for this slice; the remaining gate is exact-head CI for this metadata update and resolution of the two existing review threads.
+The existing Codex review cycle produced follow-up findings around persistence-time role revalidation, shared-executor provenance, architecture synchronization, exact-head evidence, canonical/delegation namespace collisions, foreign coordinator/Planner authority, proposal-created reserved identities, execution reference overflow, and false Stage-17 origin inference from delegation-looking Stage-16 canonical references. The code/docs baseline above addresses all of those findings with focused regression proof. No additional Codex review will be requested in this review cycle; the remaining PR gate is exact-head CI for this metadata-only update plus resolution of the already-existing review threads.
 
 ## Stage-17 implementation under review
 
@@ -36,15 +36,17 @@ The implementation provides:
 - `critic` as a read-only advisory role over one exact durable Plan/Task/linked-trace set, with no automatic repair authority;
 - deterministic full-role-context consistency checks during delegation and again before Plan persistence;
 - portable, bounded, explicit-reference role inputs/outputs with fail-closed rejection of malformed, oversized, hidden-field, secret/host-path and unavailable-reference data;
-- a stable content-addressed `agent_delegate_<role>_<digest>` identity for every validated role result, recognized only by the complete typed role-and-digest format rather than by prefix alone;
-- reservation of that complete typed delegation namespace from non-critic canonical role context, so a canonical Project/Scene/Shot/Take/Timeline identity cannot masquerade as delegation provenance;
+- a stable content-addressed `agent_delegate_<role>_<digest>` identity for every validated role result;
+- complete typed delegation-namespace reservation for existing non-critic canonical identities and for caller-selectable canonical outputs proposed by actions or bounded Skills;
+- a content-addressed Plan binding `agent_delegate_bind_<digest>` so Stage-17 execution recognizes delegation provenance only when the durable Plan contains the exact project/goal/delegation binding, rather than inferring origin from canonical-reference text alone;
 - delegation provenance carried through the existing durable Plan and existing Stage-15 trace path rather than through a second subagent/delegation store;
 - post-commit/pre-trace restart recovery that reconstructs the same delegation-linked success trace without replaying the committed effect;
 - shared Stage-16 task execution/recovery preservation of durable Plan provenance;
+- an execution-safe Plan reference ceiling of 112 inside the existing 128-reference Plan/Task contract, reserving terminal trace capacity; the shared executor rechecks this ceiling before dispatch so legacy oversized Plans fail while still `READY` and before canonical/cost-bearing work;
 - fail-closed task-coordinator injection unless the coordinator shares the exact Stage-17 provenance contract, AgentHarness, Project Store and Planner authority;
 - fail-closed standalone Planner injection unless the Planner shares the exact AgentHarness authority.
 
-Focused acceptance proof covers `explore -> plan -> dependent durable Tasks -> foreground execution -> media -> foreground execution -> reopen -> critic`, plus proposer failure/oversized-output rejection with no durable Plan creation, persistence-time forged-result rejection, prefix-collision proof using canonical project ID `agent_delegate_project`, exact typed-namespace collision rejection using canonical project ID `agent_delegate_media_00000000000000000000000000000000`, foreign-harness coordinator rejection, foreign standalone-Planner rejection, same-harness Planner injection, shared-executor provenance, and provenance-aware crash recovery.
+Focused acceptance proof covers `explore -> plan -> dependent durable Tasks -> foreground execution -> media -> foreground execution -> reopen -> critic`, plus proposer failure/oversized-output rejection with no durable Plan creation, persistence-time forged-result rejection, prefix-like canonical identity handling, complete typed existing/output namespace collision rejection, foreign-harness coordinator rejection, foreign standalone-Planner rejection, same-harness Planner injection, shared-executor provenance and crash recovery, Plan-bound provenance classification for ordinary Stage-16 delegation-looking canonical IDs, the safe 112-reference success boundary, and a legacy 127-reference Plan rejected before dispatch without mutation.
 
 ## Authority stack preserved
 
@@ -64,4 +66,4 @@ Functional subagents remain role factoring above those authorities. They do not 
 
 Execution and role delegation remain foreground and bounded. Background Agent workers, leases/heartbeats, autonomous polling, evaluate/repair loops, human takeover/edit/resume and long-form autonomy remain later D-066 layers. This slice does not claim a user-visible autonomous-Agent product surface and does not implement the unrelated desktop updater or a real continuation-provider UI.
 
-`project-context/NEXT_TASK.md` remains the exact Stage-17 scope contract until PR #71 is merged and lifecycle-closed.
+`project-context/NEXT_TASK.md` remains the exact Stage-17 scope contract until PR #71 is merged and lifecycle-closed. The accepted post-closure handoff is D-066 layer 4: background Agent work through existing Job Manager boundaries.
