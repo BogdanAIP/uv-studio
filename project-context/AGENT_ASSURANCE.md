@@ -45,29 +45,30 @@ The exact module, target file, detector and replacement anchor for every case li
 For each mutant the runner performs these steps:
 
 1. copy the full `uv_studio` package to a fresh temporary directory, excluding bytecode caches;
-2. hash the checkout target and copied target and require exact equality;
-3. launch the exact detector in a **fresh Python process** against the unmodified overlay;
-4. require the baseline detector to pass exactly once;
-5. require the manifest mutation anchor to occur exactly once;
-6. apply the mutation only inside the temporary overlay;
-7. hash the mutated target and require the digest to differ from baseline;
-8. launch the same exact detector in another fresh Python process;
-9. prove the target module was imported from the temporary overlay, that its source path equals the exact declared target path inside that overlay, and that the imported source SHA-256 equals the exact expected baseline/mutated bytes;
-10. classify the result and delete the temporary overlay.
+2. require the target to be a regular non-symlink source file that resolves inside the UV package;
+3. hash the checkout target and copied target and require exact equality;
+4. launch the exact detector in a **fresh Python process** against the unmodified overlay;
+5. require the baseline detector to execute exactly once, without skip, and pass;
+6. require the manifest mutation anchor to occur exactly once;
+7. apply the mutation only inside the temporary overlay;
+8. hash the mutated target and require the digest to differ from baseline;
+9. launch the same exact detector in another fresh Python process;
+10. prove the target module was imported from the temporary overlay, that its source path equals the exact declared target path inside that overlay, and that the imported source SHA-256 equals the exact expected baseline/mutated bytes;
+11. classify the result and delete the temporary overlay.
 
-The checkout is never edited by the mutation runner.
+The mutation runner never edits checkout source. Optional report output is rejected if its resolved path is inside the repository root.
 
 ## Classification
 
 ### `KILLED`
 
-A valid baseline detector passed, exact source binding passed, and the mutated implementation produced a normal unittest **assertion failure** with no unittest error.
+A valid non-skipped baseline detector passed, exact source binding passed, and the mutated implementation produced a normal unittest **assertion failure** with no unittest error or skip.
 
 This is the only accepted result for a curated pilot mutant.
 
 ### `SURVIVED`
 
-The exact baseline detector passed and the same detector also passed after the exact mutation.
+The exact baseline detector passed and the same non-skipped detector also passed after the exact mutation.
 
 A surviving curated mutant is a real assurance gap: either the guarantee lacks sufficient detector coverage or the mutant does not actually invalidate the stated guarantee.
 
@@ -77,14 +78,15 @@ The runner cannot establish a meaningful mutant result. Examples:
 
 - invalid manifest;
 - missing/non-unique mutation anchor;
-- baseline detector failure;
+- baseline detector failure or skip;
 - import failure;
 - detector resolution failure;
 - target module imported from the normal checkout instead of the overlay;
 - imported module path differs from the exact declared mutation target;
 - imported source SHA mismatch;
+- symlink or resolved-path escape at a mutation target;
 - timeout;
-- unittest error rather than assertion failure;
+- unittest error or skip rather than assertion failure;
 - target/source-copy mismatch.
 
 `ERROR` is never treated as `KILLED`. The harness fails closed rather than turning broken test infrastructure into false assurance.
@@ -103,10 +105,10 @@ Run one mutant:
 python tools/agent_assurance.py --mutant UV-PROV-001
 ```
 
-Write a machine-readable report:
+Write a machine-readable report **outside the repository root**:
 
 ```text
-python tools/agent_assurance.py --report agent-assurance-report.json
+python tools/agent_assurance.py --report ../agent-assurance-report.json
 ```
 
 List the suite without executing mutants:
@@ -150,7 +152,7 @@ Included:
 - baseline-before-mutation proof;
 - exact source-path/SHA binding;
 - Windows/Linux execution through the existing bootstrap suite;
-- machine-readable results.
+- optional machine-readable results written only outside the checkout.
 
 Not included:
 
