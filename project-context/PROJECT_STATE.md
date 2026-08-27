@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-agent-planner-durable-tasks-skills -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: studio-v2-agent-functional-subagents -->
 
 **Updated:** 2026-08-27
 
@@ -9,66 +9,38 @@
 
 ## Current lifecycle
 
-Stage 16 is implemented, merged in PR #70 and lifecycle-closed to idle `main`.
+Stage 17 is the active draft slice on branch `stage-17/agent-functional-subagents`, PR #71, created from lifecycle-closed `main` commit `145395fe58db811c39bc1099188e15c58736174f` after Stage 16 / PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2`.
 
-- merged slice: `studio-v2-agent-planner-durable-tasks-skills`;
-- final reviewed PR head: `3478bb17e21fb0f02b4a456a61baf4c0ad941c22`;
-- merge commit: `bd258b7564f864c7f5fe636cb1336515f0dacce2`;
-- exact-head CI #3442 (`33065539562`) completed successfully across all five permanent jobs, including Ubuntu/Windows unit suites and both app-baseline browser E2E suites;
-- fresh Codex review on the exact final head reported no major issues;
-- every inline review thread was resolved before merge.
+The Stage-16 closure CI #3444 (`33073018940`) completed successfully across all five permanent jobs, so this slice starts from a clean idle authority state.
 
-There is no active implementation branch or PR. The one declared handoff is `studio-v2-agent-functional-subagents`, described in `project-context/NEXT_TASK.md`.
+## Stage-17 goal
 
-## Merged Agent Harness foundation
-
-D-066 now has two merged internal layers:
+D-066 layer 3 adds **functional subagents** over the already merged Agent infrastructure:
 
 ```text
 Stage 15
-  Context Builder
-  Action Catalog
-  Policy projection
-  Agent Trace
-  AgentHarness execution seam
-
+  Context Builder / Action Catalog / Policy / Trace
 Stage 16
-  validated Planner
-  append-only Plan descriptors
-  durable dependency-aware Agent Tasks
-  bounded versioned Skills
-  foreground task coordination
-  execution-time context/policy evidence
-  typed trace correlation
-  restart/reopen recovery without replay
+  Planner / Plan / durable Tasks / bounded Skills / foreground coordinator
+Stage 17
+  bounded functional roles: explore / plan / media / critic
 ```
 
-Stage 16 preserves existing UV authorities rather than creating a second project or execution graph. Agent work continues to reference canonical Project / Scene / Shot / Take / media / Timeline / transaction / Generation Job identities and executes through existing Production, Timeline and Generation services.
+The roles must consume the existing UV Agent contracts rather than creating another project graph, task authority, command registry, permission system, trace store or provider runtime. Any canonical mutation remains executable only through the existing Stage-16 Task/AgentHarness path and the existing Production / Timeline / Generation authorities.
 
-## Stage-16 reliability boundary now merged
+## Required boundary
 
-The merged implementation includes:
+- `explore` observes bounded canonical/Agent context and may return structured findings/references only;
+- `plan` may produce bounded structured planning proposals that still pass the existing deterministic `AgentPlanner` validation before durable Plan creation;
+- `media` may reason about/select media- or generation-related approved Agent actions, but cannot call providers or mutate the project directly;
+- `critic` may inspect a plan/task/result/trace and return bounded evaluation findings, but automatic repair/evaluate loops remain D-066 layer 5;
+- role delegation remains foreground/synchronous in this slice;
+- background workers, leases/heartbeats, autonomous polling, evaluate/repair loops, human takeover/edit/resume and long-form autonomy remain later layers.
 
-- canonical prerequisite validation before Plan persistence, including dependency-closure provisioning;
-- rejection of duplicate planned Scene/Shot identities and deterministically invalid missing Take/track/clip/media references;
-- exclusive planned `production.accept_take` per Shot and validation that dependency-created acceptance tracks are video tracks;
-- cross-runtime task CAS and project-scoped locking with one lock order and Windows contention handling;
-- append-only Plan create-if-absent semantics;
-- exact execution-time context and policy evidence before canonical/cost-bearing dispatch;
-- generation preparation binding to the exact frozen policy, model/capability/offer/adapter mapping and request digest;
-- D-017 authorization remaining execution-only and outside durable Plan/Task state;
-- typed plan/task/Skill trace correlation with exact input digest and execution window;
-- recovery from committed `ProjectUnitOfWork` and exact Generation Job evidence without silently replaying canonical or cost-bearing work;
-- reconstruction of affected Shot/track/clip identities for recovered Production/Timeline traces.
+## Product Truth boundary
 
-Agent Tasks remain orchestration state, not canonical Production/Timeline truth, Undo/Redo history or Generation Job provenance. Skills remain bounded procedures over approved Agent catalog actions and gain no shell, Python, arbitrary filesystem/provider or private authorization path.
+Stage 17 remains internal Agent infrastructure unless a real Studio surface is deliberately added with D-067 backend/frontend/browser proof. No user-visible autonomous-Agent readiness claim is made by this slice.
 
-## Next D-066 handoff
+## Next action
 
-The next accepted layer is **functional subagents**: bounded `explore / plan / media / critic` roles that consume the merged Context / Planner / Task / Skill contracts.
-
-This next slice must remain foreground and bounded. Background Agent work is still the following D-066 layer, followed by evaluation/repair, human takeover/edit/resume and only then long-form autonomy.
-
-## Known limitations
-
-UV Studio still does not claim a user-visible autonomous-Agent product surface. Functional subagents, background execution, automatic critic/repair loops, takeover/resume orchestration and long-form autonomy remain future work. The unrelated D-068 desktop updater and a real continuation-provider UI are also outside the completed Stage-16 slice.
+Implement the smallest UV-owned role/delegation contract, prove each role is bounded by the existing context/planner/task/skill/action authorities, add restart/trace/reference-safe tests where durable state is involved, and move the PR to review only after the exact head passes all five permanent checks.
