@@ -29,9 +29,8 @@ from .stage16_runtime import (
     AgentPlanExecutionState,
     AgentPlanStore,
     AgentSkillCatalog,
-    AgentTaskStore,
 )
-from .stage16_generation_target import AgentPlanner, AgentTaskCoordinator
+from .stage16_generation_target import AgentPlanner, AgentTaskCoordinator, AgentTaskStore
 
 __all__ = [
     "AGENT_SKILL_SCHEMA_VERSION",
