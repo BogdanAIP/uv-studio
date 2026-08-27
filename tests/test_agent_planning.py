@@ -342,15 +342,15 @@ class AgentPlanningTests(unittest.TestCase):
     def test_failed_task_is_durable_and_does_not_unlock_or_report_success(self) -> None:
         state = self.coordinator.create_plan(
             project_id=self.project.project_id,
-            goal="Fail first task and keep dependent blocked",
+            goal="Fail first task after a canonical state race and keep dependent blocked",
             proposals=(
                 AgentPlanStepProposal(
                     step_id="bad_shot",
                     action_id="production.create_shot",
                     inputs={
                         "shot_id": "shot_bad",
-                        "scene_id": "scene_does_not_exist",
-                        "intent": "Must fail",
+                        "scene_id": "scene_existing",
+                        "intent": "Valid at planning time, conflicting at execution time",
                     },
                 ),
                 AgentPlanStepProposal(
@@ -361,6 +361,17 @@ class AgentPlanningTests(unittest.TestCase):
                 ),
             ),
             plan_id="agent_plan_failure_proof",
+        )
+
+        # Planner-time canonical prerequisites were valid. A concurrent canonical
+        # mutation after planning creates the same Shot, so execution must still
+        # fail durably rather than pretending the task succeeded or unlocking its
+        # dependent task.
+        self.production.create_shot(
+            self.project.project_id,
+            shot_id="shot_bad",
+            scene_id="scene_existing",
+            intent="Concurrent canonical mutation",
         )
 
         with self.assertRaises(ProductionSemanticError):
