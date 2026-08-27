@@ -19,6 +19,7 @@ from .orchestration import (
     AgentPlanRecord,
     AgentTaskRecord,
     AgentTaskStateError,
+    AgentTaskStatus,
 )
 from .stage16_generation_target import AgentTaskCoordinator as _Stage16AgentTaskCoordinator
 from .stage17_consistency import AgentSubagentCoordinator as _ConsistencyAgentSubagentCoordinator
@@ -94,6 +95,20 @@ class _DelegationTraceStore:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._base, name)
 
+    @staticmethod
+    def with_references(
+        record: AgentTraceRecord,
+        references: tuple[str, ...],
+    ) -> AgentTraceRecord:
+        if not references:
+            return record
+        canonical_references = tuple(
+            dict.fromkeys((*record.canonical_references, *references))
+        )
+        if canonical_references == record.canonical_references:
+            return record
+        return replace(record, canonical_references=canonical_references)
+
     @contextmanager
     def bind(self, *references: str) -> Iterator[None]:
         normalized = tuple(
@@ -110,14 +125,7 @@ class _DelegationTraceStore:
             self._delegation_references.reset(token)
 
     def append(self, record: AgentTraceRecord):
-        references = self._delegation_references.get()
-        if references:
-            record = replace(
-                record,
-                canonical_references=tuple(
-                    dict.fromkeys((*record.canonical_references, *references))
-                ),
-            )
+        record = self.with_references(record, self._delegation_references.get())
         return self._base.append(record)
 
     def list(self, project_id: str):
@@ -163,8 +171,28 @@ class AgentSubagentTaskCoordinator(_Stage16AgentTaskCoordinator):
         record: AgentTaskRecord,
     ) -> AgentTaskRecord:
         references = self._delegation_references(plan)
-        with self._delegation_traces.bind(*references):
+
+        trace = self._correlated_trace_for(plan, record)
+        if trace is not None:
             return super()._reconcile_running(plan, record)
+
+        recovered = self._transaction_recovery_trace(plan, record)
+        if recovered is None:
+            recovered = self._generation_recovery_trace(plan, record)
+        if recovered is not None:
+            enriched = self._delegation_traces.with_references(recovered, references)
+            # Stage 16 intentionally validates that the trace supplied to the terminal
+            # task transition is byte-for-byte the same durable Stage-15 trace record.
+            # Append and transition with this exact enriched object rather than asking
+            # the trace proxy to enrich a different local recovery object on append.
+            self.harness.traces.append(enriched)
+            return self.tasks.transition(
+                record,
+                AgentTaskStatus.SUCCEEDED,
+                trace=enriched,
+            )
+
+        return super()._reconcile_running(plan, record)
 
     def execute_task(
         self,
