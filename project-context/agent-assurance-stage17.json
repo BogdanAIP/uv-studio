@@ -60,13 +60,13 @@
     },
     {
       "id": "UV-AUTH-001",
-      "guarantee": "An injected Planner must share the exact AgentHarness authority used by the Stage-17 coordinator.",
+      "guarantee": "An injected Stage-17 task coordinator must share the exact AgentHarness, Project Store and Planner authority.",
       "target": "uv_studio/agent/stage17_provenance.py",
       "module": "uv_studio.agent.stage17_provenance",
-      "detector": "test_agent_stage17_result_integrity.AgentStage17ResultIntegrityTests.test_standalone_planner_must_share_exact_harness_authority",
+      "detector": "test_agent_stage17_result_integrity.AgentStage17ResultIntegrityTests.test_injected_task_coordinator_must_share_exact_harness_authority",
       "mutation": {
-        "find": "        if requested_planner is not None and getattr(requested_planner, \"harness\", None) is not harness:\n            raise AgentSubagentError(\n                \"Stage 17 planner must share the exact AgentHarness authority\"\n            )\n",
-        "replace": "        # MUTANT UV-AUTH-001: accept a Planner backed by a foreign AgentHarness.\n"
+        "find": "        if task_coordinator is not None:\n            if not isinstance(task_coordinator, AgentSubagentTaskCoordinator):\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must preserve functional-subagent delegation provenance\"\n                )\n            if (\n                task_coordinator.harness is not harness\n                or task_coordinator.project_store is not harness.project_store\n                or getattr(task_coordinator.plans, \"project_store\", None)\n                is not harness.project_store\n                or getattr(task_coordinator.tasks, \"project_store\", None)\n                is not harness.project_store\n            ):\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must share the exact AgentHarness and Project Store authority\"\n                )\n            coordinator_planner = task_coordinator.planner\n            if getattr(coordinator_planner, \"harness\", None) is not harness:\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator planner must share the exact AgentHarness authority\"\n                )\n            if requested_planner is not None and coordinator_planner is not requested_planner:\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must share the exact AgentPlanner authority\"\n                )\n            if requested_planner is None:\n                kwargs[\"planner\"] = coordinator_planner\n",
+        "replace": "        # MUTANT UV-AUTH-001: accept a foreign Stage-17 task coordinator authority.\n        if task_coordinator is not None and requested_planner is None:\n            kwargs[\"planner\"] = task_coordinator.planner\n"
       }
     }
   ]
