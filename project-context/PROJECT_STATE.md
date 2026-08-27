@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: studio-v2-agent-functional-subagents -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: agent-stage17-adversarial-assurance -->
 
 **Updated:** 2026-08-27
 
@@ -9,24 +9,29 @@
 
 ## Current lifecycle
 
-Stage 17 / PR #71 (`stage-17/agent-functional-subagents`) is merged and lifecycle-closed.
+The repository is in a bounded research slice: `agent-stage17-adversarial-assurance` on branch `research/agent-stage17-adversarial-assurance`.
 
-Accepted merge commit:
+The accepted production baseline is Stage 17 / PR #71, merged as `c3ca3c33f89f67fad97081f889934669e34befa5`, followed by protected-main lifecycle closure PR #72. This slice starts from closure merge `df4b68386bf4518cdf1c2946312ff06be8764ecc`.
 
-`c3ca3c33f89f67fad97081f889934669e34befa5`
+## Assurance goal
 
-The repository lifecycle is now **idle**. There is no active implementation slice on `main`. Because `main` is protected, this mechanical closure is carried through dedicated PR #72 rather than a direct closure push.
+Strengthen already accepted Stage-16/17 Agent guarantees before background execution adds leases, heartbeats, concurrency and longer recovery paths.
 
-## Last completed slice
+The first pilot is deliberately narrow:
 
-D-066 Agent Harness layer 3 added bounded foreground functional subagents (`explore`, `plan`, `media`, `critic`) over the accepted Stage-15 Context/Catalog/Policy/Trace and Stage-16 Planner/Plan/Task/Skill authorities.
+- no change to UV production Agent semantics;
+- mutate isolated temporary copies only;
+- convert real review defect classes into named guarantees;
+- require one exact detector for each curated mutant;
+- distinguish assertion-based `KILLED` from `SURVIVED` and harness/import/source-binding `ERROR`;
+- prove the detector actually imported the mutated overlay rather than the normal checkout.
 
-The accepted implementation preserves the existing Project Store, Production Semantic Core, canonical Timeline, Studio/Application Commands, AgentHarness, Planner/Task/Skill authority, Model Registry, Generation Job/Attempt authority and Capability Registry/D-017 boundaries. Functional subagents remain bounded role factoring and do not introduce a second project graph, permission authority, tool registry, provider runtime or private mutation path.
+Initial guarantees cover persistence-time role revalidation, context freshness during delegation/persistence, delegation namespace reservation, Plan-bound provenance classification and exact AgentHarness authority for injected planners.
 
-The Stage-17 review cycle added focused regression proof for persistence-time role revalidation, result integrity, shared-executor provenance, post-commit/pre-trace recovery, typed delegation namespace collisions, foreign coordinator/Planner authority, proposal-created reserved identities, execution reference bounds and false Stage-17 provenance inference from delegation-looking Stage-16 canonical references.
+## Authority stack unchanged
+
+Project Store, Production Semantic Core, canonical Timeline, Studio/Application Commands, AgentHarness, Stage-16 Planner/Plan/Task/Skill authority, Stage-17 role factoring, Model Registry, Job/Attempt authority and Capability Registry/D-017 remain unchanged. The assurance runner is test infrastructure only and cannot become a product mutation or execution path.
 
 ## Handoff
 
-The previously recorded product handoff after Stage 17 is D-066 layer 4: bounded background Agent work through existing Job Manager/execution authorities.
-
-Before opening that larger concurrency slice, a separate bounded Agent assurance hardening slice may strengthen Stage-16/17 guarantees through adversarial and mutation verification without changing production semantics.
+After the assurance slice is reviewed, merged and lifecycle-closed, the next product slice is `studio-v2-agent-background-execution`: D-066 layer 4, bounded background Agent work through existing Job Manager/execution authorities.
