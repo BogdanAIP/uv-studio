@@ -183,6 +183,7 @@ class AgentPlanner(_GenerationPolicyAgentPlanner):
             item.id: item
             for item in (*project.sources, *project.artifacts)
         }
+        planned_acceptance_by_shot: dict[str, str] = {}
 
         def require_existing_or_dependency(
             spec: Any,
@@ -295,6 +296,14 @@ class AgentPlanner(_GenerationPolicyAgentPlanner):
                         f"production.accept_take shot {shot_id!r} already accepts take "
                         f"{shot_by_id[shot_id].accepted_take_id!r}"
                     )
+                if shot_id is not None:
+                    previous_acceptance = planned_acceptance_by_shot.get(shot_id)
+                    if previous_acceptance is not None:
+                        raise AgentPlanningError(
+                            f"plan accepts Shot {shot_id!r} more than once in tasks "
+                            f"{previous_acceptance!r} and {spec.task_id!r}"
+                        )
+                    planned_acceptance_by_shot[shot_id] = spec.task_id
 
                 track_id = spec.inputs.get("track_id", "production_video")
                 track = track_by_id.get(track_id)
@@ -313,15 +322,25 @@ class AgentPlanner(_GenerationPolicyAgentPlanner):
                         ),
                         None,
                     )
+                    dependency_ids = self._dependency_task_ids(plan, spec)
                     if (
                         planned_track is not None
-                        and planned_track.task_id
-                        not in self._dependency_task_ids(plan, spec)
+                        and planned_track.task_id not in dependency_ids
                     ):
                         raise AgentPlanningError(
                             f"production.accept_take track {track_id!r} is also created by "
                             f"task {planned_track.task_id!r}; that creator must be in its "
                             "dependency closure"
+                        )
+                    if (
+                        planned_track is not None
+                        and planned_track.task_id in dependency_ids
+                        and planned_track.inputs.get("kind") != "video"
+                    ):
+                        raise AgentPlanningError(
+                            "production.accept_take requires a video track; dependency "
+                            f"task {planned_track.task_id!r} creates {track_id!r} as "
+                            f"{planned_track.inputs.get('kind')!r}"
                         )
 
                 clip_id = spec.inputs.get("clip_id")
