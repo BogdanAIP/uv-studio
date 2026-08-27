@@ -74,6 +74,8 @@ class AgentStage17AssuranceTests(unittest.TestCase):
                 )
                 self.assertIn(f"uv-assurance-{result['id']}-", result["baseline_source"])
                 self.assertIn(f"uv-assurance-{result['id']}-", result["mutant_source"])
+                self.assertTrue(result["baseline_source"].endswith(result["target"]))
+                self.assertTrue(result["mutant_source"].endswith(result["target"]))
                 self.assertEqual(result["detector_failures"], 1)
                 self.assertEqual(result["detector_errors"], 0)
 
@@ -103,6 +105,8 @@ class AgentStage17AssuranceTests(unittest.TestCase):
                     mutant["module"],
                     "--test",
                     mutant["detector"],
+                    "--expected-source-relative",
+                    mutant["target"],
                     "--expected-source-sha256",
                     "0" * 64,
                 ],
