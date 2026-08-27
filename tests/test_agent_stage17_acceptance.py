@@ -283,6 +283,15 @@ class AgentStage17AcceptanceTests(unittest.TestCase):
                 objective="Reject an unknown role",
             )
 
+    def test_provenance_blind_injected_task_coordinator_fails_closed(self) -> None:
+        stage16 = AgentTaskCoordinator(self.harness)
+        with self.assertRaisesRegex(AgentSubagentError, "preserve functional-subagent delegation"):
+            AgentSubagentCoordinator(
+                self.harness,
+                _RoleFlowProposer(),
+                task_coordinator=stage16,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
