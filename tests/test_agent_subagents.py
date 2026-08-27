@@ -23,7 +23,7 @@ from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_
 from uv_studio.projects.store import ProjectStore
 
 
-class _StaticSubagentProvider:
+class _StaticSubagentProposer:
     def __init__(self, payload: Mapping[str, Any]) -> None:
         self.payload = payload
         self.contexts = []
@@ -64,7 +64,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_role_catalog_is_bounded_and_explore_is_advisory(self) -> None:
-        provider = _StaticSubagentProvider(
+        proposer = _StaticSubagentProposer(
             {
                 "summary": "The requested Shot exists in the bounded project context.",
                 "findings": [
@@ -78,7 +78,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 "proposals": [],
             }
         )
-        coordinator = AgentSubagentCoordinator(self.harness, provider)
+        coordinator = AgentSubagentCoordinator(self.harness, proposer)
         self.assertEqual(
             tuple(item.role for item in coordinator.catalog.list()),
             tuple(AgentSubagentRole),
@@ -95,14 +95,16 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
         self.assertEqual(result.request.role, AgentSubagentRole.EXPLORE)
         self.assertIsNone(result.validated_plan)
         self.assertEqual(result.findings[0].canonical_references, ("shot_existing",))
-        self.assertEqual(provider.contexts[0].actions, ())
+        self.assertEqual(proposer.contexts[0].actions, ())
+        self.assertEqual(proposer.contexts[0].skills, ())
+        self.assertIn("shot_existing", proposer.contexts[0].available_references)
         self.assertEqual(
             AgentPlanStore(self.store).list(self.project.project_id),
             (),
         )
 
-    def test_plan_role_must_pass_stage16_planner_and_does_not_mutate_on_delegate(self) -> None:
-        provider = _StaticSubagentProvider(
+    def test_plan_role_sees_bounded_skills_and_must_pass_stage16_planner(self) -> None:
+        proposer = _StaticSubagentProposer(
             {
                 "summary": "Create one bounded scene and shot through the existing Skill.",
                 "findings": [],
@@ -120,7 +122,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 ],
             }
         )
-        coordinator = AgentSubagentCoordinator(self.harness, provider)
+        coordinator = AgentSubagentCoordinator(self.harness, proposer)
         result = coordinator.delegate(
             AgentSubagentRequest(
                 role=AgentSubagentRole.PLAN,
@@ -128,21 +130,25 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 objective="Create a scene and its first shot",
             )
         )
+        skill_ids = tuple(item["skill_id"] for item in proposer.contexts[0].skills)
+        self.assertEqual(skill_ids, (AgentSkillCatalog.SCENE_WITH_SHOT,))
         self.assertIsNotNone(result.validated_plan)
         assert result.validated_plan is not None
         self.assertEqual(
             tuple(task.task_id for task in result.validated_plan.tasks),
             ("setup.scene", "setup.shot"),
         )
-        with self.assertRaises(Exception):
-            self.production.state(self.project.project_id).scene("scene_subagent")
+        self.assertFalse(
+            any(scene.scene_id == "scene_subagent" for scene in self.production.state(self.project.project_id).scenes)
+        )
         self.assertEqual(AgentPlanStore(self.store).list(self.project.project_id), ())
 
         state = coordinator.persist_plan(result, plan_id="agent_plan_subagent")
         self.assertEqual(state.tasks[0].status, AgentTaskStatus.READY)
         self.assertEqual(state.tasks[1].status, AgentTaskStatus.PLANNED)
-        with self.assertRaises(Exception):
-            self.production.state(self.project.project_id).scene("scene_subagent")
+        self.assertFalse(
+            any(scene.scene_id == "scene_subagent" for scene in self.production.state(self.project.project_id).scenes)
+        )
 
         executor = AgentTaskCoordinator(self.harness)
         executor.execute_task(
@@ -160,8 +166,8 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
             "scene_subagent",
         )
 
-    def test_media_role_cannot_escape_media_action_boundary(self) -> None:
-        provider = _StaticSubagentProvider(
+    def test_media_role_cannot_escape_media_action_or_skill_boundary(self) -> None:
+        proposer = _StaticSubagentProposer(
             {
                 "summary": "Try an unrelated production mutation.",
                 "findings": [],
@@ -174,7 +180,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 ],
             }
         )
-        coordinator = AgentSubagentCoordinator(self.harness, provider)
+        coordinator = AgentSubagentCoordinator(self.harness, proposer)
         with self.assertRaisesRegex(AgentSubagentError, "media role cannot propose action"):
             coordinator.delegate(
                 AgentSubagentRequest(
@@ -184,7 +190,34 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 )
             )
 
-        valid_provider = _StaticSubagentProvider(
+        skill_proposer = _StaticSubagentProposer(
+            {
+                "summary": "Try to expand a general Skill.",
+                "findings": [],
+                "proposals": [
+                    {
+                        "step_id": "wrong_skill",
+                        "skill_id": AgentSkillCatalog.SCENE_WITH_SHOT,
+                        "inputs": {
+                            "scene_id": "scene_wrong_skill",
+                            "title": "Wrong skill",
+                            "shot_id": "shot_wrong_skill",
+                            "intent": "Wrong skill",
+                        },
+                    }
+                ],
+            }
+        )
+        with self.assertRaisesRegex(AgentSubagentError, "media role cannot propose Skill"):
+            AgentSubagentCoordinator(self.harness, skill_proposer).delegate(
+                AgentSubagentRequest(
+                    role=AgentSubagentRole.MEDIA,
+                    project_id=self.project.project_id,
+                    objective="Prepare media work",
+                )
+            )
+
+        valid_proposer = _StaticSubagentProposer(
             {
                 "summary": "Prepare a video track through the existing Timeline authority.",
                 "findings": [],
@@ -197,7 +230,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 ],
             }
         )
-        valid = AgentSubagentCoordinator(self.harness, valid_provider).delegate(
+        valid = AgentSubagentCoordinator(self.harness, valid_proposer).delegate(
             AgentSubagentRequest(
                 role=AgentSubagentRole.MEDIA,
                 project_id=self.project.project_id,
@@ -207,7 +240,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
         self.assertEqual(valid.validated_plan.tasks[0].action_id, "timeline.create_track")
 
     def test_critic_reads_durable_plan_evidence_but_cannot_propose_repair(self) -> None:
-        planning_provider = _StaticSubagentProvider(
+        planning_proposer = _StaticSubagentProposer(
             {
                 "summary": "Create a bounded plan for critic inspection.",
                 "findings": [],
@@ -220,7 +253,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 ],
             }
         )
-        planning = AgentSubagentCoordinator(self.harness, planning_provider)
+        planning = AgentSubagentCoordinator(self.harness, planning_proposer)
         planned = planning.delegate(
             AgentSubagentRequest(
                 role=AgentSubagentRole.PLAN,
@@ -230,7 +263,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
         )
         state = planning.persist_plan(planned, plan_id="agent_plan_for_critic")
 
-        critic_provider = _StaticSubagentProvider(
+        critic_proposer = _StaticSubagentProposer(
             {
                 "summary": "The plan is durable and has one ready task.",
                 "findings": [
@@ -244,7 +277,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 "proposals": [],
             }
         )
-        critic = AgentSubagentCoordinator(self.harness, critic_provider)
+        critic = AgentSubagentCoordinator(self.harness, critic_proposer)
         result = critic.delegate(
             AgentSubagentRequest(
                 role=AgentSubagentRole.CRITIC,
@@ -253,12 +286,13 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 plan_id=state.plan.plan_id,
             )
         )
-        evidence = critic_provider.contexts[0].evidence
+        evidence = critic_proposer.contexts[0].evidence
         self.assertEqual(evidence["plan"]["plan_id"], "agent_plan_for_critic")
         self.assertEqual(evidence["tasks"][0]["status"], "ready")
+        self.assertIn("agent_plan_for_critic", critic_proposer.contexts[0].available_references)
         self.assertIsNone(result.validated_plan)
 
-        repair_provider = _StaticSubagentProvider(
+        repair_proposer = _StaticSubagentProposer(
             {
                 "summary": "Attempt a repair proposal.",
                 "findings": [],
@@ -272,7 +306,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(AgentSubagentError, "advisory"):
-            AgentSubagentCoordinator(self.harness, repair_provider).delegate(
+            AgentSubagentCoordinator(self.harness, repair_proposer).delegate(
                 AgentSubagentRequest(
                     role=AgentSubagentRole.CRITIC,
                     project_id=self.project.project_id,
@@ -281,8 +315,8 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 )
             )
 
-    def test_outputs_reject_hidden_fields_and_hallucinated_references(self) -> None:
-        hidden_provider = _StaticSubagentProvider(
+    def test_outputs_reject_hidden_fields_and_non_reference_strings(self) -> None:
+        hidden_proposer = _StaticSubagentProposer(
             {
                 "summary": "Bounded summary",
                 "findings": [],
@@ -291,7 +325,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(AgentSubagentError, "unsupported fields"):
-            AgentSubagentCoordinator(self.harness, hidden_provider).delegate(
+            AgentSubagentCoordinator(self.harness, hidden_proposer).delegate(
                 AgentSubagentRequest(
                     role=AgentSubagentRole.EXPLORE,
                     project_id=self.project.project_id,
@@ -299,14 +333,19 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
                 )
             )
 
-        hallucinated_provider = _StaticSubagentProvider(
+        self.production.create_scene(
+            self.project.project_id,
+            scene_id="scene_title_probe",
+            title="shot_not_real",
+        )
+        hallucinated_proposer = _StaticSubagentProposer(
             {
-                "summary": "Reference a nonexistent Shot.",
+                "summary": "Reference a title that only looks like an ID.",
                 "findings": [
                     {
                         "finding_id": "finding_missing",
                         "severity": "warning",
-                        "summary": "This reference is not in bounded context.",
+                        "summary": "This string is a title, not a canonical reference.",
                         "canonical_references": ["shot_not_real"],
                     }
                 ],
@@ -314,7 +353,7 @@ class AgentFunctionalSubagentTests(unittest.TestCase):
             }
         )
         with self.assertRaisesRegex(AgentSubagentError, "absent from bounded subagent context"):
-            AgentSubagentCoordinator(self.harness, hallucinated_provider).delegate(
+            AgentSubagentCoordinator(self.harness, hallucinated_proposer).delegate(
                 AgentSubagentRequest(
                     role=AgentSubagentRole.EXPLORE,
                     project_id=self.project.project_id,

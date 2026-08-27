@@ -14,7 +14,6 @@ from .models import (
     AgentActionDefinition,
     AgentContextSnapshot,
     AgentHarnessError,
-    AgentPortableStateError,
     portable_json,
     safe_error_message,
     safe_text,
@@ -26,13 +25,14 @@ from .orchestration import (
     AgentTaskStateError,
 )
 from .stage16_generation_target import AgentPlanner, AgentTaskCoordinator, AgentTaskStore
-from .stage16_runtime import AgentPlanStore
+from .stage16_runtime import AgentPlanStore, AgentSkillCatalog
 
 AGENT_SUBAGENT_SCHEMA_VERSION = 1
 
 _MAX_FINDINGS = 16
 _MAX_PROPOSALS = 32
 _MAX_REFERENCES = 128
+_MAX_AVAILABLE_REFERENCES = 512
 _MAX_OUTPUT_BYTES = 32 * 1024
 _MAX_OBJECTIVE_LENGTH = 1200
 _MAX_SUMMARY_LENGTH = 2000
@@ -112,22 +112,186 @@ def _bounded_output(value: Mapping[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def _collect_identifiers(value: Any) -> set[str]:
-    result: set[str] = set()
-    if isinstance(value, Mapping):
-        for item in value.values():
-            result.update(_collect_identifiers(item))
-        return result
-    if isinstance(value, (list, tuple)):
-        for item in value:
-            result.update(_collect_identifiers(item))
-        return result
-    if isinstance(value, str):
-        try:
-            result.add(validate_identifier(value, field_name="context reference"))
-        except ProjectValidationError:
-            pass
-    return result
+def _add_reference(values: list[str], value: Any, *, field_name: str) -> None:
+    if value is None:
+        return
+    values.append(_identifier(value, field_name=field_name))
+
+
+def _extend_references(values: list[str], items: Any, *, field_name: str) -> None:
+    if items is None:
+        return
+    if not isinstance(items, (list, tuple)):
+        raise AgentSubagentError(f"{field_name} must be a sequence")
+    for item in items:
+        _add_reference(values, item, field_name=field_name)
+
+
+def _snapshot_references(snapshot: AgentContextSnapshot) -> tuple[str, ...]:
+    """Extract only fields that the Stage-15 context schema explicitly defines as identities."""
+
+    values: list[str] = [snapshot.project_id, snapshot.target_id]
+    content = snapshot.content
+
+    project = content.get("project", {})
+    if isinstance(project, Mapping):
+        _add_reference(values, project.get("project_id"), field_name="context project_id")
+        references = project.get("references", ())
+        if isinstance(references, (list, tuple)):
+            for reference in references:
+                if isinstance(reference, Mapping):
+                    _add_reference(
+                        values,
+                        reference.get("id"),
+                        field_name="context media reference",
+                    )
+
+    production = content.get("production", {})
+    if isinstance(production, Mapping):
+        scene = production.get("target_scene")
+        if isinstance(scene, Mapping):
+            _add_reference(values, scene.get("scene_id"), field_name="context scene_id")
+        shot = production.get("target_shot")
+        if isinstance(shot, Mapping):
+            _add_reference(values, shot.get("shot_id"), field_name="context shot_id")
+            _add_reference(values, shot.get("scene_id"), field_name="context scene_id")
+            _extend_references(
+                values,
+                shot.get("reference_ids", ()),
+                field_name="context shot reference",
+            )
+            _extend_references(
+                values,
+                shot.get("take_ids", ()),
+                field_name="context take_id",
+            )
+            _add_reference(
+                values,
+                shot.get("accepted_take_id"),
+                field_name="context accepted_take_id",
+            )
+            _extend_references(
+                values,
+                shot.get("timeline_clip_ids", ()),
+                field_name="context clip_id",
+            )
+        takes = production.get("target_takes", ())
+        if isinstance(takes, (list, tuple)):
+            for take in takes:
+                if not isinstance(take, Mapping):
+                    continue
+                _add_reference(values, take.get("take_id"), field_name="context take_id")
+                _add_reference(
+                    values,
+                    take.get("reference_id"),
+                    field_name="context media reference",
+                )
+
+    timeline = content.get("timeline", {})
+    if isinstance(timeline, Mapping):
+        _add_reference(values, timeline.get("timeline_id"), field_name="context timeline_id")
+        tracks = timeline.get("tracks", ())
+        if isinstance(tracks, (list, tuple)):
+            for track in tracks:
+                if not isinstance(track, Mapping):
+                    continue
+                _add_reference(values, track.get("track_id"), field_name="context track_id")
+                _extend_references(
+                    values,
+                    track.get("clip_ids", ()),
+                    field_name="context clip_id",
+                )
+
+    jobs = content.get("jobs", {})
+    if isinstance(jobs, Mapping):
+        job_items = jobs.get("items", ())
+        if isinstance(job_items, (list, tuple)):
+            for job in job_items:
+                if not isinstance(job, Mapping):
+                    continue
+                _add_reference(values, job.get("job_id"), field_name="context job_id")
+                attempts = job.get("attempts", ())
+                if not isinstance(attempts, (list, tuple)):
+                    continue
+                for attempt in attempts:
+                    if not isinstance(attempt, Mapping):
+                        continue
+                    _add_reference(
+                        values,
+                        attempt.get("attempt_id"),
+                        field_name="context attempt_id",
+                    )
+                    _add_reference(
+                        values,
+                        attempt.get("output_reference_id"),
+                        field_name="context output_reference_id",
+                    )
+                    _add_reference(values, attempt.get("take_id"), field_name="context take_id")
+
+    unique = tuple(dict.fromkeys(values))
+    if len(unique) > _MAX_AVAILABLE_REFERENCES:
+        raise AgentSubagentError(
+            f"bounded Agent context exposes more than {_MAX_AVAILABLE_REFERENCES} references"
+        )
+    return unique
+
+
+def _critic_references(evidence: Mapping[str, Any]) -> tuple[str, ...]:
+    """Extract explicit durable Plan/Task/Trace identity/reference fields only."""
+
+    values: list[str] = []
+    plan = evidence.get("plan", {})
+    if isinstance(plan, Mapping):
+        for key in ("plan_id", "project_id"):
+            _add_reference(values, plan.get(key), field_name=f"critic {key}")
+        _extend_references(
+            values,
+            plan.get("canonical_references", ()),
+            field_name="critic plan canonical reference",
+        )
+
+    tasks = evidence.get("tasks", ())
+    if isinstance(tasks, (list, tuple)):
+        for task in tasks:
+            if not isinstance(task, Mapping):
+                continue
+            _add_reference(values, task.get("task_id"), field_name="critic task_id")
+            _add_reference(values, task.get("trace_id"), field_name="critic trace_id")
+            _extend_references(
+                values,
+                task.get("canonical_references", ()),
+                field_name="critic task canonical reference",
+            )
+            result_references = task.get("result_references", {})
+            if isinstance(result_references, Mapping):
+                for value in result_references.values():
+                    _add_reference(
+                        values,
+                        value,
+                        field_name="critic task result reference",
+                    )
+
+    traces = evidence.get("traces", ())
+    if isinstance(traces, (list, tuple)):
+        for trace in traces:
+            if not isinstance(trace, Mapping):
+                continue
+            _add_reference(values, trace.get("trace_id"), field_name="critic trace_id")
+            _extend_references(
+                values,
+                trace.get("canonical_references", ()),
+                field_name="critic trace canonical reference",
+            )
+            result_references = trace.get("result_references", {})
+            if isinstance(result_references, Mapping):
+                for value in result_references.values():
+                    _add_reference(
+                        values,
+                        value,
+                        field_name="critic trace result reference",
+                    )
+
+    return tuple(dict.fromkeys(values))
 
 
 @dataclass(frozen=True)
@@ -266,6 +430,7 @@ class AgentSubagentDefinition:
     purpose: str
     may_propose_plan: bool
     allowed_action_ids: tuple[str, ...]
+    allowed_skill_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.role, AgentSubagentRole):
@@ -283,6 +448,12 @@ class AgentSubagentDefinition:
         if len(set(action_ids)) != len(action_ids):
             raise AgentSubagentError("allowed_action_ids must be unique")
         object.__setattr__(self, "allowed_action_ids", action_ids)
+        skill_ids = tuple(self.allowed_skill_ids)
+        if any(not isinstance(item, str) or not item.strip() for item in skill_ids):
+            raise AgentSubagentError("allowed_skill_ids must contain non-empty Skill IDs")
+        if len(set(skill_ids)) != len(skill_ids):
+            raise AgentSubagentError("allowed_skill_ids must be unique")
+        object.__setattr__(self, "allowed_skill_ids", skill_ids)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -290,14 +461,16 @@ class AgentSubagentDefinition:
             "purpose": self.purpose,
             "may_propose_plan": self.may_propose_plan,
             "allowed_action_ids": list(self.allowed_action_ids),
+            "allowed_skill_ids": list(self.allowed_skill_ids),
         }
 
 
 class AgentSubagentCatalog:
-    """Fixed functional-role catalog derived from the existing Agent action catalog."""
+    """Fixed functional-role catalog derived from existing Agent action/Skill catalogs."""
 
-    def __init__(self, actions: AgentActionCatalog) -> None:
+    def __init__(self, actions: AgentActionCatalog, skills: AgentSkillCatalog) -> None:
         all_action_ids = tuple(item.action_id for item in actions.list())
+        all_skill_ids = tuple(item.skill_id for item in skills.list())
         media_action_ids = tuple(
             action_id for action_id in all_action_ids if action_id in _MEDIA_ACTION_IDS
         )
@@ -313,6 +486,7 @@ class AgentSubagentCatalog:
                 purpose="Propose bounded action/Skill steps that must pass the existing AgentPlanner.",
                 may_propose_plan=True,
                 allowed_action_ids=all_action_ids,
+                allowed_skill_ids=all_skill_ids,
             ),
             AgentSubagentRole.MEDIA: AgentSubagentDefinition(
                 role=AgentSubagentRole.MEDIA,
@@ -345,6 +519,8 @@ class AgentSubagentContext:
     snapshot: AgentContextSnapshot
     definition: AgentSubagentDefinition
     actions: tuple[AgentActionDefinition, ...]
+    skills: tuple[dict[str, Any], ...]
+    available_references: tuple[str, ...]
     evidence: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -353,12 +529,17 @@ class AgentSubagentContext:
             "context": self.snapshot.to_dict(),
             "role": self.definition.to_dict(),
             "actions": [item.to_dict() for item in self.actions],
+            "skills": [
+                portable_json(item, field_name="functional subagent Skill")
+                for item in self.skills
+            ],
+            "available_references": list(self.available_references),
             "evidence": portable_json(self.evidence, field_name="functional subagent evidence"),
         }
 
 
-class AgentSubagentProvider(Protocol):
-    """Synchronous proposal-only seam; it receives no mutation or authorization authority."""
+class AgentSubagentProposer(Protocol):
+    """Synchronous proposal-only seam; its output is treated as untrusted structured data."""
 
     def propose(self, context: AgentSubagentContext) -> Mapping[str, Any]: ...
 
@@ -403,15 +584,16 @@ class AgentSubagentCoordinator:
     def __init__(
         self,
         harness: AgentHarness,
-        provider: AgentSubagentProvider,
+        proposer: AgentSubagentProposer,
         *,
         planner: AgentPlanner | None = None,
         task_coordinator: AgentTaskCoordinator | None = None,
     ) -> None:
         self.harness = harness
-        self.provider = provider
-        self.catalog = AgentSubagentCatalog(harness.catalog)
-        self.planner = planner or AgentPlanner(harness)
+        self.proposer = proposer
+        self.skills = AgentSkillCatalog(harness.catalog)
+        self.catalog = AgentSubagentCatalog(harness.catalog, self.skills)
+        self.planner = planner or AgentPlanner(harness, skills=self.skills)
         self._task_coordinator = task_coordinator
         self.plans = AgentPlanStore(harness.project_store)
         self.tasks = AgentTaskStore(harness.project_store)
@@ -477,13 +659,19 @@ class AgentSubagentCoordinator:
             if request.role is AgentSubagentRole.CRITIC
             else {}
         )
-        observed = _collect_identifiers(
-            {
-                "context": snapshot.to_dict(),
-                "evidence": evidence,
-            }
+        available_references = tuple(
+            dict.fromkeys(
+                (
+                    *_snapshot_references(snapshot),
+                    *_critic_references(evidence),
+                )
+            )
         )
-        missing = set(request.canonical_references).difference(observed)
+        if len(available_references) > _MAX_AVAILABLE_REFERENCES:
+            raise AgentSubagentError(
+                f"functional subagent context exceeds {_MAX_AVAILABLE_REFERENCES} explicit references"
+            )
+        missing = set(request.canonical_references).difference(available_references)
         if missing:
             raise AgentSubagentError(
                 "functional subagent request references identities absent from bounded context: "
@@ -493,11 +681,17 @@ class AgentSubagentCoordinator:
             self.harness.catalog.get(action_id)
             for action_id in definition.allowed_action_ids
         )
+        skills = tuple(
+            self.skills.describe(skill_id)
+            for skill_id in definition.allowed_skill_ids
+        )
         return AgentSubagentContext(
             request=request,
             snapshot=snapshot,
             definition=definition,
             actions=actions,
+            skills=skills,
+            available_references=available_references,
             evidence=evidence,
         )
 
@@ -565,9 +759,9 @@ class AgentSubagentCoordinator:
             )
         proposals = tuple(self._proposal_from_dict(item) for item in proposal_items)
 
-        observed = _collect_identifiers(context.to_dict())
+        available = set(context.available_references)
         for finding in findings:
-            missing = set(finding.canonical_references).difference(observed)
+            missing = set(finding.canonical_references).difference(available)
             if missing:
                 raise AgentSubagentError(
                     f"finding {finding.finding_id!r} references identities absent from "
@@ -586,24 +780,23 @@ class AgentSubagentCoordinator:
             )
         if definition.role is AgentSubagentRole.PLAN and not proposals:
             raise AgentSubagentError("plan role must propose at least one bounded step")
-        if definition.role is AgentSubagentRole.MEDIA:
-            for proposal in proposals:
-                if proposal.skill_id is not None:
-                    raise AgentSubagentError(
-                        "media role cannot expand general Skills in this slice"
-                    )
-                if proposal.action_id not in definition.allowed_action_ids:
-                    raise AgentSubagentError(
-                        f"media role cannot propose action {proposal.action_id!r}"
-                    )
+        for proposal in proposals:
+            if proposal.action_id is not None and proposal.action_id not in definition.allowed_action_ids:
+                raise AgentSubagentError(
+                    f"{definition.role.value} role cannot propose action {proposal.action_id!r}"
+                )
+            if proposal.skill_id is not None and proposal.skill_id not in definition.allowed_skill_ids:
+                raise AgentSubagentError(
+                    f"{definition.role.value} role cannot propose Skill {proposal.skill_id!r}"
+                )
 
     def delegate(self, request: AgentSubagentRequest) -> AgentSubagentResult:
         context = self.prepare(request)
         try:
-            raw = self.provider.propose(context)
+            raw = self.proposer.propose(context)
         except Exception as exc:
             raise AgentSubagentError(
-                f"functional subagent provider failed: {safe_error_message(exc)}"
+                f"functional subagent proposer failed: {safe_error_message(exc)}"
             ) from exc
         summary, findings, proposals = self._parse_output(context, raw)
         self._validate_role_output(context.definition, proposals)
@@ -662,7 +855,7 @@ __all__ = [
     "AgentSubagentError",
     "AgentSubagentFinding",
     "AgentSubagentFindingSeverity",
-    "AgentSubagentProvider",
+    "AgentSubagentProposer",
     "AgentSubagentRequest",
     "AgentSubagentResult",
     "AgentSubagentRole",
