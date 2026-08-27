@@ -11,7 +11,7 @@
 
 Stage 16 remains in review on branch `stage-16/agent-planner-durable-tasks-skills`, PR #70. It was opened from lifecycle-closed idle `main` commit `fdc82fbdbd518e711a5f4b36d01cdbc6745a7e40` after Stage 15 / PR #69 merged as `273b5ea8f979cf759cfbf6510e1215a55e98d9c9`.
 
-The previous exact review head `b3f39f18bfe18ebd57910c8877965e22c1905fc4` passed two independent five-job CI runs (#3385 and #3386), including Ubuntu/Windows unit suites and browser E2E. The subsequent Codex review found three additional recovery-provenance gaps, so merge remains blocked until the new refinement head passes its own exact-head gate and clean re-review.
+The current exact review head `5a1e6e23cd6f55f8991366c7fe08dfa0b651473b` passed exact-head CI #3402 (`33049944377`) across all five permanent jobs, including Ubuntu/Windows bootstrap+unit suites and both app-baseline browser E2E suites. All previously known review threads were resolved before the fresh Codex review of that SHA; merge remains blocked only by any new finding from that exact-head re-review until it is addressed and the resulting final head is re-verified.
 
 ## Stage-16 implementation under review
 
