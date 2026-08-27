@@ -91,29 +91,33 @@ class DevelopmentContextValidationTests(unittest.TestCase):
         )
 
     @staticmethod
-    def _valid_pr_body() -> str:
-        return "\n".join(
+    def _required_sections() -> tuple[str, ...]:
+        return (
+            "## Goal\nMake handoffs deterministic.",
+            "## Changes\nAdd lifecycle validation.",
+            "## Verification\nFocused tests pass.",
+            "## Architecture impact\nRepository state becomes unambiguous.",
+            "## Known limitations\nGitHub remains the source of live check results.",
+            "## Next task\nClose Stage 5 correctness gaps.",
+        )
+
+    @classmethod
+    def _valid_pr_body(cls) -> str:
+        return "\n\n".join(
             (
-                "<!-- uv-active-slice: chore-agent-development-workflow -->",
+                "<!-- uv-active-slice: chore-agent-development-workflow -->\n"
                 "<!-- uv-next-slice: stage-5-correctness-browser-e2e -->",
-                "",
-                "## Goal",
-                "Make handoffs deterministic.",
-                "",
-                "## Changes",
-                "Add lifecycle validation.",
-                "",
-                "## Verification",
-                "Focused tests pass.",
-                "",
-                "## Architecture impact",
-                "Repository state becomes unambiguous.",
-                "",
-                "## Known limitations",
-                "GitHub remains the source of live check results.",
-                "",
-                "## Next task",
-                "Close Stage 5 correctness gaps.",
+                *cls._required_sections(),
+            )
+        )
+
+    @classmethod
+    def _valid_closure_pr_body(cls) -> str:
+        return "\n\n".join(
+            (
+                "<!-- uv-lifecycle-closure: stage-5-dubbing-translation -->\n"
+                "<!-- uv-next-slice: stage-5-correctness-browser-e2e -->",
+                *cls._required_sections(),
             )
         )
 
@@ -125,6 +129,24 @@ class DevelopmentContextValidationTests(unittest.TestCase):
                 "body": body if body is not None else self._valid_pr_body(),
                 "head": {"ref": "chore/agent-development-workflow"},
                 "base": {"ref": "main"},
+            },
+        }
+
+    def _closure_event(
+        self,
+        *,
+        draft: bool = False,
+        body: str | None = None,
+        head: str = "chore/stage-5-lifecycle-closure",
+        base: str = "main",
+    ) -> dict:
+        return {
+            "number": 33,
+            "pull_request": {
+                "draft": draft,
+                "body": body if body is not None else self._valid_closure_pr_body(),
+                "head": {"ref": head},
+                "base": {"ref": base},
             },
         }
 
@@ -247,15 +269,48 @@ class DevelopmentContextValidationTests(unittest.TestCase):
                 event_path=self._event_path(self._event(draft=False, body=bad_body)),
             )
 
-    def test_idle_rejects_pull_request_event(self) -> None:
+    def test_idle_accepts_bounded_lifecycle_closure_pull_request(self) -> None:
         self.document = self._valid_idle_document()
         self._write_repository()
-        with self.assertRaisesRegex(DevelopmentContextError, "idle repository"):
+        result = validate_repository(
+            self.root,
+            event_name="pull_request",
+            event_path=self._event_path(self._closure_event()),
+        )
+        self.assertEqual(result["lifecycle_state"], "idle")
+        self.assertIsNone(result["active_slice"])
+
+    def test_idle_rejects_ordinary_pull_request_event(self) -> None:
+        self.document = self._valid_idle_document()
+        self._write_repository()
+        with self.assertRaisesRegex(DevelopmentContextError, "lifecycle-closure"):
             validate_repository(
                 self.root,
                 event_name="pull_request",
-                event_path=self._event_path(self._event(draft=True)),
+                event_path=self._event_path(self._event(draft=False)),
             )
+
+    def test_lifecycle_closure_marker_and_pr_shape_fail_closed(self) -> None:
+        self.document = self._valid_idle_document()
+        self._write_repository()
+        wrong_marker = self._valid_closure_pr_body().replace(
+            "uv-lifecycle-closure: stage-5-dubbing-translation",
+            "uv-lifecycle-closure: another-slice",
+        )
+        cases = (
+            (self._closure_event(body=wrong_marker), "lifecycle-closure"),
+            (self._closure_event(draft=True), "must not be draft"),
+            (self._closure_event(head="fix/not-a-closure"), "chore/"),
+            (self._closure_event(base="release"), "target main"),
+        )
+        for payload, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(DevelopmentContextError, message):
+                    validate_repository(
+                        self.root,
+                        event_name="pull_request",
+                        event_path=self._event_path(payload),
+                    )
 
     def test_review_rejects_placeholders_but_draft_allows_them(self) -> None:
         body = self._valid_pr_body().replace("Close Stage 5 correctness gaps.", "TODO")
