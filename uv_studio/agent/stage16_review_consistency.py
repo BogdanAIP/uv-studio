@@ -29,6 +29,13 @@ from .stage16_recovery import (
     _typed_correlation_reference,
 )
 
+# AgentPlanRecord and AgentTaskRecord each allow at most 128 canonical references.
+# Execution adds bounded Stage-15 result/affected identities plus plan/task/Skill
+# correlation and recovery context. Keep a conservative 16-reference reserve so a
+# valid Plan can always reach a bounded terminal Task after canonical/cost-bearing
+# dispatch instead of discovering the record bound after the effect has committed.
+EXECUTION_SAFE_PLAN_REFERENCE_LIMIT = 112
+
 
 class _ExecutionPolicyCatalog:
     """Delegate the catalog while freezing one already-captured policy for dispatch."""
@@ -107,6 +114,14 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
             task_store=task_store,
         )
 
+    @staticmethod
+    def _require_execution_reference_budget(plan: Any) -> None:
+        if len(plan.canonical_references) > EXECUTION_SAFE_PLAN_REFERENCE_LIMIT:
+            raise AgentTaskStateError(
+                "durable Agent plan canonical references exceed the execution-safe "
+                f"limit of {EXECUTION_SAFE_PLAN_REFERENCE_LIMIT}; dispatch refused"
+            )
+
     def _recovered_success_trace(
         self,
         plan: Any,
@@ -117,6 +132,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
         extra_references: Sequence[str] = (),
         context_digest: str | None = None,
     ) -> AgentTraceRecord:
+        self._require_execution_reference_budget(plan)
         spec = plan.task(record.task_id)
         evidence = self._execution_evidence.get(
             project_id=record.project_id,
@@ -171,6 +187,10 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
     ) -> Any:
         with self.project_store._lock, self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
+            # This check must happen before context/policy capture, RUNNING transition,
+            # execution evidence, or dispatch. It also protects durable Plans created
+            # by older/injected planners that predate the execution-safe Planner bound.
+            self._require_execution_reference_budget(plan)
             spec = plan.task(task_id)
             record = self.tasks.get(project_id, plan.plan_id, spec.task_id)
             if record.status is AgentTaskStatus.PLANNED:
@@ -278,42 +298,27 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                                 trace=trace,
                             )
                             self.tasks.promote_ready(plan)
-                            raise
+                            return result
                         self.tasks.transition(
                             running,
                             AgentTaskStatus.FAILED,
                             trace=trace,
                             error=exc,
                         )
-                        raise
-                    recovered = self._committed_recovery_trace(plan, running)
-                    if recovered is not None:
-                        # The effect is already authoritative; leave RUNNING so reopen
-                        # can append the missing success trace without replay.
-                        raise
-                    self.tasks.transition(
-                        running,
-                        AgentTaskStatus.FAILED,
-                        error=exc,
-                    )
+                    else:
+                        self.tasks.transition(
+                            running,
+                            AgentTaskStatus.FAILED,
+                            error=exc,
+                        )
                     raise
 
                 trace = self._correlated_trace_for(plan, running)
-                if trace is None:
-                    error = AgentTaskStateError(
-                        "AgentHarness execution completed without an inspectable Stage-15 trace"
+                if trace is None or trace.status is not AgentTraceStatus.SUCCEEDED:
+                    raise AgentTaskStateError(
+                        "Agent action completed without correlated durable success trace"
                     )
-                    recovered = self._committed_recovery_trace(plan, running)
-                    if recovered is not None:
-                        raise error
-                    self.tasks.transition(
-                        running,
-                        AgentTaskStatus.FAILED,
-                        error=error,
-                    )
-                    raise error
-
-                self.tasks.transition(
+                completed = self.tasks.transition(
                     running,
                     AgentTaskStatus.SUCCEEDED,
                     trace=trace,
@@ -322,4 +327,8 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                 return result
 
 
-__all__ = ["AgentPlanner", "AgentTaskCoordinator"]
+__all__ = [
+    "AgentPlanner",
+    "AgentTaskCoordinator",
+    "EXECUTION_SAFE_PLAN_REFERENCE_LIMIT",
+]
