@@ -4,8 +4,8 @@ The runner never edits the checkout. Each mutant receives a temporary full copy
 of the ``uv_studio`` package, proves its exact detector passes on the unmodified
 overlay, applies one exact source replacement, and then reruns the same detector
 in a fresh Python process. The detector helper proves that the target module came
-from the overlay and that its source SHA-256 matches the exact bytes the runner
-expects to execute.
+from the exact declared overlay path and that its source SHA-256 matches the exact
+bytes the runner expects to execute.
 
 Classification is deliberately fail-closed:
 
@@ -79,10 +79,19 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         seen.add(mutant_id)
         _require_string(mutant["guarantee"], f"{location}.guarantee")
         target = Path(_require_string(mutant["target"], f"{location}.target"))
-        if target.is_absolute() or ".." in target.parts or not target.parts or target.parts[0] != "uv_studio":
+        if (
+            target.is_absolute()
+            or ".." in target.parts
+            or not target.parts
+            or target.parts[0] != "uv_studio"
+        ):
             raise AssuranceError(f"{location}.target must stay inside uv_studio")
-        _require_string(mutant["module"], f"{location}.module")
-        _require_string(mutant["detector"], f"{location}.detector")
+        module = _require_string(mutant["module"], f"{location}.module")
+        if not module.startswith("uv_studio."):
+            raise AssuranceError(f"{location}.module must stay inside uv_studio")
+        detector = _require_string(mutant["detector"], f"{location}.detector")
+        if not detector.startswith("test_"):
+            raise AssuranceError(f"{location}.detector must name one repository unittest")
         mutation = mutant["mutation"]
         if not isinstance(mutation, dict) or set(mutation) != _ALLOWED_MUTATION_KEYS:
             raise AssuranceError(f"{location}.mutation keys do not match schema v1")
@@ -135,6 +144,8 @@ def _run_detector(
         str(mutant["module"]),
         "--test",
         str(mutant["detector"]),
+        "--expected-source-relative",
+        str(mutant["target"]),
         "--expected-source-sha256",
         expected_source_sha256,
     ]
@@ -176,7 +187,7 @@ def _copy_package(root: Path, overlay: Path) -> None:
     )
 
 
-def _error_result(mutant: Mapping[str, Any], exc: BaseException) -> dict[str, Any]:
+def _error_result(mutant: Mapping[str, Any], exc: Exception) -> dict[str, Any]:
     return {
         "id": mutant.get("id", "unknown"),
         "guarantee": mutant.get("guarantee", "unknown"),
@@ -247,14 +258,19 @@ def run_mutant(
                 timeout_seconds=timeout_seconds,
             )
             detector_status = detector.get("status")
-            if detector_status == "failure" and detector.get("failures", 0) >= 1 and detector.get("errors", 0) == 0:
+            if (
+                detector_status == "failure"
+                and detector.get("failures", 0) >= 1
+                and detector.get("errors", 0) == 0
+            ):
                 status = "KILLED"
             elif detector_status == "pass":
                 status = "SURVIVED"
             else:
                 raise AssuranceError(
                     "mutant detector did not produce a clean assertion failure or pass "
-                    f"(status={detector_status!r}, failures={detector.get('failures')!r}, errors={detector.get('errors')!r})"
+                    f"(status={detector_status!r}, failures={detector.get('failures')!r}, "
+                    f"errors={detector.get('errors')!r})"
                 )
 
             return {
@@ -272,7 +288,7 @@ def run_mutant(
                 "detector_errors": detector.get("errors"),
                 "detector_output": detector.get("output", ""),
             }
-    except BaseException as exc:
+    except Exception as exc:
         return _error_result(mutant, exc)
 
 
@@ -296,7 +312,10 @@ def run_suite(
         run_mutant(root, mutant, timeout_seconds=timeout_seconds)
         for mutant in mutants
     ]
-    counts = {status: sum(item["status"] == status for item in results) for status in ("KILLED", "SURVIVED", "ERROR")}
+    counts = {
+        status: sum(item["status"] == status for item in results)
+        for status in ("KILLED", "SURVIVED", "ERROR")
+    }
     return {
         "schema_version": 1,
         "suite_id": manifest["suite_id"],
@@ -355,7 +374,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not report_path.is_absolute():
             report_path = root / report_path
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        report_path.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
     return 0 if summary["SURVIVED"] == 0 and summary["ERROR"] == 0 else 1
 
