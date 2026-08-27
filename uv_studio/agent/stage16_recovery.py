@@ -1,12 +1,13 @@
 """Final Stage-16 planning validation and committed-effect recovery.
 
 This layer stays above the Stage-15 AgentHarness and existing UV mutation authorities.
-It closes two review gaps without replaying work:
+It closes review gaps without replaying work:
 
-* durable plans reject missing required inputs for every Stage-15 catalog action;
-* a foreground task that crashes after a canonical transaction/Job commit but before
-  the Stage-15 success trace can reconstruct that trace from authoritative durable
-  evidence rather than being marked failed or replayed.
+* durable plans validate required inputs and command-level input shapes before persistence;
+* foreground execution binds the exact execution-time context into durable correlation
+  evidence before any canonical/cost-bearing effect;
+* a task that crashes after a canonical transaction/Job commit but before the Stage-15
+  success trace reconstructs that trace from authoritative durable evidence.
 
 Production/Timeline correlation is written into the existing ProjectUnitOfWork
 prepared journal before canonical bytes change. Generation submission is already
@@ -16,14 +17,37 @@ persisted Job request bound to the planned idempotency key.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterator, Mapping, Sequence
 
+from uv_studio.editor.timeline_commands import (
+    AddClipCommand,
+    CreateTrackCommand,
+    MoveClipCommand,
+    RemoveClipCommand,
+    TimelineCommandError,
+    TrimClipCommand,
+)
 from uv_studio.generation.models import GenerationContract, GenerationValidationError
+from uv_studio.production.semantics import (
+    ProductionSemanticError,
+    Scene,
+    Shot,
+    Take,
+)
 from uv_studio.projects.models import ProjectValidationError, validate_identifier
+from uv_studio.projects.timeline import (
+    MAIN_TIMELINE_PATH,
+    TimelineClip,
+    TimelineDocument,
+    TimelineError,
+)
 from uv_studio.projects.transactions import (
     HISTORY_TRANSACTIONS_ROOT,
     ProjectTransactionError,
@@ -43,11 +67,19 @@ from .stage16_runtime import (
     AgentPlanner as _RuntimeAgentPlanner,
     AgentSkillCatalog,
     AgentTaskCoordinator as _RuntimeAgentTaskCoordinator,
+    AgentTaskStore as _RuntimeAgentTaskStore,
 )
 
 _CORRELATION_FIELD = "execution_correlation_id"
+_EXECUTION_CONTEXT_FIELD = "execution_context_digest"
+_EXECUTION_CONTEXT_REFERENCE_PREFIX = "agent_ctx_"
+
 _EXECUTION_CORRELATION: ContextVar[str | None] = ContextVar(
     "uv_stage16_project_transaction_correlation",
+    default=None,
+)
+_EXECUTION_CONTEXT: ContextVar[str | None] = ContextVar(
+    "uv_stage16_execution_context_digest",
     default=None,
 )
 
@@ -92,6 +124,46 @@ def _typed_correlation_reference(
     return f"agent_corr_{digest[:32]}"
 
 
+def _validate_context_digest(value: Any, *, field_name: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise AgentTaskStateError(f"{field_name} must be lowercase SHA-256 hex")
+    return value
+
+
+def _execution_context_reference(context_digest: str) -> str:
+    normalized = _validate_context_digest(
+        context_digest,
+        field_name="execution context digest",
+    )
+    reference = f"{_EXECUTION_CONTEXT_REFERENCE_PREFIX}{normalized}"
+    try:
+        return validate_identifier(reference, field_name="execution context reference")
+    except ProjectValidationError as exc:
+        raise AgentTaskStateError(str(exc)) from exc
+
+
+def _record_execution_context_digest(record: AgentTaskRecord) -> str | None:
+    matches = [
+        reference[len(_EXECUTION_CONTEXT_REFERENCE_PREFIX) :]
+        for reference in record.canonical_references
+        if reference.startswith(_EXECUTION_CONTEXT_REFERENCE_PREFIX)
+    ]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise AgentTaskStateError(
+            f"Agent Task {record.task_id!r} has ambiguous execution context evidence"
+        )
+    return _validate_context_digest(
+        matches[0],
+        field_name="durable execution context digest",
+    )
+
+
 @contextmanager
 def _execution_correlation(correlation_id: str) -> Iterator[None]:
     try:
@@ -108,15 +180,56 @@ def _execution_correlation(correlation_id: str) -> Iterator[None]:
         _EXECUTION_CORRELATION.reset(token)
 
 
+@contextmanager
+def _execution_context(context_digest: str) -> Iterator[None]:
+    normalized = _validate_context_digest(
+        context_digest,
+        field_name="execution context digest",
+    )
+    token = _EXECUTION_CONTEXT.set(normalized)
+    try:
+        yield
+    finally:
+        _EXECUTION_CONTEXT.reset(token)
+
+
+class _RecoveryAgentTaskStore(_RuntimeAgentTaskStore):
+    """Persist opaque execution-context evidence on the existing RUNNING task record."""
+
+    def write(self, record: AgentTaskRecord) -> AgentTaskRecord:
+        context_digest = _EXECUTION_CONTEXT.get()
+        if context_digest is not None and record.status is AgentTaskStatus.RUNNING:
+            reference = _execution_context_reference(context_digest)
+            existing_contexts = [
+                item
+                for item in record.canonical_references
+                if item.startswith(_EXECUTION_CONTEXT_REFERENCE_PREFIX)
+            ]
+            if existing_contexts and existing_contexts != [reference]:
+                raise AgentTaskStateError(
+                    "RUNNING Agent Task already carries different execution context evidence"
+                )
+            if reference not in record.canonical_references:
+                record = replace(
+                    record,
+                    canonical_references=tuple(
+                        dict.fromkeys((*record.canonical_references, reference))
+                    ),
+                )
+        return super().write(record)
+
+
 @dataclass(frozen=True)
 class _CommittedTransactionEvidence:
     transaction_id: str
     command: str
     created_at: str
+    context_digest: str | None
+    result_references: dict[str, str]
 
 
 class _CorrelatedProjectUnitOfWork(ProjectUnitOfWork):
-    """ProjectUnitOfWork that binds one execution correlation before its commit point."""
+    """ProjectUnitOfWork that binds execution evidence before its commit point."""
 
     def _execute_prepared(
         self,
@@ -128,9 +241,12 @@ class _CorrelatedProjectUnitOfWork(ProjectUnitOfWork):
         history_after: Any,
     ) -> None:
         correlation_id = _EXECUTION_CORRELATION.get()
+        context_digest = _EXECUTION_CONTEXT.get()
         prepared = dict(record)
         if correlation_id is not None:
             prepared[_CORRELATION_FIELD] = correlation_id
+        if context_digest is not None:
+            prepared[_EXECUTION_CONTEXT_FIELD] = context_digest
         super()._execute_prepared(
             project_id,
             record_path,
@@ -139,6 +255,160 @@ class _CorrelatedProjectUnitOfWork(ProjectUnitOfWork):
             history_before,
             history_after,
         )
+
+    @staticmethod
+    def _timeline_from_snapshot(
+        snapshot: Any,
+        *,
+        label: str,
+    ) -> TimelineDocument:
+        if not isinstance(snapshot, Mapping):
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot must be a JSON object"
+            )
+        if snapshot.get("path") != MAIN_TIMELINE_PATH:
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot path is invalid"
+            )
+        exists = snapshot.get("exists")
+        if not isinstance(exists, bool):
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot exists flag is invalid"
+            )
+        if not exists:
+            if (
+                snapshot.get("size") != 0
+                or snapshot.get("sha256") is not None
+                or snapshot.get("content_base64") is not None
+            ):
+                raise ProjectTransactionError(
+                    f"correlated timeline {label} missing snapshot metadata is invalid"
+                )
+            return TimelineDocument()
+
+        encoded = snapshot.get("content_base64")
+        expected_size = snapshot.get("size")
+        expected_sha = snapshot.get("sha256")
+        if (
+            not isinstance(encoded, str)
+            or isinstance(expected_size, bool)
+            or not isinstance(expected_size, int)
+            or not isinstance(expected_sha, str)
+        ):
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot metadata is invalid"
+            )
+        try:
+            content = base64.b64decode(encoded.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, ValueError) as exc:
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot base64 is invalid"
+            ) from exc
+        if len(content) != expected_size:
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot size is invalid"
+            )
+        if hashlib.sha256(content).hexdigest() != expected_sha:
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot digest is invalid"
+            )
+        try:
+            payload = json.loads(content.decode("utf-8"))
+            return TimelineDocument.from_dict(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError, TimelineError) as exc:
+            raise ProjectTransactionError(
+                f"correlated timeline {label} snapshot content is invalid: {exc}"
+            ) from exc
+
+    @classmethod
+    def _timeline_result_references(
+        cls,
+        record: Mapping[str, Any],
+        command: str,
+    ) -> dict[str, str]:
+        if command not in {
+            "timeline.create_track",
+            "timeline.add_clip",
+            "timeline.move_clip",
+            "timeline.remove_clip",
+            "timeline.trim_clip",
+        }:
+            return {}
+
+        changes = record.get("changes")
+        if not isinstance(changes, list):
+            raise ProjectTransactionError(
+                "correlated timeline transaction changes are invalid"
+            )
+        timeline_changes = [
+            change
+            for change in changes
+            if isinstance(change, Mapping)
+            and change.get("path") == MAIN_TIMELINE_PATH
+        ]
+        if len(timeline_changes) != 1:
+            raise ProjectTransactionError(
+                "correlated timeline transaction must contain exactly one main timeline change"
+            )
+        change = timeline_changes[0]
+        before = cls._timeline_from_snapshot(change.get("before"), label="before")
+        after = cls._timeline_from_snapshot(change.get("after"), label="after")
+
+        before_tracks = {track.track_id: track for track in before.tracks}
+        after_tracks = {track.track_id: track for track in after.tracks}
+        before_clips = {
+            clip.clip_id: (track.track_id, clip)
+            for track in before.tracks
+            for clip in track.clips
+        }
+        after_clips = {
+            clip.clip_id: (track.track_id, clip)
+            for track in after.tracks
+            for clip in track.clips
+        }
+
+        if command == "timeline.create_track":
+            added = sorted(set(after_tracks).difference(before_tracks))
+            if len(added) != 1:
+                raise ProjectTransactionError(
+                    "correlated create_track transaction does not identify one created track"
+                )
+            return {"track_id": added[0]}
+
+        if command == "timeline.add_clip":
+            added = sorted(set(after_clips).difference(before_clips))
+            if len(added) != 1:
+                raise ProjectTransactionError(
+                    "correlated add_clip transaction does not identify one created clip"
+                )
+            clip_id = added[0]
+            track_id = after_clips[clip_id][0]
+            return {"track_id": track_id, "clip_id": clip_id}
+
+        if command == "timeline.remove_clip":
+            removed = sorted(set(before_clips).difference(after_clips))
+            if len(removed) != 1:
+                raise ProjectTransactionError(
+                    "correlated remove_clip transaction does not identify one removed clip"
+                )
+            clip_id = removed[0]
+            track_id = before_clips[clip_id][0]
+            return {"track_id": track_id, "clip_id": clip_id}
+
+        changed = sorted(
+            clip_id
+            for clip_id in set(before_clips).intersection(after_clips)
+            if (
+                before_clips[clip_id][0] != after_clips[clip_id][0]
+                or before_clips[clip_id][1] != after_clips[clip_id][1]
+            )
+        )
+        if len(changed) != 1:
+            raise ProjectTransactionError(
+                f"correlated {command} transaction does not identify one changed clip"
+            )
+        clip_id = changed[0]
+        return {"track_id": after_clips[clip_id][0], "clip_id": clip_id}
 
     def committed_by_correlation(
         self,
@@ -194,15 +464,32 @@ class _CorrelatedProjectUnitOfWork(ProjectUnitOfWork):
                     raise ProjectTransactionError(
                         "correlated transaction command is invalid"
                     )
+                command = command.strip()
                 if not isinstance(created_at, str) or not created_at:
                     raise ProjectTransactionError(
                         "correlated transaction created_at is invalid"
                     )
+                raw_context_digest = record.get(_EXECUTION_CONTEXT_FIELD)
+                context_digest: str | None = None
+                if raw_context_digest is not None:
+                    try:
+                        context_digest = _validate_context_digest(
+                            raw_context_digest,
+                            field_name="correlated transaction execution context digest",
+                        )
+                    except AgentTaskStateError as exc:
+                        raise ProjectTransactionError(str(exc)) from exc
+                result_references = {
+                    "transaction_id": transaction_id,
+                    **self._timeline_result_references(record, command),
+                }
                 matches.append(
                     _CommittedTransactionEvidence(
                         transaction_id=transaction_id,
-                        command=command.strip(),
+                        command=command,
                         created_at=created_at,
+                        context_digest=context_digest,
+                        result_references=result_references,
                     )
                 )
 
@@ -213,8 +500,86 @@ class _CorrelatedProjectUnitOfWork(ProjectUnitOfWork):
             return matches[0] if matches else None
 
 
+def _validate_non_generation_action_inputs(
+    action_id: str,
+    inputs: Mapping[str, Any],
+) -> None:
+    """Validate planner input shapes with the same command/domain constructors."""
+
+    try:
+        if action_id == "production.create_scene":
+            Scene(
+                scene_id=inputs["scene_id"],
+                title=inputs["title"],
+                summary=inputs.get("summary", ""),
+            )
+            return
+        if action_id == "production.create_shot":
+            Shot(
+                shot_id=inputs["shot_id"],
+                scene_id=inputs["scene_id"],
+                intent=inputs["intent"],
+                reference_ids=inputs.get("reference_ids", ()),
+            )
+            return
+        if action_id == "production.register_take":
+            Take(
+                take_id=inputs["take_id"],
+                shot_id=inputs["shot_id"],
+                reference_id=inputs["reference_id"],
+                label=inputs.get("label", ""),
+                notes=inputs.get("notes", ""),
+            )
+            return
+        if action_id == "production.accept_take":
+            validate_identifier(inputs["take_id"], field_name="take_id")
+            validate_identifier(
+                inputs.get("track_id", "production_video"),
+                field_name="track_id",
+            )
+            clip_id = inputs.get("clip_id")
+            if clip_id is not None:
+                validate_identifier(clip_id, field_name="clip_id")
+            TimelineClip(
+                clip_id=clip_id or "clip_validation",
+                reference_id="ref_validation",
+                timeline_start_us=inputs["timeline_start_us"],
+                source_start_us=inputs.get("source_start_us", 0),
+                duration_us=inputs["duration_us"],
+            )
+            return
+        if action_id == "timeline.create_track":
+            CreateTrackCommand(**dict(inputs))
+            return
+        if action_id == "timeline.add_clip":
+            AddClipCommand(**dict(inputs))
+            return
+        if action_id == "timeline.move_clip":
+            MoveClipCommand(**dict(inputs))
+            return
+        if action_id == "timeline.remove_clip":
+            RemoveClipCommand(**dict(inputs))
+            return
+        if action_id == "timeline.trim_clip":
+            TrimClipCommand(**dict(inputs))
+            return
+        raise AgentPlanningError(
+            f"input-shape contract is not defined for action {action_id!r}"
+        )
+    except (
+        ProductionSemanticError,
+        TimelineCommandError,
+        TimelineError,
+        ProjectValidationError,
+        TypeError,
+    ) as exc:
+        raise AgentPlanningError(
+            f"action {action_id!r} inputs are invalid: {exc}"
+        ) from exc
+
+
 class AgentPlanner(_RuntimeAgentPlanner):
-    """Stage-16 Planner with explicit required-input validation before persistence."""
+    """Stage-16 Planner with command-level input validation before persistence."""
 
     def build(
         self,
@@ -260,6 +625,14 @@ class AgentPlanner(_RuntimeAgentPlanner):
                         "generation.submit contract must be a JSON object"
                     )
                 try:
+                    validate_identifier(
+                        spec.inputs["shot_id"],
+                        field_name="shot_id",
+                    )
+                    validate_identifier(
+                        spec.inputs["model_id"],
+                        field_name="model_id",
+                    )
                     GenerationContract.from_dict(contract)
                     validate_identifier(
                         spec.inputs["idempotency_key"],
@@ -269,6 +642,11 @@ class AgentPlanner(_RuntimeAgentPlanner):
                     raise AgentPlanningError(
                         f"generation.submit required inputs are invalid: {exc}"
                     ) from exc
+            else:
+                _validate_non_generation_action_inputs(
+                    spec.action_id,
+                    spec.inputs,
+                )
         return plan
 
 
@@ -288,6 +666,8 @@ class AgentTaskCoordinator(_RuntimeAgentTaskCoordinator):
                 harness,
                 skills=AgentSkillCatalog(harness.catalog),
             )
+        if task_store is None:
+            task_store = _RecoveryAgentTaskStore(harness.project_store)
         super().__init__(
             harness,
             planner=planner,
@@ -327,12 +707,18 @@ class AgentTaskCoordinator(_RuntimeAgentTaskCoordinator):
         created_at: str,
         result_references: Mapping[str, str],
         extra_references: Sequence[str] = (),
+        context_digest: str | None = None,
     ) -> AgentTraceRecord:
         spec = plan.task(record.task_id)
         typed_reference = _typed_correlation_reference(
             plan.plan_id,
             spec.task_id,
             spec.skill_id,
+        )
+        recovered_context_digest = (
+            context_digest
+            or _record_execution_context_digest(record)
+            or plan.context_digest
         )
         references = tuple(
             dict.fromkeys(
@@ -349,7 +735,7 @@ class AgentTaskCoordinator(_RuntimeAgentTaskCoordinator):
             trace_id=f"agent_trace_{uuid.uuid4().hex}",
             project_id=record.project_id,
             created_at=created_at,
-            context_digest=plan.context_digest,
+            context_digest=recovered_context_digest,
             action_id=spec.action_id,
             input_digest=self._expected_input_digest(spec),
             canonical_references=references,
@@ -393,7 +779,8 @@ class AgentTaskCoordinator(_RuntimeAgentTaskCoordinator):
             plan,
             record,
             created_at=created_at,
-            result_references={"transaction_id": evidence.transaction_id},
+            result_references=evidence.result_references,
+            context_digest=evidence.context_digest,
         )
 
     def _generation_recovery_trace(
@@ -502,17 +889,42 @@ class AgentTaskCoordinator(_RuntimeAgentTaskCoordinator):
         task_id: str,
         runtime_inputs: Mapping[str, Any] | None = None,
     ) -> Any:
-        plan = self.plans.get(project_id, plan_id)
-        spec = plan.task(task_id)
-        correlation_id = _typed_correlation_reference(
-            plan.plan_id,
-            spec.task_id,
-            spec.skill_id,
-        )
-        with _execution_correlation(correlation_id):
-            return super().execute_task(
-                project_id=project_id,
-                plan_id=plan.plan_id,
-                task_id=spec.task_id,
-                runtime_inputs=runtime_inputs,
+        # Hold the same project/task lease while observing execution context and while
+        # the runtime coordinator transitions READY -> RUNNING -> terminal. Agent Task
+        # writes do not participate in AgentContextBuilder, so the subsequent Harness
+        # snapshot is byte-for-byte the same observation unless canonical state changes,
+        # which this lease prevents.
+        with self.project_store._lock, self.tasks.records.project_lock(project_id):
+            plan = self.plans.get(project_id, plan_id)
+            spec = plan.task(task_id)
+            correlation_id = _typed_correlation_reference(
+                plan.plan_id,
+                spec.task_id,
+                spec.skill_id,
             )
+            try:
+                snapshot = self.harness.context.build(
+                    project_id,
+                    shot_id=spec.target_shot_id,
+                )
+            except Exception:
+                # Preserve the Harness preparation-failure path. No canonical mutation
+                # can occur when the same context build fails before dispatch.
+                with _execution_correlation(correlation_id):
+                    return super().execute_task(
+                        project_id=project_id,
+                        plan_id=plan.plan_id,
+                        task_id=spec.task_id,
+                        runtime_inputs=runtime_inputs,
+                    )
+
+            with (
+                _execution_correlation(correlation_id),
+                _execution_context(snapshot.digest),
+            ):
+                return super().execute_task(
+                    project_id=project_id,
+                    plan_id=plan.plan_id,
+                    task_id=spec.task_id,
+                    runtime_inputs=runtime_inputs,
+                )
