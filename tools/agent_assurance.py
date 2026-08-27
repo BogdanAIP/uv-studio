@@ -1,11 +1,12 @@
 """Curated mutation assurance for accepted UV Studio Agent guarantees.
 
-The runner never edits the checkout. Each mutant receives a temporary full copy
+The runner never edits checkout source. Each mutant receives a temporary full copy
 of the ``uv_studio`` package, proves its exact detector passes on the unmodified
 overlay, applies one exact source replacement, and then reruns the same detector
 in a fresh Python process. The detector helper proves that the target module came
 from the exact declared overlay path and that its source SHA-256 matches the exact
-bytes the runner expects to execute.
+bytes the runner expects to execute. Optional machine-readable reports are allowed
+only outside the repository root.
 
 Classification is deliberately fail-closed:
 
@@ -43,6 +44,14 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def _require_string(value: Any, location: str) -> str:
@@ -212,8 +221,19 @@ def run_mutant(
             relative_target = Path(str(mutant["target"]))
             checkout_target = root / relative_target
             overlay_target = overlay / relative_target
-            if not checkout_target.is_file() or not overlay_target.is_file():
-                raise AssuranceError(f"mutant target does not exist: {relative_target}")
+            if (
+                not checkout_target.is_file()
+                or checkout_target.is_symlink()
+                or not overlay_target.is_file()
+                or overlay_target.is_symlink()
+            ):
+                raise AssuranceError(
+                    f"mutant target must be a regular non-symlink source file: {relative_target}"
+                )
+            if not _is_within(checkout_target, root / "uv_studio"):
+                raise AssuranceError("mutant target resolved outside the checkout uv_studio package")
+            if not _is_within(overlay_target, overlay / "uv_studio"):
+                raise AssuranceError("mutant target resolved outside the isolated uv_studio package")
 
             checkout_sha256 = _sha256(checkout_target)
             baseline_sha256 = _sha256(overlay_target)
@@ -227,10 +247,15 @@ def run_mutant(
                 expected_source_sha256=baseline_sha256,
                 timeout_seconds=timeout_seconds,
             )
-            if baseline.get("status") != "pass" or baseline.get("tests_run") != 1:
+            if (
+                baseline.get("status") != "pass"
+                or baseline.get("tests_run") != 1
+                or baseline.get("skipped") != 0
+            ):
                 raise AssuranceError(
-                    "baseline detector must pass exactly once before mutation "
-                    f"(status={baseline.get('status')!r}, tests_run={baseline.get('tests_run')!r})"
+                    "baseline detector must run and pass exactly once before mutation "
+                    f"(status={baseline.get('status')!r}, tests_run={baseline.get('tests_run')!r}, "
+                    f"skipped={baseline.get('skipped')!r})"
                 )
 
             source = overlay_target.read_text(encoding="utf-8")
@@ -258,19 +283,21 @@ def run_mutant(
                 timeout_seconds=timeout_seconds,
             )
             detector_status = detector.get("status")
+            detector_skipped = detector.get("skipped")
             if (
                 detector_status == "failure"
                 and detector.get("failures", 0) >= 1
                 and detector.get("errors", 0) == 0
+                and detector_skipped == 0
             ):
                 status = "KILLED"
-            elif detector_status == "pass":
+            elif detector_status == "pass" and detector_skipped == 0:
                 status = "SURVIVED"
             else:
                 raise AssuranceError(
-                    "mutant detector did not produce a clean assertion failure or pass "
+                    "mutant detector did not produce a clean non-skipped assertion failure or pass "
                     f"(status={detector_status!r}, failures={detector.get('failures')!r}, "
-                    f"errors={detector.get('errors')!r})"
+                    f"errors={detector.get('errors')!r}, skipped={detector_skipped!r})"
                 )
 
             return {
@@ -286,6 +313,7 @@ def run_mutant(
                 "mutant_source": detector.get("source"),
                 "detector_failures": detector.get("failures"),
                 "detector_errors": detector.get("errors"),
+                "detector_skipped": detector_skipped,
                 "detector_output": detector.get("output", ""),
             }
     except Exception as exc:
@@ -355,6 +383,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             selected_ids=args.mutant or None,
             timeout_seconds=args.timeout_seconds,
         )
+        report_path: Path | None = None
+        if args.report is not None:
+            report_path = args.report
+            if not report_path.is_absolute():
+                report_path = (root / report_path).resolve()
+            else:
+                report_path = report_path.resolve()
+            if _is_within(report_path, root):
+                raise AssuranceError(
+                    "--report must point outside the repository root; assurance never writes checkout files"
+                )
     except AssuranceError as exc:
         print(f"agent assurance failed: {exc}", file=sys.stderr)
         return 2
@@ -369,10 +408,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"KILLED={summary['KILLED']} SURVIVED={summary['SURVIVED']} ERROR={summary['ERROR']}"
     )
 
-    if args.report is not None:
-        report_path = args.report
-        if not report_path.is_absolute():
-            report_path = root / report_path
+    if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n",
