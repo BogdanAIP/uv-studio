@@ -3,11 +3,14 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from uv_studio.agent import (
     AgentHarness,
+    AgentPlanningError,
     AgentPlanStepProposal,
     AgentTaskCoordinator,
+    AgentTaskStateError,
     AgentTaskStatus,
     AgentTraceStatus,
 )
@@ -162,6 +165,66 @@ class AgentStage16GenerationTargetTests(unittest.TestCase):
         self.assertIn(self.project.project_id, trace.canonical_references)
         self.assertIn("shot_deferred_generation", trace.canonical_references)
         self.assertIn(generated.result_references["job_id"], trace.canonical_references)
+
+    def test_planner_rejects_explicit_generation_target_that_differs_from_input_shot(self) -> None:
+        production = ProductionSemanticService(self.store)
+        production.create_shot(
+            self.project.project_id,
+            shot_id="shot_generation_context",
+            scene_id="scene_generation_target",
+            intent="Explicit context target",
+        )
+        production.create_shot(
+            self.project.project_id,
+            shot_id="shot_generation_job",
+            scene_id="scene_generation_target",
+            intent="Generation Job target",
+        )
+
+        harness = AgentHarness(self.store, self._registry())
+        coordinator = AgentTaskCoordinator(harness)
+        plan_id = "agent_plan_divergent_generation_target"
+
+        with self.assertRaisesRegex(
+            AgentPlanningError,
+            "target_shot_id must match inputs",
+        ):
+            coordinator.create_plan(
+                project_id=self.project.project_id,
+                goal="Do not let context and generation target diverge",
+                proposals=(
+                    AgentPlanStepProposal(
+                        step_id="generate",
+                        action_id="generation.submit",
+                        target_shot_id="shot_generation_context",
+                        inputs={
+                            "shot_id": "shot_generation_job",
+                            "model_id": "uv.image.stage16_target",
+                            "inputs": {"prompt": "divergent target"},
+                            "contract": GenerationContract().to_dict(),
+                            "idempotency_key": "idem_stage16_divergent_generation_target",
+                        },
+                    ),
+                ),
+                plan_id=plan_id,
+            )
+
+        self.assertNotIn(
+            plan_id,
+            {plan.plan_id for plan in coordinator.plans.list(self.project.project_id)},
+        )
+
+    def test_runtime_rejects_legacy_generation_task_with_divergent_target(self) -> None:
+        malformed = SimpleNamespace(
+            action_id="generation.submit",
+            target_shot_id="shot_generation_context",
+            inputs={"shot_id": "shot_generation_job"},
+        )
+        with self.assertRaisesRegex(
+            AgentTaskStateError,
+            "target Shot does not match its input Shot",
+        ):
+            AgentTaskCoordinator._execution_target_shot_id(malformed)
 
 
 if __name__ == "__main__":
