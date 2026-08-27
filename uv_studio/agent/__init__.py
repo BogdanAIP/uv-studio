@@ -31,7 +31,7 @@ from .stage16_runtime import (
     AgentSkillCatalog,
     AgentTaskStore,
 )
-from .stage16_review_consistency import AgentPlanner, AgentTaskCoordinator
+from .stage16_generation_policy import AgentPlanner, AgentTaskCoordinator
 
 __all__ = [
     "AGENT_SKILL_SCHEMA_VERSION",
