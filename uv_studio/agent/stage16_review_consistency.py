@@ -14,13 +14,16 @@ from typing import Any, Iterator, Mapping, Sequence
 
 from .models import AgentPolicyProjection, AgentTraceRecord, AgentTraceStatus
 from .orchestration import (
+    AgentPlanRecord,
+    AgentPlanStepProposal,
+    AgentPlanningError,
     AgentTaskBlocked,
     AgentTaskRecord,
     AgentTaskStateError,
     AgentTaskStatus,
 )
 from .stage16_execution_evidence import (
-    AgentPlanner,
+    AgentPlanner as _EvidenceAgentPlanner,
     AgentTaskCoordinator as _EvidenceAgentTaskCoordinator,
 )
 from .stage16_recovery import (
@@ -35,6 +38,35 @@ from .stage16_recovery import (
 # valid Plan can always reach a bounded terminal Task after canonical/cost-bearing
 # dispatch instead of discovering the record bound after the effect has committed.
 EXECUTION_SAFE_PLAN_REFERENCE_LIMIT = 112
+
+
+class AgentPlanner(_EvidenceAgentPlanner):
+    """Keep durable Plan provenance inside the later Task/Trace execution budget."""
+
+    def build(
+        self,
+        *,
+        project_id: str,
+        goal: str,
+        proposals: Sequence[AgentPlanStepProposal],
+        target_shot_id: str | None = None,
+        canonical_references: Sequence[str] = (),
+        plan_id: str | None = None,
+    ) -> AgentPlanRecord:
+        plan = super().build(
+            project_id=project_id,
+            goal=goal,
+            proposals=proposals,
+            target_shot_id=target_shot_id,
+            canonical_references=canonical_references,
+            plan_id=plan_id,
+        )
+        if len(plan.canonical_references) > EXECUTION_SAFE_PLAN_REFERENCE_LIMIT:
+            raise AgentPlanningError(
+                "plan canonical references exceed the execution-safe limit of "
+                f"{EXECUTION_SAFE_PLAN_REFERENCE_LIMIT}"
+            )
+        return plan
 
 
 class _ExecutionPolicyCatalog:
