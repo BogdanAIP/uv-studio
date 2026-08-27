@@ -212,6 +212,14 @@ class AgentTaskStore(_RuntimeAgentTaskStore):
     ) -> AgentTaskRecord:
         target = status if isinstance(status, AgentTaskStatus) else AgentTaskStatus(status)
         current = self.get(record.project_id, record.plan_id, record.task_id)
+        if current.record_id != record.record_id:
+            raise AgentTaskStateError(
+                f"stale Agent Task snapshot has replaced record identity: {record.task_id!r}"
+            )
+        if current != record:
+            raise AgentTaskStateError(
+                f"stale Agent Task snapshot for {record.task_id!r}; reload durable state"
+            )
         allowed = self._ALLOWED_TRANSITIONS[current.status]
         if target not in allowed:
             raise AgentTaskStateError(
