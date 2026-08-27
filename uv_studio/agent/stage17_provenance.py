@@ -26,6 +26,7 @@ from .stage16_generation_target import AgentTaskCoordinator as _Stage16AgentTask
 from .stage17_consistency import AgentSubagentCoordinator as _ConsistencyAgentSubagentCoordinator
 from .subagents import (
     AGENT_SUBAGENT_SCHEMA_VERSION,
+    AgentSubagentContext,
     AgentSubagentError,
     AgentSubagentRequest,
     AgentSubagentResult as _BaseAgentSubagentResult,
@@ -234,6 +235,10 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
     def __init__(self, harness: Any, proposer: Any, **kwargs: Any) -> None:
         task_coordinator = kwargs.get("task_coordinator")
         requested_planner = kwargs.get("planner")
+        if requested_planner is not None and getattr(requested_planner, "harness", None) is not harness:
+            raise AgentSubagentError(
+                "Stage 17 planner must share the exact AgentHarness authority"
+            )
         if task_coordinator is not None:
             if not isinstance(task_coordinator, AgentSubagentTaskCoordinator):
                 raise AgentSubagentError(
@@ -267,6 +272,21 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
                 harness,
                 planner=self.planner,
             )
+
+    def prepare(self, request: AgentSubagentRequest) -> AgentSubagentContext:
+        context = super().prepare(request)
+        if request.role is not AgentSubagentRole.CRITIC:
+            collisions = tuple(
+                reference
+                for reference in context.available_references
+                if _is_delegation_reference(reference)
+            )
+            if collisions:
+                raise AgentSubagentError(
+                    "canonical identity collides with the reserved functional-subagent delegation namespace: "
+                    f"{sorted(collisions)!r}"
+                )
+        return context
 
     def delegate(self, request: AgentSubagentRequest) -> AgentSubagentResult:
         try:
