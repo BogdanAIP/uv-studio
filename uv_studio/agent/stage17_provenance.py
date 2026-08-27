@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import Any, Iterator, Mapping
 
-from .models import AgentTraceRecord, stable_digest
+from .models import AgentHarnessError, AgentTraceRecord, safe_error_message, stable_digest
 from .orchestration import AgentPlanExecutionState, AgentTaskStateError
 from .stage16_generation_target import AgentTaskCoordinator as _Stage16AgentTaskCoordinator
 from .stage17_consistency import AgentSubagentCoordinator as _ConsistencyAgentSubagentCoordinator
@@ -184,7 +184,14 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
             )
 
     def delegate(self, request: AgentSubagentRequest) -> AgentSubagentResult:
-        base = super().delegate(request)
+        try:
+            base = super().delegate(request)
+        except AgentSubagentError:
+            raise
+        except AgentHarnessError as exc:
+            raise AgentSubagentError(
+                f"invalid functional subagent output: {safe_error_message(exc)}"
+            ) from exc
         delegation_id = _delegation_id(base)
         validated_plan = base.validated_plan
         if validated_plan is not None:
