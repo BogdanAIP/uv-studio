@@ -298,27 +298,42 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                                 trace=trace,
                             )
                             self.tasks.promote_ready(plan)
-                            return result
+                            raise
                         self.tasks.transition(
                             running,
                             AgentTaskStatus.FAILED,
                             trace=trace,
                             error=exc,
                         )
-                    else:
-                        self.tasks.transition(
-                            running,
-                            AgentTaskStatus.FAILED,
-                            error=exc,
-                        )
+                        raise
+                    recovered = self._committed_recovery_trace(plan, running)
+                    if recovered is not None:
+                        # The effect is already authoritative; leave RUNNING so reopen
+                        # can append the missing success trace without replay.
+                        raise
+                    self.tasks.transition(
+                        running,
+                        AgentTaskStatus.FAILED,
+                        error=exc,
+                    )
                     raise
 
                 trace = self._correlated_trace_for(plan, running)
-                if trace is None or trace.status is not AgentTraceStatus.SUCCEEDED:
-                    raise AgentTaskStateError(
-                        "Agent action completed without correlated durable success trace"
+                if trace is None:
+                    error = AgentTaskStateError(
+                        "AgentHarness execution completed without an inspectable Stage-15 trace"
                     )
-                completed = self.tasks.transition(
+                    recovered = self._committed_recovery_trace(plan, running)
+                    if recovered is not None:
+                        raise error
+                    self.tasks.transition(
+                        running,
+                        AgentTaskStatus.FAILED,
+                        error=error,
+                    )
+                    raise error
+
+                self.tasks.transition(
                     running,
                     AgentTaskStatus.SUCCEEDED,
                     trace=trace,
