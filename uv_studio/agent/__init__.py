@@ -35,7 +35,6 @@ from .subagents import (
     AGENT_SUBAGENT_SCHEMA_VERSION,
     AgentSubagentCatalog,
     AgentSubagentContext,
-    AgentSubagentCoordinator,
     AgentSubagentDefinition,
     AgentSubagentError,
     AgentSubagentFinding,
@@ -45,6 +44,7 @@ from .subagents import (
     AgentSubagentResult,
     AgentSubagentRole,
 )
+from .stage17_consistency import AgentSubagentCoordinator
 
 __all__ = [
     "AGENT_SKILL_SCHEMA_VERSION",
