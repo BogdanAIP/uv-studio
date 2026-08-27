@@ -1,10 +1,10 @@
 """Run one exact unittest detector against one isolated UV Studio source overlay.
 
 This helper is intentionally stdlib-only. The parent assurance runner supplies a
-copied ``uv_studio`` package through ``PYTHONPATH`` and an expected SHA-256 for
-the exact target source file. A detector result is accepted only after proving
-that Python imported the target module from that overlay and that the on-disk
-source bytes match the expected mutated (or baseline) bytes.
+copied ``uv_studio`` package through ``PYTHONPATH``, the exact expected source
+path inside that overlay, and an expected SHA-256 for the target source bytes. A
+detector result is accepted only after proving all three refer to the module that
+Python actually imported.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import hashlib
 import importlib
 import io
 import json
-import sys
 import traceback
 import unittest
 from pathlib import Path
@@ -48,6 +47,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--overlay", required=True, type=Path)
     parser.add_argument("--module", required=True)
     parser.add_argument("--test", required=True)
+    parser.add_argument("--expected-source-relative", required=True, type=Path)
     parser.add_argument("--expected-source-sha256", required=True)
     return parser
 
@@ -56,6 +56,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     overlay = args.overlay.resolve()
     try:
+        relative_source = args.expected_source_relative
+        if relative_source.is_absolute() or ".." in relative_source.parts:
+            raise RuntimeError("expected source path must stay inside the isolated overlay")
+        expected_source = (overlay / relative_source).resolve()
+        if not _is_within(expected_source, overlay):
+            raise RuntimeError("expected source path escaped the isolated overlay")
+
         importlib.invalidate_caches()
         target_module = importlib.import_module(args.module)
         origin = getattr(target_module, "__file__", None)
@@ -66,6 +73,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise RuntimeError(
                 "source-binding failure: target module was not imported from the isolated overlay "
                 f"(module={args.module!r}, source={str(source_path)!r}, overlay={str(overlay)!r})"
+            )
+        if source_path != expected_source:
+            raise RuntimeError(
+                "source-binding failure: imported module path does not equal the exact mutated target "
+                f"(expected={str(expected_source)!r}, actual={str(source_path)!r})"
             )
         actual_sha256 = _sha256(source_path)
         if actual_sha256 != args.expected_source_sha256:
@@ -107,7 +119,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload["error"] = "unittest returned an unclassified result"
         _emit(payload)
         return 0
-    except BaseException as exc:  # process-level harness/import/source-binding failures are explicit ERRORs
+    except Exception as exc:
         _emit(
             {
                 "status": "error",
