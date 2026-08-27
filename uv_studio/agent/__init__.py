@@ -41,10 +41,13 @@ from .subagents import (
     AgentSubagentFindingSeverity,
     AgentSubagentProposer,
     AgentSubagentRequest,
-    AgentSubagentResult,
     AgentSubagentRole,
 )
-from .stage17_consistency import AgentSubagentCoordinator
+from .stage17_provenance import (
+    AgentSubagentCoordinator,
+    AgentSubagentResult,
+    AgentSubagentTaskCoordinator,
+)
 
 __all__ = [
     "AGENT_SKILL_SCHEMA_VERSION",
@@ -78,6 +81,7 @@ __all__ = [
     "AgentSubagentRequest",
     "AgentSubagentResult",
     "AgentSubagentRole",
+    "AgentSubagentTaskCoordinator",
     "AgentTaskBlocked",
     "AgentTaskCoordinator",
     "AgentTaskRecord",
