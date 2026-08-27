@@ -266,7 +266,7 @@ class AgentStage17AcceptanceTests(unittest.TestCase):
         self.assertEqual(AgentPlanStore(self.store).list(self.project.project_id), ())
 
         oversized = AgentSubagentCoordinator(self.harness, _OversizedProposer())
-        with self.assertRaisesRegex(AgentSubagentError, "serialized bytes"):
+        with self.assertRaisesRegex(AgentSubagentError, "invalid functional subagent output"):
             oversized.delegate(
                 AgentSubagentRequest(
                     role=AgentSubagentRole.EXPLORE,
