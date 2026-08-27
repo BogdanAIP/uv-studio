@@ -1,6 +1,6 @@
 # Functional Subagents — Stage 17
 
-**Status:** draft implementation under PR #71  
+**Status:** review implementation under PR #71  
 **Date:** 2026-08-27  
 **Decision authority:** D-066
 
@@ -36,7 +36,7 @@ Functional subagents are role factoring, not new application authorities.
 
 Stage 17 deliberately adds no durable subagent store, no subagent-owned task graph, no tool registry, no permission layer and no provider execution API. The injected synchronous proposer receives only a bounded `AgentSubagentContext`; its returned data is treated as untrusted and must pass strict shape/portability/role validation. Unknown output fields are rejected, so hidden reasoning/provider-private state cannot enter UV Agent state through this contract.
 
-The proposer has no mutation callback in this API. Canonical mutations remain possible only after a planning result is explicitly persisted through `AgentTaskCoordinator.create_plan()` and later executed through the existing `AgentTaskCoordinator.execute_task()` / `AgentHarness` authority.
+The proposer has no mutation callback in this API. Canonical mutations remain possible only after a planning result is explicitly persisted through the Stage-17 provenance-aware task coordinator and later executed through the existing Stage-16 `AgentTaskCoordinator` / `AgentHarness` authority chain.
 
 ## Context consistency
 
@@ -45,6 +45,16 @@ A role result is bound to a deterministic digest of the **entire** bounded role 
 `persist_plan()` repeats the same check. A plan/media proposal therefore cannot be persisted later against a different canonical/effects context merely because the Stage-16 Planner still considers its individual commands valid. Changed context requires a fresh delegation.
 
 This is optimistic consistency, not a long-held project lock: Stage 17 does not hold canonical mutation locks across model/proposer latency.
+
+## Delegation provenance
+
+Every validated role result receives one stable content-addressed reference of the form `agent_delegate_<role>_<digest>`. The identity is derived from the validated request, bounded context digest, summary, findings and proposals; it is inspection/provenance state, not a new execution authority.
+
+For accepted `plan` and `media` output, the delegation reference is carried into the existing durable Stage-16 Plan canonical references. During execution it is appended to the same Stage-15 trace correlation path already used for Plan/Task/Skill provenance. No second trace or delegation store is introduced.
+
+The same rule applies to restart recovery. If canonical work commits and the process fails before the success trace is durable, Stage-16 reconciliation reconstructs one exact enriched trace containing the delegation reference and uses that same trace object for terminal Task validation. Recovery therefore preserves delegation provenance without replaying the committed effect.
+
+Dependency injection cannot silently bypass this rule: a provenance-blind Stage-16 task coordinator is rejected at the Stage-17 boundary.
 
 ## Reference and portability rules
 
@@ -61,6 +71,18 @@ The Stage-17 critic is observation only. It can inspect durable plan/task/trace 
 ## Foreground-only boundary
 
 Delegation is synchronous. There are no background workers, leases, heartbeats, polling or autonomous continuation in this slice. Those remain D-066 layer 4 and later.
+
+## Verification
+
+The final draft implementation head `dc973c90ac20ab7bac2d4145f58c5df4d69f663c` passed PR CI #3469 (`33097030757`) across all five permanent jobs:
+
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)` including browser user-outcome E2E;
+- `app-baseline (windows-latest)` including browser user-outcome E2E.
+
+Focused Stage-17 tests prove bounded multi-role flow, Plan/Task/Trace delegation provenance, reopen, post-commit/pre-trace crash recovery without replay, malformed/oversized/unknown-role rejection and fail-closed rejection of provenance-blind coordinator injection.
 
 ## Product Truth boundary
 
