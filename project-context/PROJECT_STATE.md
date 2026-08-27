@@ -15,7 +15,7 @@ Accepted merge commit:
 
 `c3ca3c33f89f67fad97081f889934669e34befa5`
 
-The repository lifecycle is now **idle**. There is no active implementation slice on `main`.
+The repository lifecycle is now **idle**. There is no active implementation slice on `main`. Because `main` is protected, this mechanical closure is carried through dedicated PR #72 rather than a direct closure push.
 
 ## Last completed slice
 
