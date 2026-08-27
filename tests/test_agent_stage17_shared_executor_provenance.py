@@ -7,14 +7,19 @@ from typing import Any
 
 from uv_studio.agent import (
     AgentHarness,
+    AgentPlanner,
+    AgentPlanningError,
+    AgentPlanStepProposal,
     AgentSubagentCoordinator,
     AgentSubagentRequest,
     AgentSubagentRole,
     AgentTaskCoordinator,
+    AgentTaskStateError,
     AgentTaskStatus,
     AgentTraceRecord,
     AgentTraceStatus,
 )
+from uv_studio.agent.orchestration import AgentPlanner as LegacyAgentPlanner
 from uv_studio.capabilities.registry import CapabilityRegistry
 from uv_studio.generation.models import ModelRegistry
 from uv_studio.production.commands import ProductionSemanticService
@@ -76,6 +81,21 @@ class AgentStage17SharedExecutorProvenanceTests(unittest.TestCase):
     @staticmethod
     def _models() -> ModelRegistry:
         return ModelRegistry(CapabilityRegistry())
+
+    @staticmethod
+    def _scene_proposal(scene_id: str) -> AgentPlanStepProposal:
+        return AgentPlanStepProposal(
+            step_id="scene",
+            action_id="production.create_scene",
+            inputs={
+                "scene_id": scene_id,
+                "title": "Reference budget scene",
+            },
+        )
+
+    @staticmethod
+    def _references(count: int) -> tuple[str, ...]:
+        return tuple(f"caller_ref_{index:03d}" for index in range(count))
 
     def _persist_scene_plan(self, harness: AgentHarness, *, scene_id: str, plan_id: str):
         coordinator = AgentSubagentCoordinator(harness, _ScenePlanProposer(scene_id))
@@ -152,6 +172,89 @@ class AgentStage17SharedExecutorProvenanceTests(unittest.TestCase):
         self.assertEqual(
             len([scene for scene in production.scenes if scene.scene_id == "scene_shared_recovery"]),
             1,
+        )
+
+    def test_final_planner_reserves_terminal_reference_capacity(self) -> None:
+        harness = AgentHarness(self.store, self._models())
+        planner = AgentPlanner(harness)
+
+        safe_plan = planner.build(
+            project_id=self.project.project_id,
+            goal="Execute at the final safe Plan reference boundary",
+            proposals=(self._scene_proposal("scene_reference_budget_safe"),),
+            canonical_references=self._references(111),
+            plan_id="agent_plan_reference_budget_safe",
+        )
+        self.assertEqual(len(safe_plan.canonical_references), 112)
+
+        executor = AgentTaskCoordinator(harness, planner=planner)
+        executor.plans.append(safe_plan)
+        executor.tasks.initialize(safe_plan)
+        executor.execute_task(
+            project_id=self.project.project_id,
+            plan_id=safe_plan.plan_id,
+            task_id="scene",
+        )
+        completed = executor.state(self.project.project_id, safe_plan.plan_id)
+        self.assertEqual(completed.tasks[0].status, AgentTaskStatus.SUCCEEDED)
+        self.assertLessEqual(len(completed.tasks[0].canonical_references), 128)
+
+        with self.assertRaisesRegex(
+            AgentPlanningError,
+            "execution-safe limit of 112",
+        ):
+            planner.build(
+                project_id=self.project.project_id,
+                goal="Reject a Plan that leaves no terminal reference reserve",
+                proposals=(self._scene_proposal("scene_reference_budget_rejected"),),
+                canonical_references=self._references(112),
+                plan_id="agent_plan_reference_budget_rejected",
+            )
+
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        self.assertNotIn(
+            "scene_reference_budget_rejected",
+            {scene.scene_id for scene in production.scenes},
+        )
+
+    def test_legacy_oversized_plan_is_rejected_before_dispatch(self) -> None:
+        harness = AgentHarness(self.store, self._models())
+        legacy_plan = LegacyAgentPlanner(harness).build(
+            project_id=self.project.project_id,
+            goal="Simulate a previously persisted near-limit Plan",
+            proposals=(self._scene_proposal("scene_legacy_reference_overflow"),),
+            canonical_references=self._references(126),
+            plan_id="agent_plan_legacy_reference_overflow",
+        )
+        self.assertEqual(len(legacy_plan.canonical_references), 127)
+
+        executor = AgentTaskCoordinator(harness)
+        executor.plans.append(legacy_plan)
+        executor.tasks.initialize(legacy_plan)
+
+        with self.assertRaisesRegex(
+            AgentTaskStateError,
+            "execution-safe limit of 112; dispatch refused",
+        ):
+            executor.execute_task(
+                project_id=self.project.project_id,
+                plan_id=legacy_plan.plan_id,
+                task_id="scene",
+            )
+
+        task = executor.tasks.get(
+            self.project.project_id,
+            legacy_plan.plan_id,
+            "scene",
+        )
+        self.assertEqual(task.status, AgentTaskStatus.READY)
+        self.assertIsNone(task.started_at)
+        self.assertEqual(harness.traces.list(self.project.project_id), ())
+
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        self.assertNotIn(
+            "scene_legacy_reference_overflow",
+            {scene.scene_id for scene in production.scenes},
         )
 
 
