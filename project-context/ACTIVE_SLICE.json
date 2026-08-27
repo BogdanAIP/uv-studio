@@ -8,7 +8,7 @@
     "goal": "Add bounded deterministic adversarial and curated mutation assurance for accepted Stage-16/17 Agent guarantees without changing production semantics.",
     "base_branch": "main",
     "branch": "research/agent-stage17-adversarial-assurance",
-    "pull_request": null,
+    "pull_request": 73,
     "write_scope": [
       "tests/**",
       "tools/**",
