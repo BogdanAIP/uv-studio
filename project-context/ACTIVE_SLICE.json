@@ -12,6 +12,7 @@
     "write_scope": [
       "tests/**",
       "tools/**",
+      "docs/architecture/CURRENT_ARCHITECTURE.md",
       "project-context/**"
     ]
   },
