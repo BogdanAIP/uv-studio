@@ -70,10 +70,16 @@ class AgentSubagentResult(_BaseAgentSubagentResult):
     delegation_id: str = ""
 
     def __post_init__(self) -> None:
-        expected = f"{_DELEGATION_REFERENCE_PREFIX}{self.request.role.value}_"
-        if not isinstance(self.delegation_id, str) or not self.delegation_id.startswith(expected):
+        if self.schema_version != AGENT_SUBAGENT_SCHEMA_VERSION:
             raise AgentSubagentError(
-                "functional subagent delegation_id does not match the result role"
+                f"AgentSubagentResult only represents schema v{AGENT_SUBAGENT_SCHEMA_VERSION}"
+            )
+        if not isinstance(self.request, AgentSubagentRequest):
+            raise AgentSubagentError("functional subagent result request is invalid")
+        expected = _delegation_id(self)
+        if self.delegation_id != expected:
+            raise AgentSubagentError(
+                "functional subagent delegation_id does not match validated result content"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -267,12 +273,27 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
         *,
         plan_id: str | None = None,
     ) -> AgentPlanExecutionState:
-        if not isinstance(result, _BaseAgentSubagentResult):
-            raise AgentSubagentError("persist_plan requires AgentSubagentResult")
+        if not isinstance(result, AgentSubagentResult):
+            raise AgentSubagentError(
+                "persist_plan requires a validated Stage-17 AgentSubagentResult"
+            )
         if result.request.role not in {AgentSubagentRole.PLAN, AgentSubagentRole.MEDIA}:
             raise AgentSubagentError("advisory functional subagent result cannot create a plan")
         if not result.proposals:
             raise AgentSubagentError("functional subagent result has no plan proposals")
+
+        # Revalidate the role envelope at the persistence boundary. A frozen result
+        # can still be reconstructed by another in-process caller; content-addressed
+        # provenance is not an authorization mechanism and must not replace role checks.
+        self._validate_role_output(
+            self.catalog.get(result.request.role),
+            tuple(result.proposals),
+        )
+        expected_delegation_id = _delegation_id(result)
+        if result.delegation_id != expected_delegation_id:
+            raise AgentSubagentError(
+                "functional subagent delegation_id does not match validated result content"
+            )
 
         current_context = self.prepare(result.request)
         if self._role_context_digest(current_context) != result.context_digest:
@@ -280,13 +301,8 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
                 "functional subagent context changed since delegation; delegate again before persisting"
             )
 
-        delegation_id = (
-            result.delegation_id
-            if isinstance(result, AgentSubagentResult)
-            else _delegation_id(result)
-        )
         references = tuple(
-            dict.fromkeys((*result.request.canonical_references, delegation_id))
+            dict.fromkeys((*result.request.canonical_references, result.delegation_id))
         )
         if self._task_coordinator is None:
             self._task_coordinator = AgentSubagentTaskCoordinator(
