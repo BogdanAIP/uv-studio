@@ -131,7 +131,11 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
             # AgentTaskStore implementation having enriched RUNNING references.
             effective_context = evidence.context_digest
 
-        references = list(extra_references)
+        # Plan canonical references are durable orchestration provenance. Preserve
+        # them through every shared-executor recovery path instead of making later
+        # orchestration layers re-wrap Stage-16 just to keep plan-level provenance.
+        references = list(plan.canonical_references)
+        references.extend(extra_references)
         if spec.target_shot_id is not None:
             references.append(spec.target_shot_id)
         if spec.action_id == "production.accept_take":
@@ -225,6 +229,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                     plan.plan_id,
                     spec.task_id,
                     spec.skill_id,
+                    *plan.canonical_references,
                     expected_input_digest=expected_input_digest,
                 ),
                 _execution_correlation(correlation_id),
