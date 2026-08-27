@@ -17,6 +17,7 @@ from uv_studio.agent import (
     AgentSubagentTaskCoordinator,
     AgentTaskStatus,
 )
+from uv_studio.agent.stage16_generation_target import AgentPlanner
 from uv_studio.agent.stage17_provenance import _delegation_id
 from uv_studio.agent.subagents import AgentSubagentResult as BaseAgentSubagentResult
 from uv_studio.capabilities.registry import CapabilityRegistry
@@ -152,6 +153,29 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
         self.assertEqual(reopened.tasks[0].status, AgentTaskStatus.SUCCEEDED)
         self.assertIn(result.delegation_id, reopened.tasks[0].canonical_references)
 
+    def test_complete_delegation_namespace_is_reserved_from_canonical_project_ids(self) -> None:
+        project = self.store.create_project(
+            title="Typed delegation collision",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("micro_drama"),
+            project_id="agent_delegate_media_00000000000000000000000000000000",
+        )
+        harness = AgentHarness(self.store, self._models())
+        coordinator = AgentSubagentCoordinator(harness, _MediaProposer())
+
+        with self.assertRaisesRegex(
+            AgentSubagentError,
+            "reserved functional-subagent delegation namespace",
+        ):
+            coordinator.delegate(
+                AgentSubagentRequest(
+                    role=AgentSubagentRole.MEDIA,
+                    project_id=project.project_id,
+                    objective="Reject a canonical identity that occupies the delegation namespace",
+                )
+            )
+        self.assertEqual(AgentPlanStore(self.store).list(project.project_id), ())
+
     def test_injected_task_coordinator_must_share_exact_harness_authority(self) -> None:
         foreign_store = ProjectStore(Path(self.tmp.name) / "foreign-projects")
         foreign_store.create_project(
@@ -172,6 +196,37 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
                 _MediaProposer(),
                 task_coordinator=foreign_tasks,
             )
+
+    def test_standalone_planner_must_share_exact_harness_authority(self) -> None:
+        foreign_store = ProjectStore(Path(self.tmp.name) / "foreign-planner-projects")
+        foreign_store.create_project(
+            title="Foreign planner authority",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("micro_drama"),
+            project_id=self.project.project_id,
+        )
+        foreign_harness = AgentHarness(foreign_store, self._models())
+        foreign_planner = AgentPlanner(foreign_harness)
+
+        with self.assertRaisesRegex(
+            AgentSubagentError,
+            "planner must share the exact AgentHarness authority",
+        ):
+            AgentSubagentCoordinator(
+                self.harness,
+                _MediaProposer(),
+                planner=foreign_planner,
+            )
+        self.assertEqual(AgentPlanStore(self.store).list(self.project.project_id), ())
+
+    def test_same_harness_standalone_planner_is_accepted(self) -> None:
+        planner = AgentPlanner(self.harness)
+        coordinator = AgentSubagentCoordinator(
+            self.harness,
+            _MediaProposer(),
+            planner=planner,
+        )
+        self.assertIs(coordinator.planner, planner)
 
     def test_same_harness_injected_task_coordinator_shares_exact_planner(self) -> None:
         task_coordinator = AgentSubagentTaskCoordinator(self.harness)
