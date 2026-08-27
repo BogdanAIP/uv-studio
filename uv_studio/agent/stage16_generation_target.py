@@ -212,6 +212,11 @@ class AgentTaskStore(_RuntimeAgentTaskStore):
     ) -> AgentTaskRecord:
         target = status if isinstance(status, AgentTaskStatus) else AgentTaskStatus(status)
         current = self.get(record.project_id, record.plan_id, record.task_id)
+        allowed = self._ALLOWED_TRANSITIONS[current.status]
+        if target not in allowed:
+            raise AgentTaskStateError(
+                f"invalid Agent Task transition: {current.status.value} -> {target.value}"
+            )
         if target is AgentTaskStatus.SUCCEEDED and trace is None:
             raise AgentTaskStateError(
                 "succeeded Agent Task transition requires correlated durable trace evidence"
