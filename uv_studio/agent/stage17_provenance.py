@@ -218,6 +218,13 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
 
     def __init__(self, harness: Any, proposer: Any, **kwargs: Any) -> None:
         task_coordinator = kwargs.get("task_coordinator")
+        if task_coordinator is not None and not isinstance(
+            task_coordinator,
+            AgentSubagentTaskCoordinator,
+        ):
+            raise AgentSubagentError(
+                "Stage 17 task_coordinator must preserve functional-subagent delegation provenance"
+            )
         super().__init__(harness, proposer, **kwargs)
         if task_coordinator is None:
             self._task_coordinator = AgentSubagentTaskCoordinator(
