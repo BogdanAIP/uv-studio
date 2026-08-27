@@ -14,7 +14,12 @@ from dataclasses import dataclass, replace
 from typing import Any, Iterator, Mapping
 
 from .models import AgentHarnessError, AgentTraceRecord, safe_error_message, stable_digest
-from .orchestration import AgentPlanExecutionState, AgentTaskStateError
+from .orchestration import (
+    AgentPlanExecutionState,
+    AgentPlanRecord,
+    AgentTaskRecord,
+    AgentTaskStateError,
+)
 from .stage16_generation_target import AgentTaskCoordinator as _Stage16AgentTaskCoordinator
 from .stage17_consistency import AgentSubagentCoordinator as _ConsistencyAgentSubagentCoordinator
 from .subagents import (
@@ -151,6 +156,15 @@ class AgentSubagentTaskCoordinator(_Stage16AgentTaskCoordinator):
                 "durable Agent plan contains multiple functional-subagent delegation references"
             )
         return references
+
+    def _reconcile_running(
+        self,
+        plan: AgentPlanRecord,
+        record: AgentTaskRecord,
+    ) -> AgentTaskRecord:
+        references = self._delegation_references(plan)
+        with self._delegation_traces.bind(*references):
+            return super()._reconcile_running(plan, record)
 
     def execute_task(
         self,
