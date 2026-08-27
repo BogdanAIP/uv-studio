@@ -197,7 +197,6 @@ class AgentStage16CanonicalPrerequisiteTests(unittest.TestCase):
                         inputs={
                             "track_id": "trk_audio_accept",
                             "kind": "audio",
-                            "name": "Audio",
                         },
                     ),
                     AgentPlanStepProposal(
