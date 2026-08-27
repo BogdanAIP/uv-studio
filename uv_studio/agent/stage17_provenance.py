@@ -8,6 +8,7 @@ Plan and, during execution, by the existing Stage-15 trace correlation path.
 
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
@@ -32,6 +33,16 @@ from .subagents import (
 )
 
 _DELEGATION_REFERENCE_PREFIX = "agent_delegate_"
+_DELEGATION_REFERENCE_PATTERN = re.compile(
+    r"^agent_delegate_(?:explore|plan|media|critic)_[0-9a-f]{32}$"
+)
+
+
+def _is_delegation_reference(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and _DELEGATION_REFERENCE_PATTERN.fullmatch(value) is not None
+    )
 
 
 def _proposal_payload(result: _BaseAgentSubagentResult) -> list[dict[str, Any]]:
@@ -119,9 +130,7 @@ class _DelegationTraceStore:
     def bind(self, *references: str) -> Iterator[None]:
         normalized = tuple(
             dict.fromkeys(
-                item
-                for item in references
-                if isinstance(item, str) and item.startswith(_DELEGATION_REFERENCE_PREFIX)
+                item for item in references if _is_delegation_reference(item)
             )
         )
         token = self._delegation_references.set(normalized)
@@ -163,7 +172,7 @@ class AgentSubagentTaskCoordinator(_Stage16AgentTaskCoordinator):
         references = tuple(
             item
             for item in plan.canonical_references
-            if isinstance(item, str) and item.startswith(_DELEGATION_REFERENCE_PREFIX)
+            if _is_delegation_reference(item)
         )
         if len(references) > 1:
             raise AgentTaskStateError(
@@ -224,13 +233,34 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
 
     def __init__(self, harness: Any, proposer: Any, **kwargs: Any) -> None:
         task_coordinator = kwargs.get("task_coordinator")
-        if task_coordinator is not None and not isinstance(
-            task_coordinator,
-            AgentSubagentTaskCoordinator,
-        ):
-            raise AgentSubagentError(
-                "Stage 17 task_coordinator must preserve functional-subagent delegation provenance"
-            )
+        requested_planner = kwargs.get("planner")
+        if task_coordinator is not None:
+            if not isinstance(task_coordinator, AgentSubagentTaskCoordinator):
+                raise AgentSubagentError(
+                    "Stage 17 task_coordinator must preserve functional-subagent delegation provenance"
+                )
+            if (
+                task_coordinator.harness is not harness
+                or task_coordinator.project_store is not harness.project_store
+                or getattr(task_coordinator.plans, "project_store", None)
+                is not harness.project_store
+                or getattr(task_coordinator.tasks, "project_store", None)
+                is not harness.project_store
+            ):
+                raise AgentSubagentError(
+                    "Stage 17 task_coordinator must share the exact AgentHarness and Project Store authority"
+                )
+            coordinator_planner = task_coordinator.planner
+            if getattr(coordinator_planner, "harness", None) is not harness:
+                raise AgentSubagentError(
+                    "Stage 17 task_coordinator planner must share the exact AgentHarness authority"
+                )
+            if requested_planner is not None and coordinator_planner is not requested_planner:
+                raise AgentSubagentError(
+                    "Stage 17 task_coordinator must share the exact AgentPlanner authority"
+                )
+            if requested_planner is None:
+                kwargs["planner"] = coordinator_planner
         super().__init__(harness, proposer, **kwargs)
         if task_coordinator is None:
             self._task_coordinator = AgentSubagentTaskCoordinator(
