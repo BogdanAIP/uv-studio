@@ -37,6 +37,11 @@ class AgentStage17AssuranceTests(unittest.TestCase):
         )
 
     def test_curated_stage17_mutants_are_killed_and_exact_source_bound(self) -> None:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        source_before = {
+            target: (ROOT / target).read_bytes()
+            for target in {item["target"] for item in manifest["mutants"]}
+        }
         with tempfile.TemporaryDirectory(prefix="uv-assurance-report-") as temp_dir:
             report_path = Path(temp_dir) / "report.json"
             completed = subprocess.run(
@@ -63,6 +68,9 @@ class AgentStage17AssuranceTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, detail)
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
+        for target, expected_bytes in source_before.items():
+            with self.subTest(checkout_target=target):
+                self.assertEqual((ROOT / target).read_bytes(), expected_bytes)
         self.assertEqual(report["summary"], {"KILLED": 6, "SURVIVED": 0, "ERROR": 0})
         self.assertEqual(set(report["selected_mutants"]), EXPECTED_MUTANTS)
         for result in report["results"]:
