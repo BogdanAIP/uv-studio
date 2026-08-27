@@ -173,6 +173,96 @@ class AgentStage16CanonicalPrerequisiteTests(unittest.TestCase):
         self.assertEqual(state.plan.task("add_clip").dependencies, ("accept",))
         self.assertEqual(state.plan.task("move_clip").dependencies, ("add_clip",))
 
+    def test_dependency_created_audio_track_cannot_accept_take(self) -> None:
+        self.production.register_take(
+            self.project.project_id,
+            take_id="take_audio_track",
+            shot_id="shot_existing",
+            reference_id=self.video.id,
+        )
+        coordinator = self._coordinator()
+        plan_id = "agent_plan_audio_accept_track"
+
+        with self.assertRaisesRegex(
+            AgentPlanningError,
+            "requires a video track; dependency task.*creates.*audio",
+        ):
+            coordinator.create_plan(
+                project_id=self.project.project_id,
+                goal="Reject deterministic audio-track acceptance",
+                proposals=(
+                    AgentPlanStepProposal(
+                        step_id="track",
+                        action_id="timeline.create_track",
+                        inputs={
+                            "track_id": "trk_audio_accept",
+                            "kind": "audio",
+                            "name": "Audio",
+                        },
+                    ),
+                    AgentPlanStepProposal(
+                        step_id="accept",
+                        action_id="production.accept_take",
+                        dependencies=("track",),
+                        inputs={
+                            "take_id": "take_audio_track",
+                            "timeline_start_us": 0,
+                            "duration_us": 1_000_000,
+                            "track_id": "trk_audio_accept",
+                            "clip_id": "clip_audio_accept",
+                        },
+                    ),
+                ),
+                plan_id=plan_id,
+            )
+        self._assert_plan_absent(coordinator, plan_id)
+
+    def test_plan_cannot_accept_two_takes_for_same_shot(self) -> None:
+        self.production.register_take(
+            self.project.project_id,
+            take_id="take_accept_a",
+            shot_id="shot_existing",
+            reference_id=self.video.id,
+        )
+        self.production.register_take(
+            self.project.project_id,
+            take_id="take_accept_b",
+            shot_id="shot_existing",
+            reference_id=self.video.id,
+        )
+        coordinator = self._coordinator()
+        plan_id = "agent_plan_duplicate_shot_acceptance"
+
+        with self.assertRaisesRegex(AgentPlanningError, "accepts Shot.*more than once"):
+            coordinator.create_plan(
+                project_id=self.project.project_id,
+                goal="Reject mutually exclusive Shot acceptances",
+                proposals=(
+                    AgentPlanStepProposal(
+                        step_id="accept_a",
+                        action_id="production.accept_take",
+                        inputs={
+                            "take_id": "take_accept_a",
+                            "timeline_start_us": 0,
+                            "duration_us": 1_000_000,
+                            "clip_id": "clip_accept_a",
+                        },
+                    ),
+                    AgentPlanStepProposal(
+                        step_id="accept_b",
+                        action_id="production.accept_take",
+                        inputs={
+                            "take_id": "take_accept_b",
+                            "timeline_start_us": 2_000_000,
+                            "duration_us": 1_000_000,
+                            "clip_id": "clip_accept_b",
+                        },
+                    ),
+                ),
+                plan_id=plan_id,
+            )
+        self._assert_plan_absent(coordinator, plan_id)
+
     def test_duplicate_existing_and_planned_outputs_are_rejected(self) -> None:
         coordinator = self._coordinator()
 
