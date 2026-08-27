@@ -1,7 +1,21 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "studio-v2-agent-functional-subagents",
+    "kind": "stage",
+    "roadmap_stage": "studio-v2",
+    "goal": "Implement D-066 Agent Harness layer 3: bounded functional subagents (explore, plan, media, critic) that consume the merged Stage-15 Context/Catalog/Policy/Trace and Stage-16 Planner/Plan/Task/Skill contracts without adding background autonomy, a second project graph, a second tool registry or a private mutation path.",
+    "base_branch": "main",
+    "branch": "stage-17/agent-functional-subagents",
+    "pull_request": 71,
+    "write_scope": [
+      "uv_studio/**",
+      "tests/**",
+      "docs/**",
+      "project-context/**"
+    ]
+  },
   "last_completed": {
     "id": "studio-v2-agent-planner-durable-tasks-skills",
     "pull_request": 70,

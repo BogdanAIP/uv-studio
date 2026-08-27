@@ -44,7 +44,7 @@ Project Store
  -> Agent Harness
       Context / Catalog / Policy / Trace              [Stage 15 merged]
       Planner / durable Tasks / Skills                [Stage 16 merged]
-      functional Subagents                            [next D-066 layer 3]
+      functional Subagents                            [Stage 17 active review]
       background Agent execution                      [later layer 4]
       evaluate / repair                               [later layer 5]
       takeover / edit / resume                        [later layer 6]
@@ -200,11 +200,28 @@ Stage 16 executes runnable tasks in the foreground through `AgentHarness`. It du
 
 Stage 16 remains internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
 
-## D-066 next handoff and remaining order
+## Agent Harness layer 3 — Stage 17 active review
 
-The repository is lifecycle-idle after Stage 16 closure. The one declared next handoff is **functional subagents** — bounded `explore / plan / media / critic` roles consuming the merged Context / Planner / Task / Skill contracts.
+PR #71 is the active review slice `studio-v2-agent-functional-subagents`. It adds bounded foreground functional roles over the merged Stage-15/16 authorities without adding a second project, task, trace, permission or provider-execution authority.
 
-After that, the accepted order remains:
+Current review implementation provides:
+
+- `explore` for bounded advisory findings over explicit canonical context;
+- `plan` for structured proposals that still require the existing Stage-16 Planner before durable Plan/Task creation;
+- `media` for the bounded media/generation/Take/Timeline action subset only;
+- `critic` for read-only Plan/Task/linked-trace evidence with no automatic repair authority;
+- full role-context digests and persistence-time revalidation to reject stale or reconstructed results;
+- content-addressed typed `agent_delegate_<role>_<digest>` provenance carried through durable Plan/Task/Trace state;
+- shared Stage-16 execution/recovery preservation of durable Plan provenance;
+- foreground-only execution with no workers, leases, heartbeats or autonomous polling.
+
+This is **active review implementation, not merged functionality**. Merge requires synchronized current docs, exact-head permanent CI, and clean review threads. It remains internal Agent infrastructure and does not claim a user-visible autonomous-Agent product surface.
+
+## D-066 active slice and remaining order
+
+The repository is currently in Stage 17 review, not lifecycle-idle. Functional subagents are the active D-066 layer 3 implementation and must not be initialized as duplicate future work.
+
+After Stage 17 merges and is lifecycle-closed, the accepted order remains:
 
 1. **background Agent work** coordinated through existing Job Manager boundaries;
 2. **critic/evaluation + dependency-aware repair**;
@@ -215,7 +232,7 @@ Do not collapse these layers or jump directly to long-form autonomy.
 
 ## Capability/effects boundary
 
-`CapabilityEffects` / resolved offer effects remain the single effects source for Agent policy, Skills and future subagent routing. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
+`CapabilityEffects` / resolved offer effects remain the single effects source for Agent policy, Skills and functional subagent routing. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
 
 No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority is introduced.
 
@@ -223,7 +240,7 @@ No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority i
 
 A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–16 remain explicitly internal unless a later slice adds a real Studio Agent surface and corresponding Product Truth/browser evidence.
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–16 are merged internal infrastructure and Stage 17 is active internal review infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
 
 ## Desktop updates — D-068
 

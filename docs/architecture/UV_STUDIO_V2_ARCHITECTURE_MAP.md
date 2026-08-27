@@ -7,7 +7,7 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production, generation and two-layer Agent-orchestration spine:
+UV Studio now has a concrete shared production/generation spine, two merged Agent-orchestration layers, and an active-review third Agent layer:
 
 ```text
 Project Store
@@ -21,7 +21,7 @@ Project Store
  -> Capability Registry / D-017 / adapters
  -> Agent Harness layer 1: Context / Catalog / Policy / Trace       [Stage 15 merged]
  -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 merged]
- -> functional Subagents                                             [next D-066 layer 3]
+ -> Agent Harness layer 3: functional Subagents                     [Stage 17 active review]
 ```
 
 The old product-composition errors remain rejected:
@@ -57,7 +57,7 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
                          Agent Harness
        Stage 15: Context -> Catalog -> Policy -> Trace            [merged]
        Stage 16: Planner -> durable Tasks -> Skills                [merged]
-       next: functional Subagents
+       Stage 17: functional Subagents                             [active review]
        later: background -> evaluate/repair -> takeover -> autonomy
                                  |
                        Capability Registry
@@ -226,28 +226,37 @@ Stage 16 executes ready tasks in the foreground, binds execution-time context/po
 
 Functional subagents and background execution are not part of Stage 16.
 
-## 8. D-066 remaining order
+## 8. Agent Harness layer 3 — Stage 17 ACTIVE REVIEW
 
-With Stage 16 merged and lifecycle-closed, the one declared next handoff is:
+PR #71 is the current D-066 slice. It implements bounded foreground functional roles on top of the merged Stage-15/16 contracts:
 
-1. **Layer 3 — functional subagents:** bounded `explore / plan / media / critic` roles consuming the Planner/Task/Skill contracts.
+- `explore` — advisory bounded findings over explicit canonical context;
+- `plan` — structured proposals that still require the existing Planner before durable Plan/Task creation;
+- `media` — bounded media/generation/Take/Timeline proposal subset only;
+- `critic` — read-only evaluation over one durable Plan/Task/linked-trace evidence set, without repair authority.
 
-Then:
+The active review implementation binds role output to exact bounded context, assigns typed content-addressed delegation provenance, revalidates role envelopes before persistence, carries accepted provenance through existing Plan/Task/Trace state, and preserves it through shared Stage-16 execution/recovery. It remains foreground-only and does not add workers, leases, heartbeats, autonomous polling, a second task graph, or a private mutation/provider path.
 
-2. **Layer 4 — background Agent work:** coordinated through existing Job Manager boundaries without hiding external replay/cost;
-3. **Layer 5 — evaluation + dependency-aware local repair**;
-4. **Layer 6 — human takeover/edit/resume**;
-5. **Layer 7 — long-form autonomous production**.
+Classification: **ACTIVE REVIEW**, not `NEXT` and not yet merged. Agents must not initialize a duplicate functional-subagent slice while PR #71 is active.
+
+## 9. D-066 remaining order
+
+After Stage 17 merges and is lifecycle-closed, continue in the accepted order:
+
+1. **Layer 4 — background Agent work:** coordinated through existing Job Manager boundaries without hiding external replay/cost;
+2. **Layer 5 — evaluation + dependency-aware local repair**;
+3. **Layer 6 — human takeover/edit/resume**;
+4. **Layer 7 — long-form autonomous production**.
 
 Do not jump directly to long-form autonomy.
 
-## 9. Product Truth — KEEP
+## 10. Product Truth — KEEP
 
 D-067 keeps current docs, machine-readable feature contracts, backend/API/frontend and user-outcome evidence consistent.
 
-The first visible record remains named generation -> Take. Stages 15–16 are internal Agent infrastructure; they do not claim a visible autonomous Agent product without a separate Studio surface and browser proof.
+The first visible record remains named generation -> Take. Stages 15–16 are merged internal Agent infrastructure and Stage 17 is active-review internal Agent infrastructure; none claim a visible autonomous Agent product without a separate Studio surface and browser proof.
 
-## 10. Desktop update layer — ACCEPTED TARGET, DEFERRED HERE
+## 11. Desktop update layer — ACCEPTED TARGET, DEFERRED HERE
 
 D-068 target:
 
@@ -263,11 +272,11 @@ Settings / About
 
 Release proof must include N-1 -> N in-place upgrade, not only clean install. Keep this separate from Agent implementation slices.
 
-## 11. Contextual tools — NOT DIRECTIONS
+## 12. Contextual tools — NOT DIRECTIONS
 
 Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualizer, action transfer, talking character, lip-sync, background transforms and image/video/audio generation are tools/capabilities inside a project, not new project identities.
 
-## 12. Foundation inventory
+## 13. Foundation inventory
 
 | Area | Classification | Current meaning |
 | --- | --- | --- |
@@ -284,12 +293,12 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 | GenerationContract | **KEEP** | provider-neutral semantic generation constraints |
 | Stage-15 Agent foundation | **KEEP** | Context/Catalog/Policy/Trace/AgentHarness |
 | Stage-16 Planner/Tasks/Skills | **KEEP** | merged D-066 layer 2 orchestration |
-| Functional subagents | **NEXT** | bounded role specialization over merged Agent contracts |
+| Functional subagents | **ACTIVE REVIEW** | PR #71 bounded role specialization over merged Agent contracts |
 | Product Truth | **KEEP** | cross-layer verification metadata |
 | MCP | **KEEP** | optional capability/tool transport, not product state |
 | Desktop Update Service | **FUTURE ACCEPTED** | D-068 maintained installation lifecycle |
 
-## 13. Legacy / migration inventory
+## 14. Legacy / migration inventory
 
 - Recipe Registry — **LEGACY**; compatibility/import vocabulary only.
 - Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful logic into modern authorities.
@@ -302,7 +311,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 
 Do not confuse legacy `uv_studio/orchestration/*` Product-Orchestrator-era code with the new bounded Agent orchestration under `uv_studio/agent/`.
 
-## 14. Migration order
+## 15. Migration order
 
 Completed:
 
@@ -318,9 +327,12 @@ Completed:
 10. **Stage 15 Context Builder + Action Catalog + Policy + Trace + bounded Agent execution.**
 11. **Stage 16 Planner + durable Tasks + Skills.**
 
-Next, in D-066 order:
+Active review:
 
-12. functional subagents;
+12. **Stage 17 functional subagents.**
+
+After Stage 17 lifecycle closure, continue in D-066 order:
+
 13. background Agent work;
 14. evaluation/dependency-aware repair;
 15. human takeover/edit/resume;
@@ -329,7 +341,7 @@ Next, in D-066 order:
 18. compatibility retirement after caller proof;
 19. D-068 maintained desktop update implementation/release proof when selected as its own slice.
 
-## 15. Invariants
+## 16. Invariants
 
 - one Project Store authority;
 - one canonical Timeline;

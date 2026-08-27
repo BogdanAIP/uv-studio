@@ -31,9 +31,27 @@ from .stage16_runtime import (
     AgentSkillCatalog,
 )
 from .stage16_generation_target import AgentPlanner, AgentTaskCoordinator, AgentTaskStore
+from .subagents import (
+    AGENT_SUBAGENT_SCHEMA_VERSION,
+    AgentSubagentCatalog,
+    AgentSubagentContext,
+    AgentSubagentDefinition,
+    AgentSubagentError,
+    AgentSubagentFinding,
+    AgentSubagentFindingSeverity,
+    AgentSubagentProposer,
+    AgentSubagentRequest,
+    AgentSubagentRole,
+)
+from .stage17_provenance import (
+    AgentSubagentCoordinator,
+    AgentSubagentResult,
+    AgentSubagentTaskCoordinator,
+)
 
 __all__ = [
     "AGENT_SKILL_SCHEMA_VERSION",
+    "AGENT_SUBAGENT_SCHEMA_VERSION",
     "AgentActionCatalog",
     "AgentActionDefinition",
     "AgentContextBuilder",
@@ -52,6 +70,18 @@ __all__ = [
     "AgentSkillCatalog",
     "AgentSkillDefinition",
     "AgentSkillError",
+    "AgentSubagentCatalog",
+    "AgentSubagentContext",
+    "AgentSubagentCoordinator",
+    "AgentSubagentDefinition",
+    "AgentSubagentError",
+    "AgentSubagentFinding",
+    "AgentSubagentFindingSeverity",
+    "AgentSubagentProposer",
+    "AgentSubagentRequest",
+    "AgentSubagentResult",
+    "AgentSubagentRole",
+    "AgentSubagentTaskCoordinator",
     "AgentTaskBlocked",
     "AgentTaskCoordinator",
     "AgentTaskRecord",

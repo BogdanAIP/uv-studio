@@ -14,13 +14,16 @@ from typing import Any, Iterator, Mapping, Sequence
 
 from .models import AgentPolicyProjection, AgentTraceRecord, AgentTraceStatus
 from .orchestration import (
+    AgentPlanRecord,
+    AgentPlanStepProposal,
+    AgentPlanningError,
     AgentTaskBlocked,
     AgentTaskRecord,
     AgentTaskStateError,
     AgentTaskStatus,
 )
 from .stage16_execution_evidence import (
-    AgentPlanner,
+    AgentPlanner as _EvidenceAgentPlanner,
     AgentTaskCoordinator as _EvidenceAgentTaskCoordinator,
 )
 from .stage16_recovery import (
@@ -28,6 +31,42 @@ from .stage16_recovery import (
     _execution_correlation,
     _typed_correlation_reference,
 )
+
+# AgentPlanRecord and AgentTaskRecord each allow at most 128 canonical references.
+# Execution adds bounded Stage-15 result/affected identities plus plan/task/Skill
+# correlation and recovery context. Keep a conservative 16-reference reserve so a
+# valid Plan can always reach a bounded terminal Task after canonical/cost-bearing
+# dispatch instead of discovering the record bound after the effect has committed.
+EXECUTION_SAFE_PLAN_REFERENCE_LIMIT = 112
+
+
+class AgentPlanner(_EvidenceAgentPlanner):
+    """Keep durable Plan provenance inside the later Task/Trace execution budget."""
+
+    def build(
+        self,
+        *,
+        project_id: str,
+        goal: str,
+        proposals: Sequence[AgentPlanStepProposal],
+        target_shot_id: str | None = None,
+        canonical_references: Sequence[str] = (),
+        plan_id: str | None = None,
+    ) -> AgentPlanRecord:
+        plan = super().build(
+            project_id=project_id,
+            goal=goal,
+            proposals=proposals,
+            target_shot_id=target_shot_id,
+            canonical_references=canonical_references,
+            plan_id=plan_id,
+        )
+        if len(plan.canonical_references) > EXECUTION_SAFE_PLAN_REFERENCE_LIMIT:
+            raise AgentPlanningError(
+                "plan canonical references exceed the execution-safe limit of "
+                f"{EXECUTION_SAFE_PLAN_REFERENCE_LIMIT}"
+            )
+        return plan
 
 
 class _ExecutionPolicyCatalog:
@@ -107,6 +146,14 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
             task_store=task_store,
         )
 
+    @staticmethod
+    def _require_execution_reference_budget(plan: Any) -> None:
+        if len(plan.canonical_references) > EXECUTION_SAFE_PLAN_REFERENCE_LIMIT:
+            raise AgentTaskStateError(
+                "durable Agent plan canonical references exceed the execution-safe "
+                f"limit of {EXECUTION_SAFE_PLAN_REFERENCE_LIMIT}; dispatch refused"
+            )
+
     def _recovered_success_trace(
         self,
         plan: Any,
@@ -117,6 +164,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
         extra_references: Sequence[str] = (),
         context_digest: str | None = None,
     ) -> AgentTraceRecord:
+        self._require_execution_reference_budget(plan)
         spec = plan.task(record.task_id)
         evidence = self._execution_evidence.get(
             project_id=record.project_id,
@@ -131,7 +179,11 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
             # AgentTaskStore implementation having enriched RUNNING references.
             effective_context = evidence.context_digest
 
-        references = list(extra_references)
+        # Plan canonical references are durable orchestration provenance. Preserve
+        # them through every shared-executor recovery path instead of making later
+        # orchestration layers re-wrap Stage-16 just to keep plan-level provenance.
+        references = list(plan.canonical_references)
+        references.extend(extra_references)
         if spec.target_shot_id is not None:
             references.append(spec.target_shot_id)
         if spec.action_id == "production.accept_take":
@@ -167,6 +219,10 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
     ) -> Any:
         with self.project_store._lock, self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
+            # This check must happen before context/policy capture, RUNNING transition,
+            # execution evidence, or dispatch. It also protects durable Plans created
+            # by older/injected planners that predate the execution-safe Planner bound.
+            self._require_execution_reference_budget(plan)
             spec = plan.task(task_id)
             record = self.tasks.get(project_id, plan.plan_id, spec.task_id)
             if record.status is AgentTaskStatus.PLANNED:
@@ -225,6 +281,7 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                     plan.plan_id,
                     spec.task_id,
                     spec.skill_id,
+                    *plan.canonical_references,
                     expected_input_digest=expected_input_digest,
                 ),
                 _execution_correlation(correlation_id),
@@ -317,4 +374,8 @@ class AgentTaskCoordinator(_EvidenceAgentTaskCoordinator):
                 return result
 
 
-__all__ = ["AgentPlanner", "AgentTaskCoordinator"]
+__all__ = [
+    "AgentPlanner",
+    "AgentTaskCoordinator",
+    "EXECUTION_SAFE_PLAN_REFERENCE_LIMIT",
+]
