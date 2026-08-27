@@ -13,6 +13,7 @@ from uv_studio.agent import (
     AgentSubagentCoordinator,
     AgentSubagentRequest,
     AgentSubagentRole,
+    AgentSubagentTaskCoordinator,
     AgentTaskCoordinator,
     AgentTaskStateError,
     AgentTaskStatus,
@@ -108,6 +109,16 @@ class AgentStage17SharedExecutorProvenanceTests(unittest.TestCase):
         )
         state = coordinator.persist_plan(result, plan_id=plan_id)
         self.assertIn(result.delegation_id, state.plan.canonical_references)
+        self.assertTrue(
+            any(
+                reference.startswith("agent_delegate_bind_")
+                for reference in state.plan.canonical_references
+            )
+        )
+        self.assertEqual(
+            coordinator._task_coordinator._delegation_references(state.plan),
+            (result.delegation_id,),
+        )
         return coordinator, result, state
 
     def test_plain_stage16_executor_preserves_stage17_plan_provenance(self) -> None:
@@ -172,6 +183,44 @@ class AgentStage17SharedExecutorProvenanceTests(unittest.TestCase):
         self.assertEqual(
             len([scene for scene in production.scenes if scene.scene_id == "scene_shared_recovery"]),
             1,
+        )
+
+    def test_delegation_like_stage16_canonical_refs_are_not_stage17_origin(self) -> None:
+        harness = AgentHarness(self.store, self._models())
+        fake_refs = (
+            "agent_delegate_media_11111111111111111111111111111111",
+            "agent_delegate_plan_22222222222222222222222222222222",
+        )
+        legacy_plan = LegacyAgentPlanner(harness).build(
+            project_id=self.project.project_id,
+            goal="Ordinary Stage-16 plan with delegation-looking canonical IDs",
+            proposals=(self._scene_proposal("scene_plain_stage16_fake_delegation"),),
+            canonical_references=fake_refs,
+            plan_id="agent_plan_plain_stage16_fake_delegation",
+        )
+        self.assertFalse(
+            any(
+                reference.startswith("agent_delegate_bind_")
+                for reference in legacy_plan.canonical_references
+            )
+        )
+
+        executor = AgentSubagentTaskCoordinator(harness)
+        self.assertEqual(executor._delegation_references(legacy_plan), ())
+        executor.plans.append(legacy_plan)
+        executor.tasks.initialize(legacy_plan)
+        executor.execute_task(
+            project_id=self.project.project_id,
+            plan_id=legacy_plan.plan_id,
+            task_id="scene",
+        )
+
+        completed = executor.state(self.project.project_id, legacy_plan.plan_id)
+        self.assertEqual(completed.tasks[0].status, AgentTaskStatus.SUCCEEDED)
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        self.assertIn(
+            "scene_plain_stage16_fake_delegation",
+            {scene.scene_id for scene in production.scenes},
         )
 
     def test_final_planner_reserves_terminal_reference_capacity(self) -> None:
