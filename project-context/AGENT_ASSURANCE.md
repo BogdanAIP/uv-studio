@@ -36,7 +36,7 @@ The initial `stage17-curated-v1` suite contains exactly six mutants:
 | `UV-CTX-002` | persistence rejects a role result whose bounded context became stale after delegation | `test_persist_rejects_stale_plan_role_result_after_project_change` |
 | `UV-NS-001` | proposals cannot mint canonical identities in the reserved delegation namespace | `test_planned_canonical_output_cannot_occupy_delegation_namespace` |
 | `UV-PROV-001` | delegation-looking syntax alone is not Stage-17 provenance; the durable Plan binding is required | `test_delegation_like_stage16_canonical_refs_are_not_stage17_origin` |
-| `UV-AUTH-001` | an injected Planner must share the exact AgentHarness authority | `test_standalone_planner_must_share_exact_harness_authority` |
+| `UV-AUTH-001` | an injected Stage-17 task coordinator must share the exact AgentHarness, Project Store and Planner authority | `test_injected_task_coordinator_must_share_exact_harness_authority` |
 
 The exact module, target file, detector and replacement anchor for every case live in the manifest so the mutation is reviewable rather than hidden in runner code.
 
@@ -52,7 +52,7 @@ For each mutant the runner performs these steps:
 6. apply the mutation only inside the temporary overlay;
 7. hash the mutated target and require the digest to differ from baseline;
 8. launch the same exact detector in another fresh Python process;
-9. prove the target module was imported from the temporary overlay and that the imported source file SHA-256 equals the exact expected baseline/mutated bytes;
+9. prove the target module was imported from the temporary overlay, that its source path equals the exact declared target path inside that overlay, and that the imported source SHA-256 equals the exact expected baseline/mutated bytes;
 10. classify the result and delete the temporary overlay.
 
 The checkout is never edited by the mutation runner.
@@ -81,6 +81,7 @@ The runner cannot establish a meaningful mutant result. Examples:
 - import failure;
 - detector resolution failure;
 - target module imported from the normal checkout instead of the overlay;
+- imported module path differs from the exact declared mutation target;
 - imported source SHA mismatch;
 - timeout;
 - unittest error rather than assertion failure;
@@ -120,7 +121,7 @@ The ordinary unit suite also runs the full curated pilot through `tests/test_age
 
 The pilot deliberately does not accept "we wrote mutated bytes somewhere" as proof that those bytes were executed.
 
-The detector helper imports the named target module from an isolated overlay, checks that `module.__file__` is physically inside that overlay, hashes that exact source path, and compares it with the digest calculated by the parent runner after the mutation. A dedicated regression test supplies a deliberately wrong expected digest and requires a source-binding `ERROR`.
+The detector helper imports the named target module from an isolated overlay, checks that `module.__file__` is physically inside that overlay **and equals the exact declared manifest target**, hashes that exact source path, and compares it with the digest calculated by the parent runner after the mutation. A dedicated regression test supplies a deliberately wrong expected digest and requires a source-binding `ERROR`.
 
 This is a test-harness provenance guarantee, not an authorization mechanism and not a claim about cryptographic attestation of the Python interpreter itself.
 
