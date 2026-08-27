@@ -82,6 +82,7 @@ class AgentStage17AssuranceTests(unittest.TestCase):
                 )
                 self.assertEqual(result["detector_failures"], 1)
                 self.assertEqual(result["detector_errors"], 0)
+                self.assertEqual(result["detector_skipped"], 0)
 
     def test_detector_fails_closed_on_wrong_executed_source_hash(self) -> None:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -132,6 +133,35 @@ class AgentStage17AssuranceTests(unittest.TestCase):
         payload = json.loads(payload_line[len(RESULT_PREFIX) :])
         self.assertEqual(payload["status"], "error")
         self.assertIn("source-binding failure", payload["error"])
+
+    def test_report_path_inside_checkout_fails_closed_without_write(self) -> None:
+        report_path = ROOT / ".uv-agent-assurance-forbidden-report.json"
+        self.assertFalse(report_path.exists())
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "tools/agent_assurance.py",
+                "--manifest",
+                str(MANIFEST),
+                "--mutant",
+                "UV-PROV-001",
+                "--report",
+                str(report_path),
+                "--timeout-seconds",
+                "60",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn("--report must point outside the repository root", completed.stderr)
+        self.assertFalse(report_path.exists())
 
 
 if __name__ == "__main__":
