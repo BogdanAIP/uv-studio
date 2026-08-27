@@ -7,6 +7,8 @@ Schema v2 represents the complete lifecycle explicitly:
 The validator is standard-library only so it can run before product dependencies
 are installed. Repository state is always checked. Pull-request events also bind
 the declared active slice to the live PR identity, draft state and journal body.
+A narrow lifecycle-closure PR is allowed to carry the post-merge review -> idle
+transition when repository rules protect ``main`` from direct closure commits.
 """
 
 from __future__ import annotations
@@ -207,6 +209,17 @@ def _validate_branch(kind: str, branch: Any) -> str:
     return value
 
 
+def _validate_closure_branch(branch: Any) -> str:
+    value = _require_nonblank_string(branch, "event.pull_request.head.ref")
+    if "\\" in value or value.startswith("/") or value.endswith("/"):
+        raise DevelopmentContextError("lifecycle closure branch must be canonical")
+    if any(part in {"", ".", ".."} for part in value.split("/")):
+        raise DevelopmentContextError("lifecycle closure branch contains an invalid path segment")
+    if not value.startswith("chore/") or len(value) <= len("chore/"):
+        raise DevelopmentContextError("lifecycle closure branch must use the 'chore/' prefix")
+    return value
+
+
 def _validate_active_slice(value: Any, lifecycle_state: str) -> Mapping[str, Any] | None:
     if lifecycle_state == "idle":
         if value is not None:
@@ -350,11 +363,7 @@ def _section_content(body: str, heading_body: str, match: re.Match[str]) -> str:
     return body[match.end():end]
 
 
-def _validate_pr_body(body: Any, *, active_id: str, next_id: str, state: str) -> None:
-    if not isinstance(body, str):
-        raise DevelopmentContextError("pull_request.body must be a string")
-    _validate_single_marker(body, name="active-slice", value=active_id, location="pull_request.body")
-    _validate_single_marker(body, name="next-slice", value=next_id, location="pull_request.body")
+def _validate_required_sections(body: str, *, state: str) -> None:
     heading_body = _mask_fenced_code(body)
     matches = list(_H2_PATTERN.finditer(heading_body))
     positions: list[int] = []
@@ -377,6 +386,29 @@ def _validate_pr_body(body: Any, *, active_id: str, next_id: str, state: str) ->
         raise DevelopmentContextError("pull_request.body contains a draft placeholder in review")
 
 
+def _validate_pr_body(body: Any, *, active_id: str, next_id: str, state: str) -> None:
+    if not isinstance(body, str):
+        raise DevelopmentContextError("pull_request.body must be a string")
+    _validate_single_marker(body, name="active-slice", value=active_id, location="pull_request.body")
+    _validate_single_marker(body, name="next-slice", value=next_id, location="pull_request.body")
+    _validate_absent_marker(body, name="lifecycle-closure", location="pull_request.body")
+    _validate_required_sections(body, state=state)
+
+
+def _validate_closure_pr_body(body: Any, *, completed_id: str, next_id: str) -> None:
+    if not isinstance(body, str):
+        raise DevelopmentContextError("pull_request.body must be a string")
+    _validate_single_marker(
+        body,
+        name="lifecycle-closure",
+        value=completed_id,
+        location="pull_request.body",
+    )
+    _validate_single_marker(body, name="next-slice", value=next_id, location="pull_request.body")
+    _validate_absent_marker(body, name="active-slice", location="pull_request.body")
+    _validate_required_sections(body, state="review")
+
+
 def _event_field(mapping: Mapping[str, Any], field: str, location: str) -> Any:
     if field not in mapping:
         raise DevelopmentContextError(f"{location}.{field} is required")
@@ -385,28 +417,49 @@ def _event_field(mapping: Mapping[str, Any], field: str, location: str) -> Any:
 
 def _validate_pull_request_event(event: Any, document: Mapping[str, Any]) -> None:
     state = document["lifecycle_state"]
-    if state == "idle":
-        raise DevelopmentContextError("idle repository state cannot validate a pull_request event")
-    active = _require_object(document["active_slice"], "active_slice")
     handoff = _require_object(document["handoff"], "handoff")
     payload = _require_object(event, "event")
     pull_request = _require_object(
         _event_field(payload, "pull_request", "event"), "event.pull_request"
     )
+    _require_positive_int(_event_field(payload, "number", "event"), "event.number")
+    head = _require_object(
+        _event_field(pull_request, "head", "event.pull_request"),
+        "event.pull_request.head",
+    )
+    base = _require_object(
+        _event_field(pull_request, "base", "event.pull_request"),
+        "event.pull_request.base",
+    )
+    head_ref = _event_field(head, "ref", "event.pull_request.head")
+    base_ref = _event_field(base, "ref", "event.pull_request.base")
+    is_draft = _event_field(pull_request, "draft", "event.pull_request")
+    if not isinstance(is_draft, bool):
+        raise DevelopmentContextError("event.pull_request.draft must be a boolean")
+
+    if state == "idle":
+        completed = _require_object(document["last_completed"], "last_completed")
+        _validate_closure_branch(head_ref)
+        if base_ref != "main":
+            raise DevelopmentContextError("lifecycle closure pull request must target main")
+        if is_draft:
+            raise DevelopmentContextError("lifecycle closure pull request must not be draft")
+        _validate_closure_pr_body(
+            _event_field(pull_request, "body", "event.pull_request"),
+            completed_id=completed["id"],
+            next_id=handoff["next_slice_id"],
+        )
+        return
+
+    active = _require_object(document["active_slice"], "active_slice")
     event_number = _require_positive_int(_event_field(payload, "number", "event"), "event.number")
     configured_number = active["pull_request"]
     if configured_number is None or configured_number != event_number:
         raise DevelopmentContextError("active_slice.pull_request does not match event.number")
-
-    head = _require_object(_event_field(pull_request, "head", "event.pull_request"), "event.pull_request.head")
-    base = _require_object(_event_field(pull_request, "base", "event.pull_request"), "event.pull_request.base")
-    if _event_field(head, "ref", "event.pull_request.head") != active["branch"]:
+    if head_ref != active["branch"]:
         raise DevelopmentContextError("event.pull_request.head.ref does not match active_slice.branch")
-    if _event_field(base, "ref", "event.pull_request.base") != active["base_branch"]:
+    if base_ref != active["base_branch"]:
         raise DevelopmentContextError("event.pull_request.base.ref does not match active_slice.base_branch")
-    is_draft = _event_field(pull_request, "draft", "event.pull_request")
-    if not isinstance(is_draft, bool):
-        raise DevelopmentContextError("event.pull_request.draft must be a boolean")
     if is_draft != (state == "draft"):
         raise DevelopmentContextError("event.pull_request.draft does not match lifecycle_state")
     _validate_pr_body(
