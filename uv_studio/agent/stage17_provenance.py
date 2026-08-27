@@ -37,6 +37,7 @@ _DELEGATION_REFERENCE_PREFIX = "agent_delegate_"
 _DELEGATION_REFERENCE_PATTERN = re.compile(
     r"^agent_delegate_(?:explore|plan|media|critic)_[0-9a-f]{32}$"
 )
+_DELEGATION_BINDING_REFERENCE_PREFIX = "agent_delegate_bind_"
 
 # Canonical identities that can be selected by current bounded Agent proposals.
 # Server-generated identities are outside this map because callers cannot choose
@@ -60,6 +61,32 @@ def _is_delegation_reference(value: Any) -> bool:
         isinstance(value, str)
         and _DELEGATION_REFERENCE_PATTERN.fullmatch(value) is not None
     )
+
+
+def _delegation_binding_reference(
+    *,
+    project_id: str,
+    goal: str,
+    delegation_id: str,
+) -> str:
+    """Bind one delegation identity to the immutable durable Plan purpose.
+
+    The binding is deliberately content-addressed rather than secret/authenticated:
+    delegation provenance is inspection evidence, not an authorization token. Its
+    purpose is to distinguish Stage-17-persisted provenance from arbitrary canonical
+    identities that happen to match the delegation-ID syntax.
+    """
+
+    digest = stable_digest(
+        {
+            "record_type": "agent_subagent_plan_binding",
+            "schema_version": AGENT_SUBAGENT_SCHEMA_VERSION,
+            "project_id": project_id,
+            "goal": goal,
+            "delegation_id": delegation_id,
+        }
+    )
+    return f"{_DELEGATION_BINDING_REFERENCE_PREFIX}{digest[:32]}"
 
 
 def _validate_reserved_proposal_outputs(proposals: Sequence[Any]) -> None:
@@ -202,14 +229,24 @@ class AgentSubagentTaskCoordinator(_Stage16AgentTaskCoordinator):
 
     @staticmethod
     def _delegation_references(plan: Any) -> tuple[str, ...]:
-        references = tuple(
+        candidates = tuple(
             item
             for item in plan.canonical_references
             if _is_delegation_reference(item)
         )
+        references = tuple(
+            item
+            for item in candidates
+            if _delegation_binding_reference(
+                project_id=plan.project_id,
+                goal=plan.goal,
+                delegation_id=item,
+            )
+            in plan.canonical_references
+        )
         if len(references) > 1:
             raise AgentTaskStateError(
-                "durable Agent plan contains multiple functional-subagent delegation references"
+                "durable Agent plan contains multiple bound functional-subagent delegation references"
             )
         return references
 
@@ -331,12 +368,23 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
             ) from exc
         _validate_reserved_proposal_outputs(base.proposals)
         delegation_id = _delegation_id(base)
+        binding_reference = _delegation_binding_reference(
+            project_id=base.request.project_id,
+            goal=base.request.objective,
+            delegation_id=delegation_id,
+        )
         validated_plan = base.validated_plan
         if validated_plan is not None:
             validated_plan = replace(
                 validated_plan,
                 canonical_references=tuple(
-                    dict.fromkeys((*validated_plan.canonical_references, delegation_id))
+                    dict.fromkeys(
+                        (
+                            *validated_plan.canonical_references,
+                            delegation_id,
+                            binding_reference,
+                        )
+                    )
                 ),
             )
         return AgentSubagentResult(
@@ -385,8 +433,19 @@ class AgentSubagentCoordinator(_ConsistencyAgentSubagentCoordinator):
                 "functional subagent context changed since delegation; delegate again before persisting"
             )
 
+        binding_reference = _delegation_binding_reference(
+            project_id=result.request.project_id,
+            goal=result.request.objective,
+            delegation_id=result.delegation_id,
+        )
         references = tuple(
-            dict.fromkeys((*result.request.canonical_references, result.delegation_id))
+            dict.fromkeys(
+                (
+                    *result.request.canonical_references,
+                    result.delegation_id,
+                    binding_reference,
+                )
+            )
         )
         if self._task_coordinator is None:
             self._task_coordinator = AgentSubagentTaskCoordinator(
