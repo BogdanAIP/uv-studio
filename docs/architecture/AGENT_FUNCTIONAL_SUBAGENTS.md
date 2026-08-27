@@ -54,7 +54,23 @@ For accepted `plan` and `media` output, the delegation reference is carried into
 
 The same rule applies to restart recovery. If canonical work commits and the process fails before the success trace is durable, Stage-16 reconciliation reconstructs one exact enriched trace containing the delegation reference and uses that same trace object for terminal Task validation. Recovery therefore preserves delegation provenance without replaying the committed effect.
 
-Dependency injection cannot silently bypass this rule: a provenance-blind Stage-16 task coordinator is rejected at the Stage-17 boundary.
+Dependency injection cannot silently bypass this rule. A provenance-blind task coordinator is rejected, an injected Stage-17 coordinator must share the exact `AgentHarness`, Project Store and Planner authority, and a standalone injected Planner must be bound to the exact same `AgentHarness`.
+
+## Reserved delegation namespace
+
+A complete typed delegation identity matches `agent_delegate_(explore|plan|media|critic)_[0-9a-f]{32}`. Prefix-like ordinary IDs such as `agent_delegate_project` remain valid canonical identities and are not misclassified as delegation provenance.
+
+The complete typed namespace is reserved at the Stage-17 boundary for non-critic execution roles. Existing Project/Scene/Shot/Take/Timeline identities that already occupy that namespace cause delegation to fail closed before proposer execution or Plan persistence.
+
+The same reservation is applied to **future canonical outputs proposed by a role**. Stage 17 inspects the caller-selectable output identity fields of supported creation actions and bounded Skills before durable Plan creation, so a proposal cannot create a Scene, Shot, Take, track or clip whose identity masquerades as internal delegation provenance. `critic` remains able to read genuine durable delegation references as evidence.
+
+## Execution reference budget
+
+`AgentPlanRecord` and terminal `AgentTaskRecord` each cap canonical references at 128. Shared Stage-16 execution adds bounded task correlation, execution context, affected canonical identities and result identities after planning.
+
+The final Planner therefore limits durable Plan canonical references to **112**, reserving 16 slots for execution-time provenance. The shared executor repeats the same check immediately before dispatch, so an older or externally persisted Plan above the execution-safe limit is rejected while its Task is still `READY`, before execution evidence, canonical mutation or cost-bearing provider dispatch can begin.
+
+This boundary is shared Stage-16 execution safety rather than Stage-17-only bookkeeping: Stage 17 delegation provenance consumes the existing Plan reference path and must remain compatible with the same bounded terminal Task/Trace contract.
 
 ## Reference and portability rules
 
@@ -62,7 +78,7 @@ Requests, findings and outputs reuse the Stage-15 portable-state rules: no secre
 
 `available_references` is built from **explicit identity fields** in the bounded Stage-15 context and, for `critic`, explicit durable Plan/Task/Trace reference fields. Titles, summaries, status strings and other identifier-looking text do not become references accidentally. Finding references must be members of this explicit inventory.
 
-Plan proposals may contain new entity IDs only as inputs to existing validated creation actions; the Stage-16 Planner remains authoritative for whether those future identities and dependency chains are valid.
+Plan proposals may contain new entity IDs only as inputs to existing validated creation actions; the Stage-16 Planner remains authoritative for whether those future identities and dependency chains are valid, while Stage 17 additionally reserves its internal delegation namespace as described above.
 
 ## Critic versus evaluate/repair
 
@@ -74,7 +90,7 @@ Delegation is synchronous. There are no background workers, leases, heartbeats, 
 
 ## Verification
 
-The final draft implementation head `dc973c90ac20ab7bac2d4145f58c5df4d69f663c` passed PR CI #3469 (`33097030757`) across all five permanent jobs:
+Stage 17 uses the repository's permanent exact-head gate before merge:
 
 - `development-context`;
 - `bootstrap (ubuntu-latest, 3.11)`;
@@ -82,7 +98,9 @@ The final draft implementation head `dc973c90ac20ab7bac2d4145f58c5df4d69f663c` p
 - `app-baseline (ubuntu-latest)` including browser user-outcome E2E;
 - `app-baseline (windows-latest)` including browser user-outcome E2E.
 
-Focused Stage-17 tests prove bounded multi-role flow, Plan/Task/Trace delegation provenance, reopen, post-commit/pre-trace crash recovery without replay, malformed/oversized/unknown-role rejection and fail-closed rejection of provenance-blind coordinator injection.
+The authoritative exact code-bearing SHA and CI run are recorded in `project-context/PROJECT_STATE.md` and PR #71 after the final code/docs head is green.
+
+Focused Stage-17 tests prove bounded multi-role flow, Plan/Task/Trace delegation provenance, shared-executor execution and recovery, reopen, post-commit/pre-trace crash recovery without replay, malformed/oversized/unknown-role rejection, result-integrity and role revalidation, complete namespace collision handling for existing and proposed canonical identities, exact-harness dependency-injection boundaries, and execution-reference budgeting including a legacy oversized Plan rejected before dispatch.
 
 ## Product Truth boundary
 
