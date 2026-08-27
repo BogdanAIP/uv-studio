@@ -1,7 +1,7 @@
 # UV Studio — Current Architecture
 
 **Status:** CURRENT AUTHORITY  
-**Date:** 2026-08-27  
+**Date:** 2026-08-28  
 **Product composition:** D-064  
 **Shared production semantics:** D-065  
 **Agent Harness factoring:** D-066  
@@ -44,7 +44,7 @@ Project Store
  -> Agent Harness
       Context / Catalog / Policy / Trace              [Stage 15 merged]
       Planner / durable Tasks / Skills                [Stage 16 merged]
-      functional Subagents                            [Stage 17 active review]
+      functional Subagents                            [Stage 17 merged]
       background Agent execution                      [later layer 4]
       evaluate / repair                               [later layer 5]
       takeover / edit / resume                        [later layer 6]
@@ -57,6 +57,7 @@ Cross-cutting verification:
 
 ```text
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
+Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 review]
 ```
 
 ## Canonical authorities
@@ -200,11 +201,11 @@ Stage 16 executes runnable tasks in the foreground through `AgentHarness`. It du
 
 Stage 16 remains internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
 
-## Agent Harness layer 3 — Stage 17 active review
+## Agent Harness layer 3 — Stage 17 merged
 
-PR #71 is the active review slice `studio-v2-agent-functional-subagents`. It adds bounded foreground functional roles over the merged Stage-15/16 authorities without adding a second project, task, trace, permission or provider-execution authority.
+PR #71 (`studio-v2-agent-functional-subagents`) merged as `c3ca3c33f89f67fad97081f889934669e34befa5` and was lifecycle-closed through PR #72. It adds bounded foreground functional roles over the merged Stage-15/16 authorities without adding a second project, task, trace, permission or provider-execution authority.
 
-Current review implementation provides:
+The merged implementation provides:
 
 - `explore` for bounded advisory findings over explicit canonical context;
 - `plan` for structured proposals that still require the existing Stage-16 Planner before durable Plan/Task creation;
@@ -215,15 +216,32 @@ Current review implementation provides:
 - shared Stage-16 execution/recovery preservation of durable Plan provenance;
 - foreground-only execution with no workers, leases, heartbeats or autonomous polling.
 
-This is **active review implementation, not merged functionality**. Merge requires synchronized current docs, exact-head permanent CI, and clean review threads. It remains internal Agent infrastructure and does not claim a user-visible autonomous-Agent product surface.
+Stage 17 is merged internal Agent infrastructure. It does not claim a user-visible autonomous-Agent product surface.
+
+## Stage-16/17 adversarial assurance — active review
+
+PR #73 is the active bounded research slice `agent-stage17-adversarial-assurance`. It changes verification infrastructure only and does not change production Agent semantics or canonical authorities.
+
+The review implementation adds a deterministic curated mutation runner that:
+
+- copies the full `uv_studio` package into an isolated temporary overlay and never mutates checkout source;
+- binds each named guarantee to an exact source path, baseline SHA-256, one exact replacement and one exact existing regression detector;
+- proves the detector imports the exact overlay target and expected baseline/mutated bytes;
+- first requires the detector to pass against the unmodified overlay, then runs the mutant in a fresh process;
+- classifies assertion detection as `KILLED`, a clean pass as `SURVIVED`, and source/import/harness failures as `ERROR`;
+- currently requires all six curated Stage-17 mutants to be killed on Ubuntu and Windows through the normal bootstrap suite.
+
+The initial guarantees cover persistence-time role revalidation, delegation/persistence context freshness, reserved delegation namespace protection, Plan-bound provenance classification and exact AgentHarness/Project Store/Planner authority for injected Stage-17 coordinators.
+
+This is a curated assurance pilot, not exhaustive automatic mutation testing. Background-worker lease/concurrency/recovery mutants are intentionally deferred until D-066 layer 4 exists.
 
 ## D-066 active slice and remaining order
 
-The repository is currently in Stage 17 review, not lifecycle-idle. Functional subagents are the active D-066 layer 3 implementation and must not be initialized as duplicate future work.
+The repository is currently in review for the Stage-16/17 adversarial-assurance research slice. The production D-066 baseline remains merged through layer 3; background execution has not started yet.
 
-After Stage 17 merges and is lifecycle-closed, the accepted order remains:
+After PR #73 is accepted, merged and lifecycle-closed, the order remains:
 
-1. **background Agent work** coordinated through existing Job Manager boundaries;
+1. **background Agent work** coordinated through existing Job Manager and durable Agent Task boundaries;
 2. **critic/evaluation + dependency-aware repair**;
 3. **human takeover/edit/resume**;
 4. **long-form autonomous production** only after all prior boundaries are proven.
@@ -240,7 +258,7 @@ No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority i
 
 A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–16 are merged internal infrastructure and Stage 17 is active internal review infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure and PR #73 is active internal verification infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
 
 ## Desktop updates — D-068
 

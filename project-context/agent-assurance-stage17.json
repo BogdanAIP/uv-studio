@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "suite_id": "stage17-curated-v1",
+  "description": "Curated mutations for accepted Stage-17 Agent authority, freshness, namespace and provenance guarantees.",
+  "mutants": [
+    {
+      "id": "UV-ROLE-001",
+      "guarantee": "A persisted media/plan result is revalidated against its role allowlist at the persistence boundary.",
+      "target": "uv_studio/agent/stage17_provenance.py",
+      "module": "uv_studio.agent.stage17_provenance",
+      "detector": "test_agent_stage17_result_integrity.AgentStage17ResultIntegrityTests.test_persist_plan_revalidates_media_role_for_exactly_addressed_result",
+      "mutation": {
+        "find": "        self._validate_role_output(\n            self.catalog.get(result.request.role),\n            tuple(result.proposals),\n        )\n        _validate_reserved_proposal_outputs(result.proposals)\n",
+        "replace": "        # MUTANT UV-ROLE-001: skip persistence-time role revalidation.\n        _validate_reserved_proposal_outputs(result.proposals)\n"
+      }
+    },
+    {
+      "id": "UV-CTX-001",
+      "guarantee": "A role result is rejected when the bounded canonical context changes while the proposer is running.",
+      "target": "uv_studio/agent/stage17_consistency.py",
+      "module": "uv_studio.agent.stage17_consistency",
+      "detector": "test_agent_stage17_consistency.AgentStage17ConsistencyTests.test_delegate_fails_closed_when_role_context_changes_during_proposal",
+      "mutation": {
+        "find": "        current_context = self.prepare(request)\n        if self._role_context_digest(current_context) != context_digest:\n            raise AgentSubagentError(\n                \"functional subagent context changed during delegation; rebuild the role result\"\n            )\n\n        summary, findings, proposals = self._parse_output(context, raw)\n",
+        "replace": "        # MUTANT UV-CTX-001: accept proposer output after an intervening context mutation.\n        summary, findings, proposals = self._parse_output(context, raw)\n"
+      }
+    },
+    {
+      "id": "UV-CTX-002",
+      "guarantee": "A previously validated role result is rejected if its bounded context becomes stale before persistence.",
+      "target": "uv_studio/agent/stage17_provenance.py",
+      "module": "uv_studio.agent.stage17_provenance",
+      "detector": "test_agent_stage17_consistency.AgentStage17ConsistencyTests.test_persist_rejects_stale_plan_role_result_after_project_change",
+      "mutation": {
+        "find": "        current_context = self.prepare(result.request)\n        if self._role_context_digest(current_context) != result.context_digest:\n            raise AgentSubagentError(\n                \"functional subagent context changed since delegation; delegate again before persisting\"\n            )\n\n        binding_reference = _delegation_binding_reference(\n",
+        "replace": "        # MUTANT UV-CTX-002: persist a result without rechecking context freshness.\n        binding_reference = _delegation_binding_reference(\n"
+      }
+    },
+    {
+      "id": "UV-NS-001",
+      "guarantee": "Plan/media proposals cannot mint canonical identities inside the reserved Stage-17 delegation namespace.",
+      "target": "uv_studio/agent/stage17_provenance.py",
+      "module": "uv_studio.agent.stage17_provenance",
+      "detector": "test_agent_stage17_result_integrity.AgentStage17ResultIntegrityTests.test_planned_canonical_output_cannot_occupy_delegation_namespace",
+      "mutation": {
+        "find": "        _validate_reserved_proposal_outputs(base.proposals)\n        delegation_id = _delegation_id(base)\n",
+        "replace": "        # MUTANT UV-NS-001: permit proposal-created identities in the delegation namespace.\n        delegation_id = _delegation_id(base)\n"
+      }
+    },
+    {
+      "id": "UV-PROV-001",
+      "guarantee": "A delegation-looking canonical reference is Stage-17 provenance only when the durable Plan contains its exact binding reference.",
+      "target": "uv_studio/agent/stage17_provenance.py",
+      "module": "uv_studio.agent.stage17_provenance",
+      "detector": "test_agent_stage17_shared_executor_provenance.AgentStage17SharedExecutorProvenanceTests.test_delegation_like_stage16_canonical_refs_are_not_stage17_origin",
+      "mutation": {
+        "find": "        references = tuple(\n            item\n            for item in candidates\n            if _delegation_binding_reference(\n                project_id=plan.project_id,\n                goal=plan.goal,\n                delegation_id=item,\n            )\n            in plan.canonical_references\n        )\n",
+        "replace": "        # MUTANT UV-PROV-001: infer provenance from syntax without the Plan binding.\n        references = candidates[:1]\n"
+      }
+    },
+    {
+      "id": "UV-AUTH-001",
+      "guarantee": "An injected Stage-17 task coordinator must share the exact AgentHarness, Project Store and Planner authority.",
+      "target": "uv_studio/agent/stage17_provenance.py",
+      "module": "uv_studio.agent.stage17_provenance",
+      "detector": "test_agent_stage17_result_integrity.AgentStage17ResultIntegrityTests.test_injected_task_coordinator_must_share_exact_harness_authority",
+      "mutation": {
+        "find": "        if task_coordinator is not None:\n            if not isinstance(task_coordinator, AgentSubagentTaskCoordinator):\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must preserve functional-subagent delegation provenance\"\n                )\n            if (\n                task_coordinator.harness is not harness\n                or task_coordinator.project_store is not harness.project_store\n                or getattr(task_coordinator.plans, \"project_store\", None)\n                is not harness.project_store\n                or getattr(task_coordinator.tasks, \"project_store\", None)\n                is not harness.project_store\n            ):\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must share the exact AgentHarness and Project Store authority\"\n                )\n            coordinator_planner = task_coordinator.planner\n            if getattr(coordinator_planner, \"harness\", None) is not harness:\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator planner must share the exact AgentHarness authority\"\n                )\n            if requested_planner is not None and coordinator_planner is not requested_planner:\n                raise AgentSubagentError(\n                    \"Stage 17 task_coordinator must share the exact AgentPlanner authority\"\n                )\n            if requested_planner is None:\n                kwargs[\"planner\"] = coordinator_planner\n",
+        "replace": "        # MUTANT UV-AUTH-001: accept a foreign Stage-17 task coordinator authority.\n        if task_coordinator is not None and requested_planner is None:\n            kwargs[\"planner\"] = task_coordinator.planner\n"
+      }
+    }
+  ]
+}
