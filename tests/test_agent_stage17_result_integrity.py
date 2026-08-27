@@ -14,6 +14,8 @@ from uv_studio.agent import (
     AgentSubagentRequest,
     AgentSubagentResult,
     AgentSubagentRole,
+    AgentSubagentTaskCoordinator,
+    AgentTaskStatus,
 )
 from uv_studio.agent.stage17_provenance import _delegation_id
 from uv_studio.agent.subagents import AgentSubagentResult as BaseAgentSubagentResult
@@ -61,6 +63,10 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    @staticmethod
+    def _models() -> ModelRegistry:
+        return ModelRegistry(CapabilityRegistry())
 
     def test_content_addressed_result_rejects_post_delegate_tampering(self) -> None:
         result = self.coordinator.delegate(self.request)
@@ -110,6 +116,71 @@ class AgentStage17ResultIntegrityTests(unittest.TestCase):
                 plan_id="agent_plan_media_role_bypass",
             )
         self.assertEqual(AgentPlanStore(self.store).list(self.project.project_id), ())
+
+    def test_prefix_like_canonical_project_id_is_not_a_delegation_reference(self) -> None:
+        project = self.store.create_project(
+            title="Delegation prefix collision",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("micro_drama"),
+            project_id="agent_delegate_project",
+        )
+        harness = AgentHarness(self.store, self._models())
+        coordinator = AgentSubagentCoordinator(harness, _MediaProposer())
+        result = coordinator.delegate(
+            AgentSubagentRequest(
+                role=AgentSubagentRole.MEDIA,
+                project_id=project.project_id,
+                objective="Create a track without confusing the project ID for delegation provenance",
+            )
+        )
+        state = coordinator.persist_plan(
+            result,
+            plan_id="agent_plan_prefix_collision",
+        )
+        self.assertIn(project.project_id, state.plan.canonical_references)
+        self.assertIn(result.delegation_id, state.plan.canonical_references)
+
+        coordinator.execute_task(
+            project_id=project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="video_track",
+        )
+        reopened = AgentSubagentTaskCoordinator(harness).state(
+            project.project_id,
+            state.plan.plan_id,
+        )
+        self.assertEqual(reopened.tasks[0].status, AgentTaskStatus.SUCCEEDED)
+        self.assertIn(result.delegation_id, reopened.tasks[0].canonical_references)
+
+    def test_injected_task_coordinator_must_share_exact_harness_authority(self) -> None:
+        foreign_store = ProjectStore(Path(self.tmp.name) / "foreign-projects")
+        foreign_store.create_project(
+            title="Foreign authority",
+            recipe_id=STUDIO_COMPAT_RECIPE_ID,
+            extensions=studio_project_extensions("micro_drama"),
+            project_id=self.project.project_id,
+        )
+        foreign_harness = AgentHarness(foreign_store, self._models())
+        foreign_tasks = AgentSubagentTaskCoordinator(foreign_harness)
+
+        with self.assertRaisesRegex(
+            AgentSubagentError,
+            "share the exact AgentHarness and Project Store authority",
+        ):
+            AgentSubagentCoordinator(
+                self.harness,
+                _MediaProposer(),
+                task_coordinator=foreign_tasks,
+            )
+
+    def test_same_harness_injected_task_coordinator_shares_exact_planner(self) -> None:
+        task_coordinator = AgentSubagentTaskCoordinator(self.harness)
+        coordinator = AgentSubagentCoordinator(
+            self.harness,
+            _MediaProposer(),
+            task_coordinator=task_coordinator,
+        )
+        self.assertIs(coordinator.planner, task_coordinator.planner)
 
 
 if __name__ == "__main__":
