@@ -8,7 +8,7 @@
     "goal": "Make fresh ordinary-ChatGPT exact-diff semantic review the repository-owned mandatory review layer for material changes, with Codex Review retained as an optional quota-dependent second opinion.",
     "base_branch": "main",
     "branch": "chore/independent-semantic-review",
-    "pull_request": null,
+    "pull_request": 79,
     "write_scope": [
       ".agents/skills/code-review/SKILL.md",
       "AGENTS.md",
