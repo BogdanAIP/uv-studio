@@ -63,7 +63,7 @@ from .subagents import (
     AgentSubagentRole,
 )
 from .stage17_provenance import (
-    AgentSubagentCoordinator,
+    AgentSubagentCoordinator as _ForegroundAgentSubagentCoordinator,
     AgentSubagentResult,
     AgentSubagentTaskCoordinator as _ForegroundAgentSubagentTaskCoordinator,
 )
@@ -92,6 +92,14 @@ class AgentSubagentTaskCoordinator(_ForegroundAgentSubagentTaskCoordinator):
     def __init__(self, harness, **kwargs) -> None:
         _reject_background_owned_harness(harness)
         super().__init__(harness, **kwargs)
+
+
+class AgentSubagentCoordinator(_ForegroundAgentSubagentCoordinator):
+    """Public Stage-17 delegator that cannot create foreground execution on a background harness."""
+
+    def __init__(self, harness, proposer, **kwargs) -> None:
+        _reject_background_owned_harness(harness)
+        super().__init__(harness, proposer, **kwargs)
 
 
 __all__ = [
