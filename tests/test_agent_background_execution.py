@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from uv_studio.agent import (
+    AgentBackgroundContextStale,
     AgentBackgroundLeaseConflict,
     AgentBackgroundLeaseStale,
     AgentBackgroundTaskCoordinator,
@@ -188,6 +191,148 @@ class AgentBackgroundExecutionTests(unittest.TestCase):
         worker_a.execute(claim)
         production = ProductionSemanticService(self.store).state(self.project.project_id)
         self.assertEqual(production.scene("scene_background_exclusive").scene_id, "scene_background_exclusive")
+
+    def test_durable_lease_never_persists_or_repr_exposes_bearer_token(self) -> None:
+        coordinator = self._coordinator()
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_background_token_privacy",
+            scene_id="scene_token_privacy",
+        )
+        worker = AgentBackgroundWorker(
+            coordinator,
+            worker_id="worker_token_privacy",
+            lease_seconds=10,
+            heartbeat_seconds=0,
+        )
+        claim = worker.claim(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="scene",
+        )
+
+        lease = coordinator.leases.get(self.project.project_id, state.plan.plan_id, "scene")
+        self.assertIsNotNone(lease)
+        payload = lease.to_dict()
+        self.assertNotIn("lease_token", payload)
+        serialized_payload = json.dumps(payload, sort_keys=True)
+        self.assertNotIn(claim.lease_token, serialized_payload)
+        self.assertNotIn(claim.lease_token, repr(claim))
+
+        lease_path = coordinator.leases.records.path(self.project.project_id, lease.record_id)
+        durable_text = lease_path.read_text(encoding="utf-8")
+        self.assertNotIn('"lease_token"', durable_text)
+        self.assertNotIn(claim.lease_token, durable_text)
+
+        worker.execute(claim)
+
+    def test_forged_policy_digest_cannot_rebind_background_authority(self) -> None:
+        coordinator = self._coordinator()
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_background_policy_forgery",
+            scene_id="scene_policy_forgery_must_not_exist",
+        )
+        worker = AgentBackgroundWorker(
+            coordinator,
+            worker_id="worker_policy_forgery",
+            lease_seconds=10,
+            heartbeat_seconds=0,
+        )
+        claim = worker.claim(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="scene",
+        )
+        forged = replace(claim, policy_digest="0" * 64)
+
+        with self.assertRaises(AgentBackgroundLeaseStale):
+            worker.execute(forged)
+
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        with self.assertRaises(Exception):
+            production.scene("scene_policy_forgery_must_not_exist")
+
+        worker.execute(claim)
+
+    def test_heartbeat_extends_live_lease_without_replacing_claim_authority(self) -> None:
+        coordinator = self._coordinator()
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_background_heartbeat",
+            scene_id="scene_background_heartbeat",
+        )
+        worker = AgentBackgroundWorker(
+            coordinator,
+            worker_id="worker_heartbeat",
+            lease_seconds=10,
+            heartbeat_seconds=0,
+        )
+        claim = worker.claim(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="scene",
+        )
+        before = coordinator.leases.get(self.project.project_id, state.plan.plan_id, "scene")
+        self.assertIsNotNone(before)
+
+        self.clock.advance(5)
+        extended = coordinator.heartbeat_claim(claim, lease_seconds=10)
+        self.assertEqual(extended.generation, before.generation)
+        self.assertEqual(extended.token_digest, before.token_digest)
+        self.assertNotEqual(extended.heartbeat_at, before.heartbeat_at)
+        self.assertNotEqual(extended.expires_at, before.expires_at)
+
+        self.clock.advance(6)
+        live_state = coordinator.state(self.project.project_id, state.plan.plan_id)
+        self.assertEqual(live_state.tasks[0].status, AgentTaskStatus.RUNNING)
+
+        worker.execute(claim)
+        final = coordinator.state(self.project.project_id, state.plan.plan_id)
+        self.assertEqual(final.tasks[0].status, AgentTaskStatus.SUCCEEDED)
+
+    def test_context_change_after_claim_refuses_background_commit(self) -> None:
+        coordinator = self._coordinator()
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_background_context_stale",
+            scene_id="scene_stale_context_must_not_exist",
+        )
+        worker = AgentBackgroundWorker(
+            coordinator,
+            worker_id="worker_context_stale",
+            lease_seconds=10,
+            heartbeat_seconds=0,
+        )
+        claim = worker.claim(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="scene",
+        )
+
+        coordinator.harness.execute(
+            project_id=self.project.project_id,
+            action_id="production.create_scene",
+            inputs={
+                "scene_id": "scene_external_context_change",
+                "title": "External context change",
+            },
+        )
+
+        with self.assertRaises(AgentBackgroundContextStale):
+            worker.execute(claim)
+
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        self.assertEqual(
+            production.scene("scene_external_context_change").title,
+            "External context change",
+        )
+        with self.assertRaises(Exception):
+            production.scene("scene_stale_context_must_not_exist")
+
+        self.clock.advance(11)
+        recovered = coordinator.state(self.project.project_id, state.plan.plan_id)
+        self.assertEqual(recovered.tasks[0].status, AgentTaskStatus.FAILED)
 
     def test_expired_worker_cannot_authorize_canonical_mutation(self) -> None:
         coordinator = self._coordinator()
