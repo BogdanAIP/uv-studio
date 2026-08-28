@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: studio-v2-agent-background-execution -->
 
 **Updated:** 2026-08-28
@@ -9,11 +9,11 @@
 
 ## Current lifecycle
 
-The repository is in the draft Stage 18 slice `studio-v2-agent-background-execution` on branch `stage-18/agent-background-execution`, PR #75, starting from lifecycle-closed main merge `39c80fabb596f2dce76a473a7f1947a06de3cb36`.
+The repository is in review for Stage 18 slice `studio-v2-agent-background-execution` on branch `stage-18/agent-background-execution`, PR #75, starting from lifecycle-closed main merge `39c80fabb596f2dce76a473a7f1947a06de3cb36`.
 
 The accepted production Agent baseline is merged through Stage 17 / PR #71 (`c3ca3c33f89f67fad97081f889934669e34befa5`). The curated Stage-16/17 adversarial-assurance pilot merged through PR #73 as `d1413e5753c24f207faf5a20828f891c14f53aa0` and remains verification infrastructure rather than a runtime authority.
 
-## Stage 18 implementation in draft
+## Stage 18 implementation under review
 
 D-066 layer 4 adds bounded background Agent execution without introducing another scheduler, task graph, project authority, mutation authority or provider-execution authority.
 
@@ -35,16 +35,24 @@ The current implementation:
 
 ## Current proof
 
-The initial six-case Stage-18 regression suite proved exclusive worker ownership, expired-worker fencing, safe reclaim after a pre-dispatch crash, successful background execution/reopen, post-commit/pre-trace recovery without replay, and cancellation blocking descendants on both Linux and Windows unit bootstrap.
+The Stage-18 regression and acceptance suites prove:
 
-The expanded acceptance suite additionally proves:
-
+- successful background execution and reopen;
+- exclusive worker ownership and stale/expired-worker fencing;
+- safe reclaim after a pre-dispatch crash with bounded lease history;
+- post-commit/pre-trace recovery without replay;
+- cancellation and existing Stage-16 dependency blocking semantics;
 - exact Generation Job identity/history across reopen without moving provider execution out of the existing Job Manager;
 - Stage-17 delegation provenance through background execution and reopen;
 - live-lease reopen behavior and lease-expiry reconciliation;
-- existing Stage-16 dependency semantics after real upstream failure (`PLANNED` downstream remains blocked rather than being falsely run or cancelled).
+- durable lease JSON and claim `repr` do not expose the raw bearer token;
+- forged policy digests cannot rebind execution authority;
+- heartbeat extends the same lease generation/token authority;
+- canonical context changes after claim refuse the background commit.
 
-Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611 on Ubuntu and Windows. The current follow-up proof set adds direct tests that durable lease JSON never contains the bearer token, claim `repr` never exposes it, a forged policy digest cannot rebind execution authority, heartbeat extends the same lease authority, and a canonical context change after claim refuses the background commit. These tests are part of the current PR head and must be green on the final exact review head before merge.
+Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611. The synchronized draft head `8901e79d51dfeb2ad8510bea5a418e13392c723a`, including the direct authority tests and current architecture documentation, passed all five permanent jobs in CI run #3619 on Ubuntu and Windows, including app-baseline/browser E2E.
+
+The review transition itself creates a new exact review head. That exact head must pass the same five permanent checks before merge.
 
 ## Key recovery boundary
 
@@ -52,12 +60,13 @@ A process loss after a canonical commit but before Agent success bookkeeping mus
 
 ## Review / merge gate
 
-PR #75 remains draft until:
+PR #75 is non-draft and frozen for review. Merge requires:
 
-1. the final exact head passes all five permanent CI jobs;
-2. current architecture authorities describe Stage 18 as active draft rather than future work;
-3. Codex review is run against that exact review head with correctness/security/TOCTOU/recovery focus;
-4. every concrete review finding is resolved and any resulting code change receives a fresh exact-head CI run and, when material, repeat Codex review.
+1. all five permanent CI jobs green on the exact review head;
+2. current architecture/context authorities synchronized with Stage 18 review state;
+3. focused Codex review against that exact review head for correctness, security, lease fencing, recovery, races and TOCTOU behavior;
+4. no unresolved concrete review findings or review threads;
+5. every resulting code change, if any, receives a fresh exact-head CI run and a repeat Codex review when material.
 
 ## Known limitations
 
