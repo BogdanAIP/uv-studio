@@ -45,7 +45,7 @@ Project Store
       Context / Catalog / Policy / Trace              [Stage 15 merged]
       Planner / durable Tasks / Skills                [Stage 16 merged]
       functional Subagents                            [Stage 17 merged]
-      background Agent execution                      [later layer 4]
+      background Agent execution                      [next layer 4]
       evaluate / repair                               [later layer 5]
       takeover / edit / resume                        [later layer 6]
       long-form autonomy                              [later layer 7]
@@ -57,7 +57,7 @@ Cross-cutting verification:
 
 ```text
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
-Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 review]
+Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged]
 ```
 
 ## Canonical authorities
@@ -218,30 +218,30 @@ The merged implementation provides:
 
 Stage 17 is merged internal Agent infrastructure. It does not claim a user-visible autonomous-Agent product surface.
 
-## Stage-16/17 adversarial assurance — active review
+## Stage-16/17 adversarial assurance — merged verification baseline
 
-PR #73 is the active bounded research slice `agent-stage17-adversarial-assurance`. It changes verification infrastructure only and does not change production Agent semantics or canonical authorities.
+PR #73 merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. It changes verification infrastructure only and does not change production Agent semantics or canonical authorities.
 
-The review implementation adds a deterministic curated mutation runner that:
+The accepted implementation adds a deterministic curated mutation runner that:
 
 - copies the full `uv_studio` package into an isolated temporary overlay and never mutates checkout source;
 - binds each named guarantee to an exact source path, baseline SHA-256, one exact replacement and one exact existing regression detector;
 - proves the detector imports the exact overlay target and expected baseline/mutated bytes;
 - first requires the detector to pass against the unmodified overlay, then runs the mutant in a fresh process;
 - classifies assertion detection as `KILLED`, a clean pass as `SURVIVED`, and source/import/harness failures as `ERROR`;
-- currently requires all six curated Stage-17 mutants to be killed on Ubuntu and Windows through the normal bootstrap suite.
+- requires all six curated Stage-17 mutants to be killed on Ubuntu and Windows through the normal bootstrap suite.
 
 The initial guarantees cover persistence-time role revalidation, delegation/persistence context freshness, reserved delegation namespace protection, Plan-bound provenance classification and exact AgentHarness/Project Store/Planner authority for injected Stage-17 coordinators.
 
-This is a curated assurance pilot, not exhaustive automatic mutation testing. Background-worker lease/concurrency/recovery mutants are intentionally deferred until D-066 layer 4 exists.
+This is a curated assurance baseline, not exhaustive automatic mutation testing. Background-worker lease/concurrency/recovery mutants are intentionally deferred until D-066 layer 4 exists.
 
-## D-066 active slice and remaining order
+## D-066 current handoff and remaining order
 
-The repository is currently in review for the Stage-16/17 adversarial-assurance research slice. The production D-066 baseline remains merged through layer 3; background execution has not started yet.
+The repository is lifecycle-idle after accepting the Stage-16/17 adversarial-assurance slice. The production D-066 baseline is merged through layer 3; background execution has not been implemented yet.
 
-After PR #73 is accepted, merged and lifecycle-closed, the order remains:
+The next accepted order is:
 
-1. **background Agent work** coordinated through existing Job Manager and durable Agent Task boundaries;
+1. **background Agent work** coordinated through existing Generation Job Manager and durable Agent Task boundaries;
 2. **critic/evaluation + dependency-aware repair**;
 3. **human takeover/edit/resume**;
 4. **long-form autonomous production** only after all prior boundaries are proven.
@@ -258,7 +258,7 @@ No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority i
 
 A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure and PR #73 is active internal verification infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure and PR #73 is merged internal verification infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
 
 ## Desktop updates — D-068
 

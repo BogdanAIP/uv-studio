@@ -1,25 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "agent-stage17-adversarial-assurance",
-    "kind": "research",
-    "roadmap_stage": "studio-v2",
-    "goal": "Add bounded deterministic adversarial and curated mutation assurance for accepted Stage-16/17 Agent guarantees without changing production semantics.",
-    "base_branch": "main",
-    "branch": "research/agent-stage17-adversarial-assurance",
-    "pull_request": 73,
-    "write_scope": [
-      "tests/**",
-      "tools/**",
-      "docs/architecture/CURRENT_ARCHITECTURE.md",
-      "project-context/**"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "studio-v2-agent-functional-subagents",
-    "pull_request": 71,
-    "merge_commit": "c3ca3c33f89f67fad97081f889934669e34befa5"
+    "id": "agent-stage17-adversarial-assurance",
+    "pull_request": 73,
+    "merge_commit": "d1413e5753c24f207faf5a20828f891c14f53aa0"
   },
   "handoff": {
     "next_slice_id": "studio-v2-agent-background-execution",
