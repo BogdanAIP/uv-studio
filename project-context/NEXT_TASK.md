@@ -8,14 +8,15 @@ After `architecture-compression-inventory` is accepted, merged and lifecycle-clo
 
 The expected deletion group is the old VideoClaw-style Workflow/Pipeline/Sandbox/stage UI and the donor-only remainder of its client glue. Two prerequisites must be satisfied before that deletion:
 
-1. Donor frontend restoration is currently possible through more than the manually dispatched force-reset workflow. `.github/workflows/promote-frontend.yml` runs `python tools/promote_frontend.py --force`, which can replace the maintained UV-owned `frontend/`; plain `python tools/promote_frontend.py` also recreates the pinned donor frontend when `frontend/` is absent. `tools/uv_dev.py` and Windows `scripts/setup-dev.ps1` currently direct developers to the plain command when frontend files are missing, and `docs/FRONTEND.md` documents the promotion/provenance mechanism. The retirement slice must disable, remove or safely replace every supported write-capable donor restoration entry point and update its callers/guidance before claiming donor UI retirement.
+1. Donor frontend restoration is currently possible through more than the manually dispatched force-reset workflow. `.github/workflows/promote-frontend.yml` runs `python tools/promote_frontend.py --force`, which can replace the maintained UV-owned `frontend/`; plain `python tools/promote_frontend.py` also recreates the pinned donor frontend when `frontend/` is absent. `tools/uv_dev.py` and Windows `scripts/setup-dev.ps1` currently direct developers to the plain command when frontend files are missing, and `docs/FRONTEND.md` documents the promotion/provenance mechanism. `tests/test_promote_frontend.py` deliberately verifies the current no-force creation and force-replacement behavior, while `.github/workflows/ci.yml` runs that unit suite and separately invokes `tools/promote_frontend.py --check`. The retirement slice must disable, remove or safely replace every supported write-capable donor restoration entry point, migrate its callers/guidance/tests, and preserve any intended provenance verification as check-only/read-only before claiming donor UI retirement.
 2. `frontend/lib/workflowApi.ts` is **not** wholly donor-only today: supported `/settings` reaches `fetchApiModels` through `frontend/lib/modelRegistry.ts`. That model lookup must move to a modern model/capability client without changing Settings behavior.
 
 ## Required direction
 
 - start only from lifecycle-idle `main` after the inventory PR is merged and closed;
-- first disable, remove or replace all supported pinned-frontend restoration paths so repository automation, developer tooling, setup scripts, or documented recovery guidance cannot recreate the donor VideoClaw tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` with and without `--force`, the `tools/uv_dev.py` missing-frontend guidance, Windows `scripts/setup-dev.ps1`, and the corresponding `docs/FRONTEND.md` instructions/provenance wording;
-- retain a provenance verification/check-only path if still needed, but it must have no write authority over the maintained `frontend/` tree and must not offer an equivalent whole-frontend restore under another command/workflow name;
+- first disable, remove or replace all supported pinned-frontend restoration paths so repository automation, developer tooling, setup scripts, tests, or documented recovery guidance cannot recreate the donor VideoClaw tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` with and without `--force`, `tools/uv_dev.py`, Windows `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, `tests/test_promote_frontend.py`, and the promotion/provenance checks in `.github/workflows/ci.yml`;
+- replace tests that currently assert write-capable promotion with tests for the retained safe/read-only provenance contract; keep CI provenance validation if still required, but it must not depend on write authority over the maintained `frontend/` tree;
+- retain no equivalent whole-frontend restore under another command/workflow name;
 - move `fetchApiModels` used by `/settings -> modelRegistry.ts` out of `workflowApi.ts` into an appropriate modern model/capability API client, preserving the existing model-listing/filter contract;
 - only after both prerequisites are proven, remove donor Workflow/Pipeline/Sandbox/stage roots and any `workflowApi.ts` remainder that an exact recursive scan proves has no supported caller;
 - remove only items classified **DELETE LATER** whose deletion gate is fully satisfied by the accepted inventory; treat mixed **ADAPT → DELETE LATER** glue as extract-first;
@@ -30,7 +31,8 @@ The expected deletion group is the old VideoClaw-style Workflow/Pipeline/Sandbox
 
 At minimum:
 
-- direct proof that no enabled repository workflow, developer tool, setup script, or documented supported recovery path can restore the pinned donor frontend over the UV-owned `frontend/` tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py --force`, plain `tools/promote_frontend.py` when `frontend/` is absent, `tools/uv_dev.py`, `scripts/setup-dev.ps1`, and `docs/FRONTEND.md`;
+- direct proof that no enabled repository workflow, developer tool, setup script, unit test expectation, or documented supported recovery path can restore the pinned donor frontend over the UV-owned `frontend/` tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py --force`, plain `tools/promote_frontend.py` when `frontend/` is absent, `tools/uv_dev.py`, `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, and `tests/test_promote_frontend.py`;
+- direct proof that `.github/workflows/ci.yml` retains only the intended read-only provenance/check contract and no CI path depends on donor promotion writes;
 - direct proof that any retained provenance command is check-only/read-only with respect to `frontend/`;
 - direct proof that `/settings -> modelRegistry.ts` no longer imports model listing from `workflowApi.ts` and still receives the expected filtered model groups;
 - exact recursive zero-supported-caller proof for every removed frontend file/client remainder;
@@ -39,7 +41,7 @@ At minimum:
 - permanent Ubuntu/Windows repository checks pass;
 - browser coverage confirms supported Settings/Projects/Studio/legacy compatibility routes remain usable;
 - no supported legacy project route or persisted project becomes unreadable;
-- no new compatibility fallback, setup command, documented recovery instruction or reset mechanism is introduced that recreates the deleted donor UI.
+- no new compatibility fallback, setup command, test fixture, documented recovery instruction or reset mechanism is introduced that recreates the deleted donor UI.
 
 ## Entry gate
 
