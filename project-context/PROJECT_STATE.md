@@ -15,15 +15,18 @@ The accepted production Agent baseline is merged through Stage 17 / PR #71 (`c3c
 
 ## Stage 18 implementation in draft
 
-D-066 layer 4 adds bounded background Agent execution without introducing another scheduler, task graph, project authority or provider-execution authority.
+D-066 layer 4 adds bounded background Agent execution without introducing another scheduler, task graph, project authority, mutation authority or provider-execution authority.
 
 The current implementation:
 
 - keeps the existing Stage-16 durable `AgentPlanRecord` / `AgentTaskRecord` lifecycle as orchestration truth;
 - stores project-scoped worker lease records under the existing `tasks/` authority with bounded claim generations/history;
+- persists only a digest of the bearer lease token; the raw token exists only in the ephemeral `AgentBackgroundClaim` and is excluded from `repr`;
+- binds each lease to the exact task record, worker, generation, context digest, input digest, target and frozen-policy digest;
+- persists the claim-time policy once through the existing Stage-16 append-only execution-evidence authority and reloads that evidence before dispatch, heartbeat, commit and finalization rather than trusting caller-supplied policy;
 - acquires, heartbeats and releases leases through the existing cross-runtime task-record lock and compare-and-swap boundary;
 - splits foreground's long critical section into short claim/finalize sections while reusing Stage-16 context, frozen-policy, execution-evidence, trace and committed-effect recovery contracts;
-- fences canonical Production/Timeline commits and Generation Job submission against the exact live worker lease and exact RUNNING task, refusing stale/expired ownership and stale execution context;
+- fences canonical Production/Timeline commits and Generation Job submission against the exact live worker lease and exact RUNNING task, refusing stale/expired ownership, policy substitution and stale execution context;
 - never redispatches ambiguous RUNNING work: reopen first reconciles exact correlated trace, ProjectUnitOfWork or Generation Job evidence;
 - records pre-dispatch claim loss as bounded retry history while RUNNING delivery uncertainty remains fail-closed/recovery-only;
 - preserves Stage-17 delegation references through the same durable Plan/Task/Trace path;
@@ -32,13 +35,29 @@ The current implementation:
 
 ## Current proof
 
-The first Stage-18 regression suite proves exclusive worker ownership, expired-worker fencing, safe reclaim after a pre-dispatch crash, successful background execution/reopen, post-commit/pre-trace recovery without replay, and cancellation blocking descendants on both Linux and Windows unit bootstrap for the initial six-case set.
+The initial six-case Stage-18 regression suite proved exclusive worker ownership, expired-worker fencing, safe reclaim after a pre-dispatch crash, successful background execution/reopen, post-commit/pre-trace recovery without replay, and cancellation blocking descendants on both Linux and Windows unit bootstrap.
 
-The expanded acceptance set additionally exercises exact Generation Job identity/history across reopen, Stage-17 delegation provenance through background execution, live-lease reopen behavior and downstream cancellation after a real dependency failure. Those newer checks remain under draft CI until the current head is stabilized.
+The expanded acceptance suite additionally proves:
+
+- exact Generation Job identity/history across reopen without moving provider execution out of the existing Job Manager;
+- Stage-17 delegation provenance through background execution and reopen;
+- live-lease reopen behavior and lease-expiry reconciliation;
+- existing Stage-16 dependency semantics after real upstream failure (`PLANNED` downstream remains blocked rather than being falsely run or cancelled).
+
+Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611 on Ubuntu and Windows. The current follow-up proof set adds direct tests that durable lease JSON never contains the bearer token, claim `repr` never exposes it, a forged policy digest cannot rebind execution authority, heartbeat extends the same lease authority, and a canonical context change after claim refuses the background commit. These tests are part of the current PR head and must be green on the final exact review head before merge.
 
 ## Key recovery boundary
 
-A process loss after a canonical commit but before Agent success bookkeeping must recover from the existing correlated ProjectUnitOfWork or exact Generation Job evidence without replay. A process loss before canonical commit must not create false success evidence. A stale lease may never itself authorize a mutation.
+A process loss after a canonical commit but before Agent success bookkeeping must recover from the existing correlated ProjectUnitOfWork or exact Generation Job evidence without replay. A process loss before canonical commit must not create false success evidence. A stale lease, forged claim or changed canonical context may never authorize a mutation.
+
+## Review / merge gate
+
+PR #75 remains draft until:
+
+1. the final exact head passes all five permanent CI jobs;
+2. current architecture authorities describe Stage 18 as active draft rather than future work;
+3. Codex review is run against that exact review head with correctness/security/TOCTOU/recovery focus;
+4. every concrete review finding is resolved and any resulting code change receives a fresh exact-head CI run and, when material, repeat Codex review.
 
 ## Known limitations
 
