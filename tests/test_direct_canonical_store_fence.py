@@ -78,6 +78,18 @@ class DirectCanonicalStoreFenceTests(unittest.TestCase):
             payload,
         )
 
+    def test_every_timeline_json_atomic_writer_uses_shared_project_fence(self) -> None:
+        other = ProjectStore(self.root)
+        path = other.resolve_project_file(
+            self.project.project_id,
+            "timeline/freshness-probe.json",
+            allowed_roots=("timeline",),
+        )
+        self._assert_writer_waits_for_shared_project_fence(
+            lambda: other._atomic_write_json(path, {"schema_version": 1, "kind": "probe"})
+        )
+        self.assertTrue(path.is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

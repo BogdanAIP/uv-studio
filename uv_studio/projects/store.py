@@ -33,6 +33,7 @@ PROJECT_DIRECTORIES = (
     "reviews",
     "exports",
 )
+_FENCED_CANONICAL_JSON_ROOTS = frozenset({"production", "timeline"})
 
 
 class ProjectStoreError(RuntimeError):
@@ -360,6 +361,27 @@ class ProjectStore:
                 ) from exc
         return destination
 
+    def _canonical_fenced_json_project_id(self, path: Path) -> str | None:
+        """Return the owning project for freshness-tracked canonical JSON writes."""
+
+        path = Path(path)
+        if path.suffix.lower() != ".json":
+            return None
+        try:
+            candidate = path.parent.resolve(strict=True) / path.name
+            relative = candidate.relative_to(self.root)
+        except (OSError, ValueError):
+            return None
+        parts = relative.parts
+        if len(parts) < 3 or parts[1] not in _FENCED_CANONICAL_JSON_ROOTS:
+            return None
+        project_id = parts[0]
+        try:
+            validate_identifier(project_id, field_name="project_id")
+        except ProjectValidationError:
+            return None
+        return project_id
+
     def _atomic_write_json(self, path: Path, data: Mapping[str, Any]) -> None:
         try:
             serialized = json.dumps(
@@ -373,7 +395,21 @@ class ProjectStore:
             raise ProjectStoreError(
                 f"Project data is not strict portable JSON: {_bounded_error_message(exc)}"
             ) from exc
-        self._atomic_write_bytes(path, serialized.encode("utf-8"))
+
+        encoded = serialized.encode("utf-8")
+        project_id = self._canonical_fenced_json_project_id(path)
+        if project_id is None:
+            self._atomic_write_bytes(path, encoded)
+            return
+
+        # Every JSON document included by the Stage-18 canonical freshness digest
+        # must share the same cross-runtime project fence, including contextual
+        # timeline stores such as music-map, sequence-continuity and range-edits.
+        # Import locally to avoid the task_records -> ProjectStore module cycle.
+        from .task_records import ProjectTaskRecordStore
+
+        with ProjectTaskRecordStore(self).project_lock(project_id):
+            self._atomic_write_bytes(path, encoded)
 
     def _atomic_write_bytes(self, path: Path, data: bytes) -> None:
         """Replace one project-owned file after flushing its complete new bytes."""

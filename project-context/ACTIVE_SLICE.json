@@ -11,6 +11,7 @@
     "pull_request": 75,
     "write_scope": [
       "uv_studio/agent/**",
+      "uv_studio/projects/store.py",
       "uv_studio/projects/transactions.py",
       "uv_studio/projects/production_state.py",
       "uv_studio/projects/timeline.py",
