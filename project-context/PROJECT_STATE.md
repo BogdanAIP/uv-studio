@@ -27,6 +27,7 @@ The current implementation:
 - acquires, heartbeats and releases leases through the existing cross-runtime task-record lock and compare-and-swap boundary;
 - splits foreground's long critical section into short claim/finalize sections while reusing Stage-16 context, frozen-policy, execution-evidence, trace and committed-effect recovery contracts;
 - fences canonical Production/Timeline commits and Generation Job submission against the exact live worker lease and exact RUNNING task, refusing stale/expired ownership, policy substitution and stale execution context;
+- binds recovery correlation to durable execution-evidence identity rather than trusting the ephemeral claim;
 - never redispatches ambiguous RUNNING work: reopen first reconciles exact correlated trace, ProjectUnitOfWork or Generation Job evidence;
 - records pre-dispatch claim loss as bounded retry history while RUNNING delivery uncertainty remains fail-closed/recovery-only;
 - preserves Stage-17 delegation references through the same durable Plan/Task/Trace path;
@@ -35,38 +36,34 @@ The current implementation:
 
 ## Current proof
 
-The Stage-18 regression and acceptance suites prove:
+The Stage-18 regression and acceptance suites prove successful background execution/reopen, exclusive ownership, lease expiry/reclaim, post-commit recovery without replay, cancellation/dependency semantics, Generation Job identity, Stage-17 provenance, bearer-token non-persistence, forged policy/correlation rejection, heartbeat extension and stale observed-context refusal.
 
-- successful background execution and reopen;
-- exclusive worker ownership and stale/expired-worker fencing;
-- safe reclaim after a pre-dispatch crash with bounded lease history;
-- post-commit/pre-trace recovery without replay;
-- cancellation and existing Stage-16 dependency blocking semantics;
-- exact Generation Job identity/history across reopen without moving provider execution out of the existing Job Manager;
-- Stage-17 delegation provenance through background execution and reopen;
-- live-lease reopen behavior and lease-expiry reconciliation;
-- durable lease JSON and claim `repr` do not expose the raw bearer token;
-- forged policy digests cannot rebind execution authority;
-- heartbeat extends the same lease generation/token authority;
-- canonical context changes after claim refuse the background commit.
+Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611. The synchronized draft head `8901e79d51dfeb2ad8510bea5a418e13392c723a` passed all five permanent jobs in CI run #3619. Review head `e4e632322e9a28244f26b02bef3580c67feceace`, including recovery-correlation hardening, also passed all five permanent jobs before Codex review.
 
-Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611. The synchronized draft head `8901e79d51dfeb2ad8510bea5a418e13392c723a`, including the direct authority tests and current architecture documentation, passed all five permanent jobs in CI run #3619 on Ubuntu and Windows, including app-baseline/browser E2E.
+## Codex review blockers
 
-The review transition itself creates a new exact review head. That exact head must pass the same five permanent checks before merge.
+Focused Codex review of exact head `e4e632322e9a28244f26b02bef3580c67feceace` returned three concrete P1 findings that block merge:
+
+1. Production/Timeline `ProjectUnitOfWork` commits are not serialized across independent `ProjectStore` runtimes, so a foreign process can mutate canonical state after the Agent freshness check and before the prepared background transaction writes.
+2. Generation idempotency lookup, D-017 consumption and Job reservation are not one cross-runtime atomic section, allowing duplicate Jobs for one idempotency key under concurrent Agent and GUI/API submission.
+3. `AgentContextBuilder.digest` is an observation digest rather than an exact canonical Timeline freshness token; clip timing/source-range/reference mutations can be omitted from that digest.
+
+The Stage-18 review-fix scope is therefore narrowly expanded to `uv_studio/projects/transactions.py`, `uv_studio/generation/jobs.py` and `uv_studio/generation/service.py` in addition to the existing Agent/tests/docs/context paths. The intended fix reuses the existing re-entrant cross-process `ProjectTaskRecordStore.project_lock` as the shared critical section for canonical transaction and generation authorities; no second lock/scheduler/project authority is introduced. Background freshness will additionally bind exact canonical Project/Production/Timeline JSON bytes rather than overloading the bounded Agent observation digest.
 
 ## Key recovery boundary
 
-A process loss after a canonical commit but before Agent success bookkeeping must recover from the existing correlated ProjectUnitOfWork or exact Generation Job evidence without replay. A process loss before canonical commit must not create false success evidence. A stale lease, forged claim or changed canonical context may never authorize a mutation.
+A process loss after a canonical commit but before Agent success bookkeeping must recover from the existing correlated ProjectUnitOfWork or exact Generation Job evidence without replay. A process loss before canonical commit must not create false success evidence. A stale lease, forged claim or changed canonical state may never authorize a mutation.
 
 ## Review / merge gate
 
-PR #75 is non-draft and frozen for review. Merge requires:
+PR #75 is non-draft and remains in review. Merge requires:
 
-1. all five permanent CI jobs green on the exact review head;
-2. current architecture/context authorities synchronized with Stage 18 review state;
-3. focused Codex review against that exact review head for correctness, security, lease fencing, recovery, races and TOCTOU behavior;
-4. no unresolved concrete review findings or review threads;
-5. every resulting code change, if any, receives a fresh exact-head CI run and a repeat Codex review when material.
+1. all three P1 Codex findings fixed at the existing canonical authorities rather than patched only inside Agent;
+2. focused regression tests proving cross-runtime Production/Timeline serialization, Generation idempotency atomicity and full Timeline freshness detection;
+3. all five permanent CI jobs green on the resulting exact review head;
+4. architecture/context authorities synchronized;
+5. repeat focused Codex review on the new exact head;
+6. no unresolved concrete review findings or review threads.
 
 ## Known limitations
 
