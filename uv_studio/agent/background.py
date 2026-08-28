@@ -11,6 +11,9 @@ from . import _background_impl as _impl
 from ._background_impl import *  # noqa: F401,F403
 
 
+_BACKGROUND_OWNER_ATTR = "_uv_agent_background_task_coordinator_owner"
+
+
 class AgentBackgroundTaskCoordinator(_impl.AgentBackgroundTaskCoordinator):
     """Own the background fences installed into exactly one AgentHarness."""
 
@@ -27,7 +30,8 @@ class AgentBackgroundTaskCoordinator(_impl.AgentBackgroundTaskCoordinator):
         timeline = getattr(harness, "timeline", None)
         generation = getattr(harness, "generation", None)
         if (
-            isinstance(
+            getattr(harness, _BACKGROUND_OWNER_ATTR, None) is not None
+            or isinstance(
                 getattr(production, "uow", None),
                 _impl._BackgroundFencedProjectUnitOfWork,
             )
@@ -47,6 +51,7 @@ class AgentBackgroundTaskCoordinator(_impl.AgentBackgroundTaskCoordinator):
             task_store=task_store,
             clock=clock,
         )
+        setattr(harness, _BACKGROUND_OWNER_ATTR, self)
 
 
 __all__ = list(_impl.__all__)
