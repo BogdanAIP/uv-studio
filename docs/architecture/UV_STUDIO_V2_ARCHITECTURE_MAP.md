@@ -1,13 +1,13 @@
 # UV Studio v2 — architecture map and migration inventory
 
-**Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069  
+**Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069 + D-070  
 **Date:** 2026-08-28
 
 Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, three merged Agent-orchestration layers, a merged Stage-16/17 adversarial-assurance pilot, and an active Stage-18 draft for bounded background Agent execution:
+UV Studio now has a concrete shared production/generation spine, three merged Agent-orchestration layers, a merged Stage-16/17 adversarial-assurance pilot, and an active Stage-18 review for bounded background Agent execution:
 
 ```text
 Project Store
@@ -23,7 +23,9 @@ Project Store
  -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 merged]
  -> Agent Harness layer 3: functional Subagents                     [Stage 17 merged]
  -> curated Stage-16/17 adversarial assurance                       [PR #73 merged]
- -> Agent Harness layer 4: bounded background execution             [PR #75 active draft]
+ -> Agent Harness layer 4: bounded background execution             [PR #75 active review]
+ -> D-070 product-first gate: architecture compression + golden vertical
+ -> later D-066 autonomy: evaluate/repair -> takeover -> autonomy
 ```
 
 The old product-composition errors remain rejected:
@@ -33,7 +35,7 @@ The old product-composition errors remain rejected:
 3. a parallel Agent project/tool/permission authority;
 4. a second Agent scheduler or provider-execution authority hidden behind background work.
 
-D-064 owns Production Directions. D-065 owns shared production semantics. D-066 owns the ordered Agent Harness build-out. D-067 verifies current-document/product parity. D-068 owns later desktop in-place updates. D-069 owns provider-neutral sequential-generation lineage.
+D-064 owns Production Directions. D-065 owns shared production semantics. D-066 owns the ordered Agent Harness build-out. D-067 verifies current-document/product parity. D-068 owns later desktop in-place updates. D-069 owns provider-neutral sequential-generation lineage. D-070 owns the product-first sequencing gate before further Agent autonomy.
 
 ## 2. Target architecture
 
@@ -61,8 +63,9 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
        Stage 15: Context -> Catalog -> Policy -> Trace            [merged]
        Stage 16: Planner -> durable Tasks -> Skills                [merged]
        Stage 17: functional Subagents                             [merged]
-       Stage 18: bounded background execution                     [active draft]
-       next: evaluate/repair -> takeover -> autonomy
+       Stage 18: bounded background execution                     [active review]
+       D-070: architecture compression -> micro_drama golden vertical
+       later: evaluate/repair -> takeover -> autonomy
                                  |
                        Capability Registry
                                  |
@@ -222,7 +225,7 @@ PR #73 merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. Its curated mutatio
 
 Classification: **KEEP**.
 
-## 9. Agent Harness layer 4 — Stage 18 ACTIVE DRAFT
+## 9. Agent Harness layer 4 — Stage 18 ACTIVE REVIEW
 
 PR #75 on `stage-18/agent-background-execution` implements bounded background execution over the existing Stage-16 task state machine and Stage-17 provenance. It does **not** create a second scheduler, task graph, project authority, mutation authority or provider executor.
 
@@ -259,6 +262,8 @@ Production and Timeline continue through ProjectUnitOfWork. The background seam 
 
 Generation remains routed through the existing GenerationService/Generation Job Manager. Background work fences `submit` before D-017 consumption/Job creation; long provider execution remains Job Manager responsibility.
 
+Existing-project `project.json` mutations through `ProjectStore.save_project` / `update_project` share the same cross-runtime project fence, so API/project metadata writes cannot bypass the canonical commit boundary.
+
 ### Recovery model — KEEP IF REVIEW ACCEPTS
 
 - live leased RUNNING work is not prematurely reconciled as abandoned;
@@ -287,15 +292,26 @@ Tests cover:
 - raw token non-persistence / non-disclosure in `repr`;
 - forged policy-digest rejection;
 - heartbeat extension of the same authority;
-- canonical context-stale refusal before commit.
+- canonical context-stale refusal before commit;
+- cross-runtime `project.json` update serialization with preservation of both canonical edits;
+- rejection of a second background coordinator before it can replace the first coordinator's harness fences.
 
-Security hardening at `eddd70086b1b15dc297a44dffc9d56b4ef7387d7` passed all five permanent CI jobs in run #3611 on Ubuntu and Windows. The final PR #75 exact review head must pass the same five jobs and receive focused Codex review before merge.
+The final PR #75 exact review head must pass all five permanent CI jobs and receive focused Codex review before merge.
 
-Classification while PR #75 is draft: **ADAPT / REVIEW**, not yet merged production baseline.
+Classification while PR #75 is in review: **ADAPT / REVIEW**, not yet merged production baseline.
 
-## 10. D-066 remaining order
+## 10. D-070 product-first handoff before D-066 remaining order
 
-After Stage 18 is accepted, merged and lifecycle-closed, continue in the accepted order:
+After Stage 18 is accepted, merged and lifecycle-closed, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+
+That behavior-preserving slice must map exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
+
+Further Agent autonomy resumes only after both D-070 gates are satisfied:
+
+1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices.
+2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
+
+When Agent-autonomy work resumes, preserve D-066 order:
 
 1. **Layer 5 — evaluation + dependency-aware local repair**;
 2. **Layer 6 — human takeover/edit/resume**;
@@ -307,7 +323,7 @@ Do not jump directly to long-form autonomy.
 
 D-067 keeps current docs, machine-readable feature contracts, backend/API/frontend and user-outcome evidence consistent.
 
-The visible record remains named generation -> Take. Stages 15–17 are merged internal Agent infrastructure, Stage 18 is active internal draft infrastructure, and PR #73 is merged internal assurance infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and browser proof.
+The visible record remains named generation -> Take. Stages 15–17 are merged internal Agent infrastructure, Stage 18 is active internal review infrastructure, and PR #73 is merged internal assurance infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and browser proof.
 
 ## 12. Desktop update layer — ACCEPTED TARGET, DEFERRED HERE
 
@@ -366,6 +382,8 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 
 Do not confuse legacy `uv_studio/orchestration/*` Product-Orchestrator-era code with bounded Agent orchestration under `uv_studio/agent/`.
 
+While D-070 is active, superseded product-composition paths must not gain new modern callers without a later accepted decision explicitly reversing their legacy status.
+
 ## 16. Migration order
 
 Completed:
@@ -386,16 +404,21 @@ Completed:
 
 Active:
 
-14. **Stage 18 bounded background Agent execution — PR #75 draft.**
+14. **Stage 18 bounded background Agent execution — PR #75 review.**
 
-Next in D-066 order:
+Next under D-070:
 
-15. evaluation/dependency-aware repair;
-16. human takeover/edit/resume;
-17. long-form autonomous production;
-18. direction-domain growth/extraction of useful legacy tools as required;
-19. compatibility retirement after caller proof;
-20. D-068 maintained desktop update implementation/release proof when selected as its own slice.
+15. **`architecture-compression-inventory` — exact caller/migration/deletion map, no production behavior change.**
+16. bounded retirement/extraction slices proven by that inventory;
+17. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
+
+Only after both D-070 gates are satisfied, resume D-066:
+
+18. evaluation/dependency-aware repair;
+19. human takeover/edit/resume;
+20. long-form autonomous production;
+21. additional direction-domain growth as required;
+22. D-068 maintained desktop update implementation/release proof when selected as its own slice.
 
 ## 17. Invariants
 
@@ -415,5 +438,7 @@ Next in D-066 order:
 - raw lease bearer tokens and reusable authorizations are never portable project state;
 - Agent Task/lease history does not replace Generation Job/Attempt provenance;
 - background commit authority fails closed on lost ownership, policy/evidence mismatch or stale canonical context;
+- existing-project `project.json` writers share the same cross-runtime project fence as canonical Production/Timeline/UOW/Generation reservation;
 - current docs distinguish merged, active and future work;
-- user-visible readiness requires D-067 parity/evidence, not implementation claims alone.
+- user-visible readiness requires D-067 parity/evidence, not implementation claims alone;
+- D-066 layers 5-7 remain deferred until D-070 architecture-compression and golden-vertical gates are satisfied.
