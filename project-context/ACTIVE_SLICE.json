@@ -12,6 +12,8 @@
     "write_scope": [
       "uv_studio/agent/**",
       "uv_studio/projects/transactions.py",
+      "uv_studio/projects/production_state.py",
+      "uv_studio/projects/timeline.py",
       "uv_studio/generation/jobs.py",
       "uv_studio/generation/service.py",
       "uv_studio/production/commands.py",
