@@ -47,7 +47,7 @@ Project Store
       Context / Catalog / Policy / Trace              [Stage 15 merged]
       Planner / durable Tasks / Skills                [Stage 16 merged]
       functional Subagents                            [Stage 17 merged]
-      bounded background Agent execution              [Stage 18 active review, PR #75]
+      bounded background Agent execution              [Stage 18 merged, PR #75]
       evaluate / dependency-aware repair              [deferred by D-070 product gate]
       takeover / edit / resume                        [deferred by D-070 product gate]
       long-form autonomy                              [deferred by D-070 product gate]
@@ -60,8 +60,8 @@ Cross-cutting verification:
 ```text
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
 Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged]
-Stage-18 leases/fencing/recovery <-> exact-head CI + focused Codex review [PR #75 review]
-D-070 product sequencing <-> legacy caller inventory + micro_drama golden vertical [next after Stage 18]
+Stage-18 leases/fencing/recovery <-> exact-head CI + focused review [PR #75 merged]
+D-070 product sequencing <-> legacy caller inventory + micro_drama golden vertical [architecture-compression-inventory next]
 ```
 
 ## Canonical authorities
@@ -193,9 +193,9 @@ The curated mutation runner copies the full package into an isolated overlay, ve
 
 This is a curated assurance baseline, not exhaustive automatic mutation testing.
 
-## Agent Harness layer 4 — Stage 18 active review
+## Agent Harness layer 4 — Stage 18 merged
 
-PR #75 (`stage-18/agent-background-execution`) is the current D-066 review slice. Stage 18 adds **bounded background execution** while preserving the merged Stage-15/16/17 authorities.
+PR #75 (`stage-18/agent-background-execution`) merged as `c5051b975a1ba8e747f453dd0a485cac1e308ba7`. Stage 18 adds **bounded background execution** while preserving the merged Stage-15/16/17 authorities.
 
 The background execution model is deliberately narrow:
 
@@ -270,21 +270,24 @@ A live leased RUNNING task is not treated as abandoned by ordinary Stage-16 reop
 
 The Stage-18 suites cover worker exclusivity, lease expiry/reclaim, heartbeat extension, token non-persistence, frozen-policy/correlation tamper rejection, cancellation/dependency behavior, crash recovery without replay, exact Generation Job reuse/reopen and Stage-17 delegation provenance.
 
-Focused Codex-P1 regressions additionally prove:
+Focused review regressions additionally prove:
 
 - independent Production runtimes serialize full read/modify/commit and preserve both changes;
 - independent Timeline runtimes serialize full read/modify/commit and preserve both changes;
 - a real `spawn` multiprocessing test exercises the OS-level project fence between independent Python processes on the permanent Ubuntu/Windows unit jobs;
 - concurrent same-key Generation submissions create/reuse one durable Job and consume authorization once;
-- a Timeline timing edit deliberately leaves the bounded Agent context digest unchanged while the separate exact canonical digest rejects the stale background claim.
+- a Timeline timing edit deliberately leaves the bounded Agent context digest unchanged while the separate exact canonical digest rejects the stale background claim;
+- foreground coordinators cannot replace installed background fences;
+- direct Production/Timeline stores and every freshness-tracked JSON writer under `production/` or `timeline/` share the project fence;
+- concurrent background-coordinator construction reserves harness ownership atomically.
 
-The first Codex P1 review is addressed by the current review-fix series. PR #75 remains unmerged until the final synchronized exact review head passes all five permanent CI jobs, the original P1 threads are answered, and Codex re-reviews that exact head with no remaining concrete blocker.
+All concrete PR #75 review findings were addressed before merge. Final PR head `4c80bc96512e5ba34b0c3ed973c76c1c7a029568` passed all five permanent CI jobs before the merge to `c5051b975a1ba8e747f453dd0a485cac1e308ba7`.
 
 Stage 18 remains internal infrastructure. It does not claim a visible autonomous Agent product.
 
 ## D-070 product-first handoff before further D-066 autonomy
 
-Layer 4 remains active in review PR #75. If it is accepted, merged and lifecycle-closed, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+Layer 4 is merged through PR #75 and is the accepted background-execution baseline. After its protected-main lifecycle closure, the next slice is **not** Layer 5; it is `architecture-compression-inventory`.
 
 That behavior-preserving inventory must establish exact callers, canonical replacements, durable compatibility requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
 
@@ -311,7 +314,7 @@ No parallel Protocol Bridge/tool registry/permission authority is introduced.
 
 A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure; Stage 18 is active internal review infrastructure; PR #73 is merged internal verification infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–18 are merged internal infrastructure; PR #73 is merged internal verification infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
 
 ## Desktop updates — D-068
 
@@ -352,6 +355,6 @@ Still present as compatibility/migration code unless separately promoted:
 - donor-era clients and runtime paths still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-D-070 makes `architecture-compression-inventory` the next slice after Stage 18. That inventory must prove callers, replacement authorities, compatibility requirements and removal gates before production deletion begins.
+D-070 makes `architecture-compression-inventory` the next slice after Stage 18 lifecycle closure. That inventory must prove callers, replacement authorities, compatibility requirements and removal gates before production deletion begins.
 
 Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the D-070 gate is active.

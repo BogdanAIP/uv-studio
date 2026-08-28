@@ -7,7 +7,7 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, three merged Agent-orchestration layers, a merged Stage-16/17 adversarial-assurance pilot, and an active Stage-18 review for bounded background Agent execution:
+UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75; D-070 now makes architecture compression and a user-visible golden vertical the product gate before further Agent autonomy:
 
 ```text
 Project Store
@@ -23,7 +23,7 @@ Project Store
  -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 merged]
  -> Agent Harness layer 3: functional Subagents                     [Stage 17 merged]
  -> curated Stage-16/17 adversarial assurance                       [PR #73 merged]
- -> Agent Harness layer 4: bounded background execution             [PR #75 active review]
+ -> Agent Harness layer 4: bounded background execution             [Stage 18 / PR #75 merged]
  -> D-070 product-first gate: architecture compression + golden vertical
  -> later D-066 autonomy: evaluate/repair -> takeover -> autonomy
 ```
@@ -63,7 +63,7 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
        Stage 15: Context -> Catalog -> Policy -> Trace            [merged]
        Stage 16: Planner -> durable Tasks -> Skills                [merged]
        Stage 17: functional Subagents                             [merged]
-       Stage 18: bounded background execution                     [active review]
+       Stage 18: bounded background execution                     [merged]
        D-070: architecture compression -> micro_drama golden vertical
        later: evaluate/repair -> takeover -> autonomy
                                  |
@@ -225,9 +225,9 @@ PR #73 merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. Its curated mutatio
 
 Classification: **KEEP**.
 
-## 9. Agent Harness layer 4 — Stage 18 ACTIVE REVIEW
+## 9. Agent Harness layer 4 — Stage 18 IMPLEMENTED
 
-PR #75 on `stage-18/agent-background-execution` implements bounded background execution over the existing Stage-16 task state machine and Stage-17 provenance. It does **not** create a second scheduler, task graph, project authority, mutation authority or provider executor.
+PR #75 (`stage-18/agent-background-execution`) merged as `c5051b975a1ba8e747f453dd0a485cac1e308ba7`. It implements bounded background execution over the existing Stage-16 task state machine and Stage-17 provenance without creating a second scheduler, task graph, project authority, mutation authority or provider executor.
 
 Current flow:
 
@@ -237,12 +237,12 @@ READY durable Agent Task
  -> lease record under existing tasks/ authority
  -> RUNNING + append-only execution evidence
  -> execution outside long task lock
- -> exact canonical commit fence
+ -> shared cross-runtime canonical commit fence
  -> finalize/release
  -> existing trace / ProjectUnitOfWork / Generation Job recovery
 ```
 
-### Lease/fencing model — KEEP IF REVIEW ACCEPTS
+### Lease/fencing model — KEEP
 
 The lease record is durable fencing metadata only. It is bound to exact task/worker/generation/context/input/policy/target facts and uses existing task-root CAS/locking.
 
@@ -256,15 +256,15 @@ The raw bearer `lease_token` is intentionally **ephemeral**:
 
 Claim-time policy is persisted once in the existing Stage-16 execution-evidence store. Background dispatch, heartbeat, commit and finalization reload and verify that evidence rather than trusting caller-supplied policy.
 
-### Canonical commit fence — KEEP IF REVIEW ACCEPTS
+### Canonical commit fence — KEEP
 
-Production and Timeline continue through ProjectUnitOfWork. The background seam rechecks live lease ownership, exact RUNNING task, durable evidence/policy binding and context freshness at the final prepared commit.
+Production and Timeline continue through ProjectUnitOfWork. The background seam rechecks live lease ownership, exact RUNNING task, durable evidence/policy binding and exact canonical freshness at the final prepared commit.
 
-Generation remains routed through the existing GenerationService/Generation Job Manager. Background work fences `submit` before D-017 consumption/Job creation; long provider execution remains Job Manager responsibility.
+The accepted implementation reuses the existing re-entrant `ProjectTaskRecordStore.project_lock` across Production/Timeline semantic read-modify-commit, ProjectUnitOfWork, direct canonical Production/Timeline stores, every freshness-tracked JSON writer under `production/` or `timeline/`, existing-project `project.json` writes, and Generation same-key lookup/D-017 consumption/Job reservation. Long provider execution remains outside this bounded critical section and remains Generation Job Manager responsibility.
 
-Existing-project `project.json` mutations through `ProjectStore.save_project` / `update_project` share the same cross-runtime project fence, so API/project metadata writes cannot bypass the canonical commit boundary.
+`AgentContextBuilder.digest` remains a bounded observation digest. Stage 18 separately hashes exact canonical `project.json`, `production/**/*.json` and `timeline/**/*.json` bytes so timing/source/reference changes omitted from the Agent observation still invalidate a stale background claim.
 
-### Recovery model — KEEP IF REVIEW ACCEPTS
+### Recovery model — KEEP
 
 - live leased RUNNING work is not prematurely reconciled as abandoned;
 - expired leases reuse existing Stage-16 exact trace/transaction/job recovery;
@@ -273,13 +273,13 @@ Existing-project `project.json` mutations through `ProjectStore.save_project` / 
 - post-commit/pre-trace loss recovers from committed canonical evidence without replay;
 - cancellation and dependency semantics remain those of the existing Stage-16 state machine.
 
-### Bounded worker facade — KEEP IF REVIEW ACCEPTS
+### Bounded worker facade — KEEP
 
 `AgentBackgroundWorker` exposes bounded `claim`, `execute`, `run_once` and `run_until_blocked`. There is no autonomous poll loop in Stage 18.
 
-### Current proof
+### Accepted proof
 
-Tests cover:
+The Stage-18 test/review series proves:
 
 - exclusive worker ownership;
 - expiry/stale-worker commit refusal;
@@ -290,19 +290,22 @@ Tests cover:
 - Stage-17 delegation provenance/reopen;
 - live-lease reopen and expiry reconciliation;
 - raw token non-persistence / non-disclosure in `repr`;
-- forged policy-digest rejection;
+- forged policy/correlation rejection;
 - heartbeat extension of the same authority;
-- canonical context-stale refusal before commit;
-- cross-runtime `project.json` update serialization with preservation of both canonical edits;
-- rejection of a second background coordinator before it can replace the first coordinator's harness fences.
+- stale exact canonical-state refusal before commit;
+- cross-runtime Production/Timeline/project updates serialize and preserve both edits;
+- same-key Generation submission creates/reuses one durable Job and consumes authorization once;
+- foreground coordinators cannot replace installed background fences;
+- direct canonical stores and all freshness-tracked Production/Timeline JSON writers share the project fence;
+- concurrent background coordinator construction reserves harness ownership atomically.
 
-The final PR #75 exact review head must pass all five permanent CI jobs and receive focused Codex review before merge.
+All concrete PR #75 review findings were resolved. Final exact head `4c80bc96512e5ba34b0c3ed973c76c1c7a029568` passed all five permanent CI jobs before merge.
 
-Classification while PR #75 is in review: **ADAPT / REVIEW**, not yet merged production baseline.
+Classification: **KEEP** as merged internal Agent infrastructure. It does not claim a visible autonomous Agent product.
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-After Stage 18 is accepted, merged and lifecycle-closed, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+After Stage 18 merge and protected-main lifecycle closure, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
 
 That behavior-preserving slice must map exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
 
@@ -323,7 +326,7 @@ Do not jump directly to long-form autonomy.
 
 D-067 keeps current docs, machine-readable feature contracts, backend/API/frontend and user-outcome evidence consistent.
 
-The visible record remains named generation -> Take. Stages 15–17 are merged internal Agent infrastructure, Stage 18 is active internal review infrastructure, and PR #73 is merged internal assurance infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and browser proof.
+The visible record remains named generation -> Take. Stages 15–18 are merged internal Agent infrastructure, and PR #73 is merged internal assurance infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and browser proof.
 
 ## 12. Desktop update layer — ACCEPTED TARGET, DEFERRED HERE
 
@@ -364,7 +367,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 | Stage-16 Planner/Tasks/Skills | **KEEP** | merged D-066 layer 2 orchestration |
 | Functional subagents | **KEEP** | merged Stage-17 bounded role specialization |
 | Stage-16/17 adversarial assurance | **KEEP** | merged curated verification infrastructure, not runtime authority |
-| Stage-18 background execution | **ADAPT / REVIEW** | active PR #75 bounded lease/fencing/recovery layer |
+| Stage-18 background execution | **KEEP** | merged bounded lease/fencing/recovery layer from PR #75 |
 | Product Truth | **KEEP** | cross-layer verification metadata |
 | MCP | **KEEP** | optional capability/tool transport, not product state |
 | Desktop Update Service | **FUTURE ACCEPTED** | D-068 maintained installation lifecycle |
@@ -401,10 +404,7 @@ Completed:
 11. **Stage 16 Planner + durable Tasks + Skills.**
 12. **Stage 17 functional subagents.**
 13. **Stage-16/17 curated adversarial-assurance pilot.**
-
-Active:
-
-14. **Stage 18 bounded background Agent execution — PR #75 review.**
+14. **Stage 18 bounded background Agent execution — PR #75 merged.**
 
 Next under D-070:
 
@@ -438,7 +438,7 @@ Only after both D-070 gates are satisfied, resume D-066:
 - raw lease bearer tokens and reusable authorizations are never portable project state;
 - Agent Task/lease history does not replace Generation Job/Attempt provenance;
 - background commit authority fails closed on lost ownership, policy/evidence mismatch or stale canonical context;
-- existing-project `project.json` writers share the same cross-runtime project fence as canonical Production/Timeline/UOW/Generation reservation;
+- existing-project `project.json`, Production/Timeline and freshness-tracked JSON writers share the same cross-runtime project fence as canonical UOW/Generation reservation;
 - current docs distinguish merged, active and future work;
 - user-visible readiness requires D-067 parity/evidence, not implementation claims alone;
 - D-066 layers 5-7 remain deferred until D-070 architecture-compression and golden-vertical gates are satisfied.
