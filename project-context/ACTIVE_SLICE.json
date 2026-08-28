@@ -1,7 +1,22 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "independent-semantic-review",
+    "kind": "chore",
+    "roadmap_stage": "studio-v2",
+    "goal": "Make fresh ordinary-ChatGPT exact-diff semantic review the repository-owned mandatory review layer for material changes, with Codex Review retained as an optional quota-dependent second opinion.",
+    "base_branch": "main",
+    "branch": "chore/independent-semantic-review",
+    "pull_request": null,
+    "write_scope": [
+      ".agents/skills/code-review/SKILL.md",
+      "AGENTS.md",
+      "DEVELOPMENT_PROTOCOL.md",
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md"
+    ]
+  },
   "last_completed": {
     "id": "architecture-compression-inventory",
     "pull_request": 77,
