@@ -10,6 +10,7 @@ from uv_studio.agent import (
     AgentBackgroundWorker,
     AgentHarness,
     AgentPlanStepProposal,
+    AgentSubagentCoordinator,
     AgentSubagentTaskCoordinator,
     AgentTaskCoordinator,
     AgentTaskStateError,
@@ -54,6 +55,15 @@ class AgentBackgroundCoordinatorOwnershipTests(unittest.TestCase):
                     self.assertIs(harness.production.uow, production_fence)
                     self.assertIs(harness.timeline.unit_of_work, timeline_fence)
                     self.assertIs(harness.generation, generation_fence)
+
+            with self.assertRaisesRegex(
+                AgentTaskStateError,
+                "owned by an AgentBackgroundTaskCoordinator",
+            ):
+                AgentSubagentCoordinator(harness, object())
+            self.assertIs(harness.production.uow, production_fence)
+            self.assertIs(harness.timeline.unit_of_work, timeline_fence)
+            self.assertIs(harness.generation, generation_fence)
 
             state = first.create_plan(
                 project_id=project.project_id,
