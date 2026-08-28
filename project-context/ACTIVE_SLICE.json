@@ -11,6 +11,9 @@
     "pull_request": 75,
     "write_scope": [
       "uv_studio/agent/**",
+      "uv_studio/projects/transactions.py",
+      "uv_studio/generation/jobs.py",
+      "uv_studio/generation/service.py",
       "tests/**",
       "docs/architecture/**",
       "project-context/**"
