@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / "upstream" / "video-claw.lock.json"
 SOURCE = ROOT / "vendor" / "videoclaw-app" / "frontend"
+SOURCE_REPO_PATH = SOURCE.relative_to(ROOT).as_posix()
 UPSTREAM_LICENSE = ROOT / "vendor" / "videoclaw-app" / "UPSTREAM_LICENSE"
 FRONTEND = ROOT / "frontend"
 PROVENANCE_PATH = FRONTEND / ".uv-derived.json"
@@ -47,25 +49,83 @@ def load_upstream_pin() -> dict[str, Any]:
     return lock
 
 
-def source_digest(source: Path = SOURCE) -> tuple[str, list[str]]:
-    if not source.is_dir():
-        raise ProvenanceError(f"Pinned donor frontend is missing: {source.relative_to(ROOT)}")
+def run_git(*args: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(ROOT), *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        raise ProvenanceError(f"Git is required for provenance verification: {exc}") from exc
 
-    files: list[Path] = []
-    for path in sorted(source.rglob("*")):
-        if path.is_symlink():
-            raise ProvenanceError(f"Pinned donor frontend contains a symlink: {path.relative_to(ROOT)}")
-        if path.is_file():
-            files.append(path)
-    if not files:
-        raise ProvenanceError("Pinned donor frontend contains no files")
+
+def require_clean_source() -> None:
+    diff = run_git("diff", "--quiet", "--", SOURCE_REPO_PATH)
+    if diff.returncode == 1:
+        raise ProvenanceError("Pinned donor frontend has tracked working-tree changes")
+    if diff.returncode != 0:
+        detail = diff.stderr.decode("utf-8", errors="replace").strip()
+        raise ProvenanceError(f"Could not verify donor working-tree state: {detail or 'git diff failed'}")
+
+    staged = run_git("diff", "--cached", "--quiet", "--", SOURCE_REPO_PATH)
+    if staged.returncode == 1:
+        raise ProvenanceError("Pinned donor frontend has staged changes")
+    if staged.returncode != 0:
+        detail = staged.stderr.decode("utf-8", errors="replace").strip()
+        raise ProvenanceError(f"Could not verify donor index state: {detail or 'git diff --cached failed'}")
+
+    untracked = run_git("ls-files", "--others", "--exclude-standard", "-z", "--", SOURCE_REPO_PATH)
+    if untracked.returncode != 0:
+        detail = untracked.stderr.decode("utf-8", errors="replace").strip()
+        raise ProvenanceError(f"Could not inspect donor untracked files: {detail or 'git ls-files failed'}")
+    if untracked.stdout:
+        paths = [item.decode("utf-8", errors="replace") for item in untracked.stdout.split(b"\0") if item]
+        raise ProvenanceError(f"Pinned donor frontend contains untracked files: {paths}")
+
+
+def source_digest() -> tuple[str, list[str]]:
+    if not SOURCE.is_dir():
+        raise ProvenanceError(f"Pinned donor frontend is missing: {SOURCE.relative_to(ROOT)}")
+
+    require_clean_source()
+    listing = run_git("ls-files", "--stage", "-z", "--", SOURCE_REPO_PATH)
+    if listing.returncode != 0:
+        detail = listing.stderr.decode("utf-8", errors="replace").strip()
+        raise ProvenanceError(f"Could not enumerate donor Git blobs: {detail or 'git ls-files failed'}")
+
+    entries: list[tuple[str, str]] = []
+    for raw in listing.stdout.split(b"\0"):
+        if not raw:
+            continue
+        try:
+            metadata, raw_path = raw.split(b"\t", 1)
+            mode, blob_sha, stage = metadata.decode("ascii").split(" ")
+            repo_path = raw_path.decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ProvenanceError("Could not parse donor Git index entry") from exc
+        if stage != "0":
+            raise ProvenanceError(f"Pinned donor frontend has an unmerged index entry: {repo_path}")
+        if mode not in {"100644", "100755"}:
+            raise ProvenanceError(f"Pinned donor frontend contains unsupported Git mode {mode}: {repo_path}")
+        prefix = f"{SOURCE_REPO_PATH}/"
+        if not repo_path.startswith(prefix):
+            raise ProvenanceError(f"Unexpected donor path returned by Git: {repo_path}")
+        entries.append((repo_path[len(prefix):], blob_sha))
+
+    if not entries:
+        raise ProvenanceError("Pinned donor frontend contains no tracked files")
 
     digest = hashlib.sha256()
     relative_files: list[str] = []
-    for path in files:
-        relative_text = path.relative_to(source).as_posix()
+    for relative_text, blob_sha in sorted(entries):
+        blob = run_git("cat-file", "blob", blob_sha)
+        if blob.returncode != 0:
+            detail = blob.stderr.decode("utf-8", errors="replace").strip()
+            raise ProvenanceError(f"Could not read donor Git blob {blob_sha}: {detail or 'git cat-file failed'}")
         relative = relative_text.encode("utf-8")
-        content = path.read_bytes()
+        content = blob.stdout
         relative_files.append(relative_text)
         digest.update(len(relative).to_bytes(8, "big"))
         digest.update(relative)
