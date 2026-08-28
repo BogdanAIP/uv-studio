@@ -335,7 +335,7 @@ class GenerationJobManager:
     ) -> tuple[GenerationJob, bool]:
         """Reserve one creative Job. Returns ``(job, reused)``."""
 
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             self.project_store.load_project(project_id)
             try:
                 validate_identifier(idempotency_key, field_name="idempotency_key")
