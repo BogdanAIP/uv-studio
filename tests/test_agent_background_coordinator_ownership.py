@@ -10,6 +10,9 @@ from uv_studio.agent import (
     AgentBackgroundWorker,
     AgentHarness,
     AgentPlanStepProposal,
+    AgentSubagentTaskCoordinator,
+    AgentTaskCoordinator,
+    AgentTaskStateError,
     AgentTaskStatus,
 )
 from uv_studio.capabilities.registry import CapabilityRegistry
@@ -20,7 +23,7 @@ from uv_studio.projects.store import ProjectStore
 
 
 class AgentBackgroundCoordinatorOwnershipTests(unittest.TestCase):
-    def test_second_coordinator_cannot_replace_first_harness_fences(self) -> None:
+    def test_other_coordinators_cannot_replace_background_harness_fences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ProjectStore(Path(tmp) / "projects")
             project = store.create_project(
@@ -31,12 +34,26 @@ class AgentBackgroundCoordinatorOwnershipTests(unittest.TestCase):
             )
             harness = AgentHarness(store, ModelRegistry(CapabilityRegistry()))
             first = AgentBackgroundTaskCoordinator(harness)
+            production_fence = harness.production.uow
+            timeline_fence = harness.timeline.unit_of_work
+            generation_fence = harness.generation
 
             with self.assertRaisesRegex(
                 AgentBackgroundError,
                 "already has an AgentBackgroundTaskCoordinator",
             ):
                 AgentBackgroundTaskCoordinator(harness)
+
+            for coordinator_type in (AgentTaskCoordinator, AgentSubagentTaskCoordinator):
+                with self.subTest(coordinator_type=coordinator_type.__name__):
+                    with self.assertRaisesRegex(
+                        AgentTaskStateError,
+                        "owned by an AgentBackgroundTaskCoordinator",
+                    ):
+                        coordinator_type(harness)
+                    self.assertIs(harness.production.uow, production_fence)
+                    self.assertIs(harness.timeline.unit_of_work, timeline_fence)
+                    self.assertIs(harness.generation, generation_fence)
 
             state = first.create_plan(
                 project_id=project.project_id,
