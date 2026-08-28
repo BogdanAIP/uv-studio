@@ -9,51 +9,78 @@
 
 ## Current lifecycle
 
-The repository is in draft for `architecture-compression-inventory` on branch `research/architecture-compression-inventory`, starting from lifecycle-closed `main` merge `e6d23e9444023c0c491ae0800d6aac01d415968c`.
+The repository is in draft for `architecture-compression-inventory` on branch `research/architecture-compression-inventory`, PR #77, starting from lifecycle-closed `main` merge `e6d23e9444023c0c491ae0800d6aac01d415968c`.
 
-Stage 18 `studio-v2-agent-background-execution` remains the last completed product/Agent slice, merged through PR #75 as `c5051b975a1ba8e747f453dd0a485cac1e308ba7` and lifecycle-closed through PR #76.
+Stage 18 `studio-v2-agent-background-execution` remains the last completed Agent slice, merged through PR #75 as `c5051b975a1ba8e747f453dd0a485cac1e308ba7` and lifecycle-closed through PR #76.
 
 ## Accepted Stage 18 baseline
 
-D-066 layer 4 bounded background Agent execution remains accepted infrastructure. The architecture-compression inventory must not weaken or bypass its cross-runtime project mutation fence, Generation idempotency/D-017 reservation guarantees, exact canonical freshness checks, background-worker ownership, or recovery semantics.
+D-066 layer 4 bounded background Agent execution remains accepted infrastructure. Architecture compression must not weaken or bypass:
 
-## Active product-first slice
+- the shared cross-runtime project mutation fence;
+- Production/Timeline/project JSON serialization guarantees;
+- exact canonical freshness for background claims;
+- Generation same-key idempotency and one-shot D-017 consumption/reservation atomicity;
+- foreground/background coordinator ownership;
+- restart/recovery rules that avoid replay of ambiguous work.
 
-D-070 requires a behavior-preserving inventory before further D-066 Agent-autonomy work.
+## Active D-070 inventory
 
-This slice maps the overlapping legacy and modern product-composition paths across backend, API, frontend, tests, documentation and persisted-project compatibility. It covers at least:
+PR #77 is behavior-preserving documentation/inventory work only. Runtime, frontend implementation and tests are outside its write scope.
 
-- `uv_studio/recipes/**` and Recipe Registry;
-- `uv_studio/orchestration/**` and Product Orchestrator;
-- `/api/uv/recipes`;
-- `/api/uv/projects/{project_id}/execution-plan`;
-- Stage 6/8 workspace/API/frontend compatibility surfaces;
-- server compatibility routes, including donor-era metadata where still mounted;
-- schema-v1 `recipe_id` and typed Studio identity compatibility;
-- dubbing, targeted edit, continuity and music responsibilities that must be separated from obsolete product composition without deleting useful domain state.
+The exact caller/migration map is recorded in `docs/architecture/LEGACY_SURFACE_INVENTORY.md`. Current findings are:
 
-The inventory uses the existing **KEEP / ADAPT / MOVE / LEGACY / DELETE LATER** vocabulary. It names the canonical replacement and proof-before-removal gate for every non-KEEP item, records a no-new-caller rule for superseded composition, and proposes bounded retirement/extraction PRs rather than a big-bang rewrite.
+1. **Modern product composition is already separate from Recipe/Product Orchestrator.** New creation uses Production Directions and opens `/projects/{id}/studio`; the modern workspace uses Project/Timeline/Production semantics/Generation rather than `productWorkflowApi`.
+2. **Legacy project workflows are still intentionally supported.** The project list exposes a separate “Старый совместимый workflow” link to `/projects/{id}` for legacy identity, and that route uses Product Orchestrator projections plus Dubbing/General/Music/Narrated/Continuity/Stage8 panels.
+3. **schema-v1 `recipe_id` is durable compatibility state.** `ProjectDocument` still requires/serializes it, while typed modern Studio identity lives in `extensions.studio`; imported archives may retain unknown/uncreatable legacy recipe IDs for recovery.
+4. **Recipe Registry and `/execution-plan` are compatibility seams, not modern authorities.** `/api/uv/recipes` still serves legacy creation/metadata; `/execution-plan` still resolves `project.recipe_id` and overlays Stage8 Capability readiness.
+5. **Product Orchestrator is mixed legacy composition over useful modern/domain primitives.** Its HTTP seam dispatches by recipe, but already delegates to Dubbing, Targeted Edit, Music and Capability authorities that must survive extraction.
+6. **Stage8 remains live compatibility.** Its workspace API/state, legacy editor panels and API/browser tests cannot be removed before persisted-project migration.
+7. **Donor Workflow/Pipeline/Sandbox UI is the first retirement candidate.** No supported Next app route was identified for those donor roots; modern routes do not use `workflowApi`, and the live legacy project route uses `productWorkflowApi`. GitHub Code Search was incomplete, so the retirement PR must still prove exact recursive zero supported callers before deletion.
+8. **Historical “Stage 6” is not treated as a deletion unit.** The inventory classifies concrete surviving paths; no dedicated current Stage-6 runtime authority has been positively established, and incomplete code search is not accepted as absence proof.
 
-## Current canonical destination
+## No-new-caller rule
 
-Modern product composition is owned by Production Directions over the shared Studio core. Production Directions are not execution pipelines: all directions share Project Store, Studio shell, Scene/Shot/Take semantics, canonical Timeline, Studio/Application Commands, Model/Generation Job authority and Capability/D-017 boundaries.
+Until D-070 architecture compression is executed, no new modern caller may be added to Recipe Registry, Product Orchestrator, `/execution-plan`, Stage8 composition or donor workflow APIs unless a later accepted decision explicitly reverses their legacy classification.
 
-Reusable operations such as dubbing, targeted edit, continuity and music assistance remain domain tools/capabilities where useful; they are not to survive as parallel product engines merely because legacy orchestration still calls them.
+New work must target Production Directions, Shared Production Semantic Core, Studio/Application Commands, Generation/Model Job authority and Capability/D-017 boundaries.
+
+## Domain state preservation
+
+Dubbing, targeted edit, continuity and music are not deleted as collateral damage. Portable project state and reusable domain commands remain or move toward contextual tools/capabilities; only recipe/orchestrator/workspace composition is retired after caller and persisted-state proof.
+
+## Proposed bounded retirement order
+
+The inventory currently supports this order:
+
+1. `donor-ui-retirement`;
+2. `project-identity-v2-compat-reader`;
+3. `recipe-entrypoint-retirement`;
+4. `execution-plan-retirement`;
+5. bounded legacy direction/tool migration slices;
+6. contextual tool extraction where still needed;
+7. `stage8-compatibility-retirement`;
+8. `product-orchestrator-retirement`;
+9. combined `micro_drama` golden-vertical proof when the canonical spine is ready (it may move earlier if independently provable).
+
+No big-bang rewrite is authorized by this list.
 
 ## Golden vertical gate
 
-The first named user-visible proof remains:
+The first required combined user-visible proof remains:
 
 `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`
 
-The inventory does not implement this vertical. It must state the caller/migration work required so GUI and Agent, when Agent is invoked, use the same application/domain commands and Generation authority as scripts/MCP.
+Existing tests prove important pieces separately, but the D-070 golden-vertical gate remains open until one accepted GUI outcome proves the combined path. If Agent is invoked, it must use the same Production/Timeline/Generation/Capability authorities as GUI/scripts/MCP.
 
-## Known implementation risk observed during closure CI
+## Known adjacent implementation risk
 
-Windows browser E2E exposed a timing-sensitive remount race in the production form: `ProductionWorkspacePanel` keys `ProductionSemanticsPanel` by history cursor, so a post-command history refresh can remount the panel and discard form input entered before the refresh settles. The closure PR did not modify runtime behavior; its final exact SHA passed the permanent checks on the successful rerun. This risk is not part of the inventory write scope and must not be silently fixed in this behavior-preserving slice.
+During Stage-18 closure CI, repeated Windows runs exposed a timing-sensitive production-form remount race: `ProductionWorkspacePanel` keys the production semantics panel by history cursor, so a post-command history refresh can remount the form and discard Shot input entered before refresh completion. Exact-SHA reruns alternated which “Создать кадр” E2E hit the timeout; the final closure attempt passed all permanent checks.
+
+This risk is recorded so it is not lost, but PR #77 does not modify runtime behavior. It should be handled in a separate implementation slice when selected.
 
 ## Handoff
 
-The provisional next bounded slice is `donor-ui-retirement`: remove only donor Workflow/Pipeline/Sandbox/stage UI that the accepted inventory proves has no supported route/import/runtime caller. The inventory must replace this handoff before review if the caller map disproves that it is the safest first retirement.
+The current next slice is `donor-ui-retirement`, conditional on the accepted inventory and its own exact recursive zero-caller/build/browser proof. If review disproves that it is the safest first retirement, `NEXT_TASK.md` and the lifecycle handoff must be corrected before PR #77 becomes ready.
 
 D-066 layers 5-7 remain deferred until both D-070 gates are satisfied.

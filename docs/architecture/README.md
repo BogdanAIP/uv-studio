@@ -20,6 +20,7 @@ Use this index before treating any architecture document as current guidance.
 
 These remain valid when they do not conflict with current authority:
 
+- [`LEGACY_SURFACE_INVENTORY.md`](LEGACY_SURFACE_INVENTORY.md) — active D-070 caller/migration/deletion evidence for the legacy/modern product-composition overlap; it constrains retirement work but does not become a runtime authority;
 - [`CAPABILITIES.md`](CAPABILITIES.md) — Capability Registry below Studio tools/Model Registry;
 - [`CAPABILITY_EXECUTION.md`](CAPABILITY_EXECUTION.md) — selection, authorization and bounded execution;
 - [`PRODUCT_TRUTH_CONTRACT.md`](PRODUCT_TRUTH_CONTRACT.md) — machine-verifiable D-067 contract shape connecting current docs, backend/frontend surfaces and user-outcome evidence;
@@ -49,10 +50,9 @@ The following describe earlier recipe/Product-Orchestrator recovery eras. They a
 - `PRODUCT_TRUTH_MATRIX.md`;
 - `FRONTEND_BACKEND_INTERACTION_MAP.md`;
 - `RECIPES.md`;
-- `RECIPE_EXECUTION.md`;
-- `LEGACY_SURFACE_INVENTORY.md`.
+- `RECIPE_EXECUTION.md`.
 
-If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, D-064, D-065, D-066, D-067, D-068, D-069 or D-070, current authority wins.
+If any supporting/historical document disagrees with `CURRENT_ARCHITECTURE.md`, `UV_STUDIO_V2_ARCHITECTURE_MAP.md`, D-064, D-065, D-066, D-067, D-068, D-069 or D-070, current authority wins. `LEGACY_SURFACE_INVENTORY.md` may add caller/deletion evidence, but it may not promote a legacy runtime surface over those authorities.
 
 ## Decision status
 
