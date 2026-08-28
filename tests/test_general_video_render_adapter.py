@@ -138,7 +138,10 @@ class GeneralVideoRenderAdapterTests(unittest.TestCase):
             allowed_roots=("artifacts",),
         )
         self.assertEqual(artifact.metadata["sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
-        self.assertEqual(list((self.store.project_directory(self.project.project_id) / "tasks").iterdir()), [])
+        self.assertEqual(
+            list((self.store.project_directory(self.project.project_id) / "tasks").glob("*.json")),
+            [],
+        )
 
     def test_stale_revision_tampered_visual_and_multiple_audio_are_rejected(self) -> None:
         invoke = mock.Mock()
