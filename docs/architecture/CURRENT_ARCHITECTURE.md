@@ -61,7 +61,7 @@ Cross-cutting verification:
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
 Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged]
 Stage-18 leases/fencing/recovery <-> exact-head CI + focused review [PR #75 merged]
-D-070 product sequencing <-> legacy caller inventory [architecture-compression-inventory active/review] + micro_drama golden vertical [separate gate]
+D-070 product sequencing <-> accepted legacy caller/migration inventory [PR #77 merged] + micro_drama golden vertical [separate gate still open]
 ```
 
 ## Canonical authorities
@@ -79,7 +79,7 @@ D-070 product sequencing <-> legacy caller inventory [architecture-compression-i
 - **Agent Harness** orchestrates work over the same commands/models/jobs/capabilities; it never owns a second project graph or private mutation path.
 - **Capability Registry / D-017 / adapters** own execution availability, effects, authorization and transport.
 - **Product Truth Contracts** are verification metadata, not runtime product state.
-- **D-070 sequencing** defers further Agent-autonomy layers after Stage 18 until legacy/modern product-composition overlap is inventoried and one user-visible golden vertical is proven.
+- **D-070 sequencing** now has an accepted architecture-compression inventory; bounded retirement follows that map, while further Agent-autonomy layers after Stage 18 remain deferred until the separate user-visible golden vertical is proven.
 - **Update Service** remains the accepted future desktop release authority for in-place updates; it is not implemented by the current Agent slices.
 
 ## Production semantics versus Timeline
@@ -287,14 +287,14 @@ Stage 18 remains internal infrastructure. It does not claim a visible autonomous
 
 ## D-070 product-first handoff before further D-066 autonomy
 
-Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` is the current active review slice in PR #77; after that inventory is accepted, merged and lifecycle-closed, the conditional next handoff is `donor-ui-retirement`, not D-066 Layer 5.
+Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` was accepted and merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`; the D-070 architecture-compression gate is satisfied. The next bounded migration handoff after lifecycle closure is `donor-ui-retirement`, not D-066 Layer 5.
 
-The active behavior-preserving inventory establishes exact callers, canonical replacements, durable compatibility requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/reset paths and their runtime dependencies.
+The accepted behavior-preserving inventory establishes exact callers, canonical replacements, durable compatibility requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and their runtime dependencies.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
-1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices. Acceptance of the `architecture-compression-inventory` satisfies this gate; executing the scheduled retirement/extraction slices remains later migration work rather than a prerequisite for the gate itself.
-2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
+1. **Architecture compression gate — satisfied.** Legacy/modern overlap now has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices. Executing the scheduled retirement/extraction slices remains later migration work rather than a prerequisite for this gate.
+2. **Golden vertical gate — open.** GUI must prove `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
 
 When Agent-autonomy work resumes, D-066 ordering is preserved:
 
@@ -355,6 +355,6 @@ Still present as compatibility/migration code unless separately promoted:
 - donor-era clients and runtime paths still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-Under D-070, `architecture-compression-inventory` is the active review slice. If accepted and lifecycle-closed, its conditional handoff is `donor-ui-retirement`; later bounded migration slices execute the accepted caller map, while the separate `micro_drama` golden-vertical gate remains open until proven.
+The D-070 `architecture-compression-inventory` is accepted and merged through PR #77. Its architecture-compression gate is satisfied; the bounded migration handoff is `donor-ui-retirement`, while later slices execute the accepted caller map. The separate `micro_drama` golden-vertical gate remains open until proven.
 
-Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the D-070 gate is active.
+Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the accepted D-070 retirement map is being executed.
