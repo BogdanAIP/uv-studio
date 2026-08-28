@@ -33,6 +33,7 @@ GitHub Code Search returned `incomplete_results=true` for repository symbol sear
 
 - **supported route proof** — the Next app tree contains `/`, `/projects`, `/projects/[projectId]`, `/projects/[projectId]/studio`, `/settings`; there is no supported Workflow/Pipeline/Sandbox app route;
 - **known internal donor edges** — donor roots import `workflowApi`, `BrandHeader`, `TopBar` and `components/stages/**` directly;
+- **supported shared-client edge** — `/settings` imports `frontend/lib/modelRegistry.ts`, which imports `fetchApiModels` from `frontend/lib/workflowApi.ts`; that function must move to a modern model/capability client before the remaining donor client can be deleted;
 - **final deletion proof** — the retirement PR must run an exact recursive import/reference scan from its checkout, then lint + production build + permanent browser/API CI after deletion.
 
 The inventory may nominate a first deletion candidate from route/caller evidence, but only the retirement PR may claim the zero-caller gate satisfied.
@@ -80,7 +81,7 @@ The inventory may nominate a first deletion candidate from route/caller evidence
 | `frontend/components/Sandbox/Sandbox.tsx` | **DELETE LATER** | donor root; imports donor API base/history/upload + BrandHeader; no supported app route identified | Model/Generation/Capability surfaces inside Studio | exact recursive import scan; no supported route; lint/build/browser CI |
 | `frontend/components/BrandHeader.tsx` | **DELETE LATER** | known donor callers PipelinePage/Sandbox | `AppShell` / UV Studio branding | recursive import scan after donor roots removed |
 | `frontend/components/stages/**` | **DELETE LATER** | old `WorkflowPanel` six-stage state/UI | Production Directions + shared Scene/Shot/Take + Studio | recursive import scan; do not delete live editor Stage8 panels by name similarity |
-| `frontend/lib/workflowApi.ts` | **DELETE LATER** | donor Workflow/Pipeline/Sandbox API client; endpoints include sessions, pipelines, sandbox, tasks, upload, old workflow operations | modern specialized API clients | exact recursive import scan (GitHub code search is insufficient); donor roots gone; build/E2E green |
+| `frontend/lib/workflowApi.ts` | **ADAPT → DELETE LATER** | mixed client: donor Workflow/Pipeline/Sandbox calls plus supported `/settings -> modelRegistry.ts -> fetchApiModels` model lookup | move `fetchApiModels` to a modern model/capability client; delete donor-only remainder after callers move | first prove Settings/modelRegistry uses the new client with unchanged model-selection behavior; then exact recursive scan proves no supported caller remains; donor roots gone; lint/build/browser CI green |
 | donor pipeline/session/sandbox backend from pinned upstream | **DELETE LATER / VENDOR COMPAT** | full upstream route table is not mounted by UV server; pinned vendor remains compile/provenance input | UV-owned Capability/Generation/domain routes | dependency/package/provenance proof shows no adapter still imports required donor runtime modules |
 | VideoClaw backend `sys.path` injection in `uv_studio/server.py` | **DELETE LATER** | supports exact compatibility imports from pinned vendor tree even though full route table is unmounted | normal package/adapters without global path injection | import graph + package/bootstrap proof on Windows/Ubuntu; remove separately from donor frontend |
 
@@ -149,7 +150,7 @@ Current supported route structure:
 
 Modern creation already uses `listProductionDirections()` + `createStudioProject()` and opens `/studio`. The modern workspace uses Project/Timeline/History, Production semantics, Generation and Studio components rather than `productWorkflowApi`.
 
-The donor Workflow/Pipeline/Sandbox components are physically present and compile, but no corresponding supported `app/` route is identified. This makes them the safest **candidate** for the first retirement slice, subject to the strict recursive zero-caller/build gate above.
+The donor Workflow/Pipeline/Sandbox components are physically present and compile, but no corresponding supported `app/` route is identified. They remain the safest **component roots** for the first retirement slice. However, `workflowApi.ts` itself is mixed: `/settings` reaches `fetchApiModels` through `modelRegistry.ts`. The first retirement slice must extract that supported model lookup before deleting the donor-only remainder of the client, and must still satisfy the strict recursive zero-caller/build gate above.
 
 ## 10. Tests that currently bind compatibility behavior
 
@@ -196,7 +197,7 @@ If Agent participates in that proof:
 
 The intended order is deliberately small-slice and dependency-aware:
 
-1. **`donor-ui-retirement`** — remove unrouted donor Workflow/Pipeline/Sandbox/stage UI and donor-only frontend client glue after exact recursive zero-caller proof; retire `/api/stages` only if that same proof shows no supported caller.
+1. **`donor-ui-retirement`** — first move the supported `workflowApi.fetchApiModels` dependency used by `/settings -> modelRegistry.ts` to a modern model/capability client; then remove only the unrouted donor Workflow/Pipeline/Sandbox/stage UI and donor-only remainder of frontend client glue after exact recursive zero-caller proof; retire `/api/stages` only if that same proof shows no supported caller.
 2. **`project-identity-v2-compat-reader`** — add explicit modern schema/identity migration while preserving schema-v1 import/read compatibility; modern project identity stops depending on recipe semantics.
 3. **`recipe-entrypoint-retirement`** — move remaining modern/creation callers from Recipe Registry and `/api/uv/recipes`; retain only bounded compatibility metadata if still required.
 4. **`execution-plan-retirement`** — replace `/execution-plan` with direct canonical Production/Generation/Capability readiness and migrate its tests.
@@ -213,11 +214,12 @@ A later slice may split an item further. It may not combine multiple independent
 The caller map supports `donor-ui-retirement` as the provisional first bounded slice because:
 
 - donor Workflow/Pipeline/Sandbox roots have no supported Next app route identified;
-- modern project creation and Studio routes do not import their client;
-- the live legacy `/projects/[projectId]` route uses `productWorkflowApi`, not `workflowApi`;
+- modern project creation and Studio routes do not import those donor roots;
+- the live legacy `/projects/[projectId]` route uses `productWorkflowApi`, not the donor workflow UI;
+- the only supported caller found inside `workflowApi.ts` is the model-listing seam `/settings -> modelRegistry.ts -> fetchApiModels`, which can be extracted first rather than forcing retention of the donor UI;
 - removing donor UI does not require changing schema-v1 project identity or Stage8 persisted state.
 
-This is a **candidate, not a deletion claim**. The follow-up PR must still prove exact recursive zero supported callers and preserve the supported route/build/browser contract.
+This is a **candidate, not a deletion claim**. The follow-up PR must first preserve Settings/model selection through the extracted modern client, then prove exact recursive zero supported callers for every deleted donor file/client remainder and preserve the supported route/build/browser contract.
 
 ## 14. Known adjacent defect — not part of this inventory
 
