@@ -243,4 +243,4 @@ The inventory slice may enter review when:
 - runtime diff is empty;
 - permanent repository checks pass on the exact review head.
 
-Passing this inventory defines the architecture-compression work. It does **not** by itself satisfy the D-070 architecture-compression gate or golden-vertical gate; follow-up migration/retirement slices must execute the map and supply the required evidence.
+Acceptance of this inventory satisfies the D-070 **architecture-compression gate** by establishing the accepted exact caller/migration map and bounded retirement sequence. It does **not** satisfy the separate **golden-vertical gate**. The follow-up migration/retirement slices execute the accepted map with their own proof, but they are not prerequisites for the architecture-compression gate itself.
