@@ -238,7 +238,12 @@ class ProjectStore:
 
     def save_project(self, document: ProjectDocument) -> ProjectDocument:
         """Persist a complete project document and refresh updated_at."""
-        with self._lock:
+        # Existing-project project.json writes must share the same cross-runtime
+        # project fence as Production/Timeline/UOW/Generation reservation. Import
+        # locally to avoid a module cycle: task_records imports ProjectStore.
+        from .task_records import ProjectTaskRecordStore
+
+        with ProjectTaskRecordStore(self).project_lock(document.project_id), self._lock:
             current = self.load_project(document.project_id)
             updated = replace(document, updated_at=utc_now_iso())
             assert_project_identity_transition(current, updated)
@@ -256,7 +261,11 @@ class ProjectStore:
         sources: Iterable[ProjectReference] | None = None,
         artifacts: Iterable[ProjectReference] | None = None,
     ) -> ProjectDocument:
-        with self._lock:
+        # PATCH-style project mutations are canonical project.json writes and must
+        # serialize with every other canonical command using the shared project fence.
+        from .task_records import ProjectTaskRecordStore
+
+        with ProjectTaskRecordStore(self).project_lock(project_id), self._lock:
             current = self.load_project(project_id)
             updated = replace(
                 current,
