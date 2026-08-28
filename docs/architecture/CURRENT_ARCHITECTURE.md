@@ -8,6 +8,7 @@
 **Product Truth:** D-067  
 **Desktop updates:** D-068  
 **Stateful generation lineage:** D-069  
+**Product-first sequencing gate:** D-070  
 **Editor foundation:** D-033
 
 This document describes the current UV Studio target and the concrete implementation boundary. Historical Recipe Registry, Product Orchestrator and numbered Stage workspaces remain compatibility/migration code unless a later accepted decision explicitly promotes them.
@@ -47,9 +48,9 @@ Project Store
       Planner / durable Tasks / Skills                [Stage 16 merged]
       functional Subagents                            [Stage 17 merged]
       bounded background Agent execution              [Stage 18 active review, PR #75]
-      evaluate / dependency-aware repair              [next layer 5]
-      takeover / edit / resume                        [later layer 6]
-      long-form autonomy                              [later layer 7]
+      evaluate / dependency-aware repair              [deferred by D-070 product gate]
+      takeover / edit / resume                        [deferred by D-070 product gate]
+      long-form autonomy                              [deferred by D-070 product gate]
  -> Capability Registry / D-017 / adapters
  -> MLT / FFmpeg / MCP / local / optional remote execution
 ```
@@ -60,6 +61,7 @@ Cross-cutting verification:
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
 Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged]
 Stage-18 leases/fencing/recovery <-> exact-head CI + focused Codex review [PR #75 review]
+D-070 product sequencing <-> legacy caller inventory + micro_drama golden vertical [next after Stage 18]
 ```
 
 ## Canonical authorities
@@ -77,6 +79,7 @@ Stage-18 leases/fencing/recovery <-> exact-head CI + focused Codex review [PR #7
 - **Agent Harness** orchestrates work over the same commands/models/jobs/capabilities; it never owns a second project graph or private mutation path.
 - **Capability Registry / D-017 / adapters** own execution availability, effects, authorization and transport.
 - **Product Truth Contracts** are verification metadata, not runtime product state.
+- **D-070 sequencing** defers further Agent-autonomy layers after Stage 18 until legacy/modern product-composition overlap is inventoried and one user-visible golden vertical is proven.
 - **Update Service** remains the accepted future desktop release authority for in-place updates; it is not implemented by the current Agent slices.
 
 ## Production semantics versus Timeline
@@ -279,15 +282,24 @@ The first Codex P1 review is addressed by the current review-fix series. PR #75 
 
 Stage 18 remains internal infrastructure. It does not claim a visible autonomous Agent product.
 
-## D-066 current handoff and remaining order
+## D-070 product-first handoff before further D-066 autonomy
 
-Layer 4 is active in review PR #75. After it is accepted, merged and lifecycle-closed, continue in this order:
+Layer 4 remains active in review PR #75. If it is accepted, merged and lifecycle-closed, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+
+That behavior-preserving inventory must establish exact callers, canonical replacements, durable compatibility requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
+
+Further Agent autonomy resumes only after both D-070 gates are satisfied:
+
+1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices.
+2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
+
+When Agent-autonomy work resumes, D-066 ordering is preserved:
 
 1. **Layer 5 — critic/evaluation + dependency-aware local repair**;
 2. **Layer 6 — human takeover/edit/resume**;
 3. **Layer 7 — long-form autonomous production** only after all prior boundaries are proven.
 
-Do not collapse these layers or jump directly to long-form autonomy.
+D-070 changes sequencing, not D-066 ownership. Do not collapse the deferred layers or jump directly to long-form autonomy.
 
 ## Capability/effects boundary
 
@@ -327,6 +339,7 @@ Contextual operations such as targeted edit, dubbing/translation, slideshow, vis
 12. Canonical Production/Timeline read-modify-commit and Generation reservation must reuse the shared cross-runtime project fence for every caller.
 13. Current docs must distinguish merged/as-built state from active/future state.
 14. Do not claim autonomous product readiness from internal Agent infrastructure alone.
+15. Do not add new modern callers to Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 6/8 product composition or another path classified as superseded by D-070 without an accepted decision reversing that status.
 
 ## Compatibility layer
 
@@ -339,4 +352,6 @@ Still present as compatibility/migration code unless separately promoted:
 - donor-era clients and runtime paths still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-Compatibility code may remain readable/editable while new architecture continues on the authorities defined above.
+D-070 makes `architecture-compression-inventory` the next slice after Stage 18. That inventory must prove callers, replacement authorities, compatibility requirements and removal gates before production deletion begins.
+
+Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the D-070 gate is active.
