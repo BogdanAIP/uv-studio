@@ -27,7 +27,7 @@
     "merge_commit": "d1413e5753c24f207faf5a20828f891c14f53aa0"
   },
   "handoff": {
-    "next_slice_id": "studio-v2-agent-evaluate-repair",
+    "next_slice_id": "architecture-compression-inventory",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {

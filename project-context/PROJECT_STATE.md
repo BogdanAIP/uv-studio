@@ -74,6 +74,14 @@ PR #75 is non-draft and remains in review. Merge requires:
 
 This slice is internal Agent infrastructure. It does not implement automatic critic/repair, human takeover/edit/resume, long-form autonomy, provider-private schedulers as UV truth, or a user-visible autonomous Agent UI.
 
+## Product-first sequencing gate
+
+D-070 changes the work order without discarding Stage 18. After Stage 18 closes, UV Studio must stop adding Agent-autonomy layers long enough to inventory and compress the overlapping legacy product architecture and define one user-visible golden vertical.
+
+D-066 layers 5-7 remain accepted target architecture, but they are deferred until the architecture-compression and golden-vertical gates defined by D-070 are satisfied.
+
 ## Handoff
 
-After Stage 18 is accepted, merged and lifecycle-closed, the next D-066 slice is `studio-v2-agent-evaluate-repair`: bounded critic/evaluation plus dependency-aware local repair over the same Agent authorities.
+After Stage 18 is accepted, merged and lifecycle-closed, the next slice is `architecture-compression-inventory`.
+
+That slice is behavior-preserving inventory work only: map exact callers and migration/deletion gates for Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 6/8 surfaces and related legacy composition; define the migration order; and make the `micro_drama` project-to-export path the first named product vertical. D-066 layer 5 evaluation/repair is deferred until the D-070 product-first gates are satisfied.
