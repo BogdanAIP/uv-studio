@@ -7,7 +7,7 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75; D-070 now makes architecture compression and a user-visible golden vertical the product gate before further Agent autonomy:
+UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied; the separate `micro_drama` golden-vertical gate remains open and `donor-ui-retirement` is the next bounded migration slice before further Agent autonomy:
 
 ```text
 Project Store
@@ -24,7 +24,7 @@ Project Store
  -> Agent Harness layer 3: functional Subagents                     [Stage 17 merged]
  -> curated Stage-16/17 adversarial assurance                       [PR #73 merged]
  -> Agent Harness layer 4: bounded background execution             [Stage 18 / PR #75 merged]
- -> D-070 product-first gate: architecture compression + golden vertical
+ -> D-070: architecture compression [accepted] -> micro_drama golden vertical [open]
  -> later D-066 autonomy: evaluate/repair -> takeover -> autonomy
 ```
 
@@ -64,7 +64,7 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
        Stage 16: Planner -> durable Tasks -> Skills                [merged]
        Stage 17: functional Subagents                             [merged]
        Stage 18: bounded background execution                     [merged]
-       D-070: architecture compression -> micro_drama golden vertical
+       D-070: architecture compression [accepted] -> micro_drama golden vertical [open]
        later: evaluate/repair -> takeover -> autonomy
                                  |
                        Capability Registry
@@ -305,14 +305,14 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-`architecture-compression-inventory` is the current active review slice in PR #77, following the merged and lifecycle-closed Stage 18 baseline. If the inventory is accepted, merged and lifecycle-closed, the conditional next slice is `donor-ui-retirement`, not Layer 5.
+`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. The architecture-compression gate is therefore satisfied. The next declared bounded migration slice is `donor-ui-retirement`, not Layer 5; the separate `micro_drama` golden-vertical gate remains open.
 
-The active behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
+The accepted behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
-1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices. Acceptance of `architecture-compression-inventory` satisfies this gate; the bounded deletion/extraction slices execute that accepted map later.
-2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
+1. **Architecture compression gate — SATISFIED by PR #77.** Legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices. The bounded deletion/extraction slices execute that accepted map later.
+2. **Golden vertical gate — OPEN.** GUI must prove `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
 
 When Agent-autonomy work resumes, preserve D-066 order:
 
@@ -386,7 +386,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 
 Do not confuse legacy `uv_studio/orchestration/*` Product-Orchestrator-era code with bounded Agent orchestration under `uv_studio/agent/`.
 
-While D-070 is active, superseded product-composition paths must not gain new modern callers without a later accepted decision explicitly reversing their legacy status.
+While the accepted D-070 compression map is being executed and the golden-vertical gate remains open, superseded product-composition paths must not gain new modern callers without a later accepted decision explicitly reversing their legacy status.
 
 ## 16. Migration order
 
@@ -406,18 +406,15 @@ Completed:
 12. **Stage 17 functional subagents.**
 13. **Stage-16/17 curated adversarial-assurance pilot.**
 14. **Stage 18 bounded background Agent execution — PR #75 merged.**
+15. **`architecture-compression-inventory` — PR #77 merged as `c6831a36eb88289947eed1da65609654a2353524`; exact caller/migration/deletion map accepted, architecture-compression gate satisfied.**
 
-Active under D-070:
-
-15. **`architecture-compression-inventory` — PR #77 active/review; exact caller/migration/deletion map, no production behavior change.** Acceptance of this inventory satisfies the architecture-compression gate.
-
-Conditional handoff after the inventory is accepted and lifecycle-closed:
+Next bounded work under D-070:
 
 16. **`donor-ui-retirement`** — first eliminate/replace every write-capable donor restoration path and migrate its workflow/tool/setup/docs/test callers while preserving only read-only provenance checks; extract the supported Settings model lookup; then delete only zero-caller donor UI/client remainder;
 17. later bounded retirement/extraction slices proven by the accepted inventory, including legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
 18. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
 
-Only after both D-070 gates are satisfied, resume D-066:
+Only after the remaining D-070 golden-vertical gate is satisfied, resume D-066:
 
 19. evaluation/dependency-aware repair;
 20. human takeover/edit/resume;
@@ -446,4 +443,4 @@ Only after both D-070 gates are satisfied, resume D-066:
 - existing-project `project.json`, Production/Timeline and freshness-tracked JSON writers share the same cross-runtime project fence as canonical UOW/Generation reservation;
 - current docs distinguish merged, active and future work;
 - user-visible readiness requires D-067 parity/evidence, not implementation claims alone;
-- D-066 layers 5-7 remain deferred until D-070 architecture-compression and golden-vertical gates are satisfied.
+- D-066 layers 5-7 remain deferred because the D-070 golden-vertical gate is still open; the architecture-compression gate is satisfied by PR #77.
