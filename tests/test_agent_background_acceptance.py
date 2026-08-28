@@ -305,7 +305,7 @@ class AgentBackgroundAcceptanceTests(unittest.TestCase):
         self.assertFalse(lease.active)
         self.assertEqual(lease.outcome, "recovered_failed")
 
-    def test_failed_background_dependency_cancels_downstream_work(self) -> None:
+    def test_failed_background_dependency_keeps_downstream_blocked(self) -> None:
         production = ProductionSemanticService(self.store)
         production.create_scene(
             self.project.project_id,
@@ -332,7 +332,7 @@ class AgentBackgroundAcceptanceTests(unittest.TestCase):
                     inputs={
                         "shot_id": "shot_must_not_run_after_failure",
                         "scene_id": "scene_will_become_duplicate",
-                        "intent": "Must be cancelled",
+                        "intent": "Must remain blocked",
                     },
                     dependencies=("scene",),
                 ),
@@ -358,7 +358,10 @@ class AgentBackgroundAcceptanceTests(unittest.TestCase):
 
         final = coordinator.state(self.project.project_id, state.plan.plan_id)
         self.assertEqual(final.tasks[0].status, AgentTaskStatus.FAILED)
-        self.assertEqual(final.tasks[1].status, AgentTaskStatus.CANCELLED)
+        # Preserve the merged Stage-16 state machine: failure does not rewrite a
+        # dependent PLANNED task into CANCELLED, but it can never become runnable.
+        self.assertEqual(final.tasks[1].status, AgentTaskStatus.PLANNED)
+        self.assertEqual(coordinator.runnable(self.project.project_id, state.plan.plan_id), ())
         self.assertIsNone(
             worker.run_once(
                 project_id=self.project.project_id,
