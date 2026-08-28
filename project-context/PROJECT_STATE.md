@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: architecture-compression-inventory -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: independent-semantic-review -->
 
 **Updated:** 2026-08-28
 
@@ -9,11 +9,43 @@
 
 ## Current lifecycle
 
-The repository is lifecycle-idle after `architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`.
+The repository is in draft for `independent-semantic-review` on branch `chore/independent-semantic-review`, PR #79, starting from lifecycle-idle `main` merge `aa0d17308ca8c034175e4429f8535fb70dc8d026`.
 
-`architecture-compression-inventory` is now the last completed slice. The accepted exact caller/migration map is `docs/architecture/LEGACY_SURFACE_INVENTORY.md`, and acceptance satisfies the D-070 **architecture-compression gate**. The separate D-070 **golden-vertical gate** remains open.
+The last completed product/architecture slice remains `architecture-compression-inventory`, merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and lifecycle-closed through PR #78. Its accepted exact caller/migration map satisfies the D-070 **architecture-compression gate**. The separate D-070 **golden-vertical gate** remains open.
 
-The declared next slice is `donor-ui-retirement`.
+The declared product handoff remains `donor-ui-retirement`; PR #79 is a bounded repository-process slice inserted before that implementation work so subsequent material PRs no longer depend on Codex Review quota.
+
+## Independent semantic review under adoption
+
+PR #79 introduces repository-owned semantic review infrastructure only; it does not change product/runtime/frontend/test behavior.
+
+The target process is:
+
+```text
+implementation
+ -> focused tests / preliminary CI
+ -> freeze exact BASE_SHA + HEAD_SHA
+ -> required fresh ordinary ChatGPT review via .agents/skills/code-review/SKILL.md
+ -> optional @codex review when quota is available
+ -> validate findings as CONFIRMED / REJECTED / SUPERSEDED
+ -> fix confirmed findings
+ -> material HEAD change makes the old review stale
+ -> fresh required ordinary ChatGPT review
+ -> optional fresh Codex review
+ -> final exact-head CI / physical gates
+ -> verify reviewed base/head + zero unresolved findings/threads
+ -> expected-head merge
+```
+
+The mandatory primary reviewer is operationally independent: it runs in a fresh ordinary-ChatGPT context, is read-only, receives an immutable `REVIEW_REQUEST_V1`, reconstructs evidence from the repository and does not inherit the development chat's private reasoning or correctness argument.
+
+ChatGPT Work, Workspace Agents, Codex automation and Codex Review cannot substitute for the mandatory primary review. `@codex review` remains a valuable optional second opinion when quota is available; confirmed quota exhaustion must be stated but does not block merge after the mandatory ordinary-ChatGPT review and all other gates pass.
+
+The review policy is read from `BASE_SHA` while the target diff/code/docs/tests are read from `HEAD_SHA`, so a PR cannot weaken its own accepted review policy. Candidate findings must survive an explicit falsification pass before they are reported. The development context separately validates every reported finding before fixing it.
+
+A one-time ordinary ChatGPT Scheduled Task may launch review only when the resulting reviewer can truthfully establish `review_context=ordinary_chat_fresh`; otherwise a manually opened fresh ordinary-ChatGPT conversation is required.
+
+Because PR #79 introduces this mandatory-review policy for the first time, it is governed by the previously accepted merge discipline. After PR #79 merges, the new policy governs subsequent applicable material PRs.
 
 ## Accepted Stage 18 baseline
 
@@ -60,7 +92,7 @@ The accepted inventory supports this dependency-aware order:
 4. `execution-plan-retirement` — exact-scan `projectsApi.getProjectExecutionPlan()`, migrate any supported caller or remove only that helper/type surface with `/execution-plan`, while preserving the rest of live `projectsApi.ts`;
 5. bounded legacy direction/tool migration slices;
 6. contextual tool extraction where still needed;
-7. `product-orchestrator-retirement` — only after supported legacy workflow callers have moved; this retires the Commercial/General/Narrated/Story Stage8 orchestration projections;
+7. `product-orchestrator-retirement` — only after supported legacy workflow callers have moved;
 8. `stage8-runtime-dependency-migration` / `stage8-compatibility-retirement` — move remaining render-adapter consumers to canonical direction/input state, then retire Stage8 only after persisted-project and exact zero-runtime-caller proof;
 9. combined `micro_drama` golden-vertical proof when the canonical spine is ready; it may move earlier if independently provable.
 
@@ -80,22 +112,18 @@ D-066 layers 5-7 remain deferred until the golden-vertical gate is also satisfie
 
 ## Verification state
 
-Final PR #77 head `f315c810e07323583fbbaa5ff729ee151ff2e0d6` passed all five permanent CI jobs in run #3772, including Ubuntu/Windows unit, API, real-media, frontend build and browser E2E. All concrete review threads raised before merge were resolved.
+PR #79 is an adoption/process PR. Its final exact head must pass the existing five permanent checks and have zero unresolved review conversations under the previously accepted merge policy. The new mandatory ordinary-ChatGPT semantic-review rule applies to subsequent applicable PRs after #79 is merged.
 
-A further Codex code-review request on that final head could not run because the repository/account had exhausted the Codex code-review usage quota. The canonical development protocol does not declare Codex itself as a required check; it requires exact-head declared CI and zero unresolved review threads, both of which were satisfied before the expected-head merge.
-
-PR #77 contained no runtime/product implementation diff.
+No runtime/product/frontend/test implementation is in the PR #79 write scope.
 
 ## Known adjacent implementation risk
 
-During Stage-18 closure CI, repeated Windows runs exposed a timing-sensitive production-form remount race: `ProductionWorkspacePanel` keys the production semantics panel by history cursor, so a post-command history refresh can remount the form and discard Shot input entered before refresh completion. Exact-SHA reruns alternated which “Создать кадр” E2E hit the timeout; a later rerun passed all browser tests.
+Repeated Windows CI runs have exposed a timing-sensitive production-form remount race: `ProductionWorkspacePanel` keys the production semantics panel by history cursor, so a post-command history refresh can remount the form and discard Shot input entered before refresh completion. Exact-SHA reruns have alternated between pass and a timeout on the disabled “Создать кадр” button.
 
-This remains a separate implementation defect/risk and is not silently folded into donor UI retirement.
+This remains a separate implementation defect/risk and is not silently folded into the review-policy or donor UI slices.
 
 ## Handoff
 
-The next slice is `donor-ui-retirement`.
+The next product slice remains `donor-ui-retirement` after PR #79 is merged and lifecycle-closed.
 
 Its prerequisites are: (1) eliminate or safely replace all supported write-capable donor frontend restoration paths — `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` both with and without `--force`, plus `tools/uv_dev.py`, `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, and the write-behavior expectations in `tests/test_promote_frontend.py` — while preserving only check-only provenance verification in `.github/workflows/ci.yml` if still required; (2) migrate `/settings -> modelRegistry.ts -> fetchApiModels` to a modern model/capability client. Only then may the donor-only `workflowApi.ts` remainder and donor UI be deleted after exact recursive zero-caller, route, build and browser proof.
-
-Later project-identity migration remains separately gated on migrating every direct runtime `recipe_id` reader before the newest schema can stop requiring that compatibility field. Later recipe/execution endpoint retirement remains gated on exact-scanning `recipesApi.ts`, `projectsApi.createUVProject()` and `projectsApi.getProjectExecutionPlan()`.
