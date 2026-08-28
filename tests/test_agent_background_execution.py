@@ -255,6 +255,39 @@ class AgentBackgroundExecutionTests(unittest.TestCase):
 
         worker.execute(claim)
 
+    def test_forged_correlation_id_cannot_rebind_recovery_authority(self) -> None:
+        coordinator = self._coordinator()
+        state = self._scene_plan(
+            coordinator,
+            plan_id="agent_plan_background_correlation_forgery",
+            scene_id="scene_correlation_forgery_must_not_exist",
+        )
+        worker = AgentBackgroundWorker(
+            coordinator,
+            worker_id="worker_correlation_forgery",
+            lease_seconds=10,
+            heartbeat_seconds=0,
+        )
+        claim = worker.claim(
+            project_id=self.project.project_id,
+            plan_id=state.plan.plan_id,
+            task_id="scene",
+        )
+        replacement_tail = "0" if claim.correlation_id[-1] != "0" else "1"
+        forged = replace(
+            claim,
+            correlation_id=claim.correlation_id[:-1] + replacement_tail,
+        )
+
+        with self.assertRaises(AgentBackgroundLeaseStale):
+            worker.execute(forged)
+
+        production = ProductionSemanticService(self.store).state(self.project.project_id)
+        with self.assertRaises(Exception):
+            production.scene("scene_correlation_forgery_must_not_exist")
+
+        worker.execute(claim)
+
     def test_heartbeat_extends_live_lease_without_replacing_claim_authority(self) -> None:
         coordinator = self._coordinator()
         state = self._scene_plan(

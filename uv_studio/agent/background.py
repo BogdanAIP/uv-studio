@@ -740,11 +740,18 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         )
         if evidence is None:
             raise AgentBackgroundLeaseStale("background claim has no durable execution evidence")
+        expected_correlation_id = _typed_correlation_reference(
+            claim.plan_id,
+            claim.task_id,
+            evidence.skill_id,
+        )
         if (
             evidence.action_id != claim.action_id
+            or evidence.skill_id != claim.skill_id
             or evidence.context_digest != claim.context_digest
             or evidence.input_digest != claim.input_digest
             or _policy_digest(evidence.policy) != claim.policy_digest
+            or claim.correlation_id != expected_correlation_id
         ):
             raise AgentBackgroundLeaseStale(
                 "background claim no longer matches durable execution evidence"
