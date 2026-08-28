@@ -1,13 +1,13 @@
 # UV Studio v2 — architecture map and migration inventory
 
 **Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069  
-**Date:** 2026-08-27
+**Date:** 2026-08-28
 
 Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, two merged Agent-orchestration layers, and an active-review third Agent layer:
+UV Studio now has a concrete shared production/generation spine, three merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot:
 
 ```text
 Project Store
@@ -21,7 +21,8 @@ Project Store
  -> Capability Registry / D-017 / adapters
  -> Agent Harness layer 1: Context / Catalog / Policy / Trace       [Stage 15 merged]
  -> Agent Harness layer 2: Planner / durable Tasks / Skills         [Stage 16 merged]
- -> Agent Harness layer 3: functional Subagents                     [Stage 17 active review]
+ -> Agent Harness layer 3: functional Subagents                     [Stage 17 merged]
+ -> curated Stage-16/17 adversarial assurance                       [PR #73 merged]
 ```
 
 The old product-composition errors remain rejected:
@@ -57,8 +58,8 @@ D-064 owns Production Directions. D-065 owns shared production semantics. D-066 
                          Agent Harness
        Stage 15: Context -> Catalog -> Policy -> Trace            [merged]
        Stage 16: Planner -> durable Tasks -> Skills                [merged]
-       Stage 17: functional Subagents                             [active review]
-       later: background -> evaluate/repair -> takeover -> autonomy
+       Stage 17: functional Subagents                             [merged]
+       next: background -> evaluate/repair -> takeover -> autonomy
                                  |
                        Capability Registry
                                  |
@@ -226,24 +227,26 @@ Stage 16 executes ready tasks in the foreground, binds execution-time context/po
 
 Functional subagents and background execution are not part of Stage 16.
 
-## 8. Agent Harness layer 3 — Stage 17 ACTIVE REVIEW
+## 8. Agent Harness layer 3 — Stage 17 IMPLEMENTED
 
-PR #71 is the current D-066 slice. It implements bounded foreground functional roles on top of the merged Stage-15/16 contracts:
+PR #71 (`studio-v2-agent-functional-subagents`) merged as `c3ca3c33f89f67fad97081f889934669e34befa5` and was lifecycle-closed by PR #72. It implements bounded foreground functional roles on top of the merged Stage-15/16 contracts:
 
 - `explore` — advisory bounded findings over explicit canonical context;
 - `plan` — structured proposals that still require the existing Planner before durable Plan/Task creation;
 - `media` — bounded media/generation/Take/Timeline proposal subset only;
 - `critic` — read-only evaluation over one durable Plan/Task/linked-trace evidence set, without repair authority.
 
-The active review implementation binds role output to exact bounded context, assigns typed content-addressed delegation provenance, revalidates role envelopes before persistence, carries accepted provenance through existing Plan/Task/Trace state, and preserves it through shared Stage-16 execution/recovery. It remains foreground-only and does not add workers, leases, heartbeats, autonomous polling, a second task graph, or a private mutation/provider path.
+The merged implementation binds role output to exact bounded context, assigns typed content-addressed delegation provenance, revalidates role envelopes before persistence, carries accepted provenance through existing Plan/Task/Trace state, and preserves it through shared Stage-16 execution/recovery. It remains foreground-only and does not add workers, leases, heartbeats, autonomous polling, a second task graph, or a private mutation/provider path.
 
-Classification: **ACTIVE REVIEW**, not `NEXT` and not yet merged. Agents must not initialize a duplicate functional-subagent slice while PR #71 is active.
+PR #73 (`agent-stage17-adversarial-assurance`) merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. Its curated mutation runner is verification infrastructure only: it protects selected Stage-16/17 context, provenance, namespace and shared-authority guarantees without changing production semantics.
+
+Classification: **KEEP**. Stage 17 and the assurance pilot are merged baselines; background execution is the next D-066 layer.
 
 ## 9. D-066 remaining order
 
-After Stage 17 merges and is lifecycle-closed, continue in the accepted order:
+With Stage 17 and its adversarial-assurance pilot merged and lifecycle-closed, continue in the accepted order:
 
-1. **Layer 4 — background Agent work:** coordinated through existing Job Manager boundaries without hiding external replay/cost;
+1. **Layer 4 — background Agent work:** coordinated through existing durable Agent Task and Generation Job boundaries without hiding external replay/cost;
 2. **Layer 5 — evaluation + dependency-aware local repair**;
 3. **Layer 6 — human takeover/edit/resume**;
 4. **Layer 7 — long-form autonomous production**.
@@ -254,7 +257,7 @@ Do not jump directly to long-form autonomy.
 
 D-067 keeps current docs, machine-readable feature contracts, backend/API/frontend and user-outcome evidence consistent.
 
-The first visible record remains named generation -> Take. Stages 15–16 are merged internal Agent infrastructure and Stage 17 is active-review internal Agent infrastructure; none claim a visible autonomous Agent product without a separate Studio surface and browser proof.
+The first visible record remains named generation -> Take. Stages 15–17 are merged internal Agent infrastructure and PR #73 is merged internal assurance infrastructure; none claim a visible autonomous Agent product without a separate Studio surface and browser proof.
 
 ## 11. Desktop update layer — ACCEPTED TARGET, DEFERRED HERE
 
@@ -293,7 +296,8 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 | GenerationContract | **KEEP** | provider-neutral semantic generation constraints |
 | Stage-15 Agent foundation | **KEEP** | Context/Catalog/Policy/Trace/AgentHarness |
 | Stage-16 Planner/Tasks/Skills | **KEEP** | merged D-066 layer 2 orchestration |
-| Functional subagents | **ACTIVE REVIEW** | PR #71 bounded role specialization over merged Agent contracts |
+| Functional subagents | **KEEP** | merged Stage-17 bounded role specialization |
+| Stage-16/17 adversarial assurance | **KEEP** | merged curated verification infrastructure, not runtime authority |
 | Product Truth | **KEEP** | cross-layer verification metadata |
 | MCP | **KEEP** | optional capability/tool transport, not product state |
 | Desktop Update Service | **FUTURE ACCEPTED** | D-068 maintained installation lifecycle |
@@ -326,20 +330,18 @@ Completed:
 9. Stage 14 first Product Truth record/proof.
 10. **Stage 15 Context Builder + Action Catalog + Policy + Trace + bounded Agent execution.**
 11. **Stage 16 Planner + durable Tasks + Skills.**
-
-Active review:
-
 12. **Stage 17 functional subagents.**
+13. **Stage-16/17 curated adversarial-assurance pilot.**
 
-After Stage 17 lifecycle closure, continue in D-066 order:
+Next in D-066 order:
 
-13. background Agent work;
-14. evaluation/dependency-aware repair;
-15. human takeover/edit/resume;
-16. long-form autonomous production;
-17. direction-domain growth/extraction of useful legacy tools as required;
-18. compatibility retirement after caller proof;
-19. D-068 maintained desktop update implementation/release proof when selected as its own slice.
+14. background Agent work;
+15. evaluation/dependency-aware repair;
+16. human takeover/edit/resume;
+17. long-form autonomous production;
+18. direction-domain growth/extraction of useful legacy tools as required;
+19. compatibility retirement after caller proof;
+20. D-068 maintained desktop update implementation/release proof when selected as its own slice.
 
 ## 16. Invariants
 
