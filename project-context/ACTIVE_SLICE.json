@@ -8,7 +8,7 @@
     "goal": "Produce the D-070 behavior-preserving exact caller/migration inventory for overlapping legacy and modern product composition, with canonical replacements, persisted-project gates and a bounded retirement sequence before further Agent autonomy.",
     "base_branch": "main",
     "branch": "research/architecture-compression-inventory",
-    "pull_request": null,
+    "pull_request": 77,
     "write_scope": [
       "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
       "docs/architecture/CURRENT_ARCHITECTURE.md",
