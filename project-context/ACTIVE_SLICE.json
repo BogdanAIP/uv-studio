@@ -1,7 +1,22 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "independent-code-review-policy",
+    "kind": "chore",
+    "roadmap_stage": "process-governance",
+    "goal": "Adopt a repository-local fresh ordinary-ChatGPT semantic review skill and make it the required primary review for later review-significant pull requests without making Codex quota a merge dependency.",
+    "base_branch": "main",
+    "branch": "chore/independent-code-review-policy",
+    "pull_request": 80,
+    "write_scope": [
+      ".agents/skills/code-review/SKILL.md",
+      "AGENTS.md",
+      "DEVELOPMENT_PROTOCOL.md",
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md"
+    ]
+  },
   "last_completed": {
     "id": "architecture-compression-inventory",
     "pull_request": 77,
