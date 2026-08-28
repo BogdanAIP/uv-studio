@@ -12,6 +12,7 @@ and verifies that durable evidence rather than trusting caller-supplied policy.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import uuid
@@ -45,7 +46,7 @@ from .stage16_runtime import _typed_correlation_reference
 from .stage17_provenance import AgentSubagentTaskCoordinator as _Stage17TaskCoordinator
 
 
-AGENT_BACKGROUND_LEASE_SCHEMA_VERSION = 1
+AGENT_BACKGROUND_LEASE_SCHEMA_VERSION = 2
 AGENT_BACKGROUND_LEASE_RECORD_TYPE = "agent_background_lease"
 MAX_BACKGROUND_CLAIMS_PER_TASK = 8
 MAX_BACKGROUND_LEASE_HISTORY = 8
@@ -69,7 +70,7 @@ class AgentBackgroundLeaseStale(AgentBackgroundError):
 
 
 class AgentBackgroundContextStale(AgentBackgroundError):
-    """Canonical Agent context changed after the background claim."""
+    """Canonical project state changed after the background claim."""
 
 
 class AgentBackgroundRetryLimit(AgentBackgroundError):
@@ -152,12 +153,55 @@ def _policy_digest(policy: Any) -> str:
     return stable_digest({"policy": payload})
 
 
+def _canonical_state_digest(project_store: Any, project_id: str) -> str:
+    """Hash exact mutation-relevant canonical JSON bytes under the project lock."""
+
+    project_dir = project_store.project_directory(project_id)
+    candidates = [project_store.project_path(project_id)]
+    for root_name in ("production", "timeline"):
+        root = project_dir / root_name
+        if root.is_symlink():
+            raise AgentBackgroundError(f"canonical {root_name} root must not be a symlink")
+        if not root.exists():
+            continue
+        if not root.is_dir():
+            raise AgentBackgroundError(f"canonical {root_name} root must be a directory")
+        candidates.extend(sorted(root.rglob("*.json")))
+
+    canonical: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for path in candidates:
+        relative = path.relative_to(project_dir).as_posix()
+        if relative in seen:
+            continue
+        seen.add(relative)
+        if path.is_symlink() or not path.is_file():
+            raise AgentBackgroundError(
+                f"canonical freshness source must be a regular file: {relative!r}"
+            )
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            raise AgentBackgroundError(
+                f"canonical freshness source could not be read: {relative!r}"
+            ) from exc
+        canonical.append(
+            {
+                "path": relative,
+                "size": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        )
+    return stable_digest({"project_id": project_id, "canonical_json": canonical})
+
+
 def _history_entry(record: "AgentBackgroundLeaseRecord", *, outcome: str) -> dict[str, Any]:
     return {
         "generation": record.generation,
         "owner_id": record.owner_id,
         "token_digest": record.token_digest,
         "policy_digest": record.policy_digest,
+        "canonical_digest": record.canonical_digest,
         "acquired_at": record.acquired_at,
         "heartbeat_at": record.heartbeat_at,
         "expires_at": record.expires_at,
@@ -182,6 +226,7 @@ class AgentBackgroundLeaseRecord:
     heartbeat_at: str
     expires_at: str
     context_digest: str
+    canonical_digest: str
     input_digest: str
     policy_digest: str
     target_shot_id: str | None
@@ -222,6 +267,11 @@ class AgentBackgroundLeaseRecord:
 
         object.__setattr__(self, "token_digest", _digest(self.token_digest, field_name="token_digest"))
         object.__setattr__(self, "context_digest", _digest(self.context_digest, field_name="context_digest"))
+        object.__setattr__(
+            self,
+            "canonical_digest",
+            _digest(self.canonical_digest, field_name="canonical_digest"),
+        )
         object.__setattr__(self, "input_digest", _digest(self.input_digest, field_name="input_digest"))
         object.__setattr__(self, "policy_digest", _digest(self.policy_digest, field_name="policy_digest"))
 
@@ -280,6 +330,7 @@ class AgentBackgroundLeaseRecord:
             "heartbeat_at": self.heartbeat_at,
             "expires_at": self.expires_at,
             "context_digest": self.context_digest,
+            "canonical_digest": self.canonical_digest,
             "input_digest": self.input_digest,
             "policy_digest": self.policy_digest,
             "target_shot_id": self.target_shot_id,
@@ -311,6 +362,7 @@ class AgentBackgroundLeaseRecord:
                 heartbeat_at=data["heartbeat_at"],
                 expires_at=data["expires_at"],
                 context_digest=data["context_digest"],
+                canonical_digest=data["canonical_digest"],
                 input_digest=data["input_digest"],
                 policy_digest=data["policy_digest"],
                 target_shot_id=data.get("target_shot_id"),
@@ -339,6 +391,7 @@ class AgentBackgroundClaim:
     generation: int
     lease_token: str = field(repr=False)
     context_digest: str = ""
+    canonical_digest: str = ""
     input_digest: str = ""
     policy_digest: str = ""
     target_shot_id: str | None = None
@@ -378,6 +431,11 @@ class AgentBackgroundClaim:
         if isinstance(self.generation, bool) or not isinstance(self.generation, int):
             raise AgentBackgroundError("background claim generation must be an integer")
         object.__setattr__(self, "context_digest", _digest(self.context_digest, field_name="context_digest"))
+        object.__setattr__(
+            self,
+            "canonical_digest",
+            _digest(self.canonical_digest, field_name="canonical_digest"),
+        )
         object.__setattr__(self, "input_digest", _digest(self.input_digest, field_name="input_digest"))
         object.__setattr__(self, "policy_digest", _digest(self.policy_digest, field_name="policy_digest"))
         if self.target_shot_id is not None:
@@ -392,7 +450,7 @@ class AgentBackgroundClaim:
 
 
 class AgentBackgroundLeaseStore:
-    """Durable worker ownership beside AgentTaskRecord, using the same task-root CAS."""
+    """Durable worker ownership beside AgentTaskRecord, using the shared project lock."""
 
     def __init__(self, project_store: Any, *, clock: Clock = _utc_now) -> None:
         self.project_store = project_store
@@ -437,6 +495,7 @@ class AgentBackgroundLeaseStore:
         task_record_id: str,
         owner_id: str,
         context_digest: str,
+        canonical_digest: str,
         input_digest: str,
         policy_digest: str,
         target_shot_id: str | None,
@@ -491,6 +550,7 @@ class AgentBackgroundLeaseStore:
                 heartbeat_at=_iso(now),
                 expires_at=_iso(expires),
                 context_digest=context_digest,
+                canonical_digest=canonical_digest,
                 input_digest=input_digest,
                 policy_digest=policy_digest,
                 target_shot_id=target_shot_id,
@@ -524,6 +584,7 @@ class AgentBackgroundLeaseStore:
             and current.owner_id == claim.owner_id
             and current.token_digest == _lease_token_digest(claim.lease_token)
             and current.context_digest == claim.context_digest
+            and current.canonical_digest == claim.canonical_digest
             and current.input_digest == claim.input_digest
             and current.policy_digest == claim.policy_digest
             and current.target_shot_id == claim.target_shot_id
@@ -731,6 +792,9 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             shot_id=claim.target_shot_id,
         ).digest
 
+    def _current_canonical_digest(self, claim: AgentBackgroundClaim) -> str:
+        return _canonical_state_digest(self.project_store, claim.project_id)
+
     def _evidence_for(self, claim: AgentBackgroundClaim):
         evidence = self._execution_evidence.get(
             project_id=claim.project_id,
@@ -764,23 +828,28 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         *,
         require_context: bool,
     ):
-        with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
+        with self.tasks.records.project_lock(claim.project_id):
             self.leases.require_owner_locked(claim, require_live=True)
             task = self.tasks.get(claim.project_id, claim.plan_id, claim.task_id)
             if task.record_id != claim.task_record_id or task.status is not AgentTaskStatus.RUNNING:
                 raise AgentBackgroundLeaseStale("background claim no longer owns a RUNNING Agent Task")
             evidence = self._evidence_for(claim)
-            if require_context and self._current_context_digest(claim) != claim.context_digest:
-                raise AgentBackgroundContextStale(
-                    "canonical Agent context changed before background dispatch"
-                )
+            if require_context:
+                if self._current_context_digest(claim) != claim.context_digest:
+                    raise AgentBackgroundContextStale(
+                        "Agent observation context changed before background dispatch"
+                    )
+                if self._current_canonical_digest(claim) != claim.canonical_digest:
+                    raise AgentBackgroundContextStale(
+                        "canonical project state changed before background dispatch"
+                    )
             return evidence
 
     @contextmanager
     def _commit_guard(self, claim: AgentBackgroundClaim) -> Iterator[None]:
-        """Hold the task-root fence while ownership is checked and effect commits."""
+        """Hold the shared project fence while ownership/freshness and effect commit."""
 
-        with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
+        with self.tasks.records.project_lock(claim.project_id):
             self.leases.require_owner_locked(claim, require_live=True)
             task = self.tasks.get(claim.project_id, claim.plan_id, claim.task_id)
             if task.record_id != claim.task_record_id or task.status is not AgentTaskStatus.RUNNING:
@@ -790,7 +859,11 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             self._evidence_for(claim)
             if self._current_context_digest(claim) != claim.context_digest:
                 raise AgentBackgroundContextStale(
-                    "canonical Agent context changed after background claim; commit refused"
+                    "Agent observation context changed after background claim; commit refused"
+                )
+            if self._current_canonical_digest(claim) != claim.canonical_digest:
+                raise AgentBackgroundContextStale(
+                    "canonical project state changed after background claim; commit refused"
                 )
             yield
 
@@ -806,7 +879,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
     ) -> AgentBackgroundClaim:
         """Claim READY work and persist exact pre-dispatch evidence under a short lock."""
 
-        with self.project_store._lock, self.tasks.records.project_lock(project_id):
+        with self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
             self._require_execution_reference_budget(plan)
             spec = plan.task(task_id)
@@ -836,6 +909,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             payload = self._execution_payload(spec, runtime_inputs)
             target_shot_id = self._execution_target_shot_id(spec)
             snapshot = self.harness.context.build(project_id, shot_id=target_shot_id)
+            canonical_digest = _canonical_state_digest(self.project_store, project_id)
             input_digest = self._expected_input_digest(spec)
             policy = self._execution_policy(project_id, spec, payload)
             policy_digest = _policy_digest(policy)
@@ -851,6 +925,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                 task_record_id=record.record_id,
                 owner_id=owner_id,
                 context_digest=snapshot.digest,
+                canonical_digest=canonical_digest,
                 input_digest=input_digest,
                 policy_digest=policy_digest,
                 target_shot_id=target_shot_id,
@@ -870,6 +945,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                 generation=lease.generation,
                 lease_token=lease_token,
                 context_digest=lease.context_digest,
+                canonical_digest=lease.canonical_digest,
                 input_digest=lease.input_digest,
                 policy_digest=lease.policy_digest,
                 target_shot_id=lease.target_shot_id,
