@@ -1,28 +1,11 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
-  "active_slice": {
-    "id": "architecture-compression-inventory",
-    "kind": "research",
-    "roadmap_stage": "studio-v2",
-    "goal": "Produce the D-070 behavior-preserving exact caller/migration inventory for overlapping legacy and modern product composition, with canonical replacements, persisted-project gates and a bounded retirement sequence before further Agent autonomy.",
-    "base_branch": "main",
-    "branch": "research/architecture-compression-inventory",
-    "pull_request": 77,
-    "write_scope": [
-      "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
-      "docs/architecture/CURRENT_ARCHITECTURE.md",
-      "docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md",
-      "docs/architecture/README.md",
-      "project-context/ACTIVE_SLICE.json",
-      "project-context/PROJECT_STATE.md",
-      "project-context/NEXT_TASK.md"
-    ]
-  },
+  "lifecycle_state": "idle",
+  "active_slice": null,
   "last_completed": {
-    "id": "studio-v2-agent-background-execution",
-    "pull_request": 75,
-    "merge_commit": "c5051b975a1ba8e747f453dd0a485cac1e308ba7"
+    "id": "architecture-compression-inventory",
+    "pull_request": 77,
+    "merge_commit": "c6831a36eb88289947eed1da65609654a2353524"
   },
   "handoff": {
     "next_slice_id": "donor-ui-retirement",
