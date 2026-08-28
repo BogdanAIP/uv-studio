@@ -305,13 +305,13 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-After Stage 18 merge and protected-main lifecycle closure, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+`architecture-compression-inventory` is the current active review slice in PR #77, following the merged and lifecycle-closed Stage 18 baseline. If the inventory is accepted, merged and lifecycle-closed, the conditional next slice is `donor-ui-retirement`, not Layer 5.
 
-That behavior-preserving slice must map exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
+The active behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
-1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices.
+1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices. Acceptance of `architecture-compression-inventory` satisfies this gate; the bounded deletion/extraction slices execute that accepted map later.
 2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
 
 When Agent-autonomy work resumes, preserve D-066 order:
@@ -378,8 +378,9 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 - Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful logic into modern authorities.
 - `api/project_workflow.py` — **LEGACY + EXTRACT**.
 - `/execution-plan` and recipe execution — **LEGACY**.
-- Stage 6/8 workspaces and specialized legacy project pages — **LEGACY UI**.
-- donor-era pipeline/session/task/model frontend clients — **DELETE LATER** after caller proof.
+- Stage 6/8 workspaces and specialized legacy project pages — **LEGACY RUNTIME / COMPATIBILITY**; Stage8 is still consumed by legacy UI/tests, Product Orchestrator projections and General/Narrated render adapters, so removal requires runtime-caller migration plus persisted-project proof.
+- donor-era pipeline/session/task/model frontend clients — **DELETE LATER** after caller proof; `workflowApi.fetchApiModels` is a supported Settings seam that must be extracted first.
+- donor frontend restoration (`promote-frontend.yml`, `promote_frontend.py` force/no-force, `uv_dev.py`, Windows `setup-dev.ps1`, `docs/FRONTEND.md`) — **ADAPT → DELETE LATER**; write-capable restoration must be removed/replaced before donor UI retirement. `tests/test_promote_frontend.py` currently asserts write behavior and must migrate; `.github/workflows/ci.yml` runs that suite and a separate `--check`, whose intended provenance verification may remain only as read-only proof.
 - VideoClaw backend path injection — **DELETE LATER** after dependency/package proof.
 - archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
@@ -406,19 +407,23 @@ Completed:
 13. **Stage-16/17 curated adversarial-assurance pilot.**
 14. **Stage 18 bounded background Agent execution — PR #75 merged.**
 
-Next under D-070:
+Active under D-070:
 
-15. **`architecture-compression-inventory` — exact caller/migration/deletion map, no production behavior change.**
-16. bounded retirement/extraction slices proven by that inventory;
-17. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
+15. **`architecture-compression-inventory` — PR #77 active/review; exact caller/migration/deletion map, no production behavior change.** Acceptance of this inventory satisfies the architecture-compression gate.
+
+Conditional handoff after the inventory is accepted and lifecycle-closed:
+
+16. **`donor-ui-retirement`** — first eliminate/replace every write-capable donor restoration path and migrate its workflow/tool/setup/docs/test callers while preserving only read-only provenance checks; extract the supported Settings model lookup; then delete only zero-caller donor UI/client remainder;
+17. later bounded retirement/extraction slices proven by the accepted inventory, including legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
+18. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
 
 Only after both D-070 gates are satisfied, resume D-066:
 
-18. evaluation/dependency-aware repair;
-19. human takeover/edit/resume;
-20. long-form autonomous production;
-21. additional direction-domain growth as required;
-22. D-068 maintained desktop update implementation/release proof when selected as its own slice.
+19. evaluation/dependency-aware repair;
+20. human takeover/edit/resume;
+21. long-form autonomous production;
+22. additional direction-domain growth as required;
+23. D-068 maintained desktop update implementation/release proof when selected as its own slice.
 
 ## 17. Invariants
 
