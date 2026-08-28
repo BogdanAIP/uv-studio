@@ -37,10 +37,10 @@ The exact caller/migration map is recorded in `docs/architecture/LEGACY_SURFACE_
 5. **Product Orchestrator is mixed legacy composition over useful modern/domain primitives.** Its HTTP seam dispatches by recipe, but already delegates to Dubbing, Targeted Edit, Music and Capability authorities that must survive extraction.
 6. **Stage8 is live runtime compatibility, not only legacy UI state.** Besides its workspace API/state, legacy panels and tests, `get_stage8_workspace` is consumed by `general_video_render.py`, `narrated_render.py` and Commercial/General/Narrated/Story Product Orchestrator projections. Stage8 cannot be retired until those runtime callers migrate or are retired and persisted-project compatibility is proven.
 7. **Donor Workflow/Pipeline/Sandbox UI is the first retirement candidate, but `workflowApi.ts` is mixed.** The donor roots have no supported Next app route, while `/settings -> modelRegistry.ts -> workflowApi.fetchApiModels` is a real supported caller. `donor-ui-retirement` must move `fetchApiModels` to a modern model/capability client before deleting the donor-only remainder.
-8. **The donor frontend reset is still authoritative and destructive.** Manually dispatching `.github/workflows/promote-frontend.yml` runs `tools/promote_frontend.py --force`, which removes the maintained `frontend/` and recreates it from the pinned VideoClaw frontend. `donor-ui-retirement` must disable or replace that reset authority before deletion can be considered durable.
+8. **Donor frontend restoration remains supported through multiple write paths.** The manually dispatched `.github/workflows/promote-frontend.yml` runs `tools/promote_frontend.py --force`, which can replace the maintained `frontend/`. Plain `python tools/promote_frontend.py` also recreates the pinned VideoClaw frontend when `frontend/` is absent; `tools/uv_dev.py` directs users to that command for missing frontend files, and `docs/FRONTEND.md` documents the promotion/provenance mechanism. `donor-ui-retirement` must eliminate or safely replace all of these write-capable restore paths and update their guidance before deletion can be durable.
 9. **Historical “Stage 6” is not treated as a deletion unit.** The inventory classifies concrete surviving paths; no dedicated current Stage-6 runtime authority has been positively established, and incomplete code search is not accepted as absence proof.
 
-The supported route tree, live legacy page imports, Settings/modelRegistry caller, destructive frontend reset path, and positive Stage8 runtime callers were independently rechecked during review. That evidence still supports `donor-ui-retirement` as the first bounded candidate without claiming its zero-caller or durable-deletion gates already passed.
+The supported route tree, live legacy page imports, Settings/modelRegistry caller, donor restoration paths, and positive Stage8 runtime callers were independently rechecked during review. That evidence still supports `donor-ui-retirement` as the first bounded candidate without claiming its zero-caller or durable-deletion gates already passed.
 
 ## No-new-caller rule
 
@@ -56,7 +56,7 @@ Dubbing, targeted edit, continuity and music are not deleted as collateral damag
 
 The inventory supports this order:
 
-1. `donor-ui-retirement` — first disable/replace the destructive donor reset, then extract the supported Settings model lookup from `workflowApi.ts`, then retire only donor-only UI/client remainder after zero-caller proof;
+1. `donor-ui-retirement` — first eliminate/replace every supported write-capable donor frontend restoration path (workflow, `promote_frontend.py` with or without `--force`, and its developer/documentation callers), then extract the supported Settings model lookup from `workflowApi.ts`, then retire only donor-only UI/client remainder after zero-caller proof;
 2. `project-identity-v2-compat-reader`;
 3. `recipe-entrypoint-retirement`;
 4. `execution-plan-retirement`;
@@ -78,7 +78,7 @@ Existing tests prove important pieces separately, but the D-070 golden-vertical 
 
 ## Verification state
 
-Draft head `c72d0ac12aae79bcb8f3dd63f4111256962181c8` passed CI run #3716 before the review transition. Exact-head Codex review found three concrete inventory omissions: the supported Settings/modelRegistry caller of `workflowApi.fetchApiModels`, the destructive manual donor-frontend reset path, and live Stage8 runtime callers in render adapters/Product Orchestrator projections. All three are being corrected in documentation/context only; the corrected final head must receive a fresh full permanent CI pass before merge.
+Exact-head Codex review has found concrete documentation/inventory omissions around the supported Settings/modelRegistry caller of `workflowApi.fetchApiModels`, donor frontend restoration authority, live Stage8 runtime callers, D-070 gate semantics, current-authority lifecycle wording, and the no-force `promote_frontend.py` restoration path exposed by `uv_dev.py`/frontend guidance. All fixes remain documentation/context-only; the corrected final head must receive a fresh full permanent CI pass and exact-head review before merge.
 
 PR #77 has no runtime/product implementation diff. Review must confirm the caller/migration table, persisted-project gates, bounded retirement sequence and no-new-caller rule without treating incomplete GitHub Code Search as zero-caller proof.
 
@@ -90,7 +90,7 @@ This risk is recorded so it is not lost, but PR #77 does not modify runtime beha
 
 ## Handoff
 
-The next slice is `donor-ui-retirement`, conditional on this inventory being accepted. Its prerequisites are: (1) disable or replace `.github/workflows/promote-frontend.yml` / `promote_frontend.py --force` as a destructive write path over maintained frontend bytes while preserving any required provenance-check capability; (2) migrate `/settings -> modelRegistry.ts -> fetchApiModels` to a modern model/capability client. Only then may the donor-only `workflowApi.ts` remainder and donor UI be deleted after exact recursive zero-caller, route, build and browser proof.
+The next slice is `donor-ui-retirement`, conditional on this inventory being accepted. Its prerequisites are: (1) eliminate or safely replace all supported write-capable donor frontend restoration paths — `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` both with and without `--force`, plus the `tools/uv_dev.py` and `docs/FRONTEND.md` guidance that makes the plain restore a supported recovery path — while preserving only check-only provenance verification if still required; (2) migrate `/settings -> modelRegistry.ts -> fetchApiModels` to a modern model/capability client. Only then may the donor-only `workflowApi.ts` remainder and donor UI be deleted after exact recursive zero-caller, route, build and browser proof.
 
 Later Stage8 retirement is separately gated on migration/retirement of every runtime `get_stage8_workspace` caller, including render adapters and Product Orchestrator projections; it is not part of `donor-ui-retirement`.
 
