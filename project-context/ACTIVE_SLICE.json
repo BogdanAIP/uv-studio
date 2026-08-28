@@ -8,7 +8,7 @@
     "goal": "Implement D-066 layer 4 bounded background Agent execution with durable worker leases, heartbeats, fencing and restart-safe recovery over existing Agent Task and Generation Job authorities.",
     "base_branch": "main",
     "branch": "stage-18/agent-background-execution",
-    "pull_request": null,
+    "pull_request": 75,
     "write_scope": [
       "uv_studio/agent/**",
       "tests/**",
