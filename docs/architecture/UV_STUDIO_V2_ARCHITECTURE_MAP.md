@@ -307,7 +307,7 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 `architecture-compression-inventory` is the current active review slice in PR #77, following the merged and lifecycle-closed Stage 18 baseline. If the inventory is accepted, merged and lifecycle-closed, the conditional next slice is `donor-ui-retirement`, not Layer 5.
 
-The active behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/reset paths and runtime dependencies.
+The active behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
@@ -380,7 +380,7 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 - `/execution-plan` and recipe execution — **LEGACY**.
 - Stage 6/8 workspaces and specialized legacy project pages — **LEGACY RUNTIME / COMPATIBILITY**; Stage8 is still consumed by legacy UI/tests, Product Orchestrator projections and General/Narrated render adapters, so removal requires runtime-caller migration plus persisted-project proof.
 - donor-era pipeline/session/task/model frontend clients — **DELETE LATER** after caller proof; `workflowApi.fetchApiModels` is a supported Settings seam that must be extracted first.
-- destructive pinned-frontend reset (`promote-frontend.yml` / `promote_frontend.py --force`) — **ADAPT → DELETE LATER** before donor UI retirement so removed donor surfaces cannot be restored by repository automation.
+- donor frontend restoration (`promote-frontend.yml`, `promote_frontend.py` force/no-force, `uv_dev.py`, Windows `setup-dev.ps1`, `docs/FRONTEND.md`) — **ADAPT → DELETE LATER**; write-capable restoration must be removed/replaced before donor UI retirement. `tests/test_promote_frontend.py` currently asserts write behavior and must migrate; `.github/workflows/ci.yml` runs that suite and a separate `--check`, whose intended provenance verification may remain only as read-only proof.
 - VideoClaw backend path injection — **DELETE LATER** after dependency/package proof.
 - archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
@@ -413,7 +413,7 @@ Active under D-070:
 
 Conditional handoff after the inventory is accepted and lifecycle-closed:
 
-16. **`donor-ui-retirement`** — first disable/replace destructive donor reset authority and extract the supported Settings model lookup, then delete only zero-caller donor UI/client remainder;
+16. **`donor-ui-retirement`** — first eliminate/replace every write-capable donor restoration path and migrate its workflow/tool/setup/docs/test callers while preserving only read-only provenance checks; extract the supported Settings model lookup; then delete only zero-caller donor UI/client remainder;
 17. later bounded retirement/extraction slices proven by the accepted inventory, including legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
 18. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
 
