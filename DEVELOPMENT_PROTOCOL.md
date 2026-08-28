@@ -4,7 +4,11 @@ This is the canonical lifecycle specification for development across chats/agent
 
 ## 1. Repository is the memory
 
-At the start of every development chat read `AGENTS.md`, `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, decision index/details, architecture principles, roadmap/upstream, then the active PR when one exists and recent `main` commits. Run `python tools/validate_development_context.py` before implementation.
+At the start of every development or independent-review chat, first resolve live GitHub state and enumerate `.agents/skills/*/SKILL.md` from the applicable repository ref. Read the frontmatter/triggers and load every applicable skill before planning. Never rely on remembered skill names/text; repeat discovery after `main` advances, a branch is rebased, a new slice starts or task scope materially changes.
+
+For development, then read `AGENTS.md`, `ACTIVE_SLICE.json`, `PROJECT_STATE.md`, `NEXT_TASK.md`, decision index/details, architecture principles, roadmap/upstream, the active PR when one exists and recent `main` commits. Run `python tools/validate_development_context.py` before implementation.
+
+For independent semantic review, follow `.agents/skills/code-review/SKILL.md`: the accepted review policy comes from the exact requested `BASE_SHA`, while the review target is the exact `HEAD_SHA`.
 
 ## 2. Lifecycle v2
 
@@ -40,7 +44,8 @@ The first branch commit may temporarily use a null PR number only until the draf
 - context/PR body describe actual behavior and limitations;
 - `lifecycle_state=review`;
 - PR is non-draft;
-- exact-head CI and unresolved review state are authoritative.
+- applicable independent semantic review is current for the exact base/head after adoption of the review policy;
+- exact-head CI and unresolved review/finding state are authoritative.
 
 ### post-merge closure
 
@@ -71,6 +76,8 @@ python tools/close_development_context.py \
 The helper changes `review -> idle`, sets `active_slice=null`, records `last_completed`, rewrites the `PROJECT_STATE.md` context markers and revalidates the repository. The coordinator also adds the completed slice to `PROJECT_HISTORY.md` when needed.
 
 The idle-state PR exception in `validate_development_context.py` is deliberately narrow: only a non-draft canonical `chore/* -> main` PR with the exact `uv-lifecycle-closure` marker matching `last_completed.id` is accepted. An ordinary feature/change PR cannot use idle state to bypass the normal `idle -> draft -> review` lifecycle.
+
+A mechanical lifecycle-closure PR does not require a fresh semantic review merely because it changes lifecycle/context prose. If the closure also materially changes merge/review policy, security/authority semantics or another review-significant guarantee, the normal semantic-review rule applies.
 
 ## 3. One slice = one branch/PR
 
@@ -122,16 +129,87 @@ All PR bodies contain exactly these ordered sections: Goal, Changes, Verificatio
 
 ## 6. Review/merge discipline
 
+For material production/runtime/frontend/security/recovery/concurrency/identity/authority/acceptance changes, independent semantic review is mandatory after this policy is adopted. Material changes to the repository's own merge/review policy are also review-significant after adoption.
+
+The primary review mechanism is a **fresh ordinary-ChatGPT context** using `.agents/skills/code-review/SKILL.md`. ChatGPT Work, Workspace Agents, Codex automation and Codex Review do not substitute for it.
+
+Codex Review remains an optional additional reviewer when quota is available. Codex quota exhaustion is recorded explicitly but is not a merge blocker when the mandatory ordinary-ChatGPT review and all other gates pass.
+
+### Review identity
+
+Freeze the intended review identity before requesting semantic review:
+
+```text
+REVIEW_REQUEST_V1
+repository=<owner/repo>
+pr_number=<number>
+base_sha=<40-hex SHA>
+head_sha=<40-hex SHA>
+review_skill=code-review
+review_skill_version=<expected version>
+```
+
+The reviewer verifies the live PR still has exactly that base/head and reviews `BASE_SHA..HEAD_SHA`. Review policy comes from `BASE_SHA`; target code/docs/tests and applicable target-specific skills come from `HEAD_SHA`.
+
+A one-time ordinary ChatGPT Scheduled Task may only be a launcher when it can truthfully establish the fresh-context contract defined by the skill. Otherwise use a manually opened fresh ordinary-ChatGPT conversation.
+
+### Required sequence
+
+For an applicable PR:
+
+```text
+implementation
+ -> focused tests
+ -> preliminary required hosted CI on intended head
+ -> freeze BASE_SHA + HEAD_SHA
+ -> fresh ordinary ChatGPT semantic review
+ -> optional @codex review when available
+ -> validate findings as CONFIRMED / REJECTED / SUPERSEDED
+ -> fix confirmed findings
+ -> material HEAD change => previous review stale
+ -> fresh ordinary ChatGPT review on new exact head
+ -> optional fresh @codex review when useful/available
+ -> final exact-head CI / required physical gates
+ -> verify reviewed base/head still match
+ -> verify unresolved findings and GitHub review threads are empty
+ -> expected-head merge
+```
+
+A reviewer finding is not automatically project truth. The development context must verify the claimed path/evidence before changing code. `REJECTED` findings require concrete contrary evidence; `SUPERSEDED` means a later change removed/changed the path and normally requires fresh review.
+
+The independent reviewer is read-only and must not collapse `review -> self-fix -> self-approve` into one context.
+
+### Review invalidation
+
+A previous semantic review becomes stale after a material post-review change to runtime/frontend behavior, security/authorization, persistence/recovery/retry, concurrency/identity/ownership/provenance, canonical authority, verification/acceptance semantics, Product Truth readiness, acceptance tests/CI/physical gates or merge/review policy.
+
+A base-branch advance that changes the merge base also invalidates the review. Clearly non-material spelling/formatting-only deltas may preserve validity only after the exact delta is inspected and explicitly classified non-material; when uncertain, review again.
+
+### Documentation/process scope
+
+Documentation-only changes that do not materially alter process/security/acceptance/runtime semantics do not need independent semantic review. Process changes that materially change merge/review semantics do require it **after this policy is accepted**.
+
+**Adoption exception:** the PR that first introduces `.agents/skills/code-review/SKILL.md` and this mandatory-review discipline is itself evaluated under the previously accepted merge policy. The new rule governs subsequent applicable PRs after the adoption PR merges.
+
+### Ready/merge gate
+
 Before Ready for review:
 
 - code/tests/docs/context agree;
 - focused tests pass;
 - context validator passes;
-- lifecycle is review and PR non-draft;
-- exact review head passes every required check;
-- unresolved review threads are empty.
+- lifecycle is review and PR non-draft.
 
-Merge using an expected head SHA where tooling supports it. After merge, close context to idle through the protected-main closure procedure before handoff promotion.
+Before merge:
+
+- when semantic review is required, a fresh `REVIEW_RESULT_V1` is current for the exact live `BASE_SHA..HEAD_SHA` and every reported finding is resolved/classified;
+- optional Codex findings, when available, are likewise validated rather than blindly accepted;
+- exact final head passes every required check and required physical gate;
+- unresolved GitHub review threads are empty;
+- live PR base/head still match the reviewed identity;
+- merge uses an expected head SHA where tooling supports it.
+
+After merge, close context to idle through the protected-main closure procedure before handoff promotion.
 
 ## 7. Multi-agent discipline
 
