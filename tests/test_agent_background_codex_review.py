@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import multiprocessing
 import tempfile
 import threading
 import unittest
@@ -41,14 +42,14 @@ from uv_studio.projects.timeline import TimelineStore
 
 
 class _PausingProductionService(ProductionSemanticService):
-    def __init__(self, *args, entered: threading.Event, release: threading.Event, **kwargs) -> None:
+    def __init__(self, *args, entered, release, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.entered = entered
         self.release = release
 
     def _commit_production(self, *args, **kwargs):
         self.entered.set()
-        if not self.release.wait(timeout=3.0):
+        if not self.release.wait(timeout=10.0):
             raise AssertionError("production concurrency test was not released")
         return super()._commit_production(*args, **kwargs)
 
@@ -96,6 +97,27 @@ class _PausingGenerationService(GenerationService):
         if self.release is not None and not self.release.wait(timeout=3.0):
             raise AssertionError("generation concurrency test was not released")
         return super().prepare(*args, **kwargs)
+
+
+def _production_process_call(
+    root: str,
+    project_id: str,
+    scene_id: str,
+    title: str,
+    entered,
+    release,
+    finished,
+    pause: bool,
+) -> None:
+    store = ProjectStore(Path(root))
+    if pause:
+        service = _PausingProductionService(store, entered=entered, release=release)
+    else:
+        service = ProductionSemanticService(store)
+    try:
+        service.create_scene(project_id, scene_id=scene_id, title=title)
+    finally:
+        finished.set()
 
 
 class AgentBackgroundCodexReviewTests(unittest.TestCase):
@@ -215,6 +237,70 @@ class AgentBackgroundCodexReviewTests(unittest.TestCase):
         self.assertEqual(
             {scene.scene_id for scene in scenes},
             {"scene_first_runtime", "scene_second_runtime"},
+        )
+
+    def test_production_project_fence_serializes_independent_processes(self) -> None:
+        context = multiprocessing.get_context("spawn")
+        entered = context.Event()
+        release = context.Event()
+        first_finished = context.Event()
+        second_finished = context.Event()
+        root = str(self.root)
+
+        first = context.Process(
+            target=_production_process_call,
+            args=(
+                root,
+                self.project.project_id,
+                "scene_first_process",
+                "First process",
+                entered,
+                release,
+                first_finished,
+                True,
+            ),
+        )
+        second = context.Process(
+            target=_production_process_call,
+            args=(
+                root,
+                self.project.project_id,
+                "scene_second_process",
+                "Second process",
+                entered,
+                release,
+                second_finished,
+                False,
+            ),
+        )
+
+        first.start()
+        self.assertTrue(entered.wait(timeout=5.0))
+        second.start()
+        self.assertFalse(
+            second_finished.wait(timeout=0.5),
+            "second process crossed the project OS fence while first process still owned it",
+        )
+        release.set()
+        first.join(timeout=10.0)
+        second.join(timeout=10.0)
+        if first.is_alive():
+            first.terminate()
+            first.join(timeout=2.0)
+        if second.is_alive():
+            second.terminate()
+            second.join(timeout=2.0)
+        self.assertEqual(first.exitcode, 0)
+        self.assertEqual(second.exitcode, 0)
+        self.assertTrue(first_finished.is_set())
+        self.assertTrue(second_finished.is_set())
+
+        scenes = ProductionSemanticService(ProjectStore(self.root)).state(
+            self.project.project_id
+        ).scenes
+        self.assertEqual(
+            {scene.scene_id for scene in scenes},
+            {"scene_first_process", "scene_second_process"},
         )
 
     def test_timeline_read_modify_commit_is_serialized_across_store_runtimes(self) -> None:
