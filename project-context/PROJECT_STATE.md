@@ -36,10 +36,10 @@ The exact caller/migration map is recorded in `docs/architecture/LEGACY_SURFACE_
 4. **Recipe Registry and `/execution-plan` are compatibility seams, not modern authorities.** `/api/uv/recipes` still serves legacy creation/metadata; `/execution-plan` still resolves `project.recipe_id` and overlays Stage8 Capability readiness.
 5. **Product Orchestrator is mixed legacy composition over useful modern/domain primitives.** Its HTTP seam dispatches by recipe, but already delegates to Dubbing, Targeted Edit, Music and Capability authorities that must survive extraction.
 6. **Stage8 remains live compatibility.** Its workspace API/state, legacy editor panels and API/browser tests cannot be removed before persisted-project migration.
-7. **Donor Workflow/Pipeline/Sandbox UI is the first retirement candidate.** No supported Next app route was identified for those donor roots; modern routes do not use `workflowApi`, and the live legacy project route uses `productWorkflowApi`. GitHub Code Search was incomplete, so the retirement PR must still prove exact recursive zero supported callers before deletion.
+7. **Donor Workflow/Pipeline/Sandbox UI is the first retirement candidate, but `workflowApi.ts` is mixed.** The donor roots have no supported Next app route, while `/settings -> modelRegistry.ts -> workflowApi.fetchApiModels` is a real supported caller. `donor-ui-retirement` must first move `fetchApiModels` to a modern model/capability client and only then delete the donor-only remainder after exact zero-caller proof.
 8. **Historical “Stage 6” is not treated as a deletion unit.** The inventory classifies concrete surviving paths; no dedicated current Stage-6 runtime authority has been positively established, and incomplete code search is not accepted as absence proof.
 
-The supported route tree and the live legacy page imports were independently rechecked before review. That evidence supports `donor-ui-retirement` as the first bounded candidate without claiming its zero-caller deletion gate already passed.
+The supported route tree, the live legacy page imports, and the Settings/modelRegistry caller were independently rechecked during review. That evidence still supports `donor-ui-retirement` as the first bounded candidate without claiming its zero-caller deletion gate already passed.
 
 ## No-new-caller rule
 
@@ -55,7 +55,7 @@ Dubbing, targeted edit, continuity and music are not deleted as collateral damag
 
 The inventory supports this order:
 
-1. `donor-ui-retirement`;
+1. `donor-ui-retirement` — extract the supported Settings model lookup from `workflowApi.ts`, then retire only donor-only UI/client remainder after zero-caller proof;
 2. `project-identity-v2-compat-reader`;
 3. `recipe-entrypoint-retirement`;
 4. `execution-plan-retirement`;
@@ -77,7 +77,7 @@ Existing tests prove important pieces separately, but the D-070 golden-vertical 
 
 ## Verification state
 
-Draft head `c72d0ac12aae79bcb8f3dd63f4111256962181c8` passed CI run #3716 before the review transition. The review transition changes context metadata only, so the exact review head must receive a fresh full permanent CI pass before merge.
+Draft head `c72d0ac12aae79bcb8f3dd63f4111256962181c8` passed CI run #3716 before the review transition. Exact review head `2b589aa78ade48e631363c13d99f45287eb6c1b5` entered full permanent CI and Codex review; Codex found the supported Settings/modelRegistry caller omitted from the first `workflowApi.ts` classification. That concrete P2 is being corrected in documentation/context only, so the corrected final head must receive a fresh full permanent CI pass before merge.
 
 PR #77 has no runtime/product implementation diff. Review must confirm the caller/migration table, persisted-project gates, bounded retirement sequence and no-new-caller rule without treating incomplete GitHub Code Search as zero-caller proof.
 
@@ -89,6 +89,6 @@ This risk is recorded so it is not lost, but PR #77 does not modify runtime beha
 
 ## Handoff
 
-The next slice is `donor-ui-retirement`, conditional on this inventory being accepted and on that slice independently satisfying exact recursive zero-caller, route, build and browser proof.
+The next slice is `donor-ui-retirement`, conditional on this inventory being accepted. Its first prerequisite is migrating `/settings -> modelRegistry.ts -> fetchApiModels` to a modern model/capability client; only then may the donor-only `workflowApi.ts` remainder and donor UI be deleted after exact recursive zero-caller, route, build and browser proof.
 
 D-066 layers 5-7 remain deferred until both D-070 gates are satisfied.
