@@ -34,7 +34,8 @@ GitHub Code Search returned `incomplete_results=true` for repository symbol sear
 - **supported route proof** — the Next app tree contains `/`, `/projects`, `/projects/[projectId]`, `/projects/[projectId]/studio`, `/settings`; there is no supported Workflow/Pipeline/Sandbox app route;
 - **known internal donor edges** — donor roots import `workflowApi`, `BrandHeader`, `TopBar` and `components/stages/**` directly;
 - **supported shared-client edge** — `/settings` imports `frontend/lib/modelRegistry.ts`, which imports `fetchApiModels` from `frontend/lib/workflowApi.ts`; that function must move to a modern model/capability client before the remaining donor client can be deleted;
-- **final deletion proof** — the retirement PR must run an exact recursive import/reference scan from its checkout, then lint + production build + permanent browser/API CI after deletion.
+- **repository automation edge** — `.github/workflows/promote-frontend.yml` is manually dispatchable and runs `python tools/promote_frontend.py --force`; that code removes the UV-owned `frontend/` directory and replaces it from the pinned VideoClaw frontend, so the destructive reset path must be disabled or replaced before donor retirement can be durable;
+- **final deletion proof** — the retirement PR must run an exact recursive import/reference scan from its checkout, prove no automation can restore the deleted donor surfaces, then lint + production build + permanent browser/API CI after deletion.
 
 The inventory may nominate a first deletion candidate from route/caller evidence, but only the retirement PR may claim the zero-caller gate satisfied.
 
@@ -82,6 +83,7 @@ The inventory may nominate a first deletion candidate from route/caller evidence
 | `frontend/components/BrandHeader.tsx` | **DELETE LATER** | known donor callers PipelinePage/Sandbox | `AppShell` / UV Studio branding | recursive import scan after donor roots removed |
 | `frontend/components/stages/**` | **DELETE LATER** | old `WorkflowPanel` six-stage state/UI | Production Directions + shared Scene/Shot/Take + Studio | recursive import scan; do not delete live editor Stage8 panels by name similarity |
 | `frontend/lib/workflowApi.ts` | **ADAPT → DELETE LATER** | mixed client: donor Workflow/Pipeline/Sandbox calls plus supported `/settings -> modelRegistry.ts -> fetchApiModels` model lookup | move `fetchApiModels` to a modern model/capability client; delete donor-only remainder after callers move | first prove Settings/modelRegistry uses the new client with unchanged model-selection behavior; then exact recursive scan proves no supported caller remains; donor roots gone; lint/build/browser CI green |
+| manual donor frontend reset (`.github/workflows/promote-frontend.yml` + `tools/promote_frontend.py --force`) | **ADAPT → DELETE LATER** | `workflow_dispatch` can destructively replace all UV-owned `frontend/` bytes with the pinned VideoClaw frontend and commit/push them back | provenance verification/check-only path that cannot overwrite the maintained frontend; explicit archival/reset flow outside product branch if still needed | disable or replace the destructive workflow before donor deletion; prove no repository automation can restore retired donor files; retain any required upstream provenance verification without write authority over `frontend/` |
 | donor pipeline/session/sandbox backend from pinned upstream | **DELETE LATER / VENDOR COMPAT** | full upstream route table is not mounted by UV server; pinned vendor remains compile/provenance input | UV-owned Capability/Generation/domain routes | dependency/package/provenance proof shows no adapter still imports required donor runtime modules |
 | VideoClaw backend `sys.path` injection in `uv_studio/server.py` | **DELETE LATER** | supports exact compatibility imports from pinned vendor tree even though full route table is unmounted | normal package/adapters without global path injection | import graph + package/bootstrap proof on Windows/Ubuntu; remove separately from donor frontend |
 
@@ -150,7 +152,7 @@ Current supported route structure:
 
 Modern creation already uses `listProductionDirections()` + `createStudioProject()` and opens `/studio`. The modern workspace uses Project/Timeline/History, Production semantics, Generation and Studio components rather than `productWorkflowApi`.
 
-The donor Workflow/Pipeline/Sandbox components are physically present and compile, but no corresponding supported `app/` route is identified. They remain the safest **component roots** for the first retirement slice. However, `workflowApi.ts` itself is mixed: `/settings` reaches `fetchApiModels` through `modelRegistry.ts`. The first retirement slice must extract that supported model lookup before deleting the donor-only remainder of the client, and must still satisfy the strict recursive zero-caller/build gate above.
+The donor Workflow/Pipeline/Sandbox components are physically present and compile, but no corresponding supported `app/` route is identified. They remain the safest **component roots** for the first retirement slice. However, `workflowApi.ts` itself is mixed: `/settings` reaches `fetchApiModels` through `modelRegistry.ts`. The first retirement slice must extract that supported model lookup before deleting the donor-only remainder of the client. It must also disable or replace the manually dispatchable destructive frontend reset, otherwise repository automation could restore the donor UI after a successful deletion. The slice must still satisfy the strict recursive zero-caller/build gate above.
 
 ## 10. Tests that currently bind compatibility behavior
 
@@ -197,7 +199,7 @@ If Agent participates in that proof:
 
 The intended order is deliberately small-slice and dependency-aware:
 
-1. **`donor-ui-retirement`** — first move the supported `workflowApi.fetchApiModels` dependency used by `/settings -> modelRegistry.ts` to a modern model/capability client; then remove only the unrouted donor Workflow/Pipeline/Sandbox/stage UI and donor-only remainder of frontend client glue after exact recursive zero-caller proof; retire `/api/stages` only if that same proof shows no supported caller.
+1. **`donor-ui-retirement`** — first disable or replace the destructive `promote-frontend.yml -> promote_frontend.py --force` reset path so retired donor UI cannot be reintroduced; move the supported `workflowApi.fetchApiModels` dependency used by `/settings -> modelRegistry.ts` to a modern model/capability client; then remove only the unrouted donor Workflow/Pipeline/Sandbox/stage UI and donor-only remainder of frontend client glue after exact recursive zero-caller proof; retire `/api/stages` only if that same proof shows no supported caller.
 2. **`project-identity-v2-compat-reader`** — add explicit modern schema/identity migration while preserving schema-v1 import/read compatibility; modern project identity stops depending on recipe semantics.
 3. **`recipe-entrypoint-retirement`** — move remaining modern/creation callers from Recipe Registry and `/api/uv/recipes`; retain only bounded compatibility metadata if still required.
 4. **`execution-plan-retirement`** — replace `/execution-plan` with direct canonical Production/Generation/Capability readiness and migrate its tests.
@@ -217,9 +219,10 @@ The caller map supports `donor-ui-retirement` as the provisional first bounded s
 - modern project creation and Studio routes do not import those donor roots;
 - the live legacy `/projects/[projectId]` route uses `productWorkflowApi`, not the donor workflow UI;
 - the only supported caller found inside `workflowApi.ts` is the model-listing seam `/settings -> modelRegistry.ts -> fetchApiModels`, which can be extracted first rather than forcing retention of the donor UI;
+- the current manual frontend reset can reintroduce the entire donor frontend, so that write path must be disabled/replaced before deletion is considered durable;
 - removing donor UI does not require changing schema-v1 project identity or Stage8 persisted state.
 
-This is a **candidate, not a deletion claim**. The follow-up PR must first preserve Settings/model selection through the extracted modern client, then prove exact recursive zero supported callers for every deleted donor file/client remainder and preserve the supported route/build/browser contract.
+This is a **candidate, not a deletion claim**. The follow-up PR must first remove the destructive donor reset authority, preserve Settings/model selection through the extracted modern client, then prove exact recursive zero supported callers for every deleted donor file/client remainder and preserve the supported route/build/browser contract.
 
 ## 14. Known adjacent defect — not part of this inventory
 
