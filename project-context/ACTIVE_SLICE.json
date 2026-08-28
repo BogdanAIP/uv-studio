@@ -8,7 +8,7 @@
     "goal": "Retire supported donor-UI restoration authority, isolate the supported model-listing client, and remove donor-only frontend/client residue without deleting live compatibility surfaces.",
     "base_branch": "main",
     "branch": "chore/donor-ui-retirement",
-    "pull_request": null,
+    "pull_request": 82,
     "write_scope": [
       ".github/workflows/ci.yml",
       ".github/workflows/promote-frontend.yml",
