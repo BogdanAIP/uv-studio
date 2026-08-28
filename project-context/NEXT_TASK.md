@@ -1,48 +1,32 @@
 # Next Task
 
-<!-- uv-next-slice: donor-ui-retirement -->
+<!-- uv-next-slice: project-identity-v2-compat-reader -->
+
+## Target
+
+Implement `project-identity-v2-compat-reader` as the next bounded D-070 migration slice.
 
 ## Goal
 
-After `architecture-compression-inventory` is accepted, merged and lifecycle-closed, perform the first bounded retirement slice by first removing every supported mechanism that can restore donor frontend state, extracting the one supported model-listing dependency currently shared through donor-era client glue, and only then removing donor frontend workflow surfaces whose zero-supported-caller gate is actually proven.
+Preserve supported schema-v1 project readability while moving modern callers away from direct legacy `recipe_id` interpretation and toward canonical project/production-direction identity.
 
-The expected deletion group is the old VideoClaw-style Workflow/Pipeline/Sandbox/stage UI and the donor-only remainder of its client glue. Two prerequisites must be satisfied before that deletion:
+## Scope
 
-1. Donor frontend restoration is currently possible through more than the manually dispatched force-reset workflow. `.github/workflows/promote-frontend.yml` runs `python tools/promote_frontend.py --force`, which can replace the maintained UV-owned `frontend/`; plain `python tools/promote_frontend.py` also recreates the pinned donor frontend when `frontend/` is absent. `tools/uv_dev.py` and Windows `scripts/setup-dev.ps1` currently direct developers to the plain command when frontend files are missing, and `docs/FRONTEND.md` documents the promotion/provenance mechanism. `tests/test_promote_frontend.py` deliberately verifies the current no-force creation and force-replacement behavior, while `.github/workflows/ci.yml` runs that unit suite and separately invokes `tools/promote_frontend.py --check`. The retirement slice must disable, remove or safely replace every supported write-capable donor restoration entry point, migrate its callers/guidance/tests, and preserve any intended provenance verification as check-only/read-only before claiming donor UI retirement.
-2. `frontend/lib/workflowApi.ts` is **not** wholly donor-only today: supported `/settings` reaches `fetchApiModels` through `frontend/lib/modelRegistry.ts`. That model lookup must move to a modern model/capability client without changing Settings behavior.
-
-## Required direction
-
-- start only from lifecycle-idle `main` after the inventory PR is merged and closed;
-- first disable, remove or replace all supported pinned-frontend restoration paths so repository automation, developer tooling, setup scripts, tests, or documented recovery guidance cannot recreate the donor VideoClaw tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` with and without `--force`, `tools/uv_dev.py`, Windows `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, `tests/test_promote_frontend.py`, and the promotion/provenance checks in `.github/workflows/ci.yml`;
-- replace tests that currently assert write-capable promotion with tests for the retained safe/read-only provenance contract; keep CI provenance validation if still required, but it must not depend on write authority over the maintained `frontend/` tree;
-- retain no equivalent whole-frontend restore under another command/workflow name;
-- move `fetchApiModels` used by `/settings -> modelRegistry.ts` out of `workflowApi.ts` into an appropriate modern model/capability API client, preserving the existing model-listing/filter contract;
-- only after both prerequisites are proven, remove donor Workflow/Pipeline/Sandbox/stage roots and any `workflowApi.ts` remainder that an exact recursive scan proves has no supported caller;
-- remove only items classified **DELETE LATER** whose deletion gate is fully satisfied by the accepted inventory; treat mixed **ADAPT → DELETE LATER** glue as extract-first;
-- do not remove the live legacy `/projects/[projectId]` compatibility route merely because donor components are removed;
-- do not conflate `frontend/components/stages/**` donor workflow UI with live Stage 8 editor panels such as `Stage8CompositionPanel` / `Stage8MediaPanel`;
-- do not remove Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 API/workspace, schema-v1 `recipe_id`, or useful dubbing/music/continuity/targeted-edit domain state in this slice;
-- preserve the modern `/projects/[projectId]/studio` route and Production Direction creation path;
-- preserve `/settings` and its model selection behavior;
-- preserve Stage-18 mutation/recovery guarantees.
+- inventory remaining live schema-v1 identity readers after donor UI retirement;
+- centralize legacy identity interpretation behind an explicit compatibility reader;
+- move modern callers to canonical project and production-direction identity where available;
+- preserve legacy read/round-trip behavior;
+- leave Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 and later retirement targets for their planned slices.
 
 ## Required proof
 
-At minimum:
+- exact caller inventory;
+- focused legacy/current identity fixtures;
+- no silent identity rewrite or loss of legacy readability;
+- context validation and permanent Ubuntu/Windows CI;
+- required exact-base/exact-head fresh ordinary-ChatGPT semantic review;
+- zero unresolved findings and review threads before merge.
 
-- direct proof that no enabled repository workflow, developer tool, setup script, unit test expectation, or documented supported recovery path can restore the pinned donor frontend over the UV-owned `frontend/` tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py --force`, plain `tools/promote_frontend.py` when `frontend/` is absent, `tools/uv_dev.py`, `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, and `tests/test_promote_frontend.py`;
-- direct proof that `.github/workflows/ci.yml` retains only the intended read-only provenance/check contract and no CI path depends on donor promotion writes;
-- direct proof that any retained provenance command is check-only/read-only with respect to `frontend/`;
-- direct proof that `/settings -> modelRegistry.ts` no longer imports model listing from `workflowApi.ts` and still receives the expected filtered model groups;
-- exact recursive zero-supported-caller proof for every removed frontend file/client remainder;
-- Next.js route inventory showing supported routes remain unchanged, including `/settings`;
-- frontend lint and production build pass;
-- permanent Ubuntu/Windows repository checks pass;
-- browser coverage confirms supported Settings/Projects/Studio/legacy compatibility routes remain usable;
-- no supported legacy project route or persisted project becomes unreadable;
-- no new compatibility fallback, setup command, test fixture, documented recovery instruction or reset mechanism is introduced that recreates the deleted donor UI.
+## Out of scope
 
-## Entry gate
-
-Begin only after the accepted `architecture-compression-inventory` confirms this restore-safe, extract-first `donor-ui-retirement` boundary and the repository is lifecycle-idle.
+Do not combine later recipe-entrypoint, execution-plan, Product Orchestrator or Stage 8 runtime retirement into this slice.
