@@ -1,5 +1,20 @@
 """Bounded UV-owned Agent Harness foundation and D-066 orchestration layers."""
 
+from .background import (
+    AGENT_BACKGROUND_LEASE_SCHEMA_VERSION,
+    MAX_BACKGROUND_CLAIMS_PER_TASK,
+    MAX_BACKGROUND_TASK_BUDGET,
+    AgentBackgroundClaim,
+    AgentBackgroundContextStale,
+    AgentBackgroundError,
+    AgentBackgroundLeaseConflict,
+    AgentBackgroundLeaseRecord,
+    AgentBackgroundLeaseStale,
+    AgentBackgroundLeaseStore,
+    AgentBackgroundRetryLimit,
+    AgentBackgroundTaskCoordinator,
+    AgentBackgroundWorker,
+)
 from .harness import AgentActionCatalog, AgentContextBuilder, AgentHarness, AgentTraceStore
 from .models import (
     AgentActionDefinition,
@@ -50,10 +65,23 @@ from .stage17_provenance import (
 )
 
 __all__ = [
+    "AGENT_BACKGROUND_LEASE_SCHEMA_VERSION",
     "AGENT_SKILL_SCHEMA_VERSION",
     "AGENT_SUBAGENT_SCHEMA_VERSION",
+    "MAX_BACKGROUND_CLAIMS_PER_TASK",
+    "MAX_BACKGROUND_TASK_BUDGET",
     "AgentActionCatalog",
     "AgentActionDefinition",
+    "AgentBackgroundClaim",
+    "AgentBackgroundContextStale",
+    "AgentBackgroundError",
+    "AgentBackgroundLeaseConflict",
+    "AgentBackgroundLeaseRecord",
+    "AgentBackgroundLeaseStale",
+    "AgentBackgroundLeaseStore",
+    "AgentBackgroundRetryLimit",
+    "AgentBackgroundTaskCoordinator",
+    "AgentBackgroundWorker",
     "AgentContextBuilder",
     "AgentContextSnapshot",
     "AgentHarness",
