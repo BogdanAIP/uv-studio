@@ -98,8 +98,10 @@ class ProductionDocumentStore:
         document_id: str,
         document: Mapping[str, Any],
     ) -> dict[str, Any]:
+        from uv_studio.projects.task_records import ProjectTaskRecordStore
+
         payload = validate_production_document(document)
-        with self.project_store._lock:
+        with ProjectTaskRecordStore(self.project_store).project_lock(project_id), self.project_store._lock:
             self.project_store.load_project(project_id)
             try:
                 self.project_store._atomic_write_json(

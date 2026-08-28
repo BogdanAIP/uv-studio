@@ -8,6 +8,7 @@
 **Product Truth:** D-067  
 **Desktop updates:** D-068  
 **Stateful generation lineage:** D-069  
+**Product-first sequencing gate:** D-070  
 **Editor foundation:** D-033
 
 This document describes the current UV Studio target and the concrete implementation boundary. Historical Recipe Registry, Product Orchestrator and numbered Stage workspaces remain compatibility/migration code unless a later accepted decision explicitly promotes them.
@@ -38,6 +39,7 @@ Project Store
  -> Shared Studio Core
       Media / Preview / Inspector / canonical Timeline
  -> Studio / Application Commands
+ -> shared cross-runtime project mutation fence
  -> ProjectUnitOfWork / durable Undo-Redo
  -> Model Registry
  -> Generation Job Manager / GenerationContract
@@ -45,10 +47,10 @@ Project Store
       Context / Catalog / Policy / Trace              [Stage 15 merged]
       Planner / durable Tasks / Skills                [Stage 16 merged]
       functional Subagents                            [Stage 17 merged]
-      background Agent execution                      [next layer 4]
-      evaluate / repair                               [later layer 5]
-      takeover / edit / resume                        [later layer 6]
-      long-form autonomy                              [later layer 7]
+      bounded background Agent execution              [Stage 18 active review, PR #75]
+      evaluate / dependency-aware repair              [deferred by D-070 product gate]
+      takeover / edit / resume                        [deferred by D-070 product gate]
+      long-form autonomy                              [deferred by D-070 product gate]
  -> Capability Registry / D-017 / adapters
  -> MLT / FFmpeg / MCP / local / optional remote execution
 ```
@@ -58,6 +60,8 @@ Cross-cutting verification:
 ```text
 current docs <-> Product Truth records <-> backend/API <-> frontend <-> E2E
 Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged]
+Stage-18 leases/fencing/recovery <-> exact-head CI + focused Codex review [PR #75 review]
+D-070 product sequencing <-> legacy caller inventory + micro_drama golden vertical [next after Stage 18]
 ```
 
 ## Canonical authorities
@@ -68,12 +72,14 @@ Stage-16/17 guarantees <-> curated adversarial/mutation assurance [PR #73 merged
 - **Direction Extensions** own genuinely direction-specific data while referencing shared identities.
 - **Canonical Timeline** is UV-owned assembly state; MLT remains derived behind the D-033 adapter.
 - **Studio/Application Commands** are the semantic mutation boundary for GUI, Agent, scripts and MCP.
+- **Shared project mutation fence** is the existing re-entrant cross-process `ProjectTaskRecordStore.project_lock`; Production/Timeline semantic commands, ProjectUnitOfWork and bounded Generation reservation reuse it instead of creating an Agent-only lock authority.
 - **ProjectUnitOfWork** owns canonical multi-document mutations and durable Undo/Redo.
 - **Model Registry** owns meaningful named-model identity above provider/adapter transport.
 - **Generation Job Manager** owns project-scoped generation lifecycle, idempotency, attempts and execution provenance.
 - **Agent Harness** orchestrates work over the same commands/models/jobs/capabilities; it never owns a second project graph or private mutation path.
 - **Capability Registry / D-017 / adapters** own execution availability, effects, authorization and transport.
 - **Product Truth Contracts** are verification metadata, not runtime product state.
+- **D-070 sequencing** defers further Agent-autonomy layers after Stage 18 until legacy/modern product-composition overlap is inventoried and one user-visible golden vertical is proven.
 - **Update Service** remains the accepted future desktop release authority for in-place updates; it is not implemented by the current Agent slices.
 
 ## Production semantics versus Timeline
@@ -112,6 +118,9 @@ Important invariants:
 - same idempotency key + same normalized request digest reuses the Job;
 - same key + different digest fails closed;
 - a fresh key permits intentional creative reroll;
+- same-key lookup, D-017 consumption and durable Job reservation are one shared cross-runtime project critical section for all `GenerationService.submit` callers;
+- `GenerationJobManager.create_or_reuse` uses the same shared fence for direct reservation;
+- long provider execution is outside the project mutation fence and remains owned by the Job/Attempt lifecycle;
 - restart never silently replays abandoned external work;
 - D-017 remains separate from idempotency and is required for every fresh remote/non-free execution that needs consent;
 - provider prompt text and provider-private cache/session/latent state are not canonical project truth;
@@ -121,44 +130,22 @@ A real InfinityEdit/Helios adapter and visible Continue/Edit surface are not cur
 
 ## Agent Harness layer 1 — Stage 15 merged
 
-PR #69 implemented the first D-066 layer and was lifecycle-closed before Stage 16 opened.
+PR #69 implemented the first D-066 layer.
 
-### Context Builder
+`AgentContextBuilder` creates a deterministic bounded observation from canonical Project / Production / Timeline / Model / Job authorities. It is an Agent observation contract, **not an exact canonical concurrency/version token**. `AgentActionCatalog` exposes only existing UV command authorities. Policy projects existing capability/D-017 facts but cannot self-authorize. `AgentTraceStore` persists bounded append-only project-scoped execution evidence under the existing `tasks/` authority.
 
-`AgentContextBuilder` creates a deterministic bounded observation from canonical Project / Production / Timeline / Model / Job authorities. It uses bounded nested collections and omitted counts; it does not copy the project into an Agent-owned graph.
-
-### Existing-authority action catalog
-
-`AgentActionCatalog` exposes stable metadata only over existing UV authorities:
-
-- ProductionSemanticService actions;
-- TimelineCommandService actions;
-- named generation through GenerationService.
-
-The catalog exposes effects, authority, input contract, Job Manager routing and possible D-017 routing. There is no generic `project.write_file`, shell, Python or arbitrary provider command.
-
-### Policy
-
-Agent policy projects existing availability/locality/cost/`CapabilityEffects`/D-017 facts. It may report that consent is required but cannot grant consent.
-
-### Inspectable trace
-
-`AgentTraceStore` keeps append-only project-scoped execution history under the existing `tasks/` authority. Trace binds context digest, action/policy/effects, canonical identities, result references and sanitized failures while excluding raw prompts, authorization tokens, secrets, absolute host paths and provider-private state.
-
-### Execution seam
-
-`AgentHarness` delegates canonical mutation to the same Production/Timeline/Generation services used by other callers. Stage 15 proved success and failure tracing, unavailable models, D-017 separation, bounded context and restart/reopen.
+`AgentHarness` delegates canonical mutation to the same Production/Timeline/Generation services used by other callers. There is no generic project file write, shell, Python or arbitrary provider command.
 
 ## Agent Harness layer 2 — Stage 16 merged
 
-PR #70 implemented the second D-066 layer and merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2` after exact-head CI #3442 passed all five permanent jobs and a fresh Codex review found no major issues.
+PR #70 merged as `bd258b7564f864c7f5fe636cb1336515f0dacce2` after exact-head CI and review.
 
-The merged layer adds orchestration above Stage 15 without changing canonical authorities:
+The merged layer adds:
 
 ```text
 bounded goal
  -> Stage-15 Context + Action Catalog + Policy
- -> AgentPlanner validates structured proposal
+ -> UV-validated structured Planner proposal
  -> append-only AgentPlanRecord
  -> durable dependency-aware AgentTaskRecord state
  -> bounded Skill expansion
@@ -168,17 +155,9 @@ bounded goal
  -> Stage-15 trace + canonical result references
 ```
 
-### Planner
+Plans and task records live under the existing project `tasks/` root through `ProjectTaskRecordStore`; they are orchestration state, not Generation Jobs, production truth or Undo history.
 
-The Planner contract is structured and UV-validated rather than hidden free-form reasoning. It validates bounded step/task counts, stable IDs, action/Skill identities, portable inputs, dependency references, cycles, policy availability, canonical context binding and canonical prerequisites against current state/dependency closure.
-
-A future model may propose this structured plan; UV validation remains deterministic and authoritative.
-
-### Durable Agent Tasks
-
-Plans and task records use the existing project `tasks/` root via `ProjectTaskRecordStore`. Agent Tasks are orchestration state, not Generation Jobs, production truth or Undo history.
-
-Current bounded state machine:
+Current task state machine:
 
 ```text
 planned -> ready -> running -> succeeded
@@ -187,78 +166,152 @@ planned -> ready -> running -> succeeded
    |-> cancelled
 ```
 
-Dependencies unlock only after success. A failure does not falsely unlock downstream tasks or mark the plan successful. Cross-runtime CAS/locking and restart reconciliation prevent stale task-state overwrites and silent replay.
+Dependencies unlock only after success. A failure keeps dependants blocked and does not falsely mark them successful. Cross-runtime CAS/locking and restart reconciliation prevent stale task-state overwrites and silent replay.
 
-### Skills
+Skills remain bounded procedures over approved Agent actions and inherit their effects/authority envelope. They do not gain shell, Python, arbitrary filesystem/provider or D-017 bypass rights.
 
-Skills are reusable bounded procedures over approved Agent catalog actions. The first architecture-proof Skill is `production.scene_with_shot`, which expands into `production.create_scene` followed by dependent `production.create_shot`.
-
-Skills derive their effects/authority envelope from underlying catalog actions and do not gain shell, Python, arbitrary filesystem/provider or D-017 bypass rights.
-
-### Foreground execution and recovery boundary
-
-Stage 16 executes runnable tasks in the foreground through `AgentHarness`. It durably binds execution-time context/policy and typed task correlation before canonical/cost-bearing dispatch. Production/Timeline recovery reuses committed `ProjectUnitOfWork` evidence; generation recovery requires exact Job/idempotency/request/mapping evidence and never silently resubmits.
-
-Stage 16 remains internal infrastructure. It is not a user-visible autonomous-Agent readiness claim and therefore does not invent a D-067 product claim without a real Studio surface and browser proof.
+Stage 16 recovery binds execution-time context/policy/correlation before canonical or cost-bearing dispatch. Production/Timeline recovery reuses correlated ProjectUnitOfWork evidence; generation recovery requires exact Job/idempotency/request/mapping evidence and never silently resubmits.
 
 ## Agent Harness layer 3 — Stage 17 merged
 
-PR #71 (`studio-v2-agent-functional-subagents`) merged as `c3ca3c33f89f67fad97081f889934669e34befa5` and was lifecycle-closed through PR #72. It adds bounded foreground functional roles over the merged Stage-15/16 authorities without adding a second project, task, trace, permission or provider-execution authority.
+PR #71 merged as `c3ca3c33f89f67fad97081f889934669e34befa5` and was lifecycle-closed through PR #72.
 
-The merged implementation provides:
+The merged implementation provides bounded foreground functional roles:
 
-- `explore` for bounded advisory findings over explicit canonical context;
-- `plan` for structured proposals that still require the existing Stage-16 Planner before durable Plan/Task creation;
-- `media` for the bounded media/generation/Take/Timeline action subset only;
-- `critic` for read-only Plan/Task/linked-trace evidence with no automatic repair authority;
-- full role-context digests and persistence-time revalidation to reject stale or reconstructed results;
-- content-addressed typed `agent_delegate_<role>_<digest>` provenance carried through durable Plan/Task/Trace state;
-- shared Stage-16 execution/recovery preservation of durable Plan provenance;
-- foreground-only execution with no workers, leases, heartbeats or autonomous polling.
+- `explore` for advisory findings over explicit canonical context;
+- `plan` for structured proposals that still require the existing Stage-16 Planner;
+- `media` for the bounded media/generation/Take/Timeline action subset;
+- `critic` for read-only Plan/Task/linked-trace evidence with no automatic repair authority.
 
-Stage 17 is merged internal Agent infrastructure. It does not claim a user-visible autonomous-Agent product surface.
+Role output is bound to exact bounded context, assigned typed content-addressed `agent_delegate_<role>_<digest>` provenance, revalidated before persistence and carried through the existing Plan/Task/Trace path. Stage 17 does not add a second task graph, permission system, provider executor or mutation authority.
 
 ## Stage-16/17 adversarial assurance — merged verification baseline
 
-PR #73 merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. It changes verification infrastructure only and does not change production Agent semantics or canonical authorities.
+PR #73 merged as `d1413e5753c24f207faf5a20828f891c14f53aa0`. It changes verification infrastructure only.
 
-The accepted implementation adds a deterministic curated mutation runner that:
+The curated mutation runner copies the full package into an isolated overlay, verifies exact source/import provenance, first proves the detector against baseline bytes, then requires selected mutants to be killed in fresh processes. The initial guarantee set protects context/provenance/namespace/shared-authority properties on Ubuntu and Windows.
 
-- copies the full `uv_studio` package into an isolated temporary overlay and never mutates checkout source;
-- binds each named guarantee to an exact source path, baseline SHA-256, one exact replacement and one exact existing regression detector;
-- proves the detector imports the exact overlay target and expected baseline/mutated bytes;
-- first requires the detector to pass against the unmodified overlay, then runs the mutant in a fresh process;
-- classifies assertion detection as `KILLED`, a clean pass as `SURVIVED`, and source/import/harness failures as `ERROR`;
-- requires all six curated Stage-17 mutants to be killed on Ubuntu and Windows through the normal bootstrap suite.
+This is a curated assurance baseline, not exhaustive automatic mutation testing.
 
-The initial guarantees cover persistence-time role revalidation, delegation/persistence context freshness, reserved delegation namespace protection, Plan-bound provenance classification and exact AgentHarness/Project Store/Planner authority for injected Stage-17 coordinators.
+## Agent Harness layer 4 — Stage 18 active review
 
-This is a curated assurance baseline, not exhaustive automatic mutation testing. Background-worker lease/concurrency/recovery mutants are intentionally deferred until D-066 layer 4 exists.
+PR #75 (`stage-18/agent-background-execution`) is the current D-066 review slice. Stage 18 adds **bounded background execution** while preserving the merged Stage-15/16/17 authorities.
 
-## D-066 current handoff and remaining order
+The background execution model is deliberately narrow:
 
-The repository is lifecycle-idle after accepting the Stage-16/17 adversarial-assurance slice. The production D-066 baseline is merged through layer 3; background execution has not been implemented yet.
+```text
+existing durable Agent Task
+ -> short worker claim
+ -> durable lease/fencing record beside that task
+ -> RUNNING task + append-only execution evidence
+ -> execute outside the long Agent task lock
+ -> shared project mutation fence
+ -> exact canonical commit / Generation reservation
+ -> short finalize/release
+ -> existing trace / ProjectUnitOfWork / Generation Job recovery
+```
 
-The next accepted order is:
+### Lease authority
 
-1. **background Agent work** coordinated through existing Generation Job Manager and durable Agent Task boundaries;
-2. **critic/evaluation + dependency-aware repair**;
-3. **human takeover/edit/resume**;
-4. **long-form autonomous production** only after all prior boundaries are proven.
+Background leases live under the existing project `tasks/` authority and use the same cross-runtime task-record lock and compare-and-swap boundary. They are not a scheduler and do not define another task state machine.
 
-Do not collapse these layers or jump directly to long-form autonomy.
+A lease is bound to:
+
+- exact project / Plan / Task / task-record identity;
+- worker ID and bounded generation;
+- claim-time bounded Agent observation digest;
+- **exact canonical-state digest** over `project.json`, `production/**/*.json` and `timeline/**/*.json` bytes;
+- expected input digest;
+- target Shot identity when applicable;
+- frozen policy digest;
+- deterministic recovery correlation;
+- bounded acquisition/heartbeat/expiry history.
+
+The raw bearer lease token is **not portable project state**. Only its digest is durable. The raw token exists only in the ephemeral `AgentBackgroundClaim` and is excluded from `repr`; durable records reject any `lease_token` field.
+
+### Frozen policy / evidence binding
+
+The claim-time policy is persisted once through the existing Stage-16 append-only execution-evidence authority. Dispatch, heartbeat, canonical commit and finalization reload and compare that durable evidence. A caller cannot substitute a different `AgentPolicyProjection` or recovery correlation through the claim object.
+
+### Shared cross-runtime commit fence
+
+The first focused Codex review of exact head `e4e632322e9a28244f26b02bef3580c67feceace` found three valid P1 races: Production/Timeline cross-process TOCTOU, non-atomic Generation same-key reservation/D-017 consumption, and use of incomplete bounded Agent context as a Timeline freshness token.
+
+The review fix reuses the already-existing `ProjectTaskRecordStore.project_lock` as the single shared project critical section:
+
+- `ProductionSemanticService` holds it across complete semantic read -> validate/build -> ProjectUnitOfWork commit;
+- `TimelineCommandService` holds it across complete Timeline read -> validate/build -> ProjectUnitOfWork commit;
+- `ProjectUnitOfWork` holds the same fence for history recovery, snapshot derivation, prepared write and commit/undo/redo;
+- `GenerationService.submit` holds it across prepare -> same-key lookup -> D-017 consumption -> Job reservation;
+- `GenerationJobManager.create_or_reuse` uses the same fence for direct same-key reservation;
+- Agent `_commit_guard` reuses the same fence while revalidating exact lease/task/evidence and canonical freshness before the canonical effect.
+
+The lock is re-entrant across these nested authorities. It protects bounded project mutation/reservation sections only; external provider execution is deliberately outside it.
+
+### Exact freshness versus Agent observation
+
+`AgentContextBuilder.digest` remains a bounded observation digest and can omit Timeline details by design. Stage 18 therefore does **not** use it as the sole exact freshness token.
+
+At claim time Stage 18 separately hashes the exact mutation-relevant canonical JSON bytes. At dispatch and canonical commit it requires that digest to match while holding the shared project fence. A clip timing/source/reference edit that is invisible to the bounded Agent observation still invalidates the exact canonical digest and fails closed.
+
+### Recovery and replay boundary
+
+A live leased RUNNING task is not treated as abandoned by ordinary Stage-16 reopen reconciliation. After lease expiry, Stage 18 reuses the existing exact trace/ProjectUnitOfWork/Generation Job recovery contracts.
+
+- crash before canonical commit: no false success and no hidden redispatch;
+- crash after canonical commit but before Agent success bookkeeping: recover from committed canonical evidence without replay;
+- crash after lease persistence but before READY -> RUNNING: reclaim only after expiry, consuming a bounded lease generation;
+- explicit cancellation continues to use the existing Stage-16 cancellation semantics;
+- failed dependencies remain blocked according to the existing Stage-16 state machine.
+
+`AgentBackgroundWorker.run_once` and `run_until_blocked` are bounded caller-driven facades. Stage 18 does **not** add autonomous polling or a second scheduler.
+
+### Current proof boundary
+
+The Stage-18 suites cover worker exclusivity, lease expiry/reclaim, heartbeat extension, token non-persistence, frozen-policy/correlation tamper rejection, cancellation/dependency behavior, crash recovery without replay, exact Generation Job reuse/reopen and Stage-17 delegation provenance.
+
+Focused Codex-P1 regressions additionally prove:
+
+- independent Production runtimes serialize full read/modify/commit and preserve both changes;
+- independent Timeline runtimes serialize full read/modify/commit and preserve both changes;
+- a real `spawn` multiprocessing test exercises the OS-level project fence between independent Python processes on the permanent Ubuntu/Windows unit jobs;
+- concurrent same-key Generation submissions create/reuse one durable Job and consume authorization once;
+- a Timeline timing edit deliberately leaves the bounded Agent context digest unchanged while the separate exact canonical digest rejects the stale background claim.
+
+The first Codex P1 review is addressed by the current review-fix series. PR #75 remains unmerged until the final synchronized exact review head passes all five permanent CI jobs, the original P1 threads are answered, and Codex re-reviews that exact head with no remaining concrete blocker.
+
+Stage 18 remains internal infrastructure. It does not claim a visible autonomous Agent product.
+
+## D-070 product-first handoff before further D-066 autonomy
+
+Layer 4 remains active in review PR #75. If it is accepted, merged and lifecycle-closed, the next slice is **not** Layer 5. The next slice is `architecture-compression-inventory`.
+
+That behavior-preserving inventory must establish exact callers, canonical replacements, durable compatibility requirements and deletion gates for at least Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes and schema-v1 `recipe_id`.
+
+Further Agent autonomy resumes only after both D-070 gates are satisfied:
+
+1. **Architecture compression gate** — legacy/modern overlap has an accepted caller/migration map, superseded composition gains no new callers, and duplicate authorities have bounded retirement slices.
+2. **Golden vertical gate** — GUI proves `New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`, with Agent using the same Studio/Application Commands, Generation Job authority and Capability/D-017 boundaries when invoked.
+
+When Agent-autonomy work resumes, D-066 ordering is preserved:
+
+1. **Layer 5 — critic/evaluation + dependency-aware local repair**;
+2. **Layer 6 — human takeover/edit/resume**;
+3. **Layer 7 — long-form autonomous production** only after all prior boundaries are proven.
+
+D-070 changes sequencing, not D-066 ownership. Do not collapse the deferred layers or jump directly to long-form autonomy.
 
 ## Capability/effects boundary
 
 `CapabilityEffects` / resolved offer effects remain the single effects source for Agent policy, Skills and functional subagent routing. Relevant facts include project/Timeline mutation, media generation, destructive behavior, long-running behavior, reversibility and cost bearing.
 
-No JarvisHub-style parallel Protocol Bridge/tool registry/permission authority is introduced.
+No parallel Protocol Bridge/tool registry/permission authority is introduced.
 
 ## Product Truth — D-067
 
 A user-visible feature is complete only when canonical domain/API/frontend/current-doc/evidence references agree.
 
-Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure and PR #73 is merged internal verification infrastructure; none of them claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
+Machine-readable Product Truth records live under `docs/architecture/product-truth/`. The existing named-generation record proves the Stage-14 visible generation path. Agent layers 15–17 are merged internal infrastructure; Stage 18 is active internal review infrastructure; PR #73 is merged internal verification infrastructure. None claim a visible autonomous Agent product without a separate Studio surface and corresponding Product Truth/browser evidence.
 
 ## Desktop updates — D-068
 
@@ -277,13 +330,16 @@ Contextual operations such as targeted edit, dubbing/translation, slideshow, vis
 3. Do not create a second canonical Project Store or Timeline.
 4. Do not duplicate shared Scene/Shot/Take semantics per direction.
 5. GUI, Agent, scripts and MCP converge on the same application/domain commands.
-6. Do not give the Agent, a Skill or a subagent a private project-write path.
-7. Agent context/plan/task/trace/role state are orchestration/inspection state over canonical identities, not canonical production state.
-8. Generation Job/Attempt history remains separate from Agent Task orchestration state.
+6. Do not give the Agent, a Skill, subagent or background worker a private project-write path.
+7. Agent context/plan/task/trace/role/lease state is orchestration/inspection state over canonical identities, not canonical production state.
+8. Generation Job/Attempt history remains separate from Agent Task/lease orchestration state.
 9. Remote/non-free execution remains explicit and D-017-authorized where required.
-10. Provider prompts, secrets, reusable authorization and provider-private continuation caches never become portable Project/Agent state.
-11. Current docs must distinguish merged/as-built state from active/future state.
-12. Do not claim autonomous product readiness from internal Agent infrastructure alone.
+10. Provider prompts, secrets, raw bearer lease tokens, reusable authorization and provider-private continuation caches never become portable Project/Agent state.
+11. Background execution must fail closed on lost lease authority, stale policy/evidence or stale exact canonical state.
+12. Canonical Production/Timeline read-modify-commit and Generation reservation must reuse the shared cross-runtime project fence for every caller.
+13. Current docs must distinguish merged/as-built state from active/future state.
+14. Do not claim autonomous product readiness from internal Agent infrastructure alone.
+15. Do not add new modern callers to Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 6/8 product composition or another path classified as superseded by D-070 without an accepted decision reversing that status.
 
 ## Compatibility layer
 
@@ -296,4 +352,6 @@ Still present as compatibility/migration code unless separately promoted:
 - donor-era clients and runtime paths still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-Compatibility code may remain readable/editable while new architecture continues on the authorities defined above.
+D-070 makes `architecture-compression-inventory` the next slice after Stage 18. That inventory must prove callers, replacement authorities, compatibility requirements and removal gates before production deletion begins.
+
+Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the D-070 gate is active.

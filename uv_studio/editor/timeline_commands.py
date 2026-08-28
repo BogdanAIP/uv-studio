@@ -73,7 +73,6 @@ class AddClipCommand:
             except ProjectValidationError as exc:
                 raise TimelineCommandError(str(exc)) from exc
         object.__setattr__(self, "clip_id", _optional_identifier(self.clip_id, field_name="clip_id"))
-        # TimelineClip owns exact time validation; instantiate only after IDs normalize.
         try:
             TimelineClip(
                 clip_id=self.clip_id or "clip_validation",
@@ -147,11 +146,12 @@ class TimelineCommandResult:
 
 
 def _serialized_timeline_command(method):
-    """Hold the project-store lock across each timeline read/modify/commit."""
+    """Serialize the complete Timeline read/modify/commit across project runtimes."""
 
     @wraps(method)
     def wrapped(service, *args, **kwargs):
-        with service.project_store._lock:
+        project_id = args[0] if args else kwargs.get("project_id")
+        with service.unit_of_work.records.project_lock(project_id):
             return method(service, *args, **kwargs)
 
     return wrapped

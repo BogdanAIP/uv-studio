@@ -1,5 +1,20 @@
 """Bounded UV-owned Agent Harness foundation and D-066 orchestration layers."""
 
+from .background import (
+    AGENT_BACKGROUND_LEASE_SCHEMA_VERSION,
+    MAX_BACKGROUND_CLAIMS_PER_TASK,
+    MAX_BACKGROUND_TASK_BUDGET,
+    AgentBackgroundClaim,
+    AgentBackgroundContextStale,
+    AgentBackgroundError,
+    AgentBackgroundLeaseConflict,
+    AgentBackgroundLeaseRecord,
+    AgentBackgroundLeaseStale,
+    AgentBackgroundLeaseStore,
+    AgentBackgroundRetryLimit,
+    AgentBackgroundTaskCoordinator,
+    AgentBackgroundWorker,
+)
 from .harness import AgentActionCatalog, AgentContextBuilder, AgentHarness, AgentTraceStore
 from .models import (
     AgentActionDefinition,
@@ -30,7 +45,11 @@ from .stage16_runtime import (
     AgentPlanStore,
     AgentSkillCatalog,
 )
-from .stage16_generation_target import AgentPlanner, AgentTaskCoordinator, AgentTaskStore
+from .stage16_generation_target import (
+    AgentPlanner,
+    AgentTaskCoordinator as _ForegroundAgentTaskCoordinator,
+    AgentTaskStore,
+)
 from .subagents import (
     AGENT_SUBAGENT_SCHEMA_VERSION,
     AgentSubagentCatalog,
@@ -44,16 +63,63 @@ from .subagents import (
     AgentSubagentRole,
 )
 from .stage17_provenance import (
-    AgentSubagentCoordinator,
+    AgentSubagentCoordinator as _ForegroundAgentSubagentCoordinator,
     AgentSubagentResult,
-    AgentSubagentTaskCoordinator,
+    AgentSubagentTaskCoordinator as _ForegroundAgentSubagentTaskCoordinator,
 )
 
+_BACKGROUND_OWNER_ATTR = "_uv_agent_background_task_coordinator_owner"
+
+
+def _reject_background_owned_harness(harness) -> None:
+    if getattr(harness, _BACKGROUND_OWNER_ATTR, None) is not None:
+        raise AgentTaskStateError(
+            "AgentHarness is owned by an AgentBackgroundTaskCoordinator"
+        )
+
+
+class AgentTaskCoordinator(_ForegroundAgentTaskCoordinator):
+    """Public foreground coordinator that cannot replace Stage-18 background fences."""
+
+    def __init__(self, harness, **kwargs) -> None:
+        _reject_background_owned_harness(harness)
+        super().__init__(harness, **kwargs)
+
+
+class AgentSubagentTaskCoordinator(_ForegroundAgentSubagentTaskCoordinator):
+    """Public Stage-17 foreground coordinator with the same background ownership guard."""
+
+    def __init__(self, harness, **kwargs) -> None:
+        _reject_background_owned_harness(harness)
+        super().__init__(harness, **kwargs)
+
+
+class AgentSubagentCoordinator(_ForegroundAgentSubagentCoordinator):
+    """Public Stage-17 delegator that cannot create foreground execution on a background harness."""
+
+    def __init__(self, harness, proposer, **kwargs) -> None:
+        _reject_background_owned_harness(harness)
+        super().__init__(harness, proposer, **kwargs)
+
+
 __all__ = [
+    "AGENT_BACKGROUND_LEASE_SCHEMA_VERSION",
     "AGENT_SKILL_SCHEMA_VERSION",
     "AGENT_SUBAGENT_SCHEMA_VERSION",
+    "MAX_BACKGROUND_CLAIMS_PER_TASK",
+    "MAX_BACKGROUND_TASK_BUDGET",
     "AgentActionCatalog",
     "AgentActionDefinition",
+    "AgentBackgroundClaim",
+    "AgentBackgroundContextStale",
+    "AgentBackgroundError",
+    "AgentBackgroundLeaseConflict",
+    "AgentBackgroundLeaseRecord",
+    "AgentBackgroundLeaseStale",
+    "AgentBackgroundLeaseStore",
+    "AgentBackgroundRetryLimit",
+    "AgentBackgroundTaskCoordinator",
+    "AgentBackgroundWorker",
     "AgentContextBuilder",
     "AgentContextSnapshot",
     "AgentHarness",

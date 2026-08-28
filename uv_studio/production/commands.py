@@ -69,11 +69,12 @@ class ProductionCommandResult:
 
 
 def _serialized_production_command(method):
-    """Hold the shared ProjectStore lock across each semantic read/modify/commit."""
+    """Serialize the complete semantic read/modify/commit across project runtimes."""
 
     @wraps(method)
     def wrapped(service, *args, **kwargs):
-        with service.project_store._lock:
+        project_id = args[0] if args else kwargs.get("project_id")
+        with service.uow.records.project_lock(project_id):
             return method(service, *args, **kwargs)
 
     return wrapped

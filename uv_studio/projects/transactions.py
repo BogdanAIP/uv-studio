@@ -26,6 +26,7 @@ from uv_studio.projects.models import (
 )
 from uv_studio.projects.production_state import ProductionStateError, validate_production_document
 from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore, ProjectStoreError
+from uv_studio.projects.task_records import ProjectTaskRecordStore
 from uv_studio.projects.timeline import MAIN_TIMELINE_PATH, TimelineDocument, TimelineError, TimelineStore
 
 TRANSACTION_SCHEMA_VERSION = 1
@@ -249,9 +250,10 @@ class ProjectUnitOfWork:
 
     def __init__(self, project_store: ProjectStore) -> None:
         self.project_store = project_store
+        self.records = ProjectTaskRecordStore(project_store)
 
     def history(self, project_id: str) -> ProjectHistoryState:
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             self._ensure_history_layout(project_id)
             self._recover_prepared_operations(project_id)
             self.project_store.load_project(project_id)
@@ -269,7 +271,7 @@ class ProjectUnitOfWork:
         if not isinstance(documents, Mapping) or not documents:
             raise ProjectTransactionError("transaction must contain at least one document")
 
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             self._ensure_history_layout(project_id)
             self._recover_prepared_operations(project_id)
             current_project = self.project_store.load_project(project_id)
@@ -341,7 +343,7 @@ class ProjectUnitOfWork:
         return self._move_cursor(project_id, operation="redo")
 
     def _move_cursor(self, project_id: str, *, operation: str) -> ProjectTransactionResult:
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             self._ensure_history_layout(project_id)
             self._recover_prepared_operations(project_id)
             current_project = self.project_store.load_project(project_id)

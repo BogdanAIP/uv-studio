@@ -197,17 +197,18 @@ class GenerationService:
         idempotency_key: str,
         authorization_token: str | None,
     ) -> GenerationSubmissionResult:
-        prepared = self.prepare(
-            project_id=project_id,
-            shot_id=shot_id,
-            model_id=model_id,
-            inputs=inputs,
-            contract=contract,
-        )
-
-        # Keep the idempotency lookup and D-017 grant consumption serialized for
-        # this project. A replay must never consume a fresh grant or launch again.
-        with self.project_store._lock:
+        # One cross-runtime project critical section owns preparation, idempotency
+        # lookup, D-017 grant consumption and durable Job reservation. Agent, GUI,
+        # API and script callers therefore cannot reserve two Jobs for one key or
+        # consume a second grant after another runtime has already committed it.
+        with self.jobs.records.project_lock(project_id):
+            prepared = self.prepare(
+                project_id=project_id,
+                shot_id=shot_id,
+                model_id=model_id,
+                inputs=inputs,
+                contract=contract,
+            )
             for existing in self.jobs.list(project_id):
                 if existing.idempotency_key != idempotency_key:
                     continue

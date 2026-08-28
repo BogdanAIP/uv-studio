@@ -14,6 +14,7 @@ from typing import Any, Mapping
 
 from .models import ProjectDocument, ProjectReference, ProjectValidationError, validate_identifier
 from .store import ProjectStore, ProjectStoreError
+from .task_records import ProjectTaskRecordStore
 
 TIMELINE_SCHEMA_VERSION = 1
 MAIN_TIMELINE_ID = "main"
@@ -357,7 +358,7 @@ class TimelineStore:
             raise TimelineError("save requires TimelineDocument")
         if timeline.timeline_id != MAIN_TIMELINE_ID:
             raise TimelineError("only the main timeline is supported in schema v1")
-        with self.project_store._lock:
+        with ProjectTaskRecordStore(self.project_store).project_lock(project_id), self.project_store._lock:
             self.project_store.load_project(project_id)
             self.validate(project_id, timeline)
             self.project_store._atomic_write_json(self._path(project_id), timeline.to_dict())
