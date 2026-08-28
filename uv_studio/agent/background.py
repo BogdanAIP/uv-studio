@@ -1,13 +1,13 @@
 """D-066 layer 4: bounded background Agent execution over existing authorities.
 
-This module deliberately does not introduce another scheduler or task graph.  It
-adds worker ownership beside the existing durable AgentTaskRecord state and reuses
-the Stage-16/17 policy, trace, transaction, Generation Job and recovery contracts.
+Background work reuses the Stage-16 durable Plan/Task state machine, Stage-17
+provenance, Stage-15 AgentHarness, ProjectUnitOfWork and Generation Job Manager.
+There is deliberately no second scheduler or task graph.
 
-The critical safety property is fencing: a worker lease is checked again at the
-canonical commit boundary.  A worker that lost/expired ownership may continue
-running Python code, but it cannot commit Production/Timeline state or submit a
-Generation Job through the Agent path.
+A background lease is a short-lived fencing claim, not portable authorization.
+Only a digest of its bearer token is persisted.  The claim-time policy is stored
+once in the existing Stage-16 execution-evidence record; every dispatch reloads
+and verifies that durable evidence rather than trusting caller-supplied policy.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ import threading
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from typing import Any, Callable, Iterator, Mapping
 
 from uv_studio.projects.models import (
     ProjectValidationError,
@@ -31,7 +31,7 @@ from uv_studio.projects.task_records import (
     ProjectTaskRecordStore,
 )
 
-from .models import AgentPolicyProjection, AgentTraceStatus, safe_error_message, stable_digest
+from .models import AgentTraceStatus, safe_error_message, stable_digest
 from .orchestration import (
     AgentPlanRecord,
     AgentTaskBlocked,
@@ -97,7 +97,10 @@ def _parse_time(value: Any, *, field_name: str) -> datetime:
     except ProjectValidationError as exc:
         raise AgentBackgroundError(str(exc)) from exc
     candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
-    return datetime.fromisoformat(candidate).astimezone(timezone.utc)
+    try:
+        return datetime.fromisoformat(candidate).astimezone(timezone.utc)
+    except (TypeError, ValueError) as exc:
+        raise AgentBackgroundError(f"{field_name} is not a valid timestamp") from exc
 
 
 def _digest(value: Any, *, field_name: str) -> str:
@@ -133,11 +136,28 @@ def _lease_record_id(plan_id: str, task_id: str) -> str:
     return f"agent_bg_lease_{digest[:32]}"
 
 
+def _lease_token_digest(token: str) -> str:
+    try:
+        normalized = validate_identifier(token, field_name="lease_token")
+    except ProjectValidationError as exc:
+        raise AgentBackgroundError(str(exc)) from exc
+    return stable_digest({"lease_token": normalized})
+
+
+def _policy_digest(policy: Any) -> str:
+    try:
+        payload = policy.to_dict()
+    except Exception as exc:
+        raise AgentBackgroundError("background execution policy is not serializable") from exc
+    return stable_digest({"policy": payload})
+
+
 def _history_entry(record: "AgentBackgroundLeaseRecord", *, outcome: str) -> dict[str, Any]:
     return {
         "generation": record.generation,
         "owner_id": record.owner_id,
-        "token_digest": stable_digest({"lease_token": record.lease_token}),
+        "token_digest": record.token_digest,
+        "policy_digest": record.policy_digest,
         "acquired_at": record.acquired_at,
         "heartbeat_at": record.heartbeat_at,
         "expires_at": record.expires_at,
@@ -148,7 +168,7 @@ def _history_entry(record: "AgentBackgroundLeaseRecord", *, outcome: str) -> dic
 
 @dataclass(frozen=True)
 class AgentBackgroundLeaseRecord:
-    """One mutable fencing lease stored under the existing project tasks authority."""
+    """Durable fencing metadata; it never stores the bearer lease token itself."""
 
     record_id: str
     project_id: str
@@ -157,12 +177,13 @@ class AgentBackgroundLeaseRecord:
     task_record_id: str
     generation: int
     owner_id: str
-    lease_token: str
+    token_digest: str
     acquired_at: str
     heartbeat_at: str
     expires_at: str
     context_digest: str
     input_digest: str
+    policy_digest: str
     target_shot_id: str | None
     released_at: str | None = None
     outcome: str | None = None
@@ -183,7 +204,6 @@ class AgentBackgroundLeaseRecord:
             "task_id",
             "task_record_id",
             "owner_id",
-            "lease_token",
         ):
             try:
                 object.__setattr__(
@@ -199,6 +219,11 @@ class AgentBackgroundLeaseRecord:
             raise AgentBackgroundError("background lease generation must be an integer")
         if not 1 <= self.generation <= MAX_BACKGROUND_CLAIMS_PER_TASK:
             raise AgentBackgroundError("background lease generation exceeds bounded claim budget")
+
+        object.__setattr__(self, "token_digest", _digest(self.token_digest, field_name="token_digest"))
+        object.__setattr__(self, "context_digest", _digest(self.context_digest, field_name="context_digest"))
+        object.__setattr__(self, "input_digest", _digest(self.input_digest, field_name="input_digest"))
+        object.__setattr__(self, "policy_digest", _digest(self.policy_digest, field_name="policy_digest"))
 
         acquired = _parse_time(self.acquired_at, field_name="lease acquired_at")
         heartbeat = _parse_time(self.heartbeat_at, field_name="lease heartbeat_at")
@@ -223,12 +248,13 @@ class AgentBackgroundLeaseRecord:
                 )
             except ProjectValidationError as exc:
                 raise AgentBackgroundError(str(exc)) from exc
-        object.__setattr__(self, "context_digest", _digest(self.context_digest, field_name="context_digest"))
-        object.__setattr__(self, "input_digest", _digest(self.input_digest, field_name="input_digest"))
 
         history = tuple(dict(item) for item in self.history)
         if len(history) > MAX_BACKGROUND_LEASE_HISTORY:
             raise AgentBackgroundError("background lease history exceeds bounded limit")
+        for item in history:
+            if "lease_token" in item:
+                raise AgentBackgroundError("background lease history must never persist bearer tokens")
         object.__setattr__(self, "history", history)
 
     @property
@@ -249,12 +275,13 @@ class AgentBackgroundLeaseRecord:
             "task_record_id": self.task_record_id,
             "generation": self.generation,
             "owner_id": self.owner_id,
-            "lease_token": self.lease_token,
+            "token_digest": self.token_digest,
             "acquired_at": self.acquired_at,
             "heartbeat_at": self.heartbeat_at,
             "expires_at": self.expires_at,
             "context_digest": self.context_digest,
             "input_digest": self.input_digest,
+            "policy_digest": self.policy_digest,
             "target_shot_id": self.target_shot_id,
             "released_at": self.released_at,
             "outcome": self.outcome,
@@ -267,6 +294,8 @@ class AgentBackgroundLeaseRecord:
     def from_dict(cls, data: Mapping[str, Any]) -> "AgentBackgroundLeaseRecord":
         if not isinstance(data, Mapping) or data.get("record_type") != AGENT_BACKGROUND_LEASE_RECORD_TYPE:
             raise AgentBackgroundError("task record is not a background Agent lease")
+        if "lease_token" in data:
+            raise AgentBackgroundError("background lease must not persist a bearer token")
         try:
             return cls(
                 schema_version=data["schema_version"],
@@ -277,12 +306,13 @@ class AgentBackgroundLeaseRecord:
                 task_record_id=data["task_record_id"],
                 generation=data["generation"],
                 owner_id=data["owner_id"],
-                lease_token=data["lease_token"],
+                token_digest=data["token_digest"],
                 acquired_at=data["acquired_at"],
                 heartbeat_at=data["heartbeat_at"],
                 expires_at=data["expires_at"],
                 context_digest=data["context_digest"],
                 input_digest=data["input_digest"],
+                policy_digest=data["policy_digest"],
                 target_shot_id=data.get("target_shot_id"),
                 released_at=data.get("released_at"),
                 outcome=data.get("outcome"),
@@ -294,6 +324,73 @@ class AgentBackgroundLeaseRecord:
             raise AgentBackgroundError(f"missing background lease field: {exc.args[0]}") from exc
 
 
+@dataclass(frozen=True)
+class AgentBackgroundClaim:
+    """Ephemeral bearer claim.  The raw token is intentionally memory-only."""
+
+    project_id: str
+    plan_id: str
+    task_id: str
+    task_record_id: str
+    action_id: str
+    skill_id: str | None
+    owner_id: str
+    lease_record_id: str
+    generation: int
+    lease_token: str = field(repr=False)
+    context_digest: str = ""
+    input_digest: str = ""
+    policy_digest: str = ""
+    target_shot_id: str | None = None
+    correlation_id: str = ""
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "project_id",
+            "plan_id",
+            "task_id",
+            "task_record_id",
+            "owner_id",
+            "lease_record_id",
+            "lease_token",
+            "correlation_id",
+        ):
+            try:
+                object.__setattr__(
+                    self,
+                    field_name,
+                    validate_identifier(getattr(self, field_name), field_name=field_name),
+                )
+            except ProjectValidationError as exc:
+                raise AgentBackgroundError(str(exc)) from exc
+        if not isinstance(self.action_id, str) or not self.action_id.strip():
+            raise AgentBackgroundError("background claim action_id is required")
+        object.__setattr__(self, "action_id", self.action_id.strip())
+        if self.skill_id is not None:
+            try:
+                object.__setattr__(
+                    self,
+                    "skill_id",
+                    validate_identifier(self.skill_id, field_name="skill_id"),
+                )
+            except ProjectValidationError as exc:
+                raise AgentBackgroundError(str(exc)) from exc
+        if isinstance(self.generation, bool) or not isinstance(self.generation, int):
+            raise AgentBackgroundError("background claim generation must be an integer")
+        object.__setattr__(self, "context_digest", _digest(self.context_digest, field_name="context_digest"))
+        object.__setattr__(self, "input_digest", _digest(self.input_digest, field_name="input_digest"))
+        object.__setattr__(self, "policy_digest", _digest(self.policy_digest, field_name="policy_digest"))
+        if self.target_shot_id is not None:
+            try:
+                object.__setattr__(
+                    self,
+                    "target_shot_id",
+                    validate_identifier(self.target_shot_id, field_name="target_shot_id"),
+                )
+            except ProjectValidationError as exc:
+                raise AgentBackgroundError(str(exc)) from exc
+
+
 class AgentBackgroundLeaseStore:
     """Durable worker ownership beside AgentTaskRecord, using the same task-root CAS."""
 
@@ -302,7 +399,12 @@ class AgentBackgroundLeaseStore:
         self.records = ProjectTaskRecordStore(project_store)
         self.clock = clock
 
-    def _load_locked(self, project_id: str, plan_id: str, task_id: str) -> AgentBackgroundLeaseRecord | None:
+    def _load_locked(
+        self,
+        project_id: str,
+        plan_id: str,
+        task_id: str,
+    ) -> AgentBackgroundLeaseRecord | None:
         record_id = _lease_record_id(plan_id, task_id)
         path = self.records.path(project_id, record_id)
         if not path.exists():
@@ -336,9 +438,10 @@ class AgentBackgroundLeaseStore:
         owner_id: str,
         context_digest: str,
         input_digest: str,
+        policy_digest: str,
         target_shot_id: str | None,
         lease_seconds: float,
-    ) -> AgentBackgroundLeaseRecord:
+    ) -> tuple[AgentBackgroundLeaseRecord, str]:
         try:
             normalized_owner = validate_identifier(owner_id, field_name="worker_id")
         except ProjectValidationError as exc:
@@ -374,6 +477,7 @@ class AgentBackgroundLeaseStore:
                 )
                 history = history[-MAX_BACKGROUND_LEASE_HISTORY:]
 
+            lease_token = f"agent_bg_token_{uuid.uuid4().hex}"
             record = AgentBackgroundLeaseRecord(
                 record_id=_lease_record_id(plan_id, task_id),
                 project_id=project_id,
@@ -382,12 +486,13 @@ class AgentBackgroundLeaseStore:
                 task_record_id=task_record_id,
                 generation=generation,
                 owner_id=normalized_owner,
-                lease_token=f"agent_bg_token_{uuid.uuid4().hex}",
+                token_digest=_lease_token_digest(lease_token),
                 acquired_at=_iso(now),
                 heartbeat_at=_iso(now),
                 expires_at=_iso(expires),
                 context_digest=context_digest,
                 input_digest=input_digest,
+                policy_digest=policy_digest,
                 target_shot_id=target_shot_id,
                 history=tuple(history),
             )
@@ -405,10 +510,10 @@ class AgentBackgroundLeaseStore:
                 raise AgentBackgroundLeaseConflict(
                     f"Agent Task {task_id!r} lease changed during claim"
                 ) from exc
-            return record
+            return record, lease_token
 
     @staticmethod
-    def _same_owner(current: AgentBackgroundLeaseRecord, claim: "AgentBackgroundClaim") -> bool:
+    def _same_owner(current: AgentBackgroundLeaseRecord, claim: AgentBackgroundClaim) -> bool:
         return (
             current.record_id == claim.lease_record_id
             and current.project_id == claim.project_id
@@ -417,15 +522,16 @@ class AgentBackgroundLeaseStore:
             and current.task_record_id == claim.task_record_id
             and current.generation == claim.generation
             and current.owner_id == claim.owner_id
-            and current.lease_token == claim.lease_token
+            and current.token_digest == _lease_token_digest(claim.lease_token)
             and current.context_digest == claim.context_digest
             and current.input_digest == claim.input_digest
+            and current.policy_digest == claim.policy_digest
             and current.target_shot_id == claim.target_shot_id
         )
 
     def require_owner_locked(
         self,
-        claim: "AgentBackgroundClaim",
+        claim: AgentBackgroundClaim,
         *,
         require_live: bool,
     ) -> AgentBackgroundLeaseRecord:
@@ -444,7 +550,7 @@ class AgentBackgroundLeaseStore:
             )
         return current
 
-    def heartbeat(self, claim: "AgentBackgroundClaim", *, lease_seconds: float) -> AgentBackgroundLeaseRecord:
+    def heartbeat(self, claim: AgentBackgroundClaim, *, lease_seconds: float) -> AgentBackgroundLeaseRecord:
         duration = _lease_seconds(lease_seconds)
         now = _normalized_now(self.clock)
         with self.project_store._lock, self.records.project_lock(claim.project_id):
@@ -467,7 +573,7 @@ class AgentBackgroundLeaseStore:
 
     def release(
         self,
-        claim: "AgentBackgroundClaim",
+        claim: AgentBackgroundClaim,
         *,
         outcome: str,
         error: Exception | None = None,
@@ -505,16 +611,10 @@ class AgentBackgroundLeaseStore:
         *,
         outcome: str,
     ) -> AgentBackgroundLeaseRecord:
-        """Release an expired/live record while state recovery holds the project task lock."""
-
         if not record.active:
             return record
         now = _normalized_now(self.clock)
-        updated = replace(
-            record,
-            released_at=_iso(now),
-            outcome=outcome[:200],
-        )
+        updated = replace(record, released_at=_iso(now), outcome=outcome[:200])
         try:
             self.records.compare_and_swap(
                 record.project_id,
@@ -525,25 +625,6 @@ class AgentBackgroundLeaseStore:
         except ProjectTaskRecordConflict as exc:
             raise AgentBackgroundLeaseStale("background lease changed during recovery release") from exc
         return updated
-
-
-@dataclass(frozen=True)
-class AgentBackgroundClaim:
-    project_id: str
-    plan_id: str
-    task_id: str
-    task_record_id: str
-    action_id: str
-    skill_id: str | None
-    owner_id: str
-    lease_record_id: str
-    generation: int
-    lease_token: str
-    context_digest: str
-    input_digest: str
-    target_shot_id: str | None
-    correlation_id: str
-    policy: AgentPolicyProjection
 
 
 _BACKGROUND_EXECUTION: ContextVar[
@@ -564,7 +645,7 @@ def _background_execution(
 
 
 class _BackgroundFencedProjectUnitOfWork(_FinalCorrelatedProjectUnitOfWork):
-    """Fence existing ProjectUnitOfWork commit at the worker ownership boundary."""
+    """Fence the existing ProjectUnitOfWork exactly at canonical commit."""
 
     def __init__(self, project_store: Any, coordinator: "AgentBackgroundTaskCoordinator") -> None:
         super().__init__(project_store)
@@ -582,7 +663,7 @@ class _BackgroundFencedProjectUnitOfWork(_FinalCorrelatedProjectUnitOfWork):
 
 
 class _BackgroundFencedGenerationService:
-    """Fence existing GenerationService.submit before D-017 consumption/Job creation."""
+    """Fence GenerationService.submit before D-017 consumption or Job creation."""
 
     def __init__(self, base: Any, coordinator: "AgentBackgroundTaskCoordinator") -> None:
         self._base = base
@@ -608,7 +689,7 @@ class _BackgroundFencedGenerationService:
 
 
 class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
-    """Background execution seam over the merged Stage-16/17 coordinator authority."""
+    """Background seam over the merged Stage-16/17 coordinator authority."""
 
     def __init__(
         self,
@@ -628,8 +709,6 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         self.clock = clock
         self.leases = AgentBackgroundLeaseStore(self.project_store, clock=clock)
 
-        # Keep the same transaction authority/recovery shape, adding only a fencing
-        # check immediately around the already-existing canonical commit operation.
         self._transaction_evidence = _BackgroundFencedProjectUnitOfWork(
             self.project_store,
             self,
@@ -644,18 +723,55 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         self.harness.generation = _BackgroundFencedGenerationService(generation, self)
 
     def _after_lease_persisted(self, lease: AgentBackgroundLeaseRecord) -> None:
-        """Fault-injection seam for proving crash between lease persistence and RUNNING."""
+        """Fault-injection seam for crash between lease persistence and RUNNING."""
 
     def _current_context_digest(self, claim: AgentBackgroundClaim) -> str:
-        snapshot = self.harness.context.build(
+        return self.harness.context.build(
             claim.project_id,
             shot_id=claim.target_shot_id,
+        ).digest
+
+    def _evidence_for(self, claim: AgentBackgroundClaim):
+        evidence = self._execution_evidence.get(
+            project_id=claim.project_id,
+            plan_id=claim.plan_id,
+            task_id=claim.task_id,
+            skill_id=claim.skill_id,
         )
-        return snapshot.digest
+        if evidence is None:
+            raise AgentBackgroundLeaseStale("background claim has no durable execution evidence")
+        if (
+            evidence.action_id != claim.action_id
+            or evidence.context_digest != claim.context_digest
+            or evidence.input_digest != claim.input_digest
+            or _policy_digest(evidence.policy) != claim.policy_digest
+        ):
+            raise AgentBackgroundLeaseStale(
+                "background claim no longer matches durable execution evidence"
+            )
+        return evidence
+
+    def _validate_live_claim(
+        self,
+        claim: AgentBackgroundClaim,
+        *,
+        require_context: bool,
+    ):
+        with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
+            self.leases.require_owner_locked(claim, require_live=True)
+            task = self.tasks.get(claim.project_id, claim.plan_id, claim.task_id)
+            if task.record_id != claim.task_record_id or task.status is not AgentTaskStatus.RUNNING:
+                raise AgentBackgroundLeaseStale("background claim no longer owns a RUNNING Agent Task")
+            evidence = self._evidence_for(claim)
+            if require_context and self._current_context_digest(claim) != claim.context_digest:
+                raise AgentBackgroundContextStale(
+                    "canonical Agent context changed before background dispatch"
+                )
+            return evidence
 
     @contextmanager
     def _commit_guard(self, claim: AgentBackgroundClaim) -> Iterator[None]:
-        """Hold the task-root fence while validating ownership and committing effect."""
+        """Hold the task-root fence while ownership is checked and effect commits."""
 
         with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
             self.leases.require_owner_locked(claim, require_live=True)
@@ -664,22 +780,12 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                 raise AgentBackgroundLeaseStale(
                     "background worker lost the exact RUNNING Agent Task before canonical commit"
                 )
+            self._evidence_for(claim)
             if self._current_context_digest(claim) != claim.context_digest:
                 raise AgentBackgroundContextStale(
                     "canonical Agent context changed after background claim; commit refused"
                 )
             yield
-
-    def _validate_live_claim(self, claim: AgentBackgroundClaim, *, require_context: bool) -> None:
-        with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
-            self.leases.require_owner_locked(claim, require_live=True)
-            task = self.tasks.get(claim.project_id, claim.plan_id, claim.task_id)
-            if task.record_id != claim.task_record_id or task.status is not AgentTaskStatus.RUNNING:
-                raise AgentBackgroundLeaseStale("background claim no longer owns a RUNNING Agent Task")
-            if require_context and self._current_context_digest(claim) != claim.context_digest:
-                raise AgentBackgroundContextStale(
-                    "canonical Agent context changed before background dispatch"
-                )
 
     def claim_task(
         self,
@@ -691,7 +797,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         lease_seconds: float,
         runtime_inputs: Mapping[str, Any] | None = None,
     ) -> AgentBackgroundClaim:
-        """Atomically claim READY work and persist exact pre-dispatch evidence."""
+        """Claim READY work and persist exact pre-dispatch evidence under a short lock."""
 
         with self.project_store._lock, self.tasks.records.project_lock(project_id):
             plan = self.plans.get(project_id, plan_id)
@@ -725,12 +831,13 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             snapshot = self.harness.context.build(project_id, shot_id=target_shot_id)
             input_digest = self._expected_input_digest(spec)
             policy = self._execution_policy(project_id, spec, payload)
+            policy_digest = _policy_digest(policy)
             correlation_id = _typed_correlation_reference(
                 plan.plan_id,
                 spec.task_id,
                 spec.skill_id,
             )
-            lease = self.leases.claim(
+            lease, lease_token = self.leases.claim(
                 project_id=project_id,
                 plan_id=plan.plan_id,
                 task_id=spec.task_id,
@@ -738,16 +845,32 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                 owner_id=owner_id,
                 context_digest=snapshot.digest,
                 input_digest=input_digest,
+                policy_digest=policy_digest,
                 target_shot_id=target_shot_id,
                 lease_seconds=lease_seconds,
             )
-            # Deliberately before READY -> RUNNING so a process-loss proof can leave a
-            # READY task with an expiring claim that is safely reclaimable once expired.
             self._after_lease_persisted(lease)
 
+            claim = AgentBackgroundClaim(
+                project_id=project_id,
+                plan_id=plan.plan_id,
+                task_id=spec.task_id,
+                task_record_id=record.record_id,
+                action_id=spec.action_id,
+                skill_id=spec.skill_id,
+                owner_id=lease.owner_id,
+                lease_record_id=lease.record_id,
+                generation=lease.generation,
+                lease_token=lease_token,
+                context_digest=lease.context_digest,
+                input_digest=lease.input_digest,
+                policy_digest=lease.policy_digest,
+                target_shot_id=lease.target_shot_id,
+                correlation_id=correlation_id,
+            )
             try:
                 with _execution_correlation(correlation_id), _execution_context(snapshot.digest):
-                    running = self.tasks.transition(record, AgentTaskStatus.RUNNING)
+                    self.tasks.transition(record, AgentTaskStatus.RUNNING)
                 self._execution_evidence.append(
                     project_id=project_id,
                     plan_id=plan.plan_id,
@@ -762,46 +885,12 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                 current = self.tasks.get(project_id, plan.plan_id, spec.task_id)
                 if current.status is AgentTaskStatus.RUNNING:
                     self.tasks.transition(current, AgentTaskStatus.FAILED, error=exc)
-                claim = AgentBackgroundClaim(
-                    project_id=project_id,
-                    plan_id=plan.plan_id,
-                    task_id=spec.task_id,
-                    task_record_id=record.record_id,
-                    action_id=spec.action_id,
-                    skill_id=spec.skill_id,
-                    owner_id=lease.owner_id,
-                    lease_record_id=lease.record_id,
-                    generation=lease.generation,
-                    lease_token=lease.lease_token,
-                    context_digest=lease.context_digest,
-                    input_digest=lease.input_digest,
-                    target_shot_id=lease.target_shot_id,
-                    correlation_id=correlation_id,
-                    policy=policy,
-                )
                 try:
                     self.leases.release(claim, outcome="claim_failed", error=exc)
                 except AgentBackgroundError:
                     pass
                 raise
-
-            return AgentBackgroundClaim(
-                project_id=project_id,
-                plan_id=plan.plan_id,
-                task_id=spec.task_id,
-                task_record_id=running.record_id,
-                action_id=spec.action_id,
-                skill_id=spec.skill_id,
-                owner_id=lease.owner_id,
-                lease_record_id=lease.record_id,
-                generation=lease.generation,
-                lease_token=lease.lease_token,
-                context_digest=lease.context_digest,
-                input_digest=lease.input_digest,
-                target_shot_id=lease.target_shot_id,
-                correlation_id=correlation_id,
-                policy=policy,
-            )
+            return claim
 
     def heartbeat_claim(
         self,
@@ -809,6 +898,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         *,
         lease_seconds: float,
     ) -> AgentBackgroundLeaseRecord:
+        self._evidence_for(claim)
         return self.leases.heartbeat(claim, lease_seconds=lease_seconds)
 
     def _finalize_claim(
@@ -819,6 +909,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
     ) -> AgentTaskRecord:
         with self.project_store._lock, self.tasks.records.project_lock(claim.project_id):
             self.leases.require_owner_locked(claim, require_live=True)
+            self._evidence_for(claim)
             plan = self.plans.get(claim.project_id, claim.plan_id)
             record = self.tasks.get(claim.project_id, claim.plan_id, claim.task_id)
             if record.record_id != claim.task_record_id or record.status is not AgentTaskStatus.RUNNING:
@@ -827,11 +918,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             trace = self._correlated_trace_for(plan, record)
             if trace is not None:
                 if trace.status is AgentTraceStatus.SUCCEEDED:
-                    terminal = self.tasks.transition(
-                        record,
-                        AgentTaskStatus.SUCCEEDED,
-                        trace=trace,
-                    )
+                    terminal = self.tasks.transition(record, AgentTaskStatus.SUCCEEDED, trace=trace)
                 else:
                     error = execution_error or AgentBackgroundError(
                         trace.error_message or "background Agent execution failed"
@@ -845,8 +932,6 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             else:
                 recovered = self._committed_recovery_trace(plan, record)
                 if recovered is not None:
-                    # Use the Stage-17 implementation directly so recovered success is
-                    # enriched with bound delegation provenance before terminalization.
                     terminal = _Stage17TaskCoordinator._reconcile_running(self, plan, record)
                 else:
                     error = execution_error or AgentBackgroundError(
@@ -875,12 +960,12 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
         heartbeat_seconds: float = 0.0,
         lease_seconds: float = 30.0,
     ) -> Any:
-        """Execute one already-claimed task without holding the long task-root lock."""
+        """Execute one claimed task without holding the long task-root lock."""
 
         duration = _lease_seconds(lease_seconds)
         if heartbeat_seconds < 0:
             raise AgentBackgroundError("heartbeat_seconds must be non-negative")
-        self._validate_live_claim(claim, require_context=True)
+        evidence = self._validate_live_claim(claim, require_context=True)
 
         with self.project_store._lock:
             plan = self.plans.get(claim.project_id, claim.plan_id)
@@ -905,7 +990,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             while not stop.wait(heartbeat_seconds):
                 try:
                     self.heartbeat_claim(claim, lease_seconds=duration)
-                except Exception as exc:  # background liveness is converted into fencing
+                except Exception as exc:
                     heartbeat_errors.append(exc)
                     stop.set()
                     return
@@ -941,7 +1026,7 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
                     project_id=claim.project_id,
                     action_id=claim.action_id,
                     model_id=normalized_model_id,
-                    policy=claim.policy,
+                    policy=evidence.policy,
                 ),
                 _background_execution(self, claim),
             ):
@@ -959,7 +1044,6 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
             heartbeat.join(timeout=max(1.0, heartbeat_seconds * 2 if heartbeat_seconds else 1.0))
 
         if heartbeat_errors:
-            # Never let a worker that lost heartbeat authority finalize its own result.
             raise AgentBackgroundLeaseStale(
                 f"background heartbeat lost worker ownership: {safe_error_message(heartbeat_errors[0])}"
             ) from heartbeat_errors[0]
@@ -980,9 +1064,6 @@ class AgentBackgroundTaskCoordinator(_Stage17TaskCoordinator):
     ) -> AgentTaskRecord:
         lease = self.leases.get(record.project_id, plan.plan_id, record.task_id)
         if lease is not None and lease.active and not lease.is_expired(_normalized_now(self.clock)):
-            # A live background worker still owns this RUNNING task. Reopen must not
-            # convert legitimate in-flight work into a failure just because another
-            # reader inspected state.
             return record
 
         terminal = _Stage17TaskCoordinator._reconcile_running(self, plan, record)
@@ -1083,8 +1164,11 @@ class AgentBackgroundWorker:
         plan_id: str,
         runtime_inputs: Mapping[str, Any] | None = None,
     ) -> Any | None:
-        state = self.coordinator.state(project_id, plan_id)
-        ready = [record for record in state.tasks if record.status is AgentTaskStatus.READY]
+        ready = [
+            record
+            for record in self.coordinator.state(project_id, plan_id).tasks
+            if record.status is AgentTaskStatus.READY
+        ]
         if not ready:
             return None
         claim = self.claim(
@@ -1103,14 +1187,21 @@ class AgentBackgroundWorker:
         max_tasks: int = MAX_BACKGROUND_TASK_BUDGET,
         runtime_inputs: Mapping[str, Any] | None = None,
     ) -> tuple[Any, ...]:
-        if isinstance(max_tasks, bool) or not isinstance(max_tasks, int) or not 1 <= max_tasks <= MAX_BACKGROUND_TASK_BUDGET:
+        if (
+            isinstance(max_tasks, bool)
+            or not isinstance(max_tasks, int)
+            or not 1 <= max_tasks <= MAX_BACKGROUND_TASK_BUDGET
+        ):
             raise AgentBackgroundError(
                 f"max_tasks must be an integer in 1..{MAX_BACKGROUND_TASK_BUDGET}"
             )
         results: list[Any] = []
         for _ in range(max_tasks):
-            state = self.coordinator.state(project_id, plan_id)
-            ready = [record for record in state.tasks if record.status is AgentTaskStatus.READY]
+            ready = [
+                record
+                for record in self.coordinator.state(project_id, plan_id).tasks
+                if record.status is AgentTaskStatus.READY
+            ]
             if not ready:
                 break
             claim = self.claim(
