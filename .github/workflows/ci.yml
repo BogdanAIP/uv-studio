@@ -44,7 +44,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install UV Studio core dependencies
-        run: python -m pip install -r requirements-uv.txt
+        run: |
+          python -m pip install -r requirements-uv.txt
+          python -m pip install PyYAML==6.0.2
 
       - name: Verify UV Studio core dependency graph
         run: python -m pip check
