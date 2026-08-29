@@ -13,6 +13,8 @@
       ".github/workflows/ci.yml",
       ".github/workflows/promote-frontend.yml",
       "docs/FRONTEND.md",
+      "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
+      "docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md",
       "frontend/.uv-derived.json",
       "frontend/components/BrandHeader.tsx",
       "frontend/components/HomePage.tsx",
