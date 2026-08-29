@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: donor-ui-retirement -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: actions-hardening -->
 
 **Updated:** 2026-08-29
 
@@ -9,36 +9,26 @@
 
 ## Current lifecycle
 
-The repository is lifecycle-idle after `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`.
+`actions-hardening` is the active bounded repository security/process slice on branch `chore/actions-hardening`, based on lifecycle-closed `main` `66410db447c896fb898636634258402fae1edbff`.
 
-PR #82 retired supported donor-frontend restoration authority, removed donor-only Workflow/Pipeline/Sandbox/stages UI/client residue after caller proof, isolated the supported `/api/models` client, and made top-level `frontend/` unequivocally UV Studio-owned product source. The pinned VideoClaw frontend remains read-only provenance/comparison material.
+The slice changes GitHub Actions supply-chain controls only. UV Studio runtime, product behavior, canonical Project/Production/Timeline/Generation/Capability authorities and product migration logic are out of scope.
 
-## Verification state
+## Security target
 
-The final PR #82 head `6601028e4c96e5e5591c8b44a315e66eaede58c8` received the required fresh ordinary-ChatGPT semantic review with `status=PASS`, `review_validity=CURRENT` and zero reported findings.
+Maintained first-party GitHub Actions references will be pinned to exact full commit SHAs using the same Action revisions already executed by the current successful CI, avoiding an implicit dependency upgrade while removing floating major-tag resolution.
 
-Exact-head CI run #3879 passed all five permanent checks and produced both browser E2E evidence artifacts. A duplicate Windows browser run initially hit two timing-sensitive UI failures on the same exact head; rerunning only that failed Windows job passed the full browser suite without changing repository bytes. All inline review threads were resolved before expected-head merge.
+Read-only workflows will keep explicit `permissions: contents: read` and disable persisted checkout credentials. `vendor-videoclaw.yml` remains the only approved `contents: write` workflow because it contains an authenticated Git commit/push path; its write exemption must remain coupled to that real writer behavior.
 
-## Accepted architecture baseline
+A permanent unit guard will reject future floating first-party Action refs, unexpected write authority and persisted checkout credentials in read-only workflows.
 
-The accepted caller/migration inventory remains `docs/architecture/LEGACY_SURFACE_INVENTORY.md`. The D-070 architecture-compression gate is satisfied; the separate golden-vertical gate remains open.
+## Native Ready connector state
 
-Modern product work continues to target canonical Project Store, Production Directions, shared Production Semantic Core, Studio/Application Commands, canonical Timeline, Generation/Model Job authority and Capability/D-017 boundaries.
-
-Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 composition and the legacy `/projects/[projectId]` route remain explicit compatibility/migration surfaces until later bounded retirement work proves otherwise.
-
-## GitHub process state
-
-A live post-merge capability check used the official connector's exposed `mark_pull_request_ready_for_review` mutation on draft closure PR #83. The call did not reach a successful mutation because the connector's GraphQL selection queried nonexistent `Repository.fullDatabaseId`.
-
-This is classified as an external connector implementation defect, not evidence that GitHub lacks the Ready mutation. No privileged repository fallback is authorized merely to work around that connector bug. PR #83 was closed unmerged and the exact same closure branch/diff was reopened directly non-draft as PR #84.
+The official connector currently exposes `mark_pull_request_ready_for_review` but its live invocation failed because the connector queries nonexistent GraphQL field `Repository.fullDatabaseId`. This external connector defect does not authorize a new privileged repository fallback in this slice.
 
 ## Known adjacent implementation risk
 
-A timing-sensitive `ProductionWorkspacePanel` remount race remains open: production semantics can remount after history refresh and discard Shot input entered before refresh completion. This is separate from donor UI retirement and remains a later implementation defect/risk.
+The timing-sensitive `ProductionWorkspacePanel` remount race remains separate and unchanged.
 
 ## Handoff
 
-The next bounded slice is `actions-hardening`.
-
-It will pin maintained `actions/*` uses to exact full commit SHAs, disable persisted checkout credentials in read-only workflows, keep write authority only on the genuine vendoring writer, and add a static guard preventing future workflow drift. After that security/process slice is merged and lifecycle-closed, resume `project-identity-v2-compat-reader`.
+After Actions hardening merges and its D-038 lifecycle closure returns `main` to idle, resume `project-identity-v2-compat-reader` from the accepted D-070 migration inventory.
