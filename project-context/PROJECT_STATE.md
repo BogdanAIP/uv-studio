@@ -27,12 +27,18 @@ Modern product work continues to target canonical Project Store, Production Dire
 
 Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 composition and the legacy `/projects/[projectId]` route remain explicit compatibility/migration surfaces until later bounded retirement work proves otherwise.
 
+## GitHub process state
+
+A live post-merge capability check used the official connector's exposed `mark_pull_request_ready_for_review` mutation on draft closure PR #83. The call did not reach a successful mutation because the connector's GraphQL selection queried nonexistent `Repository.fullDatabaseId`.
+
+This is classified as an external connector implementation defect, not evidence that GitHub lacks the Ready mutation. No privileged repository fallback is authorized merely to work around that connector bug. PR #83 was closed unmerged and the exact same closure branch/diff was reopened directly non-draft as PR #84.
+
 ## Known adjacent implementation risk
 
 A timing-sensitive `ProductionWorkspacePanel` remount race remains open: production semantics can remount after history refresh and discard Shot input entered before refresh completion. This is separate from donor UI retirement and remains a later implementation defect/risk.
 
 ## Handoff
 
-`github-ready-review-fallback` remains only a provisional post-merge capability decision point. Before starting any new process slice, the lifecycle closure must re-resolve the live official GitHub `mark_pull_request_ready_for_review` capability.
+The next bounded slice is `actions-hardening`.
 
-If the native mutation is available and works, no fallback workflow is created. The repository can then advance to the next explicitly selected bounded slice without adding privileged Ready-for-review automation.
+It will pin maintained `actions/*` uses to exact full commit SHAs, disable persisted checkout credentials in read-only workflows, keep write authority only on the genuine vendoring writer, and add a static guard preventing future workflow drift. After that security/process slice is merged and lifecycle-closed, resume `project-identity-v2-compat-reader`.
