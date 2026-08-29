@@ -59,6 +59,8 @@ jobs:
           python tools/uv_dev.py paths
 
       - name: Validate read-only frontend provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python tools/verify_frontend_provenance.py
 
   app-baseline:
@@ -190,6 +192,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: browser-e2e-${{ matrix.os }}
-          path: e2e-artifacts/${{ runner.os }}/**
+          path: e2e-artifacts/${{ matrix.os }}/**
           if-no-files-found: warn
           retention-days: 14
