@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 APPROVED_WRITER = "vendor-videoclaw.yml"
 FULL_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+BOOL_TAG = "tag:yaml.org,2002:bool"
 
 
 class WorkflowPolicyError(ValueError):
@@ -23,7 +24,26 @@ class WorkflowPolicyError(ValueError):
 
 
 class _UniqueKeySafeLoader(yaml.SafeLoader):
-    """SafeLoader variant that fails closed on duplicate YAML mapping keys."""
+    """SafeLoader variant with workflow-compatible booleans and unique keys."""
+
+
+# PyYAML's default YAML-1.1 resolver treats on/off/yes/no as booleans, while
+# GitHub workflow syntax relies on words such as `on` as ordinary strings.
+# Copy the resolver table, remove the broad bool resolver and re-add only the
+# true/false literals used by workflow inputs such as persist-credentials.
+_UniqueKeySafeLoader.yaml_implicit_resolvers = {
+    first: [
+        (tag, resolver)
+        for tag, resolver in resolvers
+        if tag != BOOL_TAG
+    ]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_UniqueKeySafeLoader.add_implicit_resolver(
+    BOOL_TAG,
+    re.compile(r"^(?:true|false)$", re.IGNORECASE),
+    list("tTfF"),
+)
 
 
 def _construct_unique_mapping(
@@ -122,8 +142,6 @@ def _job_writes_contents(job: Mapping[str, Any]) -> bool:
 
 
 def _normalize_action_use(value: str) -> str:
-    # GitHub owner/repository identity is case-insensitive. Normalize before
-    # classification while preserving the original value for error messages.
     return value.casefold()
 
 
@@ -269,6 +287,24 @@ class ActionsWorkflowSecurityTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 _validate_workflow_security(path.name, path.read_text(encoding="utf-8"))
+
+    def test_github_workflow_words_remain_strings_while_true_false_are_boolean(self) -> None:
+        workflow = f"""\
+on: push
+permissions:
+  contents: read
+jobs:
+  on:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+"""
+        parsed = _load_workflow("ci.yml", workflow)
+        self.assertIn("on", parsed)
+        self.assertIn("on", _require_mapping(parsed["jobs"], "jobs"))
+        _validate_workflow_security("ci.yml", workflow)
 
     def test_whole_job_flow_mapping_cannot_hide_write_authority(self) -> None:
         workflow = f"""\
