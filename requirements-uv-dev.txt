@@ -4,5 +4,8 @@
 # FastAPI/Starlette TestClient transport used by tests_api.
 httpx>=0.27,<1
 
+# Standards-based YAML parser used by the GitHub Actions security-policy guard.
+PyYAML==6.0.2
+
 # Maintained cross-platform browser E2E framework; browsers are provisioned separately in CI.
 playwright==1.61.0
