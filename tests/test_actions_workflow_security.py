@@ -108,6 +108,30 @@ def _require_mapping(value: Any, label: str) -> Mapping[str, Any]:
     return value
 
 
+def _normalize_checkout_inputs(
+    name: str,
+    job_name: str,
+    value: Any,
+) -> dict[str, Any]:
+    mapping = _require_mapping(value, f"{name} job {job_name} checkout with")
+    normalized: dict[str, Any] = {}
+    original_keys: dict[str, str] = {}
+    for raw_key, raw_value in mapping.items():
+        if not isinstance(raw_key, str):
+            raise WorkflowPolicyError(
+                f"{name} job {job_name} checkout with input names must be strings"
+            )
+        key = raw_key.casefold()
+        if key in normalized:
+            raise WorkflowPolicyError(
+                f"{name} job {job_name} checkout with contains case-insensitive duplicate "
+                f"input keys {original_keys[key]!r} and {raw_key!r}"
+            )
+        normalized[key] = raw_value
+        original_keys[key] = raw_key
+    return normalized
+
+
 def _validate_permission_value(
     name: str,
     value: Any,
@@ -240,9 +264,10 @@ def _validate_workflow_security(name: str, text: str) -> None:
             checkout_seen += 1
             if job_writes_contents:
                 writer_checkout_seen += 1
-            with_mapping = _require_mapping(
+            with_mapping = _normalize_checkout_inputs(
+                name,
+                job_name,
                 step.get("with"),
-                f"{name} job {job_name} checkout with",
             )
             if "persist-credentials" not in with_mapping:
                 raise WorkflowPolicyError(
@@ -345,6 +370,22 @@ jobs:
           persist-credentials: false
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "checkout with"):
+            _validate_workflow_security("ci.yml", workflow)
+
+    def test_checkout_input_keys_cannot_collide_case_insensitively(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+          PERSIST-CREDENTIALS: true
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "case-insensitive duplicate input keys"):
             _validate_workflow_security("ci.yml", workflow)
 
     def test_flow_style_checkout_with_is_structurally_validated(self) -> None:
