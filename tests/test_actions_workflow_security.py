@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 APPROVED_WRITER = "vendor-videoclaw.yml"
 FIRST_PARTY_ACTION = re.compile(
-    r"^\s*uses:\s*(actions/[A-Za-z0-9_.-]+)@([^\s#]+)",
+    r"^\s*(?:-\s*)?uses:\s*(actions/[A-Za-z0-9_.-]+)@([^\s#]+)",
     re.MULTILINE,
 )
 FULL_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
