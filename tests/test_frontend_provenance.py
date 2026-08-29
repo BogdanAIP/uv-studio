@@ -18,7 +18,15 @@ SPEC.loader.exec_module(provenance)
 class FrontendProvenanceTests(unittest.TestCase):
     def test_repository_provenance_matches_pinned_snapshot(self) -> None:
         local_tree = provenance.local_source_tree_sha()
-        with mock.patch.object(provenance, "validate_upstream_snapshot", return_value=local_tree):
+        vendor_license_blob = provenance.local_tracked_blob_sha(
+            provenance.UPSTREAM_LICENSE,
+            label="Pinned VideoClaw UPSTREAM_LICENSE",
+        )
+        with mock.patch.object(
+            provenance,
+            "validate_upstream_snapshot",
+            return_value=(local_tree, vendor_license_blob),
+        ):
             result = provenance.verify()
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["mode"], "read-only")
@@ -27,6 +35,7 @@ class FrontendProvenanceTests(unittest.TestCase):
         self.assertEqual(len(result["source_tree_sha256"]), 64)
         self.assertEqual(result["local_frontend_tree_sha"], local_tree)
         self.assertEqual(result["upstream_frontend_tree_sha"], local_tree)
+        self.assertEqual(result["upstream_license_blob_sha"], vendor_license_blob)
 
     def test_validation_rejects_vendored_identity_mismatch(self) -> None:
         lock = provenance.load_upstream_pin()
@@ -45,17 +54,19 @@ class FrontendProvenanceTests(unittest.TestCase):
         with self.assertRaises(provenance.ProvenanceError):
             provenance.validate_provenance(lock, changed, digest=digest, file_count=len(files))
 
-    def test_upstream_tree_resolution_walks_exact_claimed_commit_and_subtree(self) -> None:
+    def test_upstream_evidence_walks_exact_commit_frontend_and_license(self) -> None:
         commit = "1" * 40
         root_tree = "2" * 40
         first_tree = "3" * 40
         app_tree = "4" * 40
         frontend_tree = "5" * 40
+        license_blob = "6" * 40
         lock = {
             "repository": "HITsz-TMG/VideoClaw",
             "commit": commit,
             "subtree": "video-claw/video-claw",
             "license": "MIT",
+            "license_path": "LICENSE",
         }
 
         def fake_github_json(url: str):
@@ -65,7 +76,10 @@ class FrontendProvenanceTests(unittest.TestCase):
                 return {
                     "sha": root_tree,
                     "truncated": False,
-                    "tree": [{"path": "video-claw", "mode": "040000", "type": "tree", "sha": first_tree}],
+                    "tree": [
+                        {"path": "LICENSE", "mode": "100644", "type": "blob", "sha": license_blob},
+                        {"path": "video-claw", "mode": "040000", "type": "tree", "sha": first_tree},
+                    ],
                 }
             if url.endswith(f"/git/trees/{first_tree}"):
                 return {
@@ -82,13 +96,53 @@ class FrontendProvenanceTests(unittest.TestCase):
             self.fail(f"unexpected GitHub URL: {url}")
 
         with mock.patch.object(provenance, "github_json", side_effect=fake_github_json):
-            self.assertEqual(provenance.resolve_upstream_frontend_tree(lock), frontend_tree)
             self.assertEqual(
-                provenance.validate_upstream_snapshot(lock, local_tree_sha=frontend_tree),
-                frontend_tree,
+                provenance.resolve_upstream_evidence(lock),
+                (frontend_tree, license_blob),
             )
+            self.assertEqual(
+                provenance.validate_upstream_snapshot(
+                    lock,
+                    local_tree_sha=frontend_tree,
+                    vendor_license_blob_sha=license_blob,
+                    frontend_license_blob_sha=license_blob,
+                ),
+                (frontend_tree, license_blob),
+            )
+
+    def test_upstream_binding_rejects_frontend_tree_mismatch(self) -> None:
+        lock = provenance.load_upstream_pin()
+        local_license = "6" * 40
+        with mock.patch.object(
+            provenance,
+            "resolve_upstream_evidence",
+            return_value=("5" * 40, local_license),
+        ):
             with self.assertRaises(provenance.ProvenanceError):
-                provenance.validate_upstream_snapshot(lock, local_tree_sha="9" * 40)
+                provenance.validate_upstream_snapshot(
+                    lock,
+                    local_tree_sha="9" * 40,
+                    vendor_license_blob_sha=local_license,
+                    frontend_license_blob_sha=local_license,
+                )
+
+    def test_synchronized_local_license_forgery_is_rejected(self) -> None:
+        lock = provenance.load_upstream_pin()
+        local_tree = "5" * 40
+        forged_local_license = "9" * 40
+        real_upstream_license = "6" * 40
+        with mock.patch.object(
+            provenance,
+            "resolve_upstream_evidence",
+            return_value=(local_tree, real_upstream_license),
+        ):
+            with self.assertRaises(provenance.ProvenanceError):
+                provenance.validate_upstream_snapshot(
+                    lock,
+                    local_tree_sha=local_tree,
+                    vendor_license_blob_sha=forged_local_license,
+                    frontend_license_blob_sha=forged_local_license,
+                )
 
     def test_synchronized_local_commit_forgery_still_requires_upstream_resolution(self) -> None:
         lock = provenance.load_upstream_pin()
@@ -108,13 +162,21 @@ class FrontendProvenanceTests(unittest.TestCase):
         provenance.validate_provenance(forged_lock, forged_marker, digest=digest, file_count=len(files))
         with mock.patch.object(
             provenance,
-            "resolve_upstream_frontend_tree",
+            "resolve_upstream_evidence",
             side_effect=provenance.ProvenanceError("independent upstream commit did not resolve"),
         ):
             with self.assertRaises(provenance.ProvenanceError):
                 provenance.validate_upstream_snapshot(
                     forged_lock,
                     local_tree_sha=provenance.local_source_tree_sha(),
+                    vendor_license_blob_sha=provenance.local_tracked_blob_sha(
+                        provenance.UPSTREAM_LICENSE,
+                        label="Pinned VideoClaw UPSTREAM_LICENSE",
+                    ),
+                    frontend_license_blob_sha=provenance.local_tracked_blob_sha(
+                        provenance.FRONTEND_LICENSE,
+                        label="frontend/UPSTREAM_LICENSE",
+                    ),
                 )
 
     def test_verifier_exposes_no_restore_arguments(self) -> None:
