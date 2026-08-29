@@ -15,41 +15,35 @@ The slice changes GitHub Actions supply-chain controls only. UV Studio runtime, 
 
 ## Implemented security boundary
 
-All maintained first-party `actions/*` references in the three repository workflows are pinned to exact full commit SHAs. The selected SHAs are the revisions resolved by the previously used major tags at implementation time, so the hardening does not intentionally upgrade Action behavior.
+All maintained remote Action/reusable-workflow `uses:` references must use immutable full 40-character commit SHAs. The currently used `actions/checkout`, `actions/setup-python`, `actions/setup-node` and `actions/upload-artifact` SHAs are the exact revisions resolved by the previously used major tags at implementation time, so the hardening does not intentionally upgrade Action behavior. Workflow lines retain human-readable `# v4` / `# v5` comments beside the immutable refs.
 
-Read-only `ci.yml` and `editor-foundation-spike.yml` keep `permissions: contents: read` and every checkout step explicitly sets `persist-credentials: false`.
+Every maintained workflow now has top-level `permissions: contents: read`. `ci.yml` and `editor-foundation-spike.yml` are fully read-only and every checkout explicitly sets `persist-credentials: false`.
 
-`vendor-videoclaw.yml` remains the only approved `contents: write` workflow because it contains the actual authenticated Git commit/push path. Its checkout explicitly keeps `persist-credentials: true`, making the write exception visible and reviewable rather than relying on the checkout default.
+`vendor-videoclaw.yml` is the only approved writer because it contains the actual authenticated Git commit/push path, but its write authority is narrowed to the single `vendor` job: the workflow remains read-only at top level, that one job declares `contents: write`, and only checkout inside a write-authorized job may use `persist-credentials: true`. Any other checkout, including a future read-only job in the same workflow, must keep credentials disabled.
 
-The permanent guard in `tests/test_actions_workflow_security.py` parses workflows as YAML with PyYAML instead of using a partial handwritten parser. It validates root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms at every relevant schema boundary, rejects duplicate mapping keys, rejects `write-all`, rejects all unexpected write scopes, and requires every maintained first-party Action to use a full 40-character commit SHA.
+The permanent guard in `tests/test_actions_workflow_security.py` parses workflows structurally with pinned PyYAML. It checks root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms, rejects duplicate mapping keys, rejects `write-all` and unexpected write scopes, requires exactly one write-authorized job in the approved vendoring workflow, and requires that writer job to contain authenticated checkout.
 
-GitHub repository identity is case-insensitive, so the guard now case-folds `uses:` values before identifying `actions/*` and `actions/checkout`. Mixed-case first-party references therefore cannot bypass either immutable-SHA validation or checkout credential validation.
+GitHub owner/repository identity is case-insensitive, so remote `uses:` values are classified with `casefold()` before policy checks. Mixed-case references cannot bypass immutable-ref or checkout-credential validation. Local `./...` actions/workflows remain permitted; remote `owner/repo[/path]@ref` uses require a 40-character SHA; Docker actions are rejected until an explicit immutable Docker-image policy exists.
 
-PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap proves the core import/compile contract first, then installs pinned `PyYAML==6.0.2` immediately before the unit/security suite. Normal development/test setup receives it through `requirements-uv-dev.txt`.
+PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap proves the core dependency graph, server import and Python compile contract first, then installs pinned `PyYAML==6.0.2` immediately before the unit/security suite. Normal development/test setup receives it through `requirements-uv-dev.txt`.
 
 ## Semantic review history
 
-Fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..d5f7b5fb4f12e191e12111aff7477b201e275da2` returned `FINDINGS` with one P2 and three rejected candidates.
+Fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..d5f7b5fb4f12e191e12111aff7477b201e275da2` returned one P2. It was **CONFIRMED**: regex/text matching could miss valid YAML write authority and could mistake a credential decoy outside checkout `with` for the actual input.
 
-That first P2 was **CONFIRMED**: the original regex/text guard could fail open on valid YAML, including job-level `permissions: {contents: write}`, and could mistake a `persist-credentials: false` decoy outside checkout `with` for the actual checkout input. The first material fix bound `with.persist-credentials` correctly and added block/flow handling.
+Fresh review of exact `66410db447c896fb898636634258402fae1edbff..1003366e526df15242a7938dbd510eb451b5625f` returned one P2. It was **CONFIRMED**: the remaining handwritten parser could miss a complete job encoded as a YAML flow mapping. The parser was replaced with structural PyYAML parsing.
 
-A second fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..1003366e526df15242a7938dbd510eb451b5625f` also returned `FINDINGS` with one P2 and three rejected candidates.
-
-That second P2 was also **CONFIRMED**: a complete job encoded as a YAML flow mapping could still hide nested job permissions and checkout steps from the handwritten scanner. The fix therefore removed the partial parser entirely and switched to safe structural YAML parsing. Regression coverage includes whole-job flow mappings carrying hidden `contents: write`, whole-job flow mappings persisting checkout credentials, flow-style first-party Action refs, credential decoys outside `with`, and duplicate YAML keys.
-
-A third fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..8fe443bcee37036d3800973c5c26d9ecdcaef5d0` returned `FINDINGS` with one P2 and five rejected candidates.
-
-That third P2 was **CONFIRMED**: first-party Action and checkout recognition remained case-sensitive even though GitHub repository identity is case-insensitive. A mixed-case `Actions/checkout` or `AcTiOnS/setup-python` reference could therefore bypass the permanent full-SHA and/or credential checks. The fix normalizes `uses:` identity with `casefold()` before classification and adds separate regression tests for a mixed-case floating first-party Action and a mixed-case pinned checkout that tries to persist credentials.
+Fresh review of exact `66410db447c896fb898636634258402fae1edbff..8fe443bcee37036d3800973c5c26d9ecdcaef5d0` returned one P2. It was **CONFIRMED**: case-sensitive `actions/*` / checkout recognition could be bypassed by mixed-case GitHub repository identity. Action identity is now normalized before classification, with regression coverage for both floating refs and persisted checkout credentials.
 
 All three prior reviews are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
 
 ## Verification state
 
-Earlier hosted CI proved that the exact pinned checkout/setup-python/setup-node revisions execute successfully on Ubuntu/Windows and that the product/browser baselines remain viable.
+Earlier hosted CI proved that the selected pinned Action revisions execute successfully on Ubuntu and Windows and that the product/browser baselines remain viable.
 
-The first PyYAML exact-head bootstrap run also proved that maintained workflows themselves pass the structural guard. Its only unit failure was a regression assertion expecting a narrower error string: the decoy fixture was correctly rejected as `checkout with must be a mapping`. That assertion has been relaxed to match the actual fail-closed rejection.
+The first PyYAML bootstrap run proved the maintained workflows themselves passed structural validation. Its sole unit failure was an over-specific regression assertion: the credential-decoy fixture was correctly rejected as `checkout with must be a mapping`, but the test expected a narrower error phrase. The assertion was corrected without weakening rejection semantics.
 
-After the third confirmed P2 fix, the new final exact head must pass all five permanent checks. In particular, both bootstrap jobs must prove core import before PyYAML installation and then pass the complete unit/security suite, and both app-baseline jobs must still produce browser evidence. The fresh semantic review must bind the same final BASE/HEAD. Any further material change invalidates that review again.
+The final exact head must pass all five permanent checks: `development-context`, Ubuntu/Windows `bootstrap`, and Ubuntu/Windows `app-baseline`, including browser evidence uploads. The required fresh semantic review must bind that same exact BASE/HEAD. Any further material branch change invalidates it.
 
 ## Native Ready connector state
 
