@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+VENDOR_MODULE_PATH = ROOT / "tools" / "vendor_videoclaw.py"
+VENDOR_SPEC = importlib.util.spec_from_file_location("vendor_videoclaw", VENDOR_MODULE_PATH)
+assert VENDOR_SPEC and VENDOR_SPEC.loader
+vendor_videoclaw = importlib.util.module_from_spec(VENDOR_SPEC)
+sys.modules[VENDOR_SPEC.name] = vendor_videoclaw
+VENDOR_SPEC.loader.exec_module(vendor_videoclaw)
 
 RETIRED_PATHS = (
     ".github/workflows/promote-frontend.yml",
@@ -66,6 +74,12 @@ class DonorUiRetirementTests(unittest.TestCase):
                 if token in text:
                     offenders.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(offenders, [])
+
+    def test_vendor_tool_rejects_product_frontend_destination(self) -> None:
+        for destination in (ROOT / "frontend", ROOT / "frontend" / "nested"):
+            with self.subTest(destination=destination):
+                with self.assertRaises(vendor_videoclaw.VendorError):
+                    vendor_videoclaw.safe_destination(destination)
 
     def test_settings_model_registry_uses_focused_models_client(self) -> None:
         registry = (ROOT / "frontend" / "lib" / "modelRegistry.ts").read_text(encoding="utf-8")
