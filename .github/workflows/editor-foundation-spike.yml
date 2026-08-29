@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Install libopenshot probe dependencies
         run: |
           sudo apt-get update
@@ -42,7 +44,7 @@ jobs:
         run: python3 spikes/editor-foundation/summarize_probe.py "libopenshot probe" .spike-output/openshot-report.json
       - name: Upload libopenshot evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: libopenshot-spike-evidence
           path: .spike-output
@@ -52,7 +54,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Install MLT probe dependencies
         run: |
           sudo apt-get update
@@ -76,7 +80,7 @@ jobs:
         run: python3 spikes/editor-foundation/summarize_probe.py "MLT probe" .spike-output/mlt-report.json
       - name: Upload MLT evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mlt-spike-evidence
           path: .spike-output
@@ -86,8 +90,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11'
       - name: Provision pinned KDE Windows MLT runtime
@@ -141,7 +147,7 @@ jobs:
         run: python spikes/editor-foundation/summarize_probe.py "MLT Windows deployment probe" .spike-output/mlt-windows-report.json
       - name: Upload MLT Windows evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mlt-windows-spike-evidence
           path: .spike-output
@@ -151,7 +157,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Check out pinned OpenCut Classic donor candidate
         run: |
           git clone --filter=blob:none https://github.com/OpenCut-app/opencut-classic.git /tmp/opencut-classic
@@ -169,7 +177,7 @@ jobs:
         run: python3 spikes/editor-foundation/summarize_probe.py "OpenCut Classic donor probe" .spike-output/opencut-report.json
       - name: Upload OpenCut evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: opencut-classic-spike-evidence
           path: .spike-output/opencut-report.json
