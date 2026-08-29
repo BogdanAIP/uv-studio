@@ -13,9 +13,11 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / "upstream" / "video-claw.lock.json"
-SOURCE = ROOT / "vendor" / "videoclaw-app" / "frontend"
+VENDOR_ROOT = ROOT / "vendor" / "videoclaw-app"
+VENDOR_PROVENANCE_PATH = VENDOR_ROOT / ".uv-upstream.json"
+SOURCE = VENDOR_ROOT / "frontend"
 SOURCE_REPO_PATH = SOURCE.relative_to(ROOT).as_posix()
-UPSTREAM_LICENSE = ROOT / "vendor" / "videoclaw-app" / "UPSTREAM_LICENSE"
+UPSTREAM_LICENSE = VENDOR_ROOT / "UPSTREAM_LICENSE"
 FRONTEND = ROOT / "frontend"
 PROVENANCE_PATH = FRONTEND / ".uv-derived.json"
 FRONTEND_LICENSE = FRONTEND / "UPSTREAM_LICENSE"
@@ -47,6 +49,27 @@ def load_upstream_pin() -> dict[str, Any]:
     if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
         raise ProvenanceError("Pinned VideoClaw commit must be a lowercase 40-character SHA")
     return lock
+
+
+def validate_vendored_identity(lock: dict[str, Any], vendor_marker: dict[str, Any]) -> None:
+    """Bind the lock identity to the provenance emitted when the vendor snapshot was created."""
+    expected: dict[str, Any] = {
+        "repository": lock["repository"],
+        "commit": lock["commit"],
+        "subtree": lock["subtree"],
+        "license": lock["license"],
+        "license_file": "UPSTREAM_LICENSE",
+    }
+    mismatches = [
+        f"{key}: expected {value!r}, got {vendor_marker.get(key)!r}"
+        for key, value in expected.items()
+        if vendor_marker.get(key) != value
+    ]
+    file_count = vendor_marker.get("file_count")
+    if not isinstance(file_count, int) or isinstance(file_count, bool) or file_count <= 0:
+        mismatches.append(f"file_count: expected positive integer, got {file_count!r}")
+    if mismatches:
+        raise ProvenanceError("Vendored snapshot identity mismatch:\n- " + "\n- ".join(mismatches))
 
 
 def run_git(*args: str) -> subprocess.CompletedProcess[bytes]:
@@ -164,6 +187,8 @@ def validate_provenance(
 
 def verify() -> dict[str, Any]:
     lock = load_upstream_pin()
+    vendor_marker = read_json(VENDOR_PROVENANCE_PATH)
+    validate_vendored_identity(lock, vendor_marker)
     marker = read_json(PROVENANCE_PATH)
     if not UPSTREAM_LICENSE.is_file():
         raise ProvenanceError("Pinned VideoClaw UPSTREAM_LICENSE is missing")
