@@ -57,7 +57,8 @@ class DependencyContractTests(unittest.TestCase):
         text = DEV_REQUIREMENTS.read_text(encoding="utf-8")
         self.assertIn("-r requirements-uv.txt", text)
         names = _requirement_names(DEV_REQUIREMENTS)
-        self.assertEqual(names, {"httpx", "playwright"})
+        self.assertEqual(names, {"httpx", "playwright", "pyyaml"})
+        self.assertIn("PyYAML==6.0.2", text)
         self.assertIn("playwright==1.61.0", text)
 
     def test_development_setup_does_not_install_vendor_backend_requirements(self) -> None:
