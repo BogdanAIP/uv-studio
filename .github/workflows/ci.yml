@@ -195,6 +195,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: browser-e2e-${{ matrix.os }}
-          path: e2e-artifacts/${{ matrix.os }}/**
-          if-no-files-found: warn
+          path: e2e-artifacts/${{ runner.os }}/**
+          if-no-files-found: error
           retention-days: 14
