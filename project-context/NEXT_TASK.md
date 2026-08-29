@@ -1,52 +1,47 @@
 # Next Task
 
-<!-- uv-next-slice: github-ready-review-fallback -->
+<!-- uv-next-slice: actions-hardening -->
 
 ## Target
 
-Re-evaluate whether `github-ready-review-fallback` is needed **before starting any new process slice**.
+Harden the repository's GitHub Actions supply chain before resuming product architecture work.
 
-The current handoff ID is provisional so the post-merge lifecycle closure has one explicit decision point. It is not authorization to implement the fallback unconditionally.
+This is a small repository security/process slice. It must not change UV Studio runtime, product behavior or canonical application authority.
 
-## Entry gate
+## Required scope
 
-During the post-merge lifecycle closure for PR #82, resolve the live official GitHub connector capability again.
+1. Replace every first-party `actions/*@vN` reference in maintained workflows with an exact full 40-character commit SHA, using the exact action revisions already proven by current successful CI where practical so pinning does not accidentally become a version upgrade.
+2. Keep explicit `permissions: contents: read` on read-only workflows.
+3. Set `persist-credentials: false` on every `actions/checkout` step that does not need authenticated Git push.
+4. Keep `contents: write` only on the narrowly bounded workflow that actually commits/pushes the pinned VideoClaw snapshot; do not widen permissions elsewhere.
+5. Add a repository-level static guard/test that fails if a future workflow:
+   - reintroduces floating `actions/*@vN` references;
+   - grants `contents: write` outside the approved writer workflow;
+   - leaves checkout credentials persisted in a read-only workflow.
+6. Run the permanent Ubuntu/Windows CI on the exact final head.
+7. Because this changes CI/security/acceptance mechanics, freeze exact BASE/HEAD and obtain the required fresh ordinary-ChatGPT semantic review before merge.
 
-- If `mark_pull_request_ready_for_review` is available and works, **do not create or start** a `github-ready-review-fallback` branch/PR/workflow. Record that the fallback is unnecessary and advance the closed idle handoff directly to `project-identity-v2-compat-reader`.
-- Only if the official connector mutation is unavailable as a capability may the closure preserve `github-ready-review-fallback` as the next bounded process slice.
-- A transient failure must be classified before treating the native capability as unavailable; do not add privileged repository automation merely to work around an unrelated temporary error.
+## Native Ready connector note
 
-At the current PR #82 review head, the connected GitHub toolset exposes the native Ready mutation. That observation is evidence that the fallback is probably unnecessary, but the capability must be re-resolved after merge because connector capabilities are live external state.
+A live post-PR-#82 check showed that the official connector exposes `mark_pull_request_ready_for_review`, but the current connector call fails internally because its GraphQL selection queries nonexistent `Repository.fullDatabaseId`.
 
-## Conditional fallback scope
+Treat this as an external connector implementation defect, not as proof that GitHub lacks the Ready mutation. Do not add a privileged `pull_request_target` fallback inside the hardening slice merely to work around this connector bug. Revisit a repository fallback only if a later separately justified process decision proves that the benefit outweighs the added privileged workflow surface.
 
-Only when the entry gate proves the native Ready mutation unavailable:
+## GitHub settings follow-up
 
-- add a trusted `pull_request_target` workflow on `main` that reacts only to the exact `uv:ready-for-review` label;
-- require the triggering actor to be the repository owner and the PR head repository to equal this repository;
-- do not checkout or execute PR code;
-- grant only the permissions proven necessary for the mutation and cleanup;
-- call the normal GitHub ready-for-review mutation through a trusted GitHub mechanism;
-- independently verify the PR reports `draft=false` before declaring success;
-- remove the service label after success/verified already-ready state so a later deliberate draft cycle can be triggered again;
-- keep the fallback dormant unless the official connector mutation is unavailable.
+After the hardening PR is merged and the repository workflows are compatible, enable GitHub's repository/organization policy requiring Actions to be pinned to a full-length commit SHA.
 
-## Required proof if fallback is needed
-
-- focused static tests/guards for exact event, actor, repository and permission boundaries;
-- no PR-head checkout or execution path in the trusted workflow;
-- physical GitHub proof on a draft same-repository test PR that the fallback changes it to non-draft and cleans up its trigger;
-- negative proof that non-owner/fork/non-matching-label events cannot execute the mutation path;
-- context validation and permanent Ubuntu/Windows CI;
-- required exact-base/exact-head fresh ordinary-ChatGPT semantic review because this changes repository review/acceptance mechanics;
-- zero unresolved findings and review threads before merge.
+That UI setting is intentionally enabled only after repository workflows are already compliant so development is not interrupted by a policy/configuration ordering failure.
 
 ## Following product slice
 
-When the native Ready mutation is available, or after a separately justified fallback slice is completed, resume `project-identity-v2-compat-reader` from the accepted D-070 migration inventory.
+After Actions hardening and its lifecycle closure, resume `project-identity-v2-compat-reader` from the accepted D-070 migration inventory.
 
 That product slice must preserve schema-v1 project/archive readability while introducing the newer identity/compatibility boundary needed before modern projects can stop depending on `recipe_id` as canonical identity.
 
 ## Out of scope
 
-Do not patch or vendor the server-side official ChatGPT GitHub connector. Do not mix `project-identity-v2-compat-reader` implementation into a fallback process slice if the fallback is actually required.
+- do not implement `project-identity-v2-compat-reader` in the Actions hardening PR;
+- do not create a Ready-for-review fallback workflow in the same slice;
+- do not upgrade unrelated dependencies or Actions majors merely because pinning is being introduced;
+- do not change product/runtime behavior.
