@@ -53,4 +53,4 @@ Zero unresolved GitHub review threads and an exact reviewed `BASE_SHA..HEAD_SHA`
 
 ## Handoff
 
-The next slice after this one is `project-identity-v2-compat-reader`.
+The next slice is `github-ready-review-fallback`: add a trusted repository-owned label-triggered fallback for Draft -> Ready when the official GitHub connector mutation is unavailable, then resume `project-identity-v2-compat-reader`.

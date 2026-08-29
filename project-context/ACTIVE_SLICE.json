@@ -42,7 +42,7 @@
     "merge_commit": "d0a59e62a96c3f0fcee60cc7db6286357b79f1a4"
   },
   "handoff": {
-    "next_slice_id": "project-identity-v2-compat-reader",
+    "next_slice_id": "github-ready-review-fallback",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
