@@ -32,6 +32,7 @@
       "tests/test_frontend_provenance.py",
       "tests/test_promote_frontend.py",
       "tools/promote_frontend.py",
+      "tools/vendor_videoclaw.py",
       "tools/uv_dev.py",
       "tools/verify_frontend_provenance.py"
     ]
