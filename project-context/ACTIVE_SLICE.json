@@ -13,7 +13,9 @@
       ".github/workflows/ci.yml",
       ".github/workflows/editor-foundation-spike.yml",
       ".github/workflows/vendor-videoclaw.yml",
+      "requirements-uv-dev.txt",
       "tests/test_actions_workflow_security.py",
+      "tests/test_dependency_contract.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md"
