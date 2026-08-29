@@ -21,6 +21,7 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCK = ROOT / "upstream" / "video-claw.lock.json"
+PRODUCT_FRONTEND = ROOT / "frontend"
 
 
 @dataclass(frozen=True)
@@ -63,11 +64,17 @@ class VendorError(RuntimeError):
 
 
 def safe_destination(path: Path, root: Path = ROOT) -> Path:
-    """Resolve a destination and reject writes outside the repository root."""
+    """Resolve a destination and reject writes outside repository/vendor authority."""
     resolved = path.resolve()
     root_resolved = root.resolve()
+    frontend_resolved = PRODUCT_FRONTEND.resolve()
     if resolved == root_resolved:
         raise VendorError("Destination cannot be the repository root")
+    if resolved == frontend_resolved or frontend_resolved in resolved.parents:
+        raise VendorError(
+            "Destination cannot target UV Studio product frontend; "
+            "vendor snapshots must remain outside top-level frontend/"
+        )
     if root_resolved in resolved.parents:
         return resolved
     raise VendorError(f"Destination must stay inside repository root: {resolved}")
@@ -196,7 +203,7 @@ def parse_args() -> argparse.Namespace:
         "--destination",
         type=Path,
         default=None,
-        help="Destination inside repository root; defaults to lock file value.",
+        help="Destination inside repository root; top-level frontend/ is forbidden.",
     )
     parser.add_argument(
         "--dry-run",
