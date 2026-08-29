@@ -3,7 +3,7 @@
 
 This module is owned by UV Studio and provides stable repository-root commands.
 The backend wraps the pinned VideoClaw runtime, while the user-facing frontend
-is UV Studio-owned derived source under top-level `frontend/`.
+is tracked UV Studio product source under top-level `frontend/`.
 """
 
 from __future__ import annotations
@@ -49,7 +49,8 @@ def validate_layout() -> None:
             "UV Studio development layout is incomplete. Missing:\n"
             f"{formatted}\n"
             "If vendor files are missing, run: python tools/vendor_videoclaw.py\n"
-            "If frontend files are missing, run: python tools/promote_frontend.py"
+            "If tracked frontend files are missing or damaged, restore frontend/ from the current Git checkout or use a fresh checkout. "
+            "The pinned donor frontend is provenance/comparison material only."
         )
 
 

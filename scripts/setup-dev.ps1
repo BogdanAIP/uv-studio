@@ -12,7 +12,7 @@ if (-not (Test-Path $UVDevRequirements)) {
 }
 
 if (-not (Test-Path $FrontendPackage)) {
-    throw "UV Studio frontend is missing. Run: python tools/promote_frontend.py"
+    throw "UV Studio tracked frontend is missing. Restore frontend/ from the current Git checkout or use a fresh checkout; the pinned donor frontend is provenance/comparison material only."
 }
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {

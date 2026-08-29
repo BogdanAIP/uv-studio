@@ -1,5 +1,5 @@
 import type { ProviderGroup } from '@/config/models';
-import { fetchApiModels } from '@/lib/workflowApi';
+import { fetchApiModels } from '@/lib/modelsApi';
 
 const PROVIDER_LABELS: Record<string, string> = {
   dashscope: 'DashScope',

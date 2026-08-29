@@ -1,7 +1,7 @@
 # UV Studio — Current Architecture
 
 **Status:** CURRENT AUTHORITY  
-**Date:** 2026-08-28  
+**Date:** 2026-08-29  
 **Product composition:** D-064  
 **Shared production semantics:** D-065  
 **Agent Harness factoring:** D-066  
@@ -287,7 +287,7 @@ Stage 18 remains internal infrastructure. It does not claim a visible autonomous
 
 ## D-070 product-first handoff before further D-066 autonomy
 
-Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` was accepted and merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`; the D-070 architecture-compression gate is satisfied. The next bounded migration handoff after lifecycle closure is `donor-ui-retirement`, not D-066 Layer 5.
+Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` was accepted and merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`; the D-070 architecture-compression gate is satisfied. `donor-ui-retirement` is the active PR #82 candidate, not a future handoff. If PR #82 merges, the recorded post-merge lifecycle handoff is `github-ready-review-fallback`, which must be re-evaluated against live native GitHub Ready capability before any process slice is started.
 
 The accepted behavior-preserving inventory establishes exact callers, canonical replacements, durable compatibility requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and their runtime dependencies.
 
@@ -352,9 +352,9 @@ Still present as compatibility/migration code unless separately promoted:
 - Recipe Registry;
 - Product Orchestrator and legacy `/execution-plan`;
 - Stage 6/8 workspace UI;
-- donor-era clients and runtime paths still needed by supported callers;
+- legacy `/projects/[projectId]` domain panels and VideoClaw backend compatibility still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-The D-070 `architecture-compression-inventory` is accepted and merged through PR #77. Its architecture-compression gate is satisfied; the bounded migration handoff is `donor-ui-retirement`, while later slices execute the accepted caller map. The separate `micro_drama` golden-vertical gate remains open until proven.
+The D-070 `architecture-compression-inventory` is accepted and merged through PR #77. Its architecture-compression gate is satisfied. `donor-ui-retirement` is implemented on the active PR #82 candidate and remains pending merge; the recorded next lifecycle handoff is `github-ready-review-fallback`, subject to re-evaluation because native Ready mutation is currently available. The separate `micro_drama` golden-vertical gate remains open until proven.
 
 Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the accepted D-070 retirement map is being executed.

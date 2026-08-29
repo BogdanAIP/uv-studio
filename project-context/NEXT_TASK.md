@@ -1,48 +1,52 @@
 # Next Task
 
-<!-- uv-next-slice: donor-ui-retirement -->
+<!-- uv-next-slice: github-ready-review-fallback -->
 
-## Goal
+## Target
 
-After `architecture-compression-inventory` is accepted, merged and lifecycle-closed, perform the first bounded retirement slice by first removing every supported mechanism that can restore donor frontend state, extracting the one supported model-listing dependency currently shared through donor-era client glue, and only then removing donor frontend workflow surfaces whose zero-supported-caller gate is actually proven.
+Re-evaluate whether `github-ready-review-fallback` is needed **before starting any new process slice**.
 
-The expected deletion group is the old VideoClaw-style Workflow/Pipeline/Sandbox/stage UI and the donor-only remainder of its client glue. Two prerequisites must be satisfied before that deletion:
-
-1. Donor frontend restoration is currently possible through more than the manually dispatched force-reset workflow. `.github/workflows/promote-frontend.yml` runs `python tools/promote_frontend.py --force`, which can replace the maintained UV-owned `frontend/`; plain `python tools/promote_frontend.py` also recreates the pinned donor frontend when `frontend/` is absent. `tools/uv_dev.py` and Windows `scripts/setup-dev.ps1` currently direct developers to the plain command when frontend files are missing, and `docs/FRONTEND.md` documents the promotion/provenance mechanism. `tests/test_promote_frontend.py` deliberately verifies the current no-force creation and force-replacement behavior, while `.github/workflows/ci.yml` runs that unit suite and separately invokes `tools/promote_frontend.py --check`. The retirement slice must disable, remove or safely replace every supported write-capable donor restoration entry point, migrate its callers/guidance/tests, and preserve any intended provenance verification as check-only/read-only before claiming donor UI retirement.
-2. `frontend/lib/workflowApi.ts` is **not** wholly donor-only today: supported `/settings` reaches `fetchApiModels` through `frontend/lib/modelRegistry.ts`. That model lookup must move to a modern model/capability client without changing Settings behavior.
-
-## Required direction
-
-- start only from lifecycle-idle `main` after the inventory PR is merged and closed;
-- first disable, remove or replace all supported pinned-frontend restoration paths so repository automation, developer tooling, setup scripts, tests, or documented recovery guidance cannot recreate the donor VideoClaw tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py` with and without `--force`, `tools/uv_dev.py`, Windows `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, `tests/test_promote_frontend.py`, and the promotion/provenance checks in `.github/workflows/ci.yml`;
-- replace tests that currently assert write-capable promotion with tests for the retained safe/read-only provenance contract; keep CI provenance validation if still required, but it must not depend on write authority over the maintained `frontend/` tree;
-- retain no equivalent whole-frontend restore under another command/workflow name;
-- move `fetchApiModels` used by `/settings -> modelRegistry.ts` out of `workflowApi.ts` into an appropriate modern model/capability API client, preserving the existing model-listing/filter contract;
-- only after both prerequisites are proven, remove donor Workflow/Pipeline/Sandbox/stage roots and any `workflowApi.ts` remainder that an exact recursive scan proves has no supported caller;
-- remove only items classified **DELETE LATER** whose deletion gate is fully satisfied by the accepted inventory; treat mixed **ADAPT → DELETE LATER** glue as extract-first;
-- do not remove the live legacy `/projects/[projectId]` compatibility route merely because donor components are removed;
-- do not conflate `frontend/components/stages/**` donor workflow UI with live Stage 8 editor panels such as `Stage8CompositionPanel` / `Stage8MediaPanel`;
-- do not remove Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 API/workspace, schema-v1 `recipe_id`, or useful dubbing/music/continuity/targeted-edit domain state in this slice;
-- preserve the modern `/projects/[projectId]/studio` route and Production Direction creation path;
-- preserve `/settings` and its model selection behavior;
-- preserve Stage-18 mutation/recovery guarantees.
-
-## Required proof
-
-At minimum:
-
-- direct proof that no enabled repository workflow, developer tool, setup script, unit test expectation, or documented supported recovery path can restore the pinned donor frontend over the UV-owned `frontend/` tree after cleanup; explicitly cover `.github/workflows/promote-frontend.yml`, `tools/promote_frontend.py --force`, plain `tools/promote_frontend.py` when `frontend/` is absent, `tools/uv_dev.py`, `scripts/setup-dev.ps1`, `docs/FRONTEND.md`, and `tests/test_promote_frontend.py`;
-- direct proof that `.github/workflows/ci.yml` retains only the intended read-only provenance/check contract and no CI path depends on donor promotion writes;
-- direct proof that any retained provenance command is check-only/read-only with respect to `frontend/`;
-- direct proof that `/settings -> modelRegistry.ts` no longer imports model listing from `workflowApi.ts` and still receives the expected filtered model groups;
-- exact recursive zero-supported-caller proof for every removed frontend file/client remainder;
-- Next.js route inventory showing supported routes remain unchanged, including `/settings`;
-- frontend lint and production build pass;
-- permanent Ubuntu/Windows repository checks pass;
-- browser coverage confirms supported Settings/Projects/Studio/legacy compatibility routes remain usable;
-- no supported legacy project route or persisted project becomes unreadable;
-- no new compatibility fallback, setup command, test fixture, documented recovery instruction or reset mechanism is introduced that recreates the deleted donor UI.
+The current handoff ID is provisional so the post-merge lifecycle closure has one explicit decision point. It is not authorization to implement the fallback unconditionally.
 
 ## Entry gate
 
-Begin only after the accepted `architecture-compression-inventory` confirms this restore-safe, extract-first `donor-ui-retirement` boundary and the repository is lifecycle-idle.
+During the post-merge lifecycle closure for PR #82, resolve the live official GitHub connector capability again.
+
+- If `mark_pull_request_ready_for_review` is available and works, **do not create or start** a `github-ready-review-fallback` branch/PR/workflow. Record that the fallback is unnecessary and advance the closed idle handoff directly to `project-identity-v2-compat-reader`.
+- Only if the official connector mutation is unavailable as a capability may the closure preserve `github-ready-review-fallback` as the next bounded process slice.
+- A transient failure must be classified before treating the native capability as unavailable; do not add privileged repository automation merely to work around an unrelated temporary error.
+
+At the current PR #82 review head, the connected GitHub toolset exposes the native Ready mutation. That observation is evidence that the fallback is probably unnecessary, but the capability must be re-resolved after merge because connector capabilities are live external state.
+
+## Conditional fallback scope
+
+Only when the entry gate proves the native Ready mutation unavailable:
+
+- add a trusted `pull_request_target` workflow on `main` that reacts only to the exact `uv:ready-for-review` label;
+- require the triggering actor to be the repository owner and the PR head repository to equal this repository;
+- do not checkout or execute PR code;
+- grant only the permissions proven necessary for the mutation and cleanup;
+- call the normal GitHub ready-for-review mutation through a trusted GitHub mechanism;
+- independently verify the PR reports `draft=false` before declaring success;
+- remove the service label after success/verified already-ready state so a later deliberate draft cycle can be triggered again;
+- keep the fallback dormant unless the official connector mutation is unavailable.
+
+## Required proof if fallback is needed
+
+- focused static tests/guards for exact event, actor, repository and permission boundaries;
+- no PR-head checkout or execution path in the trusted workflow;
+- physical GitHub proof on a draft same-repository test PR that the fallback changes it to non-draft and cleans up its trigger;
+- negative proof that non-owner/fork/non-matching-label events cannot execute the mutation path;
+- context validation and permanent Ubuntu/Windows CI;
+- required exact-base/exact-head fresh ordinary-ChatGPT semantic review because this changes repository review/acceptance mechanics;
+- zero unresolved findings and review threads before merge.
+
+## Following product slice
+
+When the native Ready mutation is available, or after a separately justified fallback slice is completed, resume `project-identity-v2-compat-reader` from the accepted D-070 migration inventory.
+
+That product slice must preserve schema-v1 project/archive readability while introducing the newer identity/compatibility boundary needed before modern projects can stop depending on `recipe_id` as canonical identity.
+
+## Out of scope
+
+Do not patch or vendor the server-side official ChatGPT GitHub connector. Do not mix `project-identity-v2-compat-reader` implementation into a fallback process slice if the fallback is actually required.

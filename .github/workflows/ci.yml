@@ -6,6 +6,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
 
+permissions:
+  contents: read
+
 jobs:
   development-context:
     runs-on: ubuntu-latest
@@ -54,23 +57,14 @@ jobs:
       - name: Validate root launchers load
         run: |
           python tools/vendor_videoclaw.py --help
-          python tools/promote_frontend.py --check
+          python tools/verify_frontend_provenance.py --help
           python tools/uv_dev.py --help
           python tools/uv_dev.py paths
 
-      - name: Validate upstream and derived frontend provenance
-        shell: python
-        run: |
-          import json
-          from pathlib import Path
-          lock = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
-          marker = json.loads(Path("frontend/.uv-derived.json").read_text(encoding="utf-8"))
-          assert lock["schema_version"] == 1
-          assert len(lock["commit"]) == 40
-          assert lock["subtree"] == "video-claw/video-claw"
-          assert marker["source_commit"] == lock["commit"]
-          assert marker["source_subtree"] == f"{lock['subtree']}/frontend"
-          assert Path("frontend/UPSTREAM_LICENSE").is_file()
+      - name: Validate read-only frontend provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/verify_frontend_provenance.py
 
   app-baseline:
     strategy:
@@ -202,5 +196,5 @@ jobs:
         with:
           name: browser-e2e-${{ matrix.os }}
           path: e2e-artifacts/${{ runner.os }}/**
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14

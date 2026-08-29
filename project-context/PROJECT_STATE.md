@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: independent-code-review-policy -->
+<!-- uv-context-state: review -->
+<!-- uv-active-slice: donor-ui-retirement -->
 
 **Updated:** 2026-08-29
 
@@ -9,58 +9,57 @@
 
 ## Current lifecycle
 
-The repository is lifecycle-idle after `independent-code-review-policy` merged through PR #80 as `d0a59e62a96c3f0fcee60cc7db6286357b79f1a4`.
+`donor-ui-retirement` is the active review slice on `chore/donor-ui-retirement`, based on `main` at `1775e0391485fec829577cb1a8816226f7baebba`. PR #82 is non-draft and remains in exact-head review/verification.
 
-The declared next product slice remains `donor-ui-retirement`.
+The slice is bounded by the accepted D-070 legacy-surface inventory. It removes donor restoration authority and donor-only UI/client residue, but it does not retire live compatibility routes, Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 workspace/API/panels or useful domain state.
 
-## Accepted review policy
+## Implemented architecture-compression work
 
-Repository-local semantic review is now part of the accepted development process.
+The accepted caller/migration inventory is `docs/architecture/LEGACY_SURFACE_INVENTORY.md`.
 
-For later review-significant PRs:
+This slice now:
 
-1. fresh development/review invocations enumerate `.agents/skills/*/SKILL.md` from the live source ref before planning and load every applicable skill;
-2. the required primary semantic reviewer is a separate fresh ordinary-ChatGPT context using `.agents/skills/code-review/SKILL.md` against an exact frozen `BASE_SHA..HEAD_SHA`;
-3. the reviewer is read-only, reconstructs evidence independently, attempts to falsify candidate findings and reports only surviving correctness/security/recovery/concurrency/identity/authority/verification/acceptance issues introduced by the reviewed change;
-4. every reported finding is validated by the development context as `CONFIRMED`, `REJECTED` or `SUPERSEDED` before merge;
-5. material post-review changes invalidate the previous semantic review and require a fresh exact-head review;
-6. Codex Review is optional additional evidence when quota is available and is not a merge dependency;
-7. final exact-head CI/required physical evidence and zero unresolved review threads remain mandatory.
+1. removes the supported write-capable donor frontend promotion/restoration workflow and tool while retaining read-only provenance verification;
+2. verifies the pinned donor source from canonical Git blobs and fails closed on tracked, staged or untracked donor-tree changes across Linux and Windows checkouts;
+3. moves `/settings -> modelRegistry.ts -> fetchApiModels` off the broad donor `workflowApi.ts` client without changing the `/api/models` query contract;
+4. removes the donor-only Workflow/Pipeline/Sandbox/stages component residue and the now-unused broad client after repository-level caller guards prove no supported caller remains;
+5. updates development bootstrap/documentation so damaged tracked frontend source is restored from the current Git checkout rather than copied from the pinned donor snapshot.
 
-The adoption PR itself was intentionally governed by the previously accepted policy; the new rule governs subsequent review-significant PRs after this merge/closure.
+The pinned VideoClaw frontend snapshot under `vendor/videoclaw-app/frontend` remains provenance/comparison material, not a supported source for restoring top-level `frontend/`.
 
-## Accepted architecture baseline
+## Preserved boundaries
 
-The accepted caller/migration inventory is `docs/architecture/LEGACY_SURFACE_INVENTORY.md`. PR #77 satisfied the D-070 architecture-compression gate. The separate D-070 golden-vertical gate remains open.
+Modern supported routes remain `/projects`, `/projects/[projectId]/studio` and `/settings`.
 
-Modern product work continues to target canonical Project Store, Production Directions, shared Production Semantic Core, Studio/Application Commands, canonical Timeline, Generation/Model Job authority and Capability/D-017 boundaries.
+The legacy `/projects/[projectId]` route remains a live compatibility surface and is not deleted in this slice. The known timing-sensitive `ProductionWorkspacePanel` remount race also remains a separate defect/risk rather than being mixed into donor UI retirement.
 
-Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 composition and donor workflow APIs remain compatibility/migration surfaces under the accepted no-new-modern-caller rule. Useful dubbing, targeted-edit, continuity and music domain state/capabilities are not deleted as collateral damage.
+Canonical Project Store, Production Direction, shared Production Semantic Core, Studio/Application Commands, Timeline, Model/Generation and Capability/D-017 authorities are unchanged by this slice.
 
-## Accepted Stage 18 guarantees
+## Review and verification
 
-D-066 layer 4 bounded background Agent execution remains accepted infrastructure. Later work must preserve the shared cross-runtime mutation fence, exact canonical freshness, Generation idempotency/D-017 atomicity, foreground/background coordinator ownership, restart-safe recovery and convergence of Agent/GUI/scripts/MCP on the same application/domain commands and Generation/Capability authorities.
+Repository-local independent semantic review is mandatory for this review-significant slice.
 
-## D-070 gate state
+A fresh ordinary-ChatGPT review of exact head `6c62dfc5ade21d3a8f9e55b85451d9e55ec089f2` returned two P2 findings. The development context independently validated both as **CONFIRMED**:
 
-The architecture-compression gate is satisfied.
+1. browser E2E output was written under `e2e-artifacts/${runner.os}` while upload searched `${matrix.os}`, so the exact-head CI run stayed green without either intended `browser-e2e-*` artifact;
+2. `NEXT_TASK.md` unconditionally instructed implementation of `github-ready-review-fallback` even though current architecture requires a live native-Ready capability check before any such process slice begins.
 
-The golden-vertical gate remains open. Required combined user-visible proof remains:
+The browser artifact uploader is corrected to the producer path and now fails when browser evidence is absent. The fallback handoff is now explicitly a provisional post-merge capability decision: lifecycle closure must re-resolve native `mark_pull_request_ready_for_review`; when it is available, no fallback slice is started and the idle handoff advances directly to `project-identity-v2-compat-reader`.
 
-`New Project -> micro_drama -> Scene -> Shot -> named generation Job -> Take candidate -> Accept -> canonical Timeline -> Export`
+These are material post-review changes, so the review of `6c62dfc5...` is stale by policy. The new exact head must receive another separate fresh ordinary-ChatGPT review using `.agents/skills/code-review/SKILL.md`; Codex Review remains optional additional evidence only.
 
-D-066 layers 5-7 remain deferred until the golden-vertical gate is also satisfied.
+The final frozen head must also pass the permanent exact-head checks:
 
-## Verification state
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)`;
+- `app-baseline (windows-latest)`.
 
-PR #80 final head `41e3c9db6661cd32d9322afabe8f99063c61b798` passed all five permanent checks in CI run #3806 and had no unresolved review threads before merge. An earlier duplicate run retained a stale draft-event payload and therefore failed only `development-context` after the PR had already transitioned to review; rerunning that old event necessarily reproduced `event.pull_request.draft does not match lifecycle_state`. The later Ready-for-review run used the correct event state and passed 5/5, and GitHub branch protection accepted the expected-head merge.
+The app-baseline jobs must now produce durable `browser-e2e-ubuntu-latest` and `browser-e2e-windows-latest` artifacts; missing browser evidence is a CI failure rather than a warning.
 
-## Known adjacent implementation risk
-
-A timing-sensitive production-form remount race remains open: `ProductionWorkspacePanel` can remount production semantics after history refresh and discard Shot input entered before refresh completion. This remains a separate implementation defect/risk and is not silently folded into donor UI retirement.
+Zero unresolved GitHub review threads and an exact reviewed `BASE_SHA..HEAD_SHA` remain mandatory before merge.
 
 ## Handoff
 
-The next slice is `donor-ui-retirement`.
-
-Its accepted prerequisites remain: eliminate or safely replace all supported write-capable donor frontend restoration paths while preserving only intended read-only provenance checks; migrate `/settings -> modelRegistry.ts -> fetchApiModels` to a modern model/capability client; only then remove donor-only UI/client remainder after exact zero-supported-caller, route, build and browser proof.
+`github-ready-review-fallback` is a provisional capability-check handoff, not an unconditional implementation slice. During post-merge closure, re-resolve the official GitHub Ready mutation. If native Ready is available, skip the fallback and advance directly to `project-identity-v2-compat-reader`; preserve the fallback as a bounded process slice only if the native capability is genuinely unavailable.

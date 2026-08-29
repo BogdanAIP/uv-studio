@@ -1,13 +1,13 @@
 # UV Studio v2 — architecture map and migration inventory
 
 **Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069 + D-070  
-**Date:** 2026-08-28
+**Date:** 2026-08-29
 
 Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied; the separate `micro_drama` golden-vertical gate remains open and `donor-ui-retirement` is the next bounded migration slice before further Agent autonomy:
+UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied. The separate `micro_drama` golden-vertical gate remains open. The first bounded migration step, `donor-ui-retirement`, is implemented on the current PR #82 candidate and remains pending exact-head review/CI/merge rather than being future work:
 
 ```text
 Project Store
@@ -24,7 +24,7 @@ Project Store
  -> Agent Harness layer 3: functional Subagents                     [Stage 17 merged]
  -> curated Stage-16/17 adversarial assurance                       [PR #73 merged]
  -> Agent Harness layer 4: bounded background execution             [Stage 18 / PR #75 merged]
- -> D-070: architecture compression [accepted] -> micro_drama golden vertical [open]
+ -> D-070: architecture compression [accepted] -> donor UI retirement [PR #82 candidate] -> micro_drama golden vertical [open]
  -> later D-066 autonomy: evaluate/repair -> takeover -> autonomy
 ```
 
@@ -305,9 +305,11 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. The architecture-compression gate is therefore satisfied. The next declared bounded migration slice is `donor-ui-retirement`, not Layer 5; the separate `micro_drama` golden-vertical gate remains open.
+`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. The architecture-compression gate is therefore satisfied. `donor-ui-retirement` is no longer merely the next declared slice: its bounded implementation is present in PR #82 and is pending its exact-head merge gates. The separate `micro_drama` golden-vertical gate remains open.
 
 The accepted behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
+
+PR #82 implements only the donor frontend/client/restoration subset: donor-only Workflow/Pipeline/Sandbox/stage UI is removed, the supported Settings model-listing seam is extracted to focused `modelsApi.ts`, write-capable donor restoration is retired, tracked frontend recovery returns to Git, and retained provenance is read-only and bound to vendored upstream identity. Live Recipe, Product Orchestrator, `/execution-plan`, legacy `/projects/{id}`, Stage8, schema-v1 identity and VideoClaw backend compatibility remain separate work.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
@@ -379,8 +381,9 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 - `api/project_workflow.py` — **LEGACY + EXTRACT**.
 - `/execution-plan` and recipe execution — **LEGACY**.
 - Stage 6/8 workspaces and specialized legacy project pages — **LEGACY RUNTIME / COMPATIBILITY**; Stage8 is still consumed by legacy UI/tests, Product Orchestrator projections and General/Narrated render adapters, so removal requires runtime-caller migration plus persisted-project proof.
-- donor-era pipeline/session/task/model frontend clients — **DELETE LATER** after caller proof; `workflowApi.fetchApiModels` is a supported Settings seam that must be extracted first.
-- donor frontend restoration (`promote-frontend.yml`, `promote_frontend.py` force/no-force, `uv_dev.py`, Windows `setup-dev.ps1`, `docs/FRONTEND.md`) — **ADAPT → DELETE LATER**; write-capable restoration must be removed/replaced before donor UI retirement. `tests/test_promote_frontend.py` currently asserts write behavior and must migrate; `.github/workflows/ci.yml` runs that suite and a separate `--check`, whose intended provenance verification may remain only as read-only proof.
+- donor-only Workflow/Pipeline/Sandbox/stage frontend roots — **RETIRED IN PR #82 CANDIDATE** after recursive zero-caller proof; this does not include live legacy `/projects/{id}` domain/Stage8 panels.
+- `frontend/lib/workflowApi.ts` — **RETIRED / EXTRACTED IN PR #82 CANDIDATE**; the supported Settings `/api/models` seam now lives in focused `frontend/lib/modelsApi.ts` and `modelRegistry.ts` uses it directly.
+- write-capable donor frontend restoration — **RETIRED IN PR #82 CANDIDATE**; promotion workflow/tool/write-behavior tests are removed, developer/bootstrap recovery uses Git checkout, retained `vendor_videoclaw.py` cannot target `frontend/`, and `verify_frontend_provenance.py` is read-only.
 - VideoClaw backend path injection — **DELETE LATER** after dependency/package proof.
 - archived Windows packaging/runtime work — **KEEP AS ENGINEERING REFERENCE**.
 
@@ -408,10 +411,10 @@ Completed:
 14. **Stage 18 bounded background Agent execution — PR #75 merged.**
 15. **`architecture-compression-inventory` — PR #77 merged as `c6831a36eb88289947eed1da65609654a2353524`; exact caller/migration/deletion map accepted, architecture-compression gate satisfied.**
 
-Next bounded work under D-070:
+Current bounded work under D-070:
 
-16. **`donor-ui-retirement`** — first eliminate/replace every write-capable donor restoration path and migrate its workflow/tool/setup/docs/test callers while preserving only read-only provenance checks; extract the supported Settings model lookup; then delete only zero-caller donor UI/client remainder;
-17. later bounded retirement/extraction slices proven by the accepted inventory, including legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
+16. **`donor-ui-retirement` — IMPLEMENTED IN PR #82, PENDING MERGE.** Write-capable donor restoration has been removed/replaced by Git restoration plus read-only provenance; the supported Settings model lookup is extracted; zero-caller donor UI/client remainder is deleted; live compatibility surfaces remain.
+17. later bounded retirement/extraction slices proven by the accepted inventory, including project identity compatibility, recipe entrypoint retirement, execution-plan retirement, legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
 18. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
 
 Only after the remaining D-070 golden-vertical gate is satisfied, resume D-066:
