@@ -21,9 +21,11 @@ Read-only `ci.yml` and `editor-foundation-spike.yml` keep `permissions: contents
 
 `vendor-videoclaw.yml` remains the only approved `contents: write` workflow because it contains the actual authenticated Git commit/push path. Its checkout explicitly keeps `persist-credentials: true`, making the write exception visible and reviewable rather than relying on the checkout default.
 
-The permanent guard in `tests/test_actions_workflow_security.py` now parses workflows as YAML with PyYAML instead of using a partial handwritten parser. It validates root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms at every relevant schema boundary, rejects duplicate mapping keys, rejects `write-all`, rejects all unexpected write scopes, and still requires every maintained first-party Action to use a full 40-character commit SHA.
+The permanent guard in `tests/test_actions_workflow_security.py` parses workflows as YAML with PyYAML instead of using a partial handwritten parser. It validates root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms at every relevant schema boundary, rejects duplicate mapping keys, rejects `write-all`, rejects all unexpected write scopes, and requires every maintained first-party Action to use a full 40-character commit SHA.
 
-PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap installs the pinned test parser separately before the unit suite, while normal development/test setup receives it through `requirements-uv-dev.txt`.
+GitHub repository identity is case-insensitive, so the guard now case-folds `uses:` values before identifying `actions/*` and `actions/checkout`. Mixed-case first-party references therefore cannot bypass either immutable-SHA validation or checkout credential validation.
+
+PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap proves the core import/compile contract first, then installs pinned `PyYAML==6.0.2` immediately before the unit/security suite. Normal development/test setup receives it through `requirements-uv-dev.txt`.
 
 ## Semantic review history
 
@@ -33,15 +35,21 @@ That first P2 was **CONFIRMED**: the original regex/text guard could fail open o
 
 A second fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..1003366e526df15242a7938dbd510eb451b5625f` also returned `FINDINGS` with one P2 and three rejected candidates.
 
-That second P2 was also **CONFIRMED**: a complete job encoded as a YAML flow mapping could still hide nested job permissions and checkout steps from the handwritten scanner. The fix therefore removes the partial parser entirely and uses safe structural YAML parsing. Regression coverage now includes whole-job flow mappings carrying hidden `contents: write`, whole-job flow mappings persisting checkout credentials, flow-style first-party Action refs, credential decoys outside `with`, and duplicate YAML keys.
+That second P2 was also **CONFIRMED**: a complete job encoded as a YAML flow mapping could still hide nested job permissions and checkout steps from the handwritten scanner. The fix therefore removed the partial parser entirely and switched to safe structural YAML parsing. Regression coverage includes whole-job flow mappings carrying hidden `contents: write`, whole-job flow mappings persisting checkout credentials, flow-style first-party Action refs, credential decoys outside `with`, and duplicate YAML keys.
 
-Both prior reviews are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
+A third fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..8fe443bcee37036d3800973c5c26d9ecdcaef5d0` returned `FINDINGS` with one P2 and five rejected candidates.
+
+That third P2 was **CONFIRMED**: first-party Action and checkout recognition remained case-sensitive even though GitHub repository identity is case-insensitive. A mixed-case `Actions/checkout` or `AcTiOnS/setup-python` reference could therefore bypass the permanent full-SHA and/or credential checks. The fix normalizes `uses:` identity with `casefold()` before classification and adds separate regression tests for a mixed-case floating first-party Action and a mixed-case pinned checkout that tries to persist credentials.
+
+All three prior reviews are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
 
 ## Verification state
 
 Earlier hosted CI proved that the exact pinned checkout/setup-python/setup-node revisions execute successfully on Ubuntu/Windows and that the product/browser baselines remain viable.
 
-After the second confirmed P2 fix, the new final exact head must pass all five permanent checks. In particular, both bootstrap jobs must prove PyYAML provisioning plus the full unit/security suite, and both app-baseline jobs must still produce browser evidence. The fresh semantic review must bind the same final BASE/HEAD. Any further material change invalidates that review again.
+The first PyYAML exact-head bootstrap run also proved that maintained workflows themselves pass the structural guard. Its only unit failure was a regression assertion expecting a narrower error string: the decoy fixture was correctly rejected as `checkout with must be a mapping`. That assertion has been relaxed to match the actual fail-closed rejection.
+
+After the third confirmed P2 fix, the new final exact head must pass all five permanent checks. In particular, both bootstrap jobs must prove core import before PyYAML installation and then pass the complete unit/security suite, and both app-baseline jobs must still produce browser evidence. The fresh semantic review must bind the same final BASE/HEAD. Any further material change invalidates that review again.
 
 ## Native Ready connector state
 
