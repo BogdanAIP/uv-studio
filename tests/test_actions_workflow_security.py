@@ -34,8 +34,6 @@ def _construct_unique_mapping(
     if not isinstance(node, MappingNode):
         raise ConstructorError(None, None, "expected a mapping node", node.start_mark)
 
-    # Resolve YAML merge keys before duplicate detection. Overrides introduced
-    # through merge syntax are rejected rather than silently changing policy.
     loader.flatten_mapping(node)
     mapping: dict[Any, Any] = {}
     for key_node, value_node in node.value:
@@ -95,7 +93,7 @@ def _validate_permission_value(
     value: Any,
     *,
     context: str,
-    writer_workflow: bool,
+    allow_contents_write: bool,
 ) -> None:
     if isinstance(value, str):
         if value == "write-all":
@@ -114,13 +112,18 @@ def _validate_permission_value(
             raise WorkflowPolicyError(
                 f"{name} {context} has unsupported {scope} permission: {level!r}"
             )
-        if level == "write" and not (writer_workflow and scope == "contents"):
+        if level == "write" and not (allow_contents_write and scope == "contents"):
             raise WorkflowPolicyError(f"{name} {context} must not grant {scope}: write")
+
+
+def _job_writes_contents(job: Mapping[str, Any]) -> bool:
+    permissions = job.get("permissions")
+    return isinstance(permissions, Mapping) and permissions.get("contents") == "write"
 
 
 def _normalize_action_use(value: str) -> str:
     # GitHub owner/repository identity is case-insensitive. Normalize before
-    # classifying a use while preserving the original value for error text.
+    # classification while preserving the original value for error messages.
     return value.casefold()
 
 
@@ -152,16 +155,13 @@ def _validate_workflow_security(name: str, text: str) -> None:
         workflow.get("permissions"),
         f"{name} top-level permissions",
     )
-    expected_contents = "write" if writer_workflow else "read"
-    if root_permissions.get("contents") != expected_contents:
-        raise WorkflowPolicyError(
-            f"{name} top-level contents permission must be {expected_contents}"
-        )
+    if root_permissions.get("contents") != "read":
+        raise WorkflowPolicyError(f"{name} top-level contents permission must be read")
     _validate_permission_value(
         name,
         root_permissions,
         context="top-level",
-        writer_workflow=writer_workflow,
+        allow_contents_write=False,
     )
 
     jobs = _require_mapping(workflow.get("jobs"), f"{name} jobs")
@@ -170,7 +170,8 @@ def _validate_workflow_security(name: str, text: str) -> None:
 
     remote_use_seen = 0
     checkout_seen = 0
-    expected_persist = writer_workflow
+    write_jobs = 0
+    writer_checkout_seen = 0
 
     for job_name, raw_job in jobs.items():
         if not isinstance(job_name, str):
@@ -182,8 +183,12 @@ def _validate_workflow_security(name: str, text: str) -> None:
                 name,
                 job["permissions"],
                 context=f"job {job_name}",
-                writer_workflow=writer_workflow,
+                allow_contents_write=writer_workflow,
             )
+
+        job_writes_contents = _job_writes_contents(job)
+        if job_writes_contents:
+            write_jobs += 1
 
         if "uses" in job:
             if _validate_action_use(name, job["uses"], context=f"job {job_name}"):
@@ -215,6 +220,8 @@ def _validate_workflow_security(name: str, text: str) -> None:
                 continue
 
             checkout_seen += 1
+            if job_writes_contents:
+                writer_checkout_seen += 1
             with_mapping = _require_mapping(
                 step.get("with"),
                 f"{name} job {job_name} checkout with",
@@ -228,11 +235,24 @@ def _validate_workflow_security(name: str, text: str) -> None:
                 raise WorkflowPolicyError(
                     f"{name} checkout with.persist-credentials must be literal true or false"
                 )
+            expected_persist = job_writes_contents
             if actual_persist is not expected_persist:
                 expected_text = "true" if expected_persist else "false"
                 raise WorkflowPolicyError(
                     f"{name} checkout must set with.persist-credentials: {expected_text}"
                 )
+
+    if writer_workflow:
+        if write_jobs != 1:
+            raise WorkflowPolicyError(
+                f"{name} must grant contents: write to exactly one job"
+            )
+        if writer_checkout_seen == 0:
+            raise WorkflowPolicyError(
+                f"{name} writer job must contain an authenticated checkout"
+            )
+    elif write_jobs:
+        raise WorkflowPolicyError(f"{name} must not define a write-authorized job")
 
     if remote_use_seen == 0:
         raise WorkflowPolicyError(f"{name} has no remote Action/workflow use to guard")
@@ -300,7 +320,7 @@ jobs:
 """
         _validate_workflow_security("ci.yml", workflow)
 
-    def test_flow_style_first_party_action_still_requires_full_sha(self) -> None:
+    def test_flow_style_remote_action_still_requires_full_sha(self) -> None:
         workflow = """\
 permissions: {contents: read}
 jobs:
@@ -406,6 +426,86 @@ jobs:
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "must not grant issues: write"):
             _validate_workflow_security("ci.yml", workflow)
+
+    def test_writer_requires_top_level_read_and_one_write_job(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  vendor:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: true
+"""
+        _validate_workflow_security(APPROVED_WRITER, workflow)
+
+        top_level_write = workflow.replace("contents: read", "contents: write", 1)
+        with self.assertRaisesRegex(WorkflowPolicyError, "top-level contents permission must be read"):
+            _validate_workflow_security(APPROVED_WRITER, top_level_write)
+
+    def test_writer_rejects_second_write_job(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  vendor:
+    permissions: {{contents: write}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with: {{persist-credentials: true}}
+  extra:
+    permissions: {{contents: write}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'2' * 40}
+        with: {{persist-credentials: true}}
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "exactly one job"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_read_only_job_cannot_persist_credentials(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  vendor:
+    permissions: {{contents: write}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with: {{persist-credentials: true}}
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'2' * 40}
+        with: {{persist-credentials: true}}
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "persist-credentials: false"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_job_must_contain_authenticated_checkout(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  vendor:
+    permissions: {{contents: write}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@{'1' * 40}
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'2' * 40}
+        with: {{persist-credentials: false}}
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "writer job must contain"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
 
 
 if __name__ == "__main__":
