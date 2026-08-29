@@ -21,9 +21,11 @@ VENDOR_PROVENANCE_PATH = VENDOR_ROOT / ".uv-upstream.json"
 SOURCE = VENDOR_ROOT / "frontend"
 SOURCE_REPO_PATH = SOURCE.relative_to(ROOT).as_posix()
 UPSTREAM_LICENSE = VENDOR_ROOT / "UPSTREAM_LICENSE"
+UPSTREAM_LICENSE_REPO_PATH = UPSTREAM_LICENSE.relative_to(ROOT).as_posix()
 FRONTEND = ROOT / "frontend"
 PROVENANCE_PATH = FRONTEND / ".uv-derived.json"
 FRONTEND_LICENSE = FRONTEND / "UPSTREAM_LICENSE"
+FRONTEND_LICENSE_REPO_PATH = FRONTEND_LICENSE.relative_to(ROOT).as_posix()
 GITHUB_API = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
 
@@ -58,9 +60,17 @@ def _validate_repository_slug(value: object) -> str:
     return repository
 
 
+def _validate_repository_path(value: object, *, field: str) -> str:
+    path = str(value)
+    parts = path.split("/")
+    if any(not part or part in {".", ".."} for part in parts):
+        raise ProvenanceError(f"Pinned VideoClaw {field} must be a normalized repository path")
+    return path
+
+
 def load_upstream_pin() -> dict[str, Any]:
     lock = read_json(LOCK_PATH)
-    required = ("repository", "commit", "subtree", "license")
+    required = ("repository", "commit", "subtree", "license", "license_path")
     missing = [key for key in required if not lock.get(key)]
     if missing:
         raise ProvenanceError(f"{LOCK_PATH.relative_to(ROOT)} is missing fields: {missing}")
@@ -68,9 +78,8 @@ def load_upstream_pin() -> dict[str, Any]:
     commit = str(lock["commit"])
     if not _valid_sha(commit):
         raise ProvenanceError("Pinned VideoClaw commit must be a lowercase 40-character SHA")
-    subtree_parts = str(lock["subtree"]).split("/")
-    if any(not part or part in {".", ".."} for part in subtree_parts):
-        raise ProvenanceError("Pinned VideoClaw subtree must be a normalized repository path")
+    _validate_repository_path(lock["subtree"], field="subtree")
+    _validate_repository_path(lock["license_path"], field="license_path")
     return lock
 
 
@@ -106,21 +115,24 @@ def run_git(*args: str) -> subprocess.CompletedProcess[bytes]:
         raise ProvenanceError(f"Git is required for provenance verification: {exc}") from exc
 
 
-def require_clean_source() -> None:
-    diff = run_git("diff", "--quiet", "--", SOURCE_REPO_PATH)
+def _require_clean_tracked_path(repo_path: str, *, label: str) -> None:
+    diff = run_git("diff", "--quiet", "--", repo_path)
     if diff.returncode == 1:
-        raise ProvenanceError("Pinned donor frontend has tracked working-tree changes")
+        raise ProvenanceError(f"{label} has tracked working-tree changes")
     if diff.returncode != 0:
         detail = diff.stderr.decode("utf-8", errors="replace").strip()
-        raise ProvenanceError(f"Could not verify donor working-tree state: {detail or 'git diff failed'}")
+        raise ProvenanceError(f"Could not verify {label} working-tree state: {detail or 'git diff failed'}")
 
-    staged = run_git("diff", "--cached", "--quiet", "--", SOURCE_REPO_PATH)
+    staged = run_git("diff", "--cached", "--quiet", "--", repo_path)
     if staged.returncode == 1:
-        raise ProvenanceError("Pinned donor frontend has staged changes")
+        raise ProvenanceError(f"{label} has staged changes")
     if staged.returncode != 0:
         detail = staged.stderr.decode("utf-8", errors="replace").strip()
-        raise ProvenanceError(f"Could not verify donor index state: {detail or 'git diff --cached failed'}")
+        raise ProvenanceError(f"Could not verify {label} index state: {detail or 'git diff --cached failed'}")
 
+
+def require_clean_source() -> None:
+    _require_clean_tracked_path(SOURCE_REPO_PATH, label="Pinned donor frontend")
     untracked = run_git("ls-files", "--others", "--exclude-standard", "-z", "--", SOURCE_REPO_PATH)
     if untracked.returncode != 0:
         detail = untracked.stderr.decode("utf-8", errors="replace").strip()
@@ -143,6 +155,22 @@ def local_source_tree_sha() -> str:
     if not _valid_sha(tree_sha):
         raise ProvenanceError(f"Local donor frontend returned invalid Git tree SHA: {tree_sha!r}")
     return tree_sha
+
+
+def local_tracked_blob_sha(path: Path, *, label: str) -> str:
+    """Return the canonical Git blob identity for an unchanged tracked file."""
+    if not path.is_file():
+        raise ProvenanceError(f"{label} is missing: {path.relative_to(ROOT)}")
+    repo_path = path.relative_to(ROOT).as_posix()
+    _require_clean_tracked_path(repo_path, label=label)
+    result = run_git("rev-parse", f"HEAD:{repo_path}")
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise ProvenanceError(f"Could not resolve {label} Git blob: {detail or 'git rev-parse failed'}")
+    blob_sha = result.stdout.decode("ascii", errors="strict").strip()
+    if not _valid_sha(blob_sha):
+        raise ProvenanceError(f"{label} returned invalid Git blob SHA: {blob_sha!r}")
+    return blob_sha
 
 
 def source_entries() -> list[tuple[str, str, str]]:
@@ -235,8 +263,7 @@ def _tree_payload(repository: str, tree_sha: str) -> dict[str, Any]:
     return payload
 
 
-def resolve_upstream_frontend_tree(lock: dict[str, Any]) -> str:
-    """Resolve the exact frontend tree from the claimed public upstream commit."""
+def _resolve_upstream_commit_root(lock: dict[str, Any]) -> tuple[str, str]:
     repository = _validate_repository_slug(lock["repository"])
     commit = str(lock["commit"])
     commit_payload = github_json(f"{GITHUB_API}/repos/{repository}/git/commits/{commit}")
@@ -250,10 +277,14 @@ def resolve_upstream_frontend_tree(lock: dict[str, Any]) -> str:
         raise ProvenanceError("Upstream commit response did not include a root tree SHA") from exc
     if not _valid_sha(root_tree_sha):
         raise ProvenanceError(f"Upstream commit returned invalid root tree SHA: {root_tree_sha!r}")
+    return repository, str(root_tree_sha)
 
-    current_tree = str(root_tree_sha)
+
+def _resolve_upstream_path_entry(repository: str, root_tree_sha: str, path: str) -> dict[str, Any]:
+    parts = _validate_repository_path(path, field="path").split("/")
+    current_tree = root_tree_sha
     walked: list[str] = []
-    for part in [*str(lock["subtree"]).split("/"), "frontend"]:
+    for index, part in enumerate(parts):
         tree_payload = _tree_payload(repository, current_tree)
         matches = [
             entry
@@ -264,26 +295,75 @@ def resolve_upstream_frontend_tree(lock: dict[str, Any]) -> str:
             joined = "/".join([*walked, part])
             raise ProvenanceError(f"Pinned upstream tree path is missing or ambiguous: {joined}")
         entry = matches[0]
+        if index == len(parts) - 1:
+            return entry
         if entry.get("type") != "tree" or entry.get("mode") != "040000" or not _valid_sha(entry.get("sha")):
             joined = "/".join([*walked, part])
             raise ProvenanceError(f"Pinned upstream path is not a normal Git tree: {joined}")
         current_tree = str(entry["sha"])
         walked.append(part)
-    return current_tree
+    raise ProvenanceError(f"Pinned upstream path could not be resolved: {path}")
 
 
-def validate_upstream_snapshot(lock: dict[str, Any], *, local_tree_sha: str | None = None) -> str:
-    """Bind local vendored bytes to the independently resolved upstream Git tree."""
+def resolve_upstream_evidence(lock: dict[str, Any]) -> tuple[str, str]:
+    """Resolve frontend tree and license blob from the same exact public upstream commit."""
+    repository, root_tree_sha = _resolve_upstream_commit_root(lock)
+
+    frontend_path = f"{lock['subtree']}/frontend"
+    frontend_entry = _resolve_upstream_path_entry(repository, root_tree_sha, frontend_path)
+    if (
+        frontend_entry.get("type") != "tree"
+        or frontend_entry.get("mode") != "040000"
+        or not _valid_sha(frontend_entry.get("sha"))
+    ):
+        raise ProvenanceError(f"Pinned upstream frontend is not a normal Git tree: {frontend_path}")
+
+    license_path = _validate_repository_path(lock["license_path"], field="license_path")
+    license_entry = _resolve_upstream_path_entry(repository, root_tree_sha, license_path)
+    if (
+        license_entry.get("type") != "blob"
+        or license_entry.get("mode") != "100644"
+        or not _valid_sha(license_entry.get("sha"))
+    ):
+        raise ProvenanceError(f"Pinned upstream license is not a normal tracked file: {license_path}")
+
+    return str(frontend_entry["sha"]), str(license_entry["sha"])
+
+
+def validate_upstream_snapshot(
+    lock: dict[str, Any],
+    *,
+    local_tree_sha: str | None = None,
+    vendor_license_blob_sha: str | None = None,
+    frontend_license_blob_sha: str | None = None,
+) -> tuple[str, str]:
+    """Bind local vendored frontend and license bytes to independently resolved upstream Git objects."""
     local_tree = local_tree_sha or local_source_tree_sha()
+    vendor_license_blob = vendor_license_blob_sha or local_tracked_blob_sha(
+        UPSTREAM_LICENSE,
+        label="Pinned VideoClaw UPSTREAM_LICENSE",
+    )
+    frontend_license_blob = frontend_license_blob_sha or local_tracked_blob_sha(
+        FRONTEND_LICENSE,
+        label="frontend/UPSTREAM_LICENSE",
+    )
     if not _valid_sha(local_tree):
         raise ProvenanceError(f"Local donor frontend returned invalid Git tree SHA: {local_tree!r}")
-    upstream_tree = resolve_upstream_frontend_tree(lock)
+    if not _valid_sha(vendor_license_blob) or not _valid_sha(frontend_license_blob):
+        raise ProvenanceError("Local donor license returned an invalid Git blob SHA")
+
+    upstream_tree, upstream_license_blob = resolve_upstream_evidence(lock)
     if local_tree != upstream_tree:
         raise ProvenanceError(
             "Vendored frontend Git tree does not match the pinned upstream commit: "
             f"local={local_tree}, upstream={upstream_tree}"
         )
-    return upstream_tree
+    if vendor_license_blob != upstream_license_blob or frontend_license_blob != upstream_license_blob:
+        raise ProvenanceError(
+            "Local UPSTREAM_LICENSE Git blobs do not match the pinned upstream license: "
+            f"vendor={vendor_license_blob}, frontend={frontend_license_blob}, upstream={upstream_license_blob}"
+        )
+    return upstream_tree, upstream_license_blob
 
 
 def validate_provenance(
@@ -319,16 +399,23 @@ def verify() -> dict[str, Any]:
     vendor_marker = read_json(VENDOR_PROVENANCE_PATH)
     validate_vendored_identity(lock, vendor_marker)
     marker = read_json(PROVENANCE_PATH)
-    if not UPSTREAM_LICENSE.is_file():
-        raise ProvenanceError("Pinned VideoClaw UPSTREAM_LICENSE is missing")
-    if not FRONTEND_LICENSE.is_file():
-        raise ProvenanceError("frontend/UPSTREAM_LICENSE is missing")
-    if FRONTEND_LICENSE.read_bytes() != UPSTREAM_LICENSE.read_bytes():
-        raise ProvenanceError("frontend/UPSTREAM_LICENSE does not match the pinned donor license")
 
     entries = source_entries()
     local_tree_sha = local_source_tree_sha()
-    upstream_frontend_tree_sha = validate_upstream_snapshot(lock, local_tree_sha=local_tree_sha)
+    vendor_license_blob_sha = local_tracked_blob_sha(
+        UPSTREAM_LICENSE,
+        label="Pinned VideoClaw UPSTREAM_LICENSE",
+    )
+    frontend_license_blob_sha = local_tracked_blob_sha(
+        FRONTEND_LICENSE,
+        label="frontend/UPSTREAM_LICENSE",
+    )
+    upstream_frontend_tree_sha, upstream_license_blob_sha = validate_upstream_snapshot(
+        lock,
+        local_tree_sha=local_tree_sha,
+        vendor_license_blob_sha=vendor_license_blob_sha,
+        frontend_license_blob_sha=frontend_license_blob_sha,
+    )
     digest, files = source_digest(entries)
     validate_provenance(lock, marker, digest=digest, file_count=len(files))
     return {
@@ -339,6 +426,7 @@ def verify() -> dict[str, Any]:
         "source_tree_sha256": digest,
         "local_frontend_tree_sha": local_tree_sha,
         "upstream_frontend_tree_sha": upstream_frontend_tree_sha,
+        "upstream_license_blob_sha": upstream_license_blob_sha,
     }
 
 
@@ -362,7 +450,8 @@ def main() -> int:
         print(
             "frontend provenance ok: "
             f"{result['source_commit']} ({result['source_file_count']} pinned files, read-only, "
-            f"upstream tree {result['upstream_frontend_tree_sha']})"
+            f"upstream tree {result['upstream_frontend_tree_sha']}, "
+            f"license blob {result['upstream_license_blob_sha']})"
         )
     return 0
 
