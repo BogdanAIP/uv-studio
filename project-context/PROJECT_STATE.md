@@ -21,21 +21,27 @@ Read-only `ci.yml` and `editor-foundation-spike.yml` keep `permissions: contents
 
 `vendor-videoclaw.yml` remains the only approved `contents: write` workflow because it contains the actual authenticated Git commit/push path. Its checkout explicitly keeps `persist-credentials: true`, making the write exception visible and reviewable rather than relying on the checkout default.
 
-`tests/test_actions_workflow_security.py` now validates the security policy with a fail-closed structural scanner for the supported GitHub workflow YAML forms. It validates block and flow mappings for `permissions` and checkout `with`, rejects unsupported alias/complex permission syntax rather than guessing, binds `persist-credentials` specifically to the checkout `with` mapping, and still requires every maintained first-party Action to use a full 40-character commit SHA.
+The permanent guard in `tests/test_actions_workflow_security.py` now parses workflows as YAML with PyYAML instead of using a partial handwritten parser. It validates root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms at every relevant schema boundary, rejects duplicate mapping keys, rejects `write-all`, rejects all unexpected write scopes, and still requires every maintained first-party Action to use a full 40-character commit SHA.
+
+PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap installs the pinned test parser separately before the unit suite, while normal development/test setup receives it through `requirements-uv-dev.txt`.
 
 ## Semantic review history
 
 Fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..d5f7b5fb4f12e191e12111aff7477b201e275da2` returned `FINDINGS` with one P2 and three rejected candidates.
 
-The P2 was **CONFIRMED**: the first version of the permanent workflow-security guard could fail open on valid YAML, including job-level `permissions: {contents: write}`, and could mistake a `persist-credentials: false` decoy outside checkout `with` for the actual checkout input. The reviewer also confirmed that the current maintained workflows themselves were configured safely and that the pinned Action SHAs matched the previous major-tag resolutions.
+That first P2 was **CONFIRMED**: the original regex/text guard could fail open on valid YAML, including job-level `permissions: {contents: write}`, and could mistake a `persist-credentials: false` decoy outside checkout `with` for the actual checkout input. The first material fix bound `with.persist-credentials` correctly and added block/flow handling.
 
-The guard was materially fixed after review. Regression coverage now proves that job-level flow-style `contents: write` is rejected, a credential decoy outside `with` is rejected, valid flow-style checkout `with` is structurally validated, and permission aliases fail closed. Because this is a material acceptance/security-test change, the prior review is stale and a fresh ordinary-ChatGPT semantic review is required on the new final exact head before merge.
+A second fresh ordinary-ChatGPT review of exact `66410db447c896fb898636634258402fae1edbff..1003366e526df15242a7938dbd510eb451b5625f` also returned `FINDINGS` with one P2 and three rejected candidates.
+
+That second P2 was also **CONFIRMED**: a complete job encoded as a YAML flow mapping could still hide nested job permissions and checkout steps from the handwritten scanner. The fix therefore removes the partial parser entirely and uses safe structural YAML parsing. Regression coverage now includes whole-job flow mappings carrying hidden `contents: write`, whole-job flow mappings persisting checkout credentials, flow-style first-party Action refs, credential decoys outside `with`, and duplicate YAML keys.
+
+Both prior reviews are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
 
 ## Verification state
 
-Preliminary hosted CI on an earlier implementation head proved that the exact pinned checkout/setup-python/setup-node revisions execute successfully, both Ubuntu and Windows bootstrap jobs pass the full unit suite, and Ubuntu app-baseline including browser evidence succeeds. The early development-context failure on that stale head was caused by the then-unbound PR number/write-scope and was corrected before review freeze.
+Earlier hosted CI proved that the exact pinned checkout/setup-python/setup-node revisions execute successfully on Ubuntu/Windows and that the product/browser baselines remain viable.
 
-After the confirmed P2 fix, the final exact head must pass all five permanent checks, including both browser suites/evidence uploads. The fresh semantic review must bind the same final BASE/HEAD. Any further material change invalidates that review again.
+After the second confirmed P2 fix, the new final exact head must pass all five permanent checks. In particular, both bootstrap jobs must prove PyYAML provisioning plus the full unit/security suite, and both app-baseline jobs must still produce browser evidence. The fresh semantic review must bind the same final BASE/HEAD. Any further material change invalidates that review again.
 
 ## Native Ready connector state
 
