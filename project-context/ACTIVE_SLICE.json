@@ -8,7 +8,7 @@
     "goal": "Harden GitHub Actions supply-chain integrity with immutable first-party Action revisions, least-privilege checkout credentials and a permanent workflow-policy guard without changing UV Studio runtime/product behavior.",
     "base_branch": "main",
     "branch": "chore/actions-hardening",
-    "pull_request": 85,
+    "pull_request": 86,
     "write_scope": [
       ".github/workflows/ci.yml",
       ".github/workflows/editor-foundation-spike.yml",
