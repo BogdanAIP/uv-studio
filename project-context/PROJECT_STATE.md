@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: donor-ui-retirement -->
 
 **Updated:** 2026-08-29
@@ -9,27 +9,21 @@
 
 ## Current lifecycle
 
-`donor-ui-retirement` is the active draft slice on `chore/donor-ui-retirement`, based on idle `main` at `1775e0391485fec829577cb1a8816226f7baebba`.
+`donor-ui-retirement` is the active review slice on `chore/donor-ui-retirement`, based on `main` at `1775e0391485fec829577cb1a8816226f7baebba`. PR #82 is non-draft and the implementation is frozen for exact-head review/verification.
 
 The slice is bounded by the accepted D-070 legacy-surface inventory. It removes donor restoration authority and donor-only UI/client residue, but it does not retire live compatibility routes, Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 8 workspace/API/panels or useful domain state.
 
-## Accepted review policy
-
-Repository-local independent semantic review is mandatory for this review-significant slice.
-
-After implementation and focused verification, the PR must freeze exact `BASE_SHA..HEAD_SHA` and receive a separate fresh ordinary-ChatGPT review using `.agents/skills/code-review/SKILL.md`. Codex Review remains optional additional evidence only.
-
-Any material post-review change invalidates the prior semantic review. Exact-head permanent CI/browser gates and zero unresolved GitHub review threads remain mandatory before merge.
-
-## Active architecture-compression work
+## Implemented architecture-compression work
 
 The accepted caller/migration inventory is `docs/architecture/LEGACY_SURFACE_INVENTORY.md`.
 
-This slice will:
+This slice now:
 
-1. remove every supported write-capable donor frontend restoration path while retaining read-only provenance verification;
-2. move `/settings -> modelRegistry.ts -> fetchApiModels` off the broad donor `workflowApi.ts` client without changing the `/api/models` contract;
-3. delete the donor-only Workflow/Pipeline/Sandbox/stages component residue and then the broad client remainder only after repository-level caller guards, TypeScript build and browser evidence prove no supported caller remains.
+1. removes the supported write-capable donor frontend promotion/restoration workflow and tool while retaining read-only provenance verification;
+2. verifies the pinned donor source from canonical Git blobs and fails closed on tracked, staged or untracked donor-tree changes across Linux and Windows checkouts;
+3. moves `/settings -> modelRegistry.ts -> fetchApiModels` off the broad donor `workflowApi.ts` client without changing the `/api/models` query contract;
+4. removes the donor-only Workflow/Pipeline/Sandbox/stages component residue and the now-unused broad client after repository-level caller guards prove no supported caller remains;
+5. updates development bootstrap/documentation so damaged tracked frontend source is restored from the current Git checkout rather than copied from the pinned donor snapshot.
 
 The pinned VideoClaw frontend snapshot under `vendor/videoclaw-app/frontend` remains provenance/comparison material, not a supported source for restoring top-level `frontend/`.
 
@@ -41,16 +35,21 @@ The legacy `/projects/[projectId]` route remains a live compatibility surface an
 
 Canonical Project Store, Production Direction, shared Production Semantic Core, Studio/Application Commands, Timeline, Model/Generation and Capability/D-017 authorities are unchanged by this slice.
 
-## Verification target
+## Review and verification
 
-Required proof includes:
+Repository-local independent semantic review is mandatory for this review-significant slice.
 
-- no supported workflow/script/tool can repopulate top-level `frontend/` from the pinned donor snapshot;
-- retained frontend provenance verification is read-only;
-- `/settings` model listing preserves its current `/api/models` query contract through a focused modern client;
-- the accepted donor-only component/client paths are absent and repository-level caller guards find no surviving `workflowApi` caller;
-- frontend lint/build pass;
-- permanent Ubuntu/Windows CI and browser user-outcome gates pass on the final reviewed head.
+The exact review head must receive a separate fresh ordinary-ChatGPT review using `.agents/skills/code-review/SKILL.md`; Codex Review remains optional additional evidence only. Any material post-review change invalidates the prior semantic review.
+
+Focused repository guards and cross-platform bootstrap verification have passed during implementation. The final frozen head must still pass the permanent exact-head checks:
+
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)`;
+- `app-baseline (windows-latest)`.
+
+Zero unresolved GitHub review threads and an exact reviewed `BASE_SHA..HEAD_SHA` remain mandatory before merge.
 
 ## Handoff
 

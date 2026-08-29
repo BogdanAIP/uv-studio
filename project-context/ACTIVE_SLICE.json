@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "draft",
+  "lifecycle_state": "review",
   "active_slice": {
     "id": "donor-ui-retirement",
     "kind": "chore",
@@ -12,7 +12,6 @@
     "write_scope": [
       ".github/workflows/ci.yml",
       ".github/workflows/promote-frontend.yml",
-      ".github/workflows/review-ready-bridge.yml",
       "docs/FRONTEND.md",
       "frontend/.uv-derived.json",
       "frontend/components/BrandHeader.tsx",
