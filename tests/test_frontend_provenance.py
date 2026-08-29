@@ -23,6 +23,14 @@ class FrontendProvenanceTests(unittest.TestCase):
         self.assertGreater(result["source_file_count"], 0)
         self.assertEqual(len(result["source_tree_sha256"]), 64)
 
+    def test_validation_rejects_vendored_identity_mismatch(self) -> None:
+        lock = provenance.load_upstream_pin()
+        vendor_marker = provenance.read_json(provenance.VENDOR_PROVENANCE_PATH)
+        changed = dict(lock)
+        changed["commit"] = "0" * 40
+        with self.assertRaises(provenance.ProvenanceError):
+            provenance.validate_vendored_identity(changed, vendor_marker)
+
     def test_validation_rejects_marker_mismatch(self) -> None:
         lock = provenance.load_upstream_pin()
         marker = provenance.read_json(provenance.PROVENANCE_PATH)
