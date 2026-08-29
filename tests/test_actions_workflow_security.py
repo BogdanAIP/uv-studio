@@ -189,6 +189,24 @@ def _validate_action_use(name: str, value: Any, *, context: str) -> bool:
     return True
 
 
+def _run_contains_real_git_push(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = line.split()
+        if (
+            len(tokens) >= 2
+            and tokens[0] == "git"
+            and tokens[1] == "push"
+            and "--dry-run" not in tokens
+        ):
+            return True
+    return False
+
+
 def _validate_workflow_security(name: str, text: str) -> None:
     workflow = _load_workflow(name, text)
     writer_workflow = name == APPROVED_WRITER
@@ -210,10 +228,9 @@ def _validate_workflow_security(name: str, text: str) -> None:
     if not jobs:
         raise WorkflowPolicyError(f"{name} must define at least one job")
 
-    remote_use_seen = 0
-    checkout_seen = 0
     write_jobs = 0
     writer_checkout_seen = 0
+    writer_push_seen = 0
 
     for job_name, raw_job in jobs.items():
         if not isinstance(job_name, str):
@@ -233,8 +250,7 @@ def _validate_workflow_security(name: str, text: str) -> None:
             write_jobs += 1
 
         if "uses" in job:
-            if _validate_action_use(name, job["uses"], context=f"job {job_name}"):
-                remote_use_seen += 1
+            _validate_action_use(name, job["uses"], context=f"job {job_name}")
 
         raw_steps = job.get("steps")
         if raw_steps is None:
@@ -244,16 +260,17 @@ def _validate_workflow_security(name: str, text: str) -> None:
 
         for index, raw_step in enumerate(raw_steps):
             step = _require_mapping(raw_step, f"{name} job {job_name} step {index}")
+            if job_writes_contents and _run_contains_real_git_push(step.get("run")):
+                writer_push_seen += 1
             if "uses" not in step:
                 continue
 
             use_value = step["uses"]
-            if _validate_action_use(
+            _validate_action_use(
                 name,
                 use_value,
                 context=f"job {job_name} step {index}",
-            ):
-                remote_use_seen += 1
+            )
 
             if not isinstance(use_value, str):
                 continue
@@ -261,7 +278,6 @@ def _validate_workflow_security(name: str, text: str) -> None:
             if not normalized_use.startswith("actions/checkout@"):
                 continue
 
-            checkout_seen += 1
             if job_writes_contents:
                 writer_checkout_seen += 1
             with_mapping = _normalize_checkout_inputs(
@@ -294,15 +310,12 @@ def _validate_workflow_security(name: str, text: str) -> None:
             raise WorkflowPolicyError(
                 f"{name} writer job must contain an authenticated checkout"
             )
+        if writer_push_seen == 0:
+            raise WorkflowPolicyError(
+                f"{name} writer job must contain a real git push command"
+            )
     elif write_jobs:
         raise WorkflowPolicyError(f"{name} must not define a write-authorized job")
-
-    if remote_use_seen == 0:
-        raise WorkflowPolicyError(f"{name} has no remote Action/workflow use to guard")
-    if checkout_seen == 0:
-        raise WorkflowPolicyError(
-            f"{name} has no checkout step for credential-policy validation"
-        )
 
 
 class ActionsWorkflowSecurityTests(unittest.TestCase):
@@ -312,6 +325,18 @@ class ActionsWorkflowSecurityTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.name):
                 _validate_workflow_security(path.name, path.read_text(encoding="utf-8"))
+
+    def test_read_only_shell_only_workflow_is_allowed(self) -> None:
+        workflow = """\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo safe
+"""
+        _validate_workflow_security("ci.yml", workflow)
 
     def test_github_workflow_words_remain_strings_while_true_false_are_boolean(self) -> None:
         workflow = f"""\
@@ -517,6 +542,7 @@ jobs:
       - uses: actions/checkout@{'1' * 40}
         with:
           persist-credentials: true
+      - run: git push origin HEAD:test
 """
         _validate_workflow_security(APPROVED_WRITER, workflow)
 
@@ -575,6 +601,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-python@{'1' * 40}
+      - run: git push origin HEAD:test
   inspect:
     runs-on: ubuntu-latest
     steps:
@@ -582,6 +609,22 @@ jobs:
         with: {{persist-credentials: false}}
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "writer job must contain"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_job_must_contain_real_git_push(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  vendor:
+    permissions: {{contents: write}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with: {{persist-credentials: true}}
+      - run: git push --dry-run origin HEAD:test
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "real git push"):
             _validate_workflow_security(APPROVED_WRITER, workflow)
 
 
