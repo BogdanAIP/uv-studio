@@ -13,8 +13,9 @@ jobs:
       github.event.pull_request.draft == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.login == github.repository_owner &&
-      contains(github.event.pull_request.body || '', '<!-- uv-ready-bridge: requested -->')
+      contains(github.event.pull_request.body || '', '<!-- uv-ready-bridge: requested-v2 -->')
     permissions:
+      contents: write
       pull-requests: write
     runs-on: ubuntu-latest
 
