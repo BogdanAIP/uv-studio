@@ -8,12 +8,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 APPROVED_WRITER = "vendor-videoclaw.yml"
-FIRST_PARTY_ACTION = re.compile(
-    r"^\s*(?:-\s*)?uses:\s*(actions/[A-Za-z0-9_.-]+)@([^\s#]+)",
+USES_VALUE = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.MULTILINE)
+FULL_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+CONTENTS_WRITE = re.compile(
+    r"^\s*contents:\s*['\"]?write['\"]?\s*(?:#.*)?$",
     re.MULTILINE,
 )
-FULL_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
-CONTENTS_WRITE = re.compile(r"^\s*contents:\s*write\s*(?:#.*)?$", re.MULTILINE)
+WRITE_ALL = re.compile(r"^\s*permissions:\s*['\"]?write-all['\"]?\s*(?:#.*)?$", re.MULTILINE)
 
 
 def _workflow_paths() -> list[Path]:
@@ -39,6 +40,10 @@ def _step_blocks(text: str) -> list[str]:
     return blocks
 
 
+def _uses_values(text: str) -> list[str]:
+    return [value.strip("'\"") for value in USES_VALUE.findall(text)]
+
+
 class ActionsWorkflowSecurityTests(unittest.TestCase):
     def test_first_party_actions_are_pinned_to_full_commit_shas(self) -> None:
         paths = _workflow_paths()
@@ -47,22 +52,30 @@ class ActionsWorkflowSecurityTests(unittest.TestCase):
         seen = 0
         for path in paths:
             text = path.read_text(encoding="utf-8")
-            for action, ref in FIRST_PARTY_ACTION.findall(text):
+            for value in _uses_values(text):
+                if not value.startswith("actions/"):
+                    continue
                 seen += 1
-                self.assertRegex(
-                    ref,
-                    FULL_COMMIT_SHA,
+                action, separator, ref = value.rpartition("@")
+                self.assertEqual(
+                    separator,
+                    "@",
+                    f"{path.relative_to(ROOT)} has malformed first-party Action use: {value}",
+                )
+                self.assertTrue(
+                    FULL_COMMIT_SHA.fullmatch(ref),
                     f"{path.relative_to(ROOT)} uses floating {action}@{ref}",
                 )
         self.assertGreater(seen, 0, "No first-party actions/* uses were found to guard")
 
-    def test_contents_write_is_limited_to_vendoring_writer(self) -> None:
+    def test_write_permission_is_limited_to_vendoring_writer(self) -> None:
         paths = _workflow_paths()
-        writers = [
-            path.name
-            for path in paths
-            if CONTENTS_WRITE.search(path.read_text(encoding="utf-8"))
-        ]
+        writers = []
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            self.assertIsNone(WRITE_ALL.search(text), f"{path.relative_to(ROOT)} must not use permissions: write-all")
+            if CONTENTS_WRITE.search(text):
+                writers.append(path.name)
         self.assertEqual(writers, [APPROVED_WRITER])
 
         for path in paths:
@@ -80,7 +93,7 @@ class ActionsWorkflowSecurityTests(unittest.TestCase):
             checkout_steps = [
                 block
                 for block in _step_blocks(text)
-                if re.search(r"uses:\s*actions/checkout@", block)
+                if re.search(r"uses:\s*['\"]?actions/checkout@", block)
             ]
             self.assertTrue(
                 checkout_steps,
