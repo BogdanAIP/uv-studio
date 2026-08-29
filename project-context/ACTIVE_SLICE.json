@@ -1,14 +1,31 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "draft",
+  "active_slice": {
+    "id": "actions-hardening",
+    "kind": "chore",
+    "roadmap_stage": "security-process",
+    "goal": "Harden GitHub Actions supply-chain integrity with immutable first-party Action revisions, least-privilege checkout credentials and a permanent workflow-policy guard without changing UV Studio runtime/product behavior.",
+    "base_branch": "main",
+    "branch": "chore/actions-hardening",
+    "pull_request": null,
+    "write_scope": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/editor-foundation-spike.yml",
+      ".github/workflows/vendor-videoclaw.yml",
+      "tests/test_actions_hardening.py",
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md",
+      "project-context/NEXT_TASK.md"
+    ]
+  },
   "last_completed": {
     "id": "donor-ui-retirement",
     "pull_request": 82,
     "merge_commit": "c1eb609ec1e4c9db082eaa8338ac7f1e4938da11"
   },
   "handoff": {
-    "next_slice_id": "actions-hardening",
+    "next_slice_id": "project-identity-v2-compat-reader",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
