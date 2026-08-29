@@ -8,12 +8,12 @@
     "goal": "Harden GitHub Actions supply-chain integrity with immutable first-party Action revisions, least-privilege checkout credentials and a permanent workflow-policy guard without changing UV Studio runtime/product behavior.",
     "base_branch": "main",
     "branch": "chore/actions-hardening",
-    "pull_request": null,
+    "pull_request": 85,
     "write_scope": [
       ".github/workflows/ci.yml",
       ".github/workflows/editor-foundation-spike.yml",
       ".github/workflows/vendor-videoclaw.yml",
-      "tests/test_actions_hardening.py",
+      "tests/test_actions_workflow_security.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "project-context/NEXT_TASK.md"
