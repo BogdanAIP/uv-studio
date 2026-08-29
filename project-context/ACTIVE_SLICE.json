@@ -12,6 +12,7 @@
     "write_scope": [
       ".github/workflows/ci.yml",
       ".github/workflows/promote-frontend.yml",
+      ".github/workflows/review-ready-bridge.yml",
       "docs/FRONTEND.md",
       "frontend/.uv-derived.json",
       "frontend/components/BrandHeader.tsx",

@@ -1,0 +1,26 @@
+name: Temporary Review Ready Bridge
+
+on:
+  pull_request:
+    types: [edited]
+
+permissions:
+  contents: read
+
+jobs:
+  mark-ready:
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      contains(github.event.pull_request.body || '', '<!-- uv-ready-bridge: requested -->')
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Mark pull request ready for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr ready "$PR_URL"
