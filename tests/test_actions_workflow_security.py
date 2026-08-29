@@ -67,7 +67,11 @@ _UniqueKeySafeLoader.add_constructor(
 
 
 def _workflow_paths() -> list[Path]:
-    return sorted((*WORKFLOW_DIR.glob("*.yml"), *WORKFLOW_DIR.glob("*.yaml")))
+    return sorted(
+        path
+        for path in WORKFLOW_DIR.iterdir()
+        if path.is_file() and path.suffix.casefold() in {".yml", ".yaml"}
+    )
 
 
 def _load_workflow(name: str, text: str) -> Mapping[str, Any]:
@@ -115,9 +119,8 @@ def _validate_permission_value(
 
 
 def _normalize_action_use(value: str) -> str:
-    # GitHub repository identity is case-insensitive. Normalize the complete
-    # owner/repository/ref string before classifying first-party Actions while
-    # preserving the original value for human-facing error messages.
+    # GitHub owner/repository identity is case-insensitive. Normalize before
+    # classifying a use while preserving the original value for error text.
     return value.casefold()
 
 
@@ -126,13 +129,17 @@ def _validate_action_use(name: str, value: Any, *, context: str) -> bool:
         raise WorkflowPolicyError(f"{name} {context} uses value must be a string")
 
     normalized = _normalize_action_use(value)
-    if not normalized.startswith("actions/"):
+    if normalized.startswith("./"):
         return False
+    if normalized.startswith("docker://"):
+        raise WorkflowPolicyError(
+            f"{name} {context} uses Docker action without an approved immutable policy: {value}"
+        )
 
     action, separator, ref = normalized.rpartition("@")
-    if separator != "@" or not action or not FULL_COMMIT_SHA.fullmatch(ref):
+    if separator != "@" or "/" not in action or not FULL_COMMIT_SHA.fullmatch(ref):
         raise WorkflowPolicyError(
-            f"{name} uses floating or malformed first-party Action: {value}"
+            f"{name} uses floating or malformed remote Action/workflow: {value}"
         )
     return True
 
@@ -161,7 +168,7 @@ def _validate_workflow_security(name: str, text: str) -> None:
     if not jobs:
         raise WorkflowPolicyError(f"{name} must define at least one job")
 
-    first_party_seen = 0
+    remote_use_seen = 0
     checkout_seen = 0
     expected_persist = writer_workflow
 
@@ -180,7 +187,7 @@ def _validate_workflow_security(name: str, text: str) -> None:
 
         if "uses" in job:
             if _validate_action_use(name, job["uses"], context=f"job {job_name}"):
-                first_party_seen += 1
+                remote_use_seen += 1
 
         raw_steps = job.get("steps")
         if raw_steps is None:
@@ -199,7 +206,7 @@ def _validate_workflow_security(name: str, text: str) -> None:
                 use_value,
                 context=f"job {job_name} step {index}",
             ):
-                first_party_seen += 1
+                remote_use_seen += 1
 
             if not isinstance(use_value, str):
                 continue
@@ -227,8 +234,8 @@ def _validate_workflow_security(name: str, text: str) -> None:
                     f"{name} checkout must set with.persist-credentials: {expected_text}"
                 )
 
-    if first_party_seen == 0:
-        raise WorkflowPolicyError(f"{name} has no first-party actions/* use to guard")
+    if remote_use_seen == 0:
+        raise WorkflowPolicyError(f"{name} has no remote Action/workflow use to guard")
     if checkout_seen == 0:
         raise WorkflowPolicyError(
             f"{name} has no checkout step for credential-policy validation"
@@ -334,6 +341,38 @@ jobs:
           persist-credentials: true
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "persist-credentials: false"):
+            _validate_workflow_security("ci.yml", workflow)
+
+    def test_third_party_remote_action_also_requires_full_sha(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+      - uses: example/action@v1
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "floating or malformed"):
+            _validate_workflow_security("ci.yml", workflow)
+
+    def test_docker_action_is_rejected_without_explicit_immutable_policy(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+      - uses: docker://alpine:latest
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "Docker action"):
             _validate_workflow_security("ci.yml", workflow)
 
     def test_duplicate_yaml_keys_fail_closed(self) -> None:
