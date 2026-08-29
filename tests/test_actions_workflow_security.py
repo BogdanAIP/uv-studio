@@ -111,18 +111,25 @@ def _validate_permission_value(
                 f"{name} {context} has unsupported {scope} permission: {level!r}"
             )
         if level == "write" and not (writer_workflow and scope == "contents"):
-            raise WorkflowPolicyError(
-                f"{name} {context} must not grant {scope}: write"
-            )
+            raise WorkflowPolicyError(f"{name} {context} must not grant {scope}: write")
+
+
+def _normalize_action_use(value: str) -> str:
+    # GitHub repository identity is case-insensitive. Normalize the complete
+    # owner/repository/ref string before classifying first-party Actions while
+    # preserving the original value for human-facing error messages.
+    return value.casefold()
 
 
 def _validate_action_use(name: str, value: Any, *, context: str) -> bool:
     if not isinstance(value, str):
         raise WorkflowPolicyError(f"{name} {context} uses value must be a string")
-    if not value.startswith("actions/"):
+
+    normalized = _normalize_action_use(value)
+    if not normalized.startswith("actions/"):
         return False
 
-    action, separator, ref = value.rpartition("@")
+    action, separator, ref = normalized.rpartition("@")
     if separator != "@" or not action or not FULL_COMMIT_SHA.fullmatch(ref):
         raise WorkflowPolicyError(
             f"{name} uses floating or malformed first-party Action: {value}"
@@ -194,7 +201,10 @@ def _validate_workflow_security(name: str, text: str) -> None:
             ):
                 first_party_seen += 1
 
-            if not isinstance(use_value, str) or not use_value.startswith("actions/checkout@"):
+            if not isinstance(use_value, str):
+                continue
+            normalized_use = _normalize_action_use(use_value)
+            if not normalized_use.startswith("actions/checkout@"):
                 continue
 
             checkout_seen += 1
@@ -271,7 +281,7 @@ jobs:
         env:
           persist-credentials: false
 """
-        with self.assertRaisesRegex(WorkflowPolicyError, "with.persist-credentials"):
+        with self.assertRaisesRegex(WorkflowPolicyError, "checkout with"):
             _validate_workflow_security("ci.yml", workflow)
 
     def test_flow_style_checkout_with_is_structurally_validated(self) -> None:
@@ -290,6 +300,40 @@ jobs:
   probe: {runs-on: ubuntu-latest, steps: [{uses: actions/checkout@v4, with: {persist-credentials: false}}]}
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "floating or malformed"):
+            _validate_workflow_security("ci.yml", workflow)
+
+    def test_mixed_case_first_party_action_still_requires_full_sha(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+      - uses: AcTiOnS/setup-python@v5
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "floating or malformed"):
+            _validate_workflow_security("ci.yml", workflow)
+
+    def test_mixed_case_checkout_still_enforces_credential_policy(self) -> None:
+        workflow = f"""\
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@{'1' * 40}
+        with:
+          persist-credentials: false
+      - uses: aCtIoNs/ChEcKoUt@{'2' * 40}
+        with:
+          persist-credentials: true
+"""
+        with self.assertRaisesRegex(WorkflowPolicyError, "persist-credentials: false"):
             _validate_workflow_security("ci.yml", workflow)
 
     def test_duplicate_yaml_keys_fail_closed(self) -> None:
