@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .models import ProjectDocument, ProjectValidationError
+from .models import ProjectDocument, ProjectValidationError, compatibility_recipe_id
 from .source_media import ProjectSourceMediaStore, SourceMediaError, SourceMediaNotFound
 from .store import ProjectNotFound, ProjectStore, ProjectStoreError
 
@@ -285,12 +285,13 @@ class Stage8RecipeWorkspace:
 
 
 def _current_recipe(project: ProjectDocument) -> str:
-    if project.recipe_id not in _SUPPORTED_RECIPES:
+    recipe_id = compatibility_recipe_id(project)
+    if recipe_id not in _SUPPORTED_RECIPES:
         raise Stage8WorkspaceError(
             "Stage 8 recipe workspace is available only for general_video, story_video, "
             "commercial_product, free_project or narrated_video"
         )
-    return project.recipe_id
+    return recipe_id
 
 
 def _workspace_map(project: ProjectDocument) -> dict[str, Any]:
