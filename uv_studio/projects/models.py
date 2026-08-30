@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from typing import Any, Mapping
 
-PROJECT_SCHEMA_VERSION = 1
+PROJECT_SCHEMA_VERSION = 2
+PROJECT_COMPATIBILITY_SCHEMA_VERSION = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
 _ALLOWED_REFERENCE_KINDS = {
@@ -187,9 +188,66 @@ class ProjectReference:
 
 
 @dataclass(frozen=True)
+class ProjectCompatibility:
+    """Persisted compatibility-only identity for pre-product Project callers.
+
+    ``recipe_id`` is retained exactly so historical recipe projects remain
+    readable, but schema v2 no longer stores it as top-level canonical product
+    identity. Modern product identity remains owned by ``extensions.studio``.
+    """
+
+    recipe_id: str
+    schema_version: int = PROJECT_COMPATIBILITY_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version != PROJECT_COMPATIBILITY_SCHEMA_VERSION
+        ):
+            raise ProjectValidationError(
+                f"unsupported Project compatibility schema: {self.schema_version!r}; "
+                f"supported={PROJECT_COMPATIBILITY_SCHEMA_VERSION}"
+            )
+        object.__setattr__(
+            self,
+            "recipe_id",
+            validate_identifier(self.recipe_id, field_name="compatibility.recipe_id"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "recipe_id": self.recipe_id,
+        }
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "ProjectCompatibility":
+        if not isinstance(data, Mapping):
+            raise ProjectValidationError("compatibility must be a JSON object")
+        allowed = {"schema_version", "recipe_id"}
+        unknown = set(data).difference(allowed)
+        if unknown:
+            raise ProjectValidationError(
+                f"unsupported Project compatibility fields: {sorted(unknown)!r}"
+            )
+        missing = allowed.difference(data)
+        if missing:
+            raise ProjectValidationError(
+                f"Project compatibility is missing fields: {sorted(missing)!r}"
+            )
+        return cls(
+            schema_version=data["schema_version"],
+            recipe_id=data["recipe_id"],
+        )
+
+
+@dataclass(frozen=True)
 class ProjectDocument:
     project_id: str
     title: str
+    # Compatibility-only in-memory alias. Schema v2 persists this under
+    # compatibility.recipe_id rather than as top-level canonical identity.
     recipe_id: str
     created_at: str
     updated_at: str
@@ -209,7 +267,9 @@ class ProjectDocument:
             self, "project_id", validate_identifier(self.project_id, field_name="project_id")
         )
         object.__setattr__(
-            self, "recipe_id", validate_identifier(self.recipe_id, field_name="recipe_id")
+            self,
+            "recipe_id",
+            ProjectCompatibility(recipe_id=self.recipe_id).recipe_id,
         )
         if not isinstance(self.title, str) or not self.title.strip():
             raise ProjectValidationError("title must be a non-empty string")
@@ -256,7 +316,7 @@ class ProjectDocument:
             "schema_version": self.schema_version,
             "project_id": self.project_id,
             "title": self.title,
-            "recipe_id": self.recipe_id,
+            "compatibility": ProjectCompatibility(recipe_id=self.recipe_id).to_dict(),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "settings": _json_object(self.settings, field_name="settings"),
@@ -273,18 +333,24 @@ class ProjectDocument:
             "schema_version",
             "project_id",
             "title",
-            "recipe_id",
+            "compatibility",
             "created_at",
             "updated_at",
         ]
         missing = [key for key in required if key not in data]
         if missing:
             raise ProjectValidationError(f"missing project fields: {', '.join(missing)}")
+        if "recipe_id" in data:
+            raise ProjectValidationError(
+                "schema-v2 project must not contain top-level recipe_id; "
+                "use compatibility.recipe_id"
+            )
+        compatibility = ProjectCompatibility.from_mapping(data["compatibility"])
         return cls(
             schema_version=int(data["schema_version"]),
             project_id=str(data["project_id"]),
             title=str(data["title"]),
-            recipe_id=str(data["recipe_id"]),
+            recipe_id=compatibility.recipe_id,
             created_at=str(data["created_at"]),
             updated_at=str(data["updated_at"]),
             settings=_json_object(data.get("settings"), field_name="settings"),
@@ -292,3 +358,11 @@ class ProjectDocument:
             artifacts=tuple(ProjectReference.from_dict(item) for item in data.get("artifacts", [])),
             extensions=_json_object(data.get("extensions"), field_name="extensions"),
         )
+
+
+def compatibility_recipe_id(project: ProjectDocument) -> str:
+    """Return legacy recipe identity through the explicit compatibility boundary."""
+
+    if not isinstance(project, ProjectDocument):
+        raise ProjectValidationError("compatibility recipe lookup requires ProjectDocument")
+    return ProjectCompatibility(recipe_id=project.recipe_id).recipe_id
