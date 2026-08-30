@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .media_integrity import MediaIntegrityError, verify_registered_media_bytes
-from .models import ProjectValidationError, validate_identifier
+from .models import ProjectValidationError, compatibility_recipe_id, validate_identifier
 from .music_assembly import MusicAssemblyError, MusicAssemblyStore
 from .music_direction import MusicDirectionError, MusicDirectionStore
 from .music_map import MusicMapError, MusicMapStore
@@ -195,7 +195,7 @@ class MusicVideoReviewStore:
         expected: MusicVideoReview | None = None,
     ) -> dict[str, Any]:
         project = self.store.load_project(project_id)
-        if project.recipe_id != "music_video":
+        if compatibility_recipe_id(project) != "music_video":
             raise MusicVideoReviewError("final Music Video review is only valid for music_video")
         music_map = self.maps.load(project_id, validate_current=True)
         direction = self.directions.load(project_id, validate_current=True)
