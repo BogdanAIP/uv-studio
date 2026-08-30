@@ -21,7 +21,8 @@
       "uv_studio/api/projects.py",
       "tests/test_project_store.py",
       "tests/test_project_identity.py",
-      "tests/test_project_archive.py"
+      "tests/test_project_archive.py",
+      "tests_api/test_projects_api.py"
     ]
   },
   "last_completed": {
