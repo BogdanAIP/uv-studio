@@ -3,7 +3,7 @@
 <!-- uv-context-state: review -->
 <!-- uv-active-slice: actions-hardening -->
 
-**Updated:** 2026-08-29
+**Updated:** 2026-08-30
 
 **Repository:** `BogdanAIP/uv-studio`
 
@@ -19,9 +19,11 @@ All maintained remote Action/reusable-workflow `uses:` references must use immut
 
 Every maintained workflow has top-level `permissions: contents: read`. `ci.yml` and `editor-foundation-spike.yml` are fully read-only and every checkout explicitly sets `persist-credentials: false`.
 
-`vendor-videoclaw.yml` is the only approved writer because it contains the actual authenticated Git commit/push path, but its write authority is narrowed to the single `vendor` job: the workflow remains read-only at top level, that one job declares `contents: write`, and only checkout inside a write-authorized job may use `persist-credentials: true`. The guard also requires that this write-authorized job still contain a real non-dry-run `git push`, so removing the push path cannot leave unnecessary write authority silently accepted. Any other checkout, including a future read-only job in the same workflow, must keep credentials disabled.
+`vendor-videoclaw.yml` is the only approved writer. Its write authority is narrowed to the single `vendor` job: the workflow remains read-only at top level, that job declares `contents: write`, and its authenticated checkout uses `persist-credentials: true` for the real branch push path. Any other checkout, including a future read-only job in the same workflow, must keep credentials disabled.
 
-The permanent guard in `tests/test_actions_workflow_security.py` parses workflows structurally with pinned PyYAML. It checks root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms, rejects duplicate mapping keys, rejects `write-all` and unexpected write scopes, requires exactly one write-authorized job in the approved vendoring workflow, and requires that writer job to contain authenticated checkout plus a real `git push`. Remote Action/reusable-workflow uses and checkout steps are validated whenever present, while a legitimate read-only workflow that needs neither remains allowed rather than being forced to add security-sensitive machinery merely to satisfy the guard.
+The sole writer exception no longer depends on a handwritten Bash predicate. The permanent guard parses YAML structurally with pinned PyYAML and compares the complete semantic structure of `vendor-videoclaw.yml` against a reviewed canonical writer-workflow contract. Comments and formatting may change without affecting the contract, but any semantic trigger, permission, job, step, Action, checkout input, shell, condition, environment, command or push-path change makes the guard fail closed until the security contract is deliberately updated and reviewed. This directly prevents `git push --dry-run`, the equivalent `git push -n`, non-executed heredoc text and disabled push steps from satisfying the write exception.
+
+For all maintained workflows the guard checks root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms, rejects duplicate mapping keys, rejects `write-all` and unexpected write scopes, and validates every remote Action/reusable-workflow reference whenever present. A legitimate read-only workflow that needs no remote Action or checkout remains allowed.
 
 GitHub owner/repository identity is case-insensitive, so remote `uses:` values are classified with `casefold()` before policy checks. Mixed-case references cannot bypass immutable-ref or checkout-credential validation. GitHub Runner action input names are also case-insensitive, so checkout `with:` keys are normalized with `casefold()` before credential validation and case-colliding logical duplicates such as `persist-credentials` plus `PERSIST-CREDENTIALS` are rejected fail-closed. Local `./...` actions/workflows remain permitted; remote `owner/repo[/path]@ref` uses require a 40-character SHA; Docker actions are rejected until an explicit immutable Docker-image policy exists.
 
@@ -35,15 +37,19 @@ Fresh review of exact `66410db447c896fb898636634258402fae1edbff..1003366e526df15
 
 Fresh review of exact `66410db447c896fb898636634258402fae1edbff..8fe443bcee37036d3800973c5c26d9ecdcaef5d0` returned one P2. It was **CONFIRMED**: case-sensitive `actions/*` / checkout recognition could be bypassed by mixed-case GitHub repository identity. Action identity is normalized before classification, with regression coverage for both floating refs and persisted checkout credentials.
 
-Fresh review of exact `66410db447c896fb898636634258402fae1edbff..2618046496c8a44aa018d745ccdcfacf3af3f28e` returned one P2 and four rejected candidates. It was **CONFIRMED**: PyYAML preserved differently-cased checkout input keys as distinct while GitHub Runner binds action inputs case-insensitively, so a later `PERSIST-CREDENTIALS: true` could override a guarded lowercase `persist-credentials: false`. Checkout input keys are now normalized before validation and case-insensitive logical duplicates are rejected, with regression coverage for the reported bypass.
+Fresh review of exact `66410db447c896fb898636634258402fae1edbff..2618046496c8a44aa018d745ccdcfacf3af3f28e` returned one P2 and four rejected candidates. It was **CONFIRMED**: PyYAML preserved differently-cased checkout input keys as distinct while GitHub Runner binds action inputs case-insensitively, so a later `PERSIST-CREDENTIALS: true` could override a guarded lowercase `persist-credentials: false`. Checkout input keys are now normalized before validation and case-insensitive logical duplicates are rejected.
 
-All four prior reviews are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
+Fresh review of exact `66410db447c896fb898636634258402fae1edbff..750829da9cdc4039a3761a979313743baeb23535` returned one P2 and seven rejected candidates. It was **CONFIRMED**: the writer-liveness helper still attempted to infer shell execution from text and therefore accepted the short Git dry-run flag `-n` and could count non-executed heredoc content. The shell heuristic has been removed entirely; the complete parsed writer workflow is now frozen against the canonical reviewed structure, with explicit regression coverage for both dry-run forms, heredoc text and a disabled push step.
+
+All five prior review results are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
 
 ## Verification state
 
-Hosted CI run #3976 on the fourth reviewed head `2618046496c8a44aa018d745ccdcfacf3af3f28e` passed all five permanent checks on Ubuntu and Windows, including the complete unit/security suite and browser evidence. That proof establishes that the pre-fix workflow definitions themselves were clean; the reported defect was in the permanent drift guard.
+Hosted CI on prior reviewed heads established that the pinned Action revisions execute successfully on Ubuntu and Windows and that the product/browser baselines remain viable. The fifth reported defect was again in the permanent future-drift guard, not in the currently maintained writer workflow, which still contains the intended authenticated real `git push`.
 
-After the fourth P2 fix, self-audit of the original hardening acceptance contract found that the approved writer exception was not yet mechanically coupled to the real `git push`, and that the guard unnecessarily required every workflow to contain checkout/remote Actions. The guard now requires a real non-dry-run push in the sole writer job and allows shell-only read-only workflows; both behaviors have regression coverage. These are material acceptance changes, so the final exact head must pass all five permanent checks again: `development-context`, Ubuntu/Windows `bootstrap`, and Ubuntu/Windows `app-baseline`, including browser evidence uploads. The required fresh semantic review must bind that same exact BASE/HEAD. Any further material branch change invalidates it.
+Before committing the fifth fix, the replacement structural guard was exercised locally against the real current writer workflow plus adversarial fixtures: 24 focused tests passed, including explicit rejection of `git push --dry-run`, `git push -n`, push text hidden inside a heredoc and `if: false` on the canonical push step.
+
+Because the fifth P2 required a material acceptance-guard change, the new exact head must pass all five permanent checks again: `development-context`, Ubuntu/Windows `bootstrap`, and Ubuntu/Windows `app-baseline`, including browser evidence uploads. The required fresh semantic review must bind that same exact BASE/HEAD. Any further material branch change invalidates it.
 
 ## Native Ready connector state
 
