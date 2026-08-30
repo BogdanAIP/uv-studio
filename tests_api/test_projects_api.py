@@ -41,7 +41,8 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertEqual(create.status_code, 201, create.text)
         created = create.json()
         project_id = created["project_id"]
-        self.assertEqual(created["schema_version"], 1)
+        self.assertEqual(created["schema_version"], 2)
+        self.assertEqual(created["recipe_id"], "general_video")
         self.assertEqual(created["title"], "API Project")
 
         listed = self.client.get("/api/uv/projects")
