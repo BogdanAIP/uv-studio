@@ -5,6 +5,7 @@ from dataclasses import replace
 from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.dubbing_review import DubbingReviewError, DubbingReviewStore
 from uv_studio.projects.dubbing_review_current import CurrentReviewError, CurrentReviewStore
+from uv_studio.projects.models import compatibility_recipe_id
 from uv_studio.projects.prepared_audio import PreparedAudioError, ProjectPreparedAudioStore
 from uv_studio.projects.prepared_speech import PreparedSpeechError, PreparedSpeechStore
 from uv_studio.projects.replacement_review import ReplacementReviewError, ReplacementReviewStore
@@ -452,19 +453,20 @@ def _normalize_dubbing_projection(
 def project_workflow_state(project, recipe, registry, source_media) -> ProjectWorkflowState:
     """Dispatch supported Product Orchestrator projections without duplicating canonical state."""
 
-    if recipe is not None and project.recipe_id == TARGETED_EDIT_RECIPE_ID:
+    recipe_id = compatibility_recipe_id(project)
+    if recipe is not None and recipe_id == TARGETED_EDIT_RECIPE_ID:
         state = targeted_edit_workflow_state(project, recipe, registry, source_media)
         return _normalize_targeted_projection(state, source_media)
-    if recipe is not None and project.recipe_id == DUBBING_RECIPE_ID:
+    if recipe is not None and recipe_id == DUBBING_RECIPE_ID:
         state = dubbing_workflow_state(project, recipe, registry, source_media)
         return _normalize_dubbing_projection(state, source_media)
-    if recipe is not None and project.recipe_id == GENERAL_VIDEO_RECIPE_ID:
+    if recipe is not None and recipe_id == GENERAL_VIDEO_RECIPE_ID:
         return general_video_workflow_state(project, recipe, registry, source_media)
-    if recipe is not None and project.recipe_id == NARRATED_RECIPE_ID:
+    if recipe is not None and recipe_id == NARRATED_RECIPE_ID:
         return narrated_workflow_state(project, recipe, registry, source_media)
-    if recipe is not None and project.recipe_id == STORY_RECIPE_ID:
+    if recipe is not None and recipe_id == STORY_RECIPE_ID:
         return story_workflow_state(project, recipe, registry, source_media)
-    if recipe is not None and project.recipe_id == COMMERCIAL_PRODUCT_RECIPE_ID:
+    if recipe is not None and recipe_id == COMMERCIAL_PRODUCT_RECIPE_ID:
         return commercial_product_workflow_state(project, recipe, registry, source_media)
     return _base_project_workflow_state(project, recipe, registry, source_media)
 
