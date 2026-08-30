@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
+  "lifecycle_state": "draft",
   "active_slice": {
     "id": "project-identity-v2-compat-reader",
     "kind": "stage",
@@ -13,6 +13,7 @@
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
       "docs/PROJECT_STORE.md",
+      "docs/PROJECT_ARCHIVES.md",
       "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
       "uv_studio/projects/models.py",
       "uv_studio/projects/migrations.py",
