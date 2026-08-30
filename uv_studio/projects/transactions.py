@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 from uv_studio.projects.identity import assert_project_identity_transition
+from uv_studio.projects.migrations import migrate_project_data
 from uv_studio.projects.models import (
     ProjectDocument,
     ProjectValidationError,
@@ -442,7 +443,7 @@ class ProjectUnitOfWork:
         if project_bytes is not None:
             try:
                 raw = json.loads(project_bytes.decode("utf-8"))
-                proposed_project = ProjectDocument.from_dict(raw)
+                proposed_project = ProjectDocument.from_dict(migrate_project_data(raw))
             except (UnicodeDecodeError, json.JSONDecodeError, ProjectValidationError) as exc:
                 raise ProjectTransactionError(f"invalid staged project.json: {exc}") from exc
             if proposed_project.project_id != project_id:
