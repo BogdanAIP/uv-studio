@@ -33,7 +33,8 @@
       "tests/test_project_identity.py",
       "tests/test_project_archive.py",
       "tests_api/test_projects_api.py",
-      "e2e/test_named_generation_outcome.py"
+      "e2e/test_named_generation_outcome.py",
+      "e2e/test_micro_drama_production_outcome.py"
     ]
   },
   "last_completed": {
