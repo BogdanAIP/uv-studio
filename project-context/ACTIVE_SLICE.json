@@ -15,6 +15,7 @@
       ".github/workflows/vendor-videoclaw.yml",
       "requirements-uv-dev.txt",
       "tests/test_actions_workflow_security.py",
+      "tests/test_actions_local_uses_policy.py",
       "tests/test_dependency_contract.py",
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
