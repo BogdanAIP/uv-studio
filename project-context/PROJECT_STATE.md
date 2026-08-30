@@ -25,7 +25,9 @@ The sole writer exception no longer depends on a handwritten Bash predicate. The
 
 For all maintained workflows the guard checks root/job permission mappings and actual job step structures, binds checkout credential policy specifically to `steps[*].with.persist-credentials`, sees block and flow collection forms, rejects duplicate mapping keys, rejects `write-all` and unexpected write scopes, and validates every remote Action/reusable-workflow reference whenever present. A legitimate read-only workflow that needs no remote Action or checkout remains allowed.
 
-GitHub owner/repository identity is case-insensitive, so remote `uses:` values are classified with `casefold()` before policy checks. Mixed-case references cannot bypass immutable-ref or checkout-credential validation. GitHub Runner action input names are also case-insensitive, so checkout `with:` keys are normalized with `casefold()` before credential validation and case-colliding logical duplicates such as `persist-credentials` plus `PERSIST-CREDENTIALS` are rejected fail-closed. Local `./...` actions/workflows remain permitted; remote `owner/repo[/path]@ref` uses require a 40-character SHA; Docker actions are rejected until an explicit immutable Docker-image policy exists.
+GitHub owner/repository identity is case-insensitive, so remote `uses:` values are classified with `casefold()` before policy checks. Mixed-case references cannot bypass immutable-ref or checkout-credential validation. GitHub Runner action input names are also case-insensitive, so checkout `with:` keys are normalized with `casefold()` before credential validation and case-colliding logical duplicates such as `persist-credentials` plus `PERSIST-CREDENTIALS` are rejected fail-closed. Remote `owner/repo[/path]@ref` uses require a 40-character SHA and Docker actions are rejected until an explicit immutable Docker-image policy exists.
+
+Repository-local `uses: ./...` are now fail-closed rather than implicitly trusted. A companion permanent guard rejects both step-level local Actions and job-level local reusable workflows because their transitive `uses` graph is not yet scanned by this slice. Local Actions/reusable workflows may be introduced later only together with an explicit reviewed transitive immutable-reference policy; until then they are not an allowed escape from the remote-SHA rule.
 
 PyYAML is kept in the development/test dependency layer rather than the UV Studio core runtime. Bootstrap proves the core dependency graph, server import and Python compile contract first, then installs pinned `PyYAML==6.0.2` immediately before the unit/security suite. Normal development/test setup receives it through `requirements-uv-dev.txt`.
 
@@ -41,19 +43,21 @@ Fresh review of exact `66410db447c896fb898636634258402fae1edbff..2618046496c8a44
 
 Fresh review of exact `66410db447c896fb898636634258402fae1edbff..750829da9cdc4039a3761a979313743baeb23535` returned one P2 and seven rejected candidates. It was **CONFIRMED**: the writer-liveness helper still attempted to infer shell execution from text and therefore accepted the short Git dry-run flag `-n` and could count non-executed heredoc content. The shell heuristic has been removed entirely; the complete parsed writer workflow is now frozen against the canonical reviewed structure, with explicit regression coverage for both dry-run forms, heredoc text and a disabled push step.
 
-All five prior review results are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
+Fresh review of exact `66410db447c896fb898636634258402fae1edbff..b709de941f7444c6cf71296d54eef0d6bd9f4261` returned one P2 and five rejected candidates. It was **CONFIRMED**: repository-local `uses: ./...` bypassed the remote-ref validator, so a future local composite Action could hide a floating transitive remote Action. Current maintained workflows use no local Actions/reusable workflows. The fix therefore fails closed on all local `uses` until a separate transitive immutable-reference policy is implemented, with regression coverage for both local composite Actions and local reusable workflows.
+
+All six prior review results are stale because material security/acceptance fixes followed them. A fresh ordinary-ChatGPT semantic review is required on the final exact head before merge.
 
 ## Verification state
 
-Hosted CI on prior reviewed heads established that the pinned Action revisions execute successfully on Ubuntu and Windows and that the product/browser baselines remain viable. The fifth reported defect was again in the permanent future-drift guard, not in the currently maintained writer workflow, which still contains the intended authenticated real `git push`.
+Hosted CI on prior reviewed heads established that the pinned Action revisions execute successfully on Ubuntu and Windows and that the product/browser baselines remain viable. The sixth reported defect was again in the permanent future-drift guard rather than the currently maintained workflows.
 
-Before committing the fifth fix, the replacement structural guard was exercised locally against the real current writer workflow plus adversarial fixtures: 24 focused tests passed, including explicit rejection of `git push --dry-run`, `git push -n`, push text hidden inside a heredoc and `if: false` on the canonical push step.
+The sixth fix adds a repository-level companion guard without changing any maintained workflow: all three current workflow files were rechecked and contain no `uses: ./...`. The new regression suite rejects both a workflow step that calls `./.github/actions/example` and a job that delegates to a local reusable workflow.
 
-Because the fifth P2 required a material acceptance-guard change, the new exact head must pass all five permanent checks again: `development-context`, Ubuntu/Windows `bootstrap`, and Ubuntu/Windows `app-baseline`, including browser evidence uploads. The required fresh semantic review must bind that same exact BASE/HEAD. Any further material branch change invalidates it.
+Because the sixth P2 required a material acceptance-guard change, the new exact head must pass all five permanent checks again: `development-context`, Ubuntu/Windows `bootstrap`, and Ubuntu/Windows `app-baseline`, including browser evidence uploads. The required fresh semantic review must bind that same exact BASE/HEAD. Any further material branch change invalidates it.
 
 ## Native Ready connector state
 
-The official connector exposes `mark_pull_request_ready_for_review`, but repeated live invocation failed because the connector queried nonexistent GraphQL field `Repository.fullDatabaseId`. Draft PR #85 was therefore closed unmerged and the same branch was reopened directly as non-draft PR #86. No privileged repository fallback was introduced.
+The official connector exposes `mark_pull_request_ready_for_review`, but repeated live invocation failed because the connector queried nonexistent GraphQL field `Repository.fullDatabaseId`. Draft PR #85 was therefore closed unmerged and the same branch was reopened directly non-draft as PR #86. No privileged repository fallback was introduced.
 
 ## Known adjacent implementation risk
 
