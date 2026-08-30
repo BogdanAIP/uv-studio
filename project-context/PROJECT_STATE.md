@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is active in draft PR #88 on branch `feat/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is active in draft PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
 The entry gate is satisfied: the repository-level full-SHA GitHub Actions policy was enabled and fresh exact-tree CI run #4018 passed all five required checks before the branch was created.
 
@@ -28,9 +28,9 @@ Recipe endpoint retirement, execution-plan changes, Product Orchestrator redesig
 
 ## Implementation plan
 
-`ProjectStore` already routes loaded JSON through `migrate_project_data`, so schema-v1 compatibility will be implemented there instead of scattering version checks across runtime code. Schema v2 will keep legacy recipe information in a dedicated compatibility object; current serializers will no longer treat top-level `recipe_id` as canonical Project identity. The identity classifier and compatibility API will read the legacy value through the new boundary.
+`ProjectStore` already routes loaded JSON through `migrate_project_data`, so schema-v1 compatibility is implemented there instead of scattering version checks across runtime code. Schema v2 keeps legacy recipe information in a dedicated compatibility object; current serializers no longer treat top-level `recipe_id` as canonical Project identity. The identity classifier and compatibility API read the legacy value through the new boundary.
 
-Archive import will validate the manifest against the archive's raw Project schema before migration, allowing a schema-v1 archive to load as a current schema-v2 document without falsely comparing the old manifest version to the migrated in-memory version. Modern schema-v2 and legacy schema-v1 round trips will be covered directly in Project Store/identity/archive tests.
+Archive import validates the manifest against the archive's raw Project schema before migration, allowing a schema-v1 archive to load as a current schema-v2 document without falsely comparing the old manifest version to the migrated in-memory version. Modern schema-v2 and legacy schema-v1 round trips are covered directly in Project Store/identity/archive tests.
 
 ## Accepted GitHub Actions security boundary
 
