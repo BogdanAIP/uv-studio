@@ -27,6 +27,7 @@ from .models import (
     validate_identifier,
 )
 from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
+from .task_records import ProjectTaskRecordStore
 
 ARCHIVE_SCHEMA_VERSION = 1
 ARCHIVE_MANIFEST = ".uv-project-archive.json"
@@ -82,10 +83,16 @@ def _safe_archive_output(project_dir: Path, archive_path: Path) -> Path:
     return resolved
 
 
+def _is_archive_transient(project_dir: Path, path: Path) -> bool:
+    return path == project_dir / "tasks" / ProjectTaskRecordStore.LOCK_FILE_NAME
+
+
 def _iter_project_entries(project_dir: Path) -> tuple[list[Path], list[Path]]:
     directories: list[Path] = []
     files: list[Path] = []
     for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix()):
+        if _is_archive_transient(project_dir, path):
+            continue
         if path.is_symlink():
             raise ProjectArchiveError(f"Project archive does not allow symlinks: {path}")
         if path.is_dir():
@@ -114,55 +121,57 @@ def export_project(
     project_id: str,
     archive_path: Path | str,
 ) -> Path:
-    """Export a complete canonical project directory to a validated ZIP format."""
-    document = store.load_project(project_id)
-    project_path = store.project_path(project_id)
-    project_dir = project_path.parent
-    stored_schema_version = _raw_project_schema_version(project_path)
-    destination = _safe_archive_output(project_dir, Path(archive_path))
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    """Export one stable canonical project snapshot to a validated ZIP format."""
+    task_records = ProjectTaskRecordStore(store)
+    with task_records.project_lock(project_id):
+        document = store.load_project(project_id)
+        project_path = store.project_path(project_id)
+        project_dir = project_path.parent
+        stored_schema_version = _raw_project_schema_version(project_path)
+        destination = _safe_archive_output(project_dir, Path(archive_path))
+        destination.parent.mkdir(parents=True, exist_ok=True)
 
-    directories, files = _iter_project_entries(project_dir)
-    file_records: list[dict[str, Any]] = []
-    for path in files:
-        file_records.append(
-            {
-                "path": _archive_relative_name(project_dir, path),
-                "size": path.stat().st_size,
-                "sha256": _sha256_file(path),
-            }
-        )
-
-    manifest = {
-        "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
-        "project_id": document.project_id,
-        "project_schema_version": stored_schema_version,
-        "created_at": utc_now_iso(),
-        "files": file_records,
-    }
-
-    temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
-    try:
-        with zipfile.ZipFile(
-            temp_path,
-            mode="w",
-            compression=zipfile.ZIP_DEFLATED,
-            allowZip64=True,
-        ) as archive:
-            archive.writestr(
-                ARCHIVE_MANIFEST,
-                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        directories, files = _iter_project_entries(project_dir)
+        file_records: list[dict[str, Any]] = []
+        for path in files:
+            file_records.append(
+                {
+                    "path": _archive_relative_name(project_dir, path),
+                    "size": path.stat().st_size,
+                    "sha256": _sha256_file(path),
+                }
             )
-            _write_zip_directory(archive, PROJECT_PREFIX)
-            for directory in directories:
-                _write_zip_directory(archive, _archive_relative_name(project_dir, directory))
-            for path in files:
-                archive.write(path, _archive_relative_name(project_dir, path))
-        os.replace(temp_path, destination)
-    except Exception:
-        temp_path.unlink(missing_ok=True)
-        raise
-    return destination
+
+        manifest = {
+            "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
+            "project_id": document.project_id,
+            "project_schema_version": stored_schema_version,
+            "created_at": utc_now_iso(),
+            "files": file_records,
+        }
+
+        temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            with zipfile.ZipFile(
+                temp_path,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED,
+                allowZip64=True,
+            ) as archive:
+                archive.writestr(
+                    ARCHIVE_MANIFEST,
+                    json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                )
+                _write_zip_directory(archive, PROJECT_PREFIX)
+                for directory in directories:
+                    _write_zip_directory(archive, _archive_relative_name(project_dir, directory))
+                for path in files:
+                    archive.write(path, _archive_relative_name(project_dir, path))
+            os.replace(temp_path, destination)
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
+        return destination
 
 
 def create_backup(
