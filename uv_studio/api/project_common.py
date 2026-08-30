@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from uv_studio.config import projects_root
 from uv_studio.projects.identity import classify_project_identity
-from uv_studio.projects.models import ProjectDocument
+from uv_studio.projects.models import ProjectDocument, compatibility_recipe_id
 from uv_studio.projects.store import ProjectStore
 
 
@@ -58,6 +58,11 @@ def get_project_store() -> ProjectStore:
 
 
 def project_payload(document: ProjectDocument) -> ProjectPayload:
-    return ProjectPayload.model_validate(
-        {**document.to_dict(), "product_identity": classify_project_identity(document).to_dict()}
-    )
+    # The compatibility HTTP contract intentionally keeps ``recipe_id`` while
+    # canonical schema v2 persists it under ``compatibility``. Do not leak the
+    # persistence-only wrapper into the legacy response model.
+    data = document.to_dict()
+    data.pop("compatibility", None)
+    data["recipe_id"] = compatibility_recipe_id(document)
+    data["product_identity"] = classify_project_identity(document).to_dict()
+    return ProjectPayload.model_validate(data)
