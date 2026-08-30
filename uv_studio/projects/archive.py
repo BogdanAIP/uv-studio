@@ -60,6 +60,21 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _raw_project_schema_version(path: Path) -> int:
+    """Return the schema declared by the exact project.json bytes at ``path``."""
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ProjectArchiveError(f"Cannot read archived project schema: {path}") from exc
+    if not isinstance(data, dict):
+        raise ProjectArchiveError("Archived project.json must be a JSON object")
+    version = data.get("schema_version")
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ProjectArchiveError("Archived project.json has invalid schema_version")
+    return version
+
+
 def _safe_archive_output(project_dir: Path, archive_path: Path) -> Path:
     resolved = archive_path.expanduser().resolve()
     if resolved == project_dir or project_dir in resolved.parents:
@@ -101,7 +116,9 @@ def export_project(
 ) -> Path:
     """Export a complete canonical project directory to a validated ZIP format."""
     document = store.load_project(project_id)
-    project_dir = store.project_path(project_id).parent
+    project_path = store.project_path(project_id)
+    project_dir = project_path.parent
+    stored_schema_version = _raw_project_schema_version(project_path)
     destination = _safe_archive_output(project_dir, Path(archive_path))
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -119,7 +136,7 @@ def export_project(
     manifest = {
         "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
         "project_id": document.project_id,
-        "project_schema_version": document.schema_version,
+        "project_schema_version": stored_schema_version,
         "created_at": utc_now_iso(),
         "files": file_records,
     }
@@ -397,14 +414,16 @@ def import_project(
             for name in PROJECT_DIRECTORIES:
                 (staging_project / name).mkdir(parents=True, exist_ok=True)
 
+            raw_schema_version = _raw_project_schema_version(staging_project / "project.json")
+            if manifest.get("project_schema_version") != raw_schema_version:
+                raise ProjectArchiveError(
+                    "Manifest project_schema_version does not match project.json"
+                )
+
             staged_store = ProjectStore(temp_root)
             document = staged_store.load_project(project_id)
             if document.project_id != project_id:
                 raise ProjectArchiveError("Manifest project_id does not match project.json")
-            if manifest.get("project_schema_version") != document.schema_version:
-                raise ProjectArchiveError(
-                    "Manifest project_schema_version does not match project.json"
-                )
             if document.schema_version != PROJECT_SCHEMA_VERSION:
                 raise ProjectArchiveError(
                     f"Unsupported imported project schema: {document.schema_version}"
