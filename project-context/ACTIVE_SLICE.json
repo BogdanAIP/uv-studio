@@ -32,7 +32,8 @@
       "tests/test_project_store.py",
       "tests/test_project_identity.py",
       "tests/test_project_archive.py",
-      "tests_api/test_projects_api.py"
+      "tests_api/test_projects_api.py",
+      "e2e/test_named_generation_outcome.py"
     ]
   },
   "last_completed": {
