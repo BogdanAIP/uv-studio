@@ -1,6 +1,6 @@
 # UV Studio portable project archives
 
-UV Studio project archives are product-owned, portable backups of one complete canonical project directory.
+UV Studio project archives are product-owned, portable backups of one complete recoverable canonical project state. They include the canonical project files needed for recovery, but intentionally exclude explicitly non-portable coordination artifacts such as the ordinary technical task-record lock file described below.
 
 ## Format
 
@@ -26,7 +26,9 @@ Archive schema v1:
     └── exports/
 ```
 
-The archive can contain additional project-relative directories/files created by future recipes, but every regular file under `project/` must be declared in the manifest.
+The archive can contain additional project-relative directories/files created by future recipes. Every portable regular file under `project/` must be declared in the manifest.
+
+`tasks/.uv-task-records.lock` is a technical cross-runtime coordination file, not recoverable project content. When that exact lexical path is an ordinary file, export omits it from the ZIP and manifest; a restored Project Store recreates coordination state as needed. If that lexical path is a symlink, export fails closed rather than treating it as the technical exception.
 
 ## Manifest
 
@@ -36,23 +38,30 @@ The archive can contain additional project-relative directories/files created by
 - `project_id`;
 - `project_schema_version`;
 - archive `created_at`;
-- every regular file path;
+- every portable regular file path;
 - uncompressed file size;
 - SHA-256 digest.
 
-This lets import verify the entire project before it becomes canonical state.
+This lets import verify the entire portable recovery snapshot before it becomes canonical state.
 
 ## Export contract
 
+Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence spans raw Project-schema sampling, filesystem enumeration, hashing and ZIP capture, so a concurrent canonical mutation cannot make the manifest and archived bytes describe different project states.
+
 Export:
 
-1. loads and validates the canonical `project.json`;
-2. rejects symlinks/special filesystem entries;
-3. hashes every regular project file;
-4. writes the ZIP to a temporary sibling file;
-5. atomically replaces the requested archive destination when complete.
+1. checks the lexical technical lock path and fails closed if it is a symlink;
+2. acquires the shared project mutation fence;
+3. loads and validates the canonical `project.json`;
+4. rejects symlinks/special filesystem entries during project enumeration;
+5. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
+6. hashes every remaining portable regular project file;
+7. writes the ZIP to a temporary sibling file;
+8. atomically replaces the requested archive destination when complete.
 
 The destination may not be inside the project being archived. That prevents a backup from recursively including itself.
+
+The project fence is a snapshot-consistency boundary, not archive payload. Export never relies on the lock file as recoverable state and never weakens the general symlink rejection rule to omit it.
 
 ## Import contract
 
@@ -63,7 +72,7 @@ Import is fail-closed:
 3. reject encrypted entries;
 4. reject absolute paths, `..`, Windows drive paths and case-colliding duplicates;
 5. reject symlinks/special files represented by Unix ZIP metadata;
-6. require all project files to be declared in the manifest;
+6. require all archived portable project files to be declared in the manifest;
 7. validate manifest archive schema;
 8. validate `project_id` before using it as a path component;
 9. extract into a temporary directory beneath the canonical Project Store root;
@@ -130,6 +139,6 @@ Automatic/scheduled backups are intentionally a separate future policy. The arch
 
 ## Recovery rule
 
-A portable archive is a complete project-level recovery unit. Restore into a Project Store that does not already contain the same `project_id`.
+A portable archive is a complete project-level recovery unit for canonical recoverable project state. Runtime coordination artifacts such as the ordinary technical task-record lock file are recreated by the Project Store and are not part of the portable recovery payload. Restore into a Project Store that does not already contain the same `project_id`.
 
 Conflict/clone/replace policies, if later added, must be explicit operations rather than weakening this fail-closed import contract.
