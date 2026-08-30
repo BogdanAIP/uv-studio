@@ -15,8 +15,90 @@ from yaml.resolver import BaseResolver
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 APPROVED_WRITER = "vendor-videoclaw.yml"
+APPROVED_WRITER_JOB = "vendor"
 FULL_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 BOOL_TAG = "tag:yaml.org,2002:bool"
+
+# The sole write-authorized workflow is frozen by parsed YAML structure rather
+# than by attempting to interpret Bash. Comments and formatting may change,
+# but any semantic trigger/job/step change must update this reviewed contract.
+APPROVED_WRITER_WORKFLOW_YAML = """\
+name: Vendor pinned VideoClaw
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["stage-0/bootstrap"]
+    paths:
+      - "upstream/video-claw.lock.json"
+      - "tools/vendor_videoclaw.py"
+      - ".github/workflows/vendor-videoclaw.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  vendor:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout active branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Import pinned modern application
+        run: python tools/vendor_videoclaw.py
+
+      - name: Verify baseline shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f vendor/videoclaw-app/backend/api_server.py
+          test -d vendor/videoclaw-app/backend/pipelines
+          test -d vendor/videoclaw-app/backend/models
+          test -f vendor/videoclaw-app/frontend/package.json
+          test -f vendor/videoclaw-app/install.bat
+          test -f vendor/videoclaw-app/UPSTREAM_LICENSE
+          test -f vendor/videoclaw-app/.uv-upstream.json
+
+      - name: Verify provenance matches lock
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          lock = json.loads(Path("upstream/video-claw.lock.json").read_text(encoding="utf-8"))
+          provenance = json.loads(Path("vendor/videoclaw-app/.uv-upstream.json").read_text(encoding="utf-8"))
+          assert provenance["repository"] == lock["repository"]
+          assert provenance["commit"] == lock["commit"]
+          assert provenance["subtree"] == lock["subtree"]
+          assert provenance["license"] == lock["license"]
+          assert provenance["file_count"] > 0
+
+      - name: Commit vendored baseline when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/videoclaw-app
+          if git diff --cached --quiet; then
+            echo "Vendored baseline already matches lock."
+            exit 0
+          fi
+          PIN=$(python -c 'import json; print(json.load(open("upstream/video-claw.lock.json"))["commit"][:12])')
+          git commit -m "vendor: import VideoClaw ${PIN} baseline"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+"""
 
 
 class WorkflowPolicyError(ValueError):
@@ -29,14 +111,9 @@ class _UniqueKeySafeLoader(yaml.SafeLoader):
 
 # PyYAML's default YAML-1.1 resolver treats on/off/yes/no as booleans, while
 # GitHub workflow syntax relies on words such as `on` as ordinary strings.
-# Copy the resolver table, remove the broad bool resolver and re-add only the
-# true/false literals used by workflow inputs such as persist-credentials.
+# Keep only true/false implicit booleans.
 _UniqueKeySafeLoader.yaml_implicit_resolvers = {
-    first: [
-        (tag, resolver)
-        for tag, resolver in resolvers
-        if tag != BOOL_TAG
-    ]
+    first: [(tag, resolver) for tag, resolver in resolvers if tag != BOOL_TAG]
     for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
 }
 _UniqueKeySafeLoader.add_implicit_resolver(
@@ -144,7 +221,9 @@ def _validate_permission_value(
             raise WorkflowPolicyError(f"{name} {context} must not use permissions: write-all")
         if value == "read-all":
             return
-        raise WorkflowPolicyError(f"{name} {context} has unsupported permissions scalar: {value!r}")
+        raise WorkflowPolicyError(
+            f"{name} {context} has unsupported permissions scalar: {value!r}"
+        )
 
     mapping = _require_mapping(value, f"{name} {context} permissions")
     for scope, level in mapping.items():
@@ -169,42 +248,33 @@ def _normalize_action_use(value: str) -> str:
     return value.casefold()
 
 
-def _validate_action_use(name: str, value: Any, *, context: str) -> bool:
+def _validate_action_use(name: str, value: Any, *, context: str) -> None:
     if not isinstance(value, str):
         raise WorkflowPolicyError(f"{name} {context} uses value must be a string")
 
     normalized = _normalize_action_use(value)
     if normalized.startswith("./"):
-        return False
+        return
     if normalized.startswith("docker://"):
         raise WorkflowPolicyError(
             f"{name} {context} uses Docker action without an approved immutable policy: {value}"
         )
 
     action, separator, ref = normalized.rpartition("@")
-    if separator != "@" or "/" not in action or not FULL_COMMIT_SHA.fullmatch(ref):
+    segments = action.split("/")
+    if (
+        separator != "@"
+        or len(segments) < 2
+        or any(segment in {"", ".", ".."} for segment in segments)
+        or not FULL_COMMIT_SHA.fullmatch(ref)
+    ):
         raise WorkflowPolicyError(
             f"{name} uses floating or malformed remote Action/workflow: {value}"
         )
-    return True
 
 
-def _run_contains_real_git_push(value: Any) -> bool:
-    if not isinstance(value, str):
-        return False
-    for raw_line in value.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        tokens = line.split()
-        if (
-            len(tokens) >= 2
-            and tokens[0] == "git"
-            and tokens[1] == "push"
-            and "--dry-run" not in tokens
-        ):
-            return True
-    return False
+def _approved_writer_shape() -> Mapping[str, Any]:
+    return _load_workflow("<approved-writer-contract>", APPROVED_WRITER_WORKFLOW_YAML)
 
 
 def _validate_workflow_security(name: str, text: str) -> None:
@@ -228,26 +298,25 @@ def _validate_workflow_security(name: str, text: str) -> None:
     if not jobs:
         raise WorkflowPolicyError(f"{name} must define at least one job")
 
-    write_jobs = 0
-    writer_checkout_seen = 0
-    writer_push_seen = 0
+    write_jobs: list[str] = []
 
     for job_name, raw_job in jobs.items():
         if not isinstance(job_name, str):
             raise WorkflowPolicyError(f"{name} job identifiers must be strings")
         job = _require_mapping(raw_job, f"{name} job {job_name}")
+        approved_writer_job = writer_workflow and job_name == APPROVED_WRITER_JOB
 
         if "permissions" in job:
             _validate_permission_value(
                 name,
                 job["permissions"],
                 context=f"job {job_name}",
-                allow_contents_write=writer_workflow,
+                allow_contents_write=approved_writer_job,
             )
 
         job_writes_contents = _job_writes_contents(job)
         if job_writes_contents:
-            write_jobs += 1
+            write_jobs.append(job_name)
 
         if "uses" in job:
             _validate_action_use(name, job["uses"], context=f"job {job_name}")
@@ -260,8 +329,6 @@ def _validate_workflow_security(name: str, text: str) -> None:
 
         for index, raw_step in enumerate(raw_steps):
             step = _require_mapping(raw_step, f"{name} job {job_name} step {index}")
-            if job_writes_contents and _run_contains_real_git_push(step.get("run")):
-                writer_push_seen += 1
             if "uses" not in step:
                 continue
 
@@ -278,8 +345,6 @@ def _validate_workflow_security(name: str, text: str) -> None:
             if not normalized_use.startswith("actions/checkout@"):
                 continue
 
-            if job_writes_contents:
-                writer_checkout_seen += 1
             with_mapping = _normalize_checkout_inputs(
                 name,
                 job_name,
@@ -302,20 +367,20 @@ def _validate_workflow_security(name: str, text: str) -> None:
                 )
 
     if writer_workflow:
-        if write_jobs != 1:
+        if write_jobs != [APPROVED_WRITER_JOB]:
             raise WorkflowPolicyError(
-                f"{name} must grant contents: write to exactly one job"
+                f"{name} must grant contents: write only to job {APPROVED_WRITER_JOB!r}"
             )
-        if writer_checkout_seen == 0:
+        if workflow != _approved_writer_shape():
             raise WorkflowPolicyError(
-                f"{name} writer job must contain an authenticated checkout"
-            )
-        if writer_push_seen == 0:
-            raise WorkflowPolicyError(
-                f"{name} writer job must contain a real git push command"
+                f"{name} must match the reviewed canonical writer workflow exactly"
             )
     elif write_jobs:
         raise WorkflowPolicyError(f"{name} must not define a write-authorized job")
+
+
+def _writer_workflow_text() -> str:
+    return (WORKFLOW_DIR / APPROVED_WRITER).read_text(encoding="utf-8")
 
 
 class ActionsWorkflowSecurityTests(unittest.TestCase):
@@ -529,102 +594,91 @@ jobs:
         with self.assertRaisesRegex(WorkflowPolicyError, "must not grant issues: write"):
             _validate_workflow_security("ci.yml", workflow)
 
-    def test_writer_requires_top_level_read_and_one_write_job(self) -> None:
-        workflow = f"""\
-permissions:
-  contents: read
-jobs:
-  vendor:
+    def test_current_writer_matches_canonical_contract(self) -> None:
+        _validate_workflow_security(APPROVED_WRITER, _writer_workflow_text())
+
+    def test_writer_requires_top_level_read(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            "permissions:\n  contents: read",
+            "permissions:\n  contents: write",
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "top-level contents permission must be read"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_rejects_second_write_job(self) -> None:
+        workflow = _writer_workflow_text() + f"""\
+  extra:
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@{'1' * 40}
+      - uses: actions/checkout@{'2' * 40}
         with:
           persist-credentials: true
-      - run: git push origin HEAD:test
 """
-        _validate_workflow_security(APPROVED_WRITER, workflow)
-
-        top_level_write = workflow.replace("contents: read", "contents: write", 1)
-        with self.assertRaisesRegex(WorkflowPolicyError, "top-level contents permission must be read"):
-            _validate_workflow_security(APPROVED_WRITER, top_level_write)
-
-    def test_writer_rejects_second_write_job(self) -> None:
-        workflow = f"""\
-permissions:
-  contents: read
-jobs:
-  vendor:
-    permissions: {{contents: write}}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@{'1' * 40}
-        with: {{persist-credentials: true}}
-  extra:
-    permissions: {{contents: write}}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@{'2' * 40}
-        with: {{persist-credentials: true}}
-"""
-        with self.assertRaisesRegex(WorkflowPolicyError, "exactly one job"):
+        with self.assertRaisesRegex(WorkflowPolicyError, "must not grant contents: write"):
             _validate_workflow_security(APPROVED_WRITER, workflow)
 
     def test_writer_read_only_job_cannot_persist_credentials(self) -> None:
-        workflow = f"""\
-permissions:
-  contents: read
-jobs:
-  vendor:
-    permissions: {{contents: write}}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@{'1' * 40}
-        with: {{persist-credentials: true}}
+        workflow = _writer_workflow_text() + f"""\
   inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@{'2' * 40}
-        with: {{persist-credentials: true}}
+        with:
+          persist-credentials: true
 """
         with self.assertRaisesRegex(WorkflowPolicyError, "persist-credentials: false"):
             _validate_workflow_security(APPROVED_WRITER, workflow)
 
-    def test_writer_job_must_contain_authenticated_checkout(self) -> None:
-        workflow = f"""\
-permissions:
-  contents: read
-jobs:
-  vendor:
-    permissions: {{contents: write}}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-python@{'1' * 40}
-      - run: git push origin HEAD:test
-  inspect:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@{'2' * 40}
-        with: {{persist-credentials: false}}
-"""
-        with self.assertRaisesRegex(WorkflowPolicyError, "writer job must contain"):
+    def test_writer_checkout_must_remain_authenticated(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            "          persist-credentials: true",
+            "          persist-credentials: false",
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "persist-credentials: true"):
             _validate_workflow_security(APPROVED_WRITER, workflow)
 
-    def test_writer_job_must_contain_real_git_push(self) -> None:
-        workflow = f"""\
-permissions:
-  contents: read
-jobs:
-  vendor:
-    permissions: {{contents: write}}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@{'1' * 40}
-        with: {{persist-credentials: true}}
-      - run: git push --dry-run origin HEAD:test
-"""
-        with self.assertRaisesRegex(WorkflowPolicyError, "real git push"):
+    def test_writer_rejects_long_form_dry_run_push(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            '          git push origin "HEAD:${GITHUB_REF_NAME}"',
+            '          git push --dry-run origin "HEAD:${GITHUB_REF_NAME}"',
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "canonical writer workflow"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_rejects_short_form_dry_run_push(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            '          git push origin "HEAD:${GITHUB_REF_NAME}"',
+            '          git push -n origin "HEAD:${GITHUB_REF_NAME}"',
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "canonical writer workflow"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_rejects_push_text_hidden_in_heredoc(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            '          git push origin "HEAD:${GITHUB_REF_NAME}"',
+            "          cat <<'EOF'\n"
+            '          git push origin "HEAD:${GITHUB_REF_NAME}"\n'
+            "          EOF",
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "canonical writer workflow"):
+            _validate_workflow_security(APPROVED_WRITER, workflow)
+
+    def test_writer_rejects_condition_that_disables_push_step(self) -> None:
+        workflow = _writer_workflow_text().replace(
+            "      - name: Commit vendored baseline when changed\n        shell: bash\n",
+            "      - name: Commit vendored baseline when changed\n"
+            "        if: ${{ false }}\n"
+            "        shell: bash\n",
+            1,
+        )
+        with self.assertRaisesRegex(WorkflowPolicyError, "canonical writer workflow"):
             _validate_workflow_security(APPROVED_WRITER, workflow)
 
 
