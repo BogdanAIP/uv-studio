@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-08-30
@@ -9,11 +9,11 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is active in draft PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is frozen for independent review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
 The entry gate is satisfied: the repository-level full-SHA GitHub Actions policy was enabled and fresh exact-tree CI run #4018 passed all five required checks before the branch was created.
 
-## Active implementation boundary
+## Frozen implementation boundary
 
 This slice implements only the D-070 Project identity/schema compatibility boundary:
 
@@ -24,13 +24,19 @@ This slice implements only the D-070 Project identity/schema compatibility bound
 - keep the compatibility Project HTTP surface working while its `recipe_id` field is derived from compatibility state;
 - preserve project/source/artifact/media/Timeline identifiers and paths across migration and archive round trips.
 
-Recipe endpoint retirement, execution-plan changes, Product Orchestrator redesign, Stage8 retirement and later D-070 compression work are explicitly outside this slice.
+Recipe endpoint retirement, execution-plan changes, Product Orchestrator redesign, Stage8 retirement and later D-070 compression work remain explicitly outside this slice.
 
-## Implementation plan
+## Implemented compatibility boundary
 
-`ProjectStore` already routes loaded JSON through `migrate_project_data`, so schema-v1 compatibility is implemented there instead of scattering version checks across runtime code. Schema v2 keeps legacy recipe information in a dedicated compatibility object; current serializers no longer treat top-level `recipe_id` as canonical Project identity. The identity classifier and compatibility API read the legacy value through the new boundary.
+`ProjectStore` routes loaded JSON through `migrate_project_data`, so schema-v1 compatibility is centralized instead of scattering version checks across runtime code. Schema v2 keeps legacy recipe information in a dedicated compatibility object; current serializers no longer treat top-level `recipe_id` as canonical Project identity. The identity classifier, compatibility API, Stage8 compatibility readers, music-video readers and render adapters now read the legacy value through the explicit compatibility accessor.
 
-Archive import validates the manifest against the archive's raw Project schema before migration, allowing a schema-v1 archive to load as a current schema-v2 document without falsely comparing the old manifest version to the migrated in-memory version. Modern schema-v2 and legacy schema-v1 round trips are covered directly in Project Store/identity/archive tests.
+Archive import validates the manifest against the archive's raw Project schema before migration, allowing a schema-v1 archive to load as a current schema-v2 document without falsely comparing the old manifest version to the migrated in-memory version. Modern schema-v2 and legacy schema-v1 round trips are covered directly in Project Store/identity/archive/API tests.
+
+## Acceptance synchronization
+
+The implementation-head CI exposed a pre-existing timing race in two Windows browser acceptance scenarios around the intentional Production panel remount after a project transaction. The product frontend was not changed in this slice. Both affected tests now wait for the old Production DOM instance to detach before entering the next step; no arbitrary sleep or weaker product assertion was introduced.
+
+Exact-head CI run #4069 on `0775971302c46d493275f880d5c844cde14bcbaa` passed all five required checks, including the Windows browser suite. The lifecycle freeze changes the head, so the final review head must pass the five checks again.
 
 ## Accepted GitHub Actions security boundary
 
@@ -38,4 +44,4 @@ The previously merged Actions hardening remains unchanged. Maintained workflow A
 
 ## Review and verification
 
-This is material Project runtime/compatibility work. Before merge the final exact `BASE_SHA..HEAD_SHA` must pass all five required CI checks and receive a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` with zero surviving findings. Any material post-review fix makes that review stale.
+This is material Project runtime/compatibility work and is now frozen. Merge requires the final exact `BASE_SHA..HEAD_SHA` to pass all five required CI checks and receive a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` with zero surviving findings. Any material post-review fix makes that review stale and returns the slice to implementation work before a new review.
