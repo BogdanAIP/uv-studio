@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
+  "lifecycle_state": "draft",
   "active_slice": {
     "id": "project-identity-v2-compat-reader",
     "kind": "stage",
@@ -12,11 +12,13 @@
     "write_scope": [
       "project-context/ACTIVE_SLICE.json",
       "project-context/PROJECT_STATE.md",
+      "docs/PROJECT_STORE.md",
       "uv_studio/projects/models.py",
       "uv_studio/projects/migrations.py",
       "uv_studio/projects/store.py",
       "uv_studio/projects/identity.py",
       "uv_studio/projects/archive.py",
+      "uv_studio/projects/transactions.py",
       "uv_studio/projects/stage8_workspace.py",
       "uv_studio/projects/music_analysis_assist.py",
       "uv_studio/projects/music_video_review.py",
@@ -32,6 +34,7 @@
       "tests/test_project_store.py",
       "tests/test_project_identity.py",
       "tests/test_project_archive.py",
+      "tests/test_project_transactions.py",
       "tests_api/test_projects_api.py",
       "e2e/test_named_generation_outcome.py",
       "e2e/test_micro_drama_production_outcome.py"
