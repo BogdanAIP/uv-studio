@@ -17,6 +17,7 @@ from uv_studio.projects.archive import (
     export_project,
     import_project,
 )
+from uv_studio.projects.models import PROJECT_SCHEMA_VERSION, compatibility_recipe_id
 from uv_studio.projects.store import ProjectAlreadyExists, ProjectStore, ProjectStoreError
 
 
@@ -112,6 +113,60 @@ class ProjectArchiveTests(unittest.TestCase):
             (target_dir / "artifacts" / "preview" / "frame.txt").read_text(encoding="utf-8"),
             "frame-data",
         )
+
+    def test_schema_v1_archive_keeps_raw_version_and_loads_as_current_schema(self) -> None:
+        path = self.source_store.project_path(self.project.project_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw.pop("compatibility")
+        raw["schema_version"] = 1
+        raw["recipe_id"] = "historic_recipe_unknown"
+        path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        legacy_bytes = path.read_bytes()
+
+        archive = self._export("legacy-v1.uvproj.zip")
+        with zipfile.ZipFile(archive, "r") as zipped:
+            manifest = json.loads(zipped.read(ARCHIVE_MANIFEST).decode("utf-8"))
+            archived_project = json.loads(zipped.read("project/project.json").decode("utf-8"))
+        self.assertEqual(manifest["project_schema_version"], 1)
+        self.assertEqual(archived_project["schema_version"], 1)
+        self.assertEqual(archived_project["recipe_id"], "historic_recipe_unknown")
+
+        imported = import_project(self.target_store, archive)
+        self.assertEqual(imported.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(compatibility_recipe_id(imported), "historic_recipe_unknown")
+        imported_path = self.target_store.project_path(imported.project_id)
+        self.assertEqual(imported_path.read_bytes(), legacy_bytes)
+        self.assertEqual((imported_path.parent / "sources" / "clip.bin").read_bytes(), b"source-bytes")
+        self.assertEqual(
+            (imported_path.parent / "artifacts" / "preview" / "frame.txt").read_text(encoding="utf-8"),
+            "frame-data",
+        )
+
+        reexported = export_project(
+            self.target_store,
+            imported.project_id,
+            self.base / "legacy-v1-reexport.uvproj.zip",
+        )
+        with zipfile.ZipFile(reexported, "r") as zipped:
+            reexport_manifest = json.loads(zipped.read(ARCHIVE_MANIFEST).decode("utf-8"))
+        self.assertEqual(reexport_manifest["project_schema_version"], 1)
+
+    def test_manifest_project_schema_must_match_archived_project_bytes(self) -> None:
+        archive = self._export()
+        mismatched = self.base / "schema-mismatch.uvproj.zip"
+
+        def mutate(name: str, data: bytes) -> bytes | None:
+            if name == ARCHIVE_MANIFEST:
+                manifest = json.loads(data.decode("utf-8"))
+                manifest["project_schema_version"] = 1
+                return json.dumps(manifest).encode("utf-8")
+            return data
+
+        self._rewrite_archive(archive, mismatched, mutate)
+        with self.assertRaises(ProjectArchiveError) as caught:
+            import_project(self.target_store, mismatched)
+        self.assertIn("project_schema_version", str(caught.exception))
+        self.assertFalse((self.target_store.root / self.project.project_id).exists())
 
     def test_backup_creates_portable_archive(self) -> None:
         backup = create_backup(
