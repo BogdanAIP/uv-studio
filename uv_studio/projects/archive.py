@@ -91,10 +91,10 @@ def _iter_project_entries(project_dir: Path) -> tuple[list[Path], list[Path]]:
     directories: list[Path] = []
     files: list[Path] = []
     for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix()):
-        if _is_archive_transient(project_dir, path):
-            continue
         if path.is_symlink():
             raise ProjectArchiveError(f"Project archive does not allow symlinks: {path}")
+        if _is_archive_transient(project_dir, path):
+            continue
         if path.is_dir():
             directories.append(path)
         elif path.is_file():
@@ -122,6 +122,11 @@ def export_project(
     archive_path: Path | str,
 ) -> Path:
     """Export one stable canonical project snapshot to a validated ZIP format."""
+    project_dir = store.project_path(project_id).parent
+    lexical_lock_path = project_dir / "tasks" / ProjectTaskRecordStore.LOCK_FILE_NAME
+    if lexical_lock_path.is_symlink():
+        raise ProjectArchiveError(f"Project archive does not allow symlinks: {lexical_lock_path}")
+
     task_records = ProjectTaskRecordStore(store)
     with task_records.project_lock(project_id):
         document = store.load_project(project_id)
