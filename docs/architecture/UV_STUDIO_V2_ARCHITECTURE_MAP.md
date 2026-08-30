@@ -1,13 +1,13 @@
 # UV Studio v2 — architecture map and migration inventory
 
 **Status:** active architecture map under D-064 + D-065 + D-066 + D-067 + D-068 + D-069 + D-070  
-**Date:** 2026-08-29
+**Date:** 2026-08-30
 
 Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied. The separate `micro_drama` golden-vertical gate remains open. The first bounded migration step, `donor-ui-retirement`, merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; donor-only UI/client residue and supported donor-restoration authority are retired:
+UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied. The separate `micro_drama` golden-vertical gate remains open. The first bounded migration step, `donor-ui-retirement`, merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; donor-only UI/client residue and supported donor-restoration authority are retired. The bounded repository-security slice `actions-hardening` merged through PR #86 as `975a64855a739398139c90a094bdde9435542299`; after its lifecycle closure returns `main` to `idle`, migration continues with `project-identity-v2-compat-reader`:
 
 ```text
 Project Store
@@ -305,11 +305,11 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. The architecture-compression gate is therefore satisfied. `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; its bounded donor frontend/client/restoration work is complete. The separate `micro_drama` golden-vertical gate remains open.
+`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. The architecture-compression gate is therefore satisfied. `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; its bounded donor frontend/client/restoration work is complete. `actions-hardening` merged through PR #86 as `975a64855a739398139c90a094bdde9435542299`. The separate `micro_drama` golden-vertical gate remains open.
 
 The accepted behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
 
-PR #82 retired only the donor frontend/client/restoration subset: donor-only Workflow/Pipeline/Sandbox/stage UI is removed, the supported Settings model-listing seam is extracted to focused `modelsApi.ts`, write-capable donor restoration is retired, tracked frontend recovery returns to Git, and retained provenance is read-only and bound to vendored upstream identity. Live Recipe, Product Orchestrator, `/execution-plan`, legacy `/projects/{id}`, Stage8, schema-v1 identity and VideoClaw backend compatibility remain separate work. Before those product migrations resume, the bounded `actions-hardening` security/process slice is the next repository handoff.
+PR #82 retired only the donor frontend/client/restoration subset: donor-only Workflow/Pipeline/Sandbox/stage UI is removed, the supported Settings model-listing seam is extracted to focused `modelsApi.ts`, write-capable donor restoration is retired, tracked frontend recovery returns to Git, and retained provenance is read-only and bound to vendored upstream identity. Live Recipe, Product Orchestrator, `/execution-plan`, legacy `/projects/{id}`, Stage8, schema-v1 identity and VideoClaw backend compatibility remain separate work. With the bounded `actions-hardening` security/process slice now merged, those product migrations resume with `project-identity-v2-compat-reader` after the lifecycle closure returns `main` to `idle`.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
@@ -411,12 +411,9 @@ Completed:
 14. **Stage 18 bounded background Agent execution — PR #75 merged.**
 15. **`architecture-compression-inventory` — PR #77 merged as `c6831a36eb88289947eed1da65609654a2353524`; exact caller/migration/deletion map accepted, architecture-compression gate satisfied.**
 16. **`donor-ui-retirement` — PR #82 merged as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`.** Write-capable donor restoration was removed/replaced by Git restoration plus read-only provenance; the supported Settings model lookup was extracted; zero-caller donor UI/client remainder was deleted; live compatibility surfaces remain.
+17. **`actions-hardening` — PR #86 merged as `975a64855a739398139c90a094bdde9435542299`.** Maintained remote Action refs are pinned to immutable SHAs, read-only checkouts disable credential persistence, write authority is narrowed to the genuine vendoring job, and structural regression guards prevent policy drift.
 
-Current bounded repository-security work:
-
-17. **`actions-hardening`** — pin maintained first-party Actions to exact commit SHAs, disable persisted checkout credentials in read-only workflows, keep write authority only on the genuine vendoring writer, and prevent policy drift with a static guard.
-
-Then continue D-070 migration work:
+Next D-070 migration work:
 
 18. later bounded retirement/extraction slices proven by the accepted inventory, beginning with `project-identity-v2-compat-reader`, then recipe entrypoint retirement, execution-plan retirement, legacy direction/tool migration, Product Orchestrator retirement, remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
 19. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
