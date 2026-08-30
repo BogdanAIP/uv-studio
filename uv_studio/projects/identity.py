@@ -1,4 +1,4 @@
-"""Typed UV Studio product identity over schema-v1 compatibility metadata."""
+"""Typed UV Studio product identity over Project compatibility metadata."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
 from uv_studio.production.directions import ProductionDirectionNotFound, get_production_direction
-from uv_studio.projects.models import ProjectDocument, ProjectValidationError
+from uv_studio.projects.models import (
+    ProjectDocument,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 
 STUDIO_COMPAT_RECIPE_ID = "studio_v2"
 STUDIO_EXTENSION_KEY = "studio"
@@ -135,11 +139,12 @@ def _pr63_direction_v2(value: object) -> str | None:
 
 
 def classify_project_identity(project: ProjectDocument) -> ProjectIdentityProjection:
+    recipe_id = compatibility_recipe_id(project)
     has_studio = STUDIO_EXTENSION_KEY in project.extensions
     raw_studio = project.extensions.get(STUDIO_EXTENSION_KEY)
 
     if not has_studio:
-        if project.recipe_id == STUDIO_COMPAT_RECIPE_ID:
+        if recipe_id == STUDIO_COMPAT_RECIPE_ID:
             return ProjectIdentityProjection(
                 kind="legacy_compatibility",
                 compatibility_kind="studio_unversioned",
@@ -151,14 +156,14 @@ def classify_project_identity(project: ProjectDocument) -> ProjectIdentityProjec
         return ProjectIdentityProjection(
             kind="legacy_compatibility",
             compatibility_kind="recipe",
-            reason=f"legacy recipe project: {project.recipe_id}",
+            reason=f"legacy recipe project: {recipe_id}",
         )
 
-    if project.recipe_id != STUDIO_COMPAT_RECIPE_ID:
+    if recipe_id != STUDIO_COMPAT_RECIPE_ID:
         return ProjectIdentityProjection(
             kind="invalid_recovery",
             reason=(
-                "extensions.studio is present but recipe_id is not the neutral "
+                "extensions.studio is present but compatibility.recipe_id is not the neutral "
                 f"{STUDIO_COMPAT_RECIPE_ID!r} compatibility value"
             ),
         )
@@ -215,7 +220,10 @@ def require_modern_studio_identity(project: ProjectDocument) -> StudioProjectIde
 
 
 def _has_protected_studio_claim(project: ProjectDocument) -> bool:
-    return project.recipe_id == STUDIO_COMPAT_RECIPE_ID or STUDIO_EXTENSION_KEY in project.extensions
+    return (
+        compatibility_recipe_id(project) == STUDIO_COMPAT_RECIPE_ID
+        or STUDIO_EXTENSION_KEY in project.extensions
+    )
 
 
 def assert_project_identity_transition(current: ProjectDocument, proposed: ProjectDocument) -> None:
@@ -226,7 +234,7 @@ def assert_project_identity_transition(current: ProjectDocument, proposed: Proje
     current_has_studio = STUDIO_EXTENSION_KEY in current.extensions
     proposed_has_studio = STUDIO_EXTENSION_KEY in proposed.extensions
     if (
-        current.recipe_id != proposed.recipe_id
+        compatibility_recipe_id(current) != compatibility_recipe_id(proposed)
         or current_has_studio != proposed_has_studio
         or current.extensions.get(STUDIO_EXTENSION_KEY) != proposed.extensions.get(STUDIO_EXTENSION_KEY)
     ):
