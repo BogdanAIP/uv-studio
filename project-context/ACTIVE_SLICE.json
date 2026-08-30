@@ -3,7 +3,7 @@
   "lifecycle_state": "draft",
   "active_slice": {
     "id": "project-identity-v2-compat-reader",
-    "kind": "feature",
+    "kind": "stage",
     "roadmap_stage": "product-first-architecture-compression",
     "goal": "Introduce the Project schema-v2 compatibility identity boundary, keep schema-v1 projects and archives readable, and move legacy recipe identity behind explicit compatibility state without changing execution, orchestration, Stage8 or recipe endpoint authority.",
     "base_branch": "main",
