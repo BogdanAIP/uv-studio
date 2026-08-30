@@ -5,19 +5,35 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
-from .models import PROJECT_SCHEMA_VERSION, ProjectValidationError
+from .models import PROJECT_SCHEMA_VERSION, ProjectCompatibility, ProjectValidationError
 
 
 class UnsupportedProjectSchema(ProjectValidationError):
     pass
 
 
+def _migrate_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
+    """Move legacy top-level recipe identity into explicit compatibility state."""
+
+    if "recipe_id" not in data:
+        raise ProjectValidationError("schema-v1 project is missing recipe_id")
+    if "compatibility" in data:
+        raise ProjectValidationError(
+            "schema-v1 project contains reserved compatibility state and cannot be migrated safely"
+        )
+
+    compatibility = ProjectCompatibility(recipe_id=data.pop("recipe_id"))
+    data["compatibility"] = compatibility.to_dict()
+    data["schema_version"] = 2
+    return data
+
+
 def migrate_project_data(data: Mapping[str, Any]) -> dict[str, Any]:
     """Return project data upgraded to the current schema.
 
-    Version 1 is the first schema, so no migration functions exist yet. Keeping
-    this boundary from day one prevents future code from silently treating old
-    or newer project files as if they matched the current model.
+    Historical bytes are never rewritten by this function. Callers receive a
+    detached current-schema mapping, while the original schema-v1 project can
+    remain on disk until a later canonical write deliberately persists v2.
     """
     if not isinstance(data, Mapping):
         raise ProjectValidationError("project document must be a JSON object")
@@ -43,11 +59,13 @@ def migrate_project_data(data: Mapping[str, Any]) -> dict[str, Any]:
             )
         current = migration(current)
         version = current.get("schema_version")
-        if not isinstance(version, int):
+        if not isinstance(version, int) or isinstance(version, bool):
             raise ProjectValidationError("migration produced invalid schema_version")
 
     return current
 
 
 # Maps source version -> function that returns the next version.
-_MIGRATIONS: dict[int, Any] = {}
+_MIGRATIONS: dict[int, Any] = {
+    1: _migrate_v1_to_v2,
+}
