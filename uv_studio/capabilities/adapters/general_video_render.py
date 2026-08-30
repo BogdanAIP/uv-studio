@@ -10,7 +10,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.models import (
+    ProjectReference,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 from uv_studio.projects.source_media import ProjectSourceMediaStore, SourceMediaError
 from uv_studio.projects.stage8_workspace import Stage8WorkspaceError, get_stage8_workspace
 from uv_studio.projects.store import ProjectStoreError
@@ -134,7 +138,7 @@ def render_general_workspace(
         raise InvalidCapabilityInput("video.render_general requires workspace_revision_sha256")
 
     project = adapter.store.load_project(project_id)
-    if project.recipe_id != _RECIPE_ID:
+    if compatibility_recipe_id(project) != _RECIPE_ID:
         raise InvalidCapabilityInput("video.render_general is available only for general_video")
     try:
         workspace = get_stage8_workspace(adapter.store, project_id)
