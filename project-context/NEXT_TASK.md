@@ -1,47 +1,29 @@
 # Next Task
 
-<!-- uv-next-slice: actions-hardening -->
+<!-- uv-next-slice: project-identity-v2-compat-reader -->
 
 ## Target
 
-Harden the repository's GitHub Actions supply chain before resuming product architecture work.
+Resume the accepted D-070 migration sequence with `project-identity-v2-compat-reader` after the current `actions-hardening` security/process slice is merged and lifecycle-closed.
 
-This is a small repository security/process slice. It must not change UV Studio runtime, product behavior or canonical application authority.
+## Required product scope
 
-## Required scope
+- introduce an explicit newer project-schema/identity compatibility boundary without breaking schema-v1 project/archive readability;
+- preserve known legacy, known-but-uncreatable and historically unknown schema-v1 recipe identities as compatibility state rather than silently guessing a modern Production Direction;
+- migrate supported direct runtime readers of `recipe_id` to typed Studio identity / Production Direction or an explicit compatibility discriminator supplied by the v1 reader before the newest schema can stop depending on `recipe_id` as canonical identity;
+- keep source/media/artifact identities and canonical Timeline state stable through migration;
+- prove representative modern and unmigrated-v1 export/import round trips;
+- keep later recipe entrypoint, execution-plan, Product Orchestrator and Stage8 retirement as separate bounded slices.
 
-1. Replace every first-party `actions/*@vN` reference in maintained workflows with an exact full 40-character commit SHA, using the exact action revisions already proven by current successful CI where practical so pinning does not accidentally become a version upgrade.
-2. Keep explicit `permissions: contents: read` on read-only workflows.
-3. Set `persist-credentials: false` on every `actions/checkout` step that does not need authenticated Git push.
-4. Keep `contents: write` only on the narrowly bounded workflow that actually commits/pushes the pinned VideoClaw snapshot; do not widen permissions elsewhere.
-5. Add a repository-level static guard/test that fails if a future workflow:
-   - reintroduces floating `actions/*@vN` references;
-   - grants `contents: write` outside the approved writer workflow;
-   - leaves checkout credentials persisted in a read-only workflow.
-6. Run the permanent Ubuntu/Windows CI on the exact final head.
-7. Because this changes CI/security/acceptance mechanics, freeze exact BASE/HEAD and obtain the required fresh ordinary-ChatGPT semantic review before merge.
+## Entry gate
 
-## Native Ready connector note
+Do not start this product slice until:
 
-A live post-PR-#82 check showed that the official connector exposes `mark_pull_request_ready_for_review`, but the current connector call fails internally because its GraphQL selection queries nonexistent `Repository.fullDatabaseId`.
-
-Treat this as an external connector implementation defect, not as proof that GitHub lacks the Ready mutation. Do not add a privileged `pull_request_target` fallback inside the hardening slice merely to work around this connector bug. Revisit a repository fallback only if a later separately justified process decision proves that the benefit outweighs the added privileged workflow surface.
-
-## GitHub settings follow-up
-
-After the hardening PR is merged and the repository workflows are compatible, enable GitHub's repository/organization policy requiring Actions to be pinned to a full-length commit SHA.
-
-That UI setting is intentionally enabled only after repository workflows are already compliant so development is not interrupted by a policy/configuration ordering failure.
-
-## Following product slice
-
-After Actions hardening and its lifecycle closure, resume `project-identity-v2-compat-reader` from the accepted D-070 migration inventory.
-
-That product slice must preserve schema-v1 project/archive readability while introducing the newer identity/compatibility boundary needed before modern projects can stop depending on `recipe_id` as canonical identity.
+1. `actions-hardening` has merged;
+2. its D-038 lifecycle closure has returned `main` to `idle`;
+3. the repository-level full-SHA Actions policy has been enabled after workflow compatibility is proven, when that setting is available to the repository owner;
+4. the mandatory fresh bootstrap is rerun against that new `main`.
 
 ## Out of scope
 
-- do not implement `project-identity-v2-compat-reader` in the Actions hardening PR;
-- do not create a Ready-for-review fallback workflow in the same slice;
-- do not upgrade unrelated dependencies or Actions majors merely because pinning is being introduced;
-- do not change product/runtime behavior.
+Do not mix GitHub Actions supply-chain work, Ready-for-review connector work, recipe endpoint retirement, execution-plan retirement, Product Orchestrator retirement or Stage8 runtime retirement into the identity compatibility slice.
