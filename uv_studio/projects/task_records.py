@@ -78,7 +78,6 @@ def _release_os_lock(handle: Any) -> None:
         return
     import fcntl
 
-    handle.seek(0)
     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
