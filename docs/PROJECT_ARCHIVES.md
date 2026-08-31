@@ -46,24 +46,29 @@ This lets import verify the entire portable recovery snapshot before it becomes 
 
 ## Export contract
 
-Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence spans raw Project-schema sampling, filesystem enumeration, hashing and ZIP capture, so a concurrent canonical mutation cannot make the manifest and archived bytes describe different project states.
+Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence freezes canonical Project metadata and every publisher that participates in that authority while export samples the raw schema and enumerates the project filesystem.
 
-Source-media upload follows the same snapshot boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after the upload is complete does source publication acquire the shared project fence; the final move into `sources/`, media probe, canonical source-reference registration and failure cleanup remain inside that fence. Export therefore observes either the complete pre-publication project or the complete registered source state, never an in-progress `.upload` file or a final source file whose `project.json` reference is still waiting to commit.
+The archive boundary is also fail-closed around older media publishers that may finish writing unique UV-owned bytes before their Project-reference transaction acquires the fence. A regular file in a managed media root (`sources/`, `assets/`, `artifacts/` or `exports/`) whose UV-owned UUID name starts with `src_`, `art_` or `aud_` must already be represented by the frozen Project `sources`/`artifacts` references. The same rule catches hidden in-project upload names derived from those identities. If such a file exists without its reference, export stops instead of freezing an ambiguous publication state; after the publisher completes registration or recovery/cleanup, a retry can export the complete state. Ordinary unregistered project files with non-managed names remain portable and are not reclassified as transient content.
+
+For every accepted portable file, export computes size and SHA-256 while streaming that exact byte sequence directly into the ZIP. It does not hash one live read and later perform a second live read for ZIP capture. A concurrent non-authoritative file change can therefore either cause export to fail while opening/capturing the file or produce a manifest record for exactly the bytes stored in the ZIP; it cannot produce the former two-read hash/ZIP mismatch.
+
+Source-media upload follows the same snapshot boundary proactively. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after the upload is complete does source publication acquire the shared project fence; the final move into `sources/`, media probe, canonical source-reference registration and failure cleanup remain inside that fence. Export therefore observes either the complete pre-publication project or the complete registered source state, never an in-progress `.upload` file or a final source file whose `project.json` reference is still waiting to commit.
 
 Export:
 
 1. checks the lexical technical lock path and fails closed if it is a symlink;
 2. acquires the shared project mutation fence;
-3. loads and validates the canonical `project.json`;
+3. loads and validates the canonical `project.json` and samples its raw schema;
 4. rejects symlinks/special filesystem entries during project enumeration;
 5. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
-6. hashes every remaining portable regular project file;
-7. writes the ZIP to a temporary sibling file;
-8. atomically replaces the requested archive destination when complete.
+6. rejects an enumerated UV-owned `src_`/`art_`/`aud_` managed-media publication that is absent from the frozen Project references;
+7. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes;
+8. writes the manifest describing those captured bytes;
+9. atomically replaces the requested archive destination when complete.
 
 The destination may not be inside the project being archived. That prevents a backup from recursively including itself.
 
-The project fence is a snapshot-consistency boundary, not archive payload. Export never relies on the lock file as recoverable state and never weakens the general symlink rejection rule to omit it.
+The project fence is a snapshot-consistency boundary, not archive payload. Export never relies on the lock file as recoverable state and never weakens the general symlink rejection rule to omit it. An export rejected because a managed publication is incomplete is not a corrupt backup: no destination archive is committed, and the caller may retry after the publisher finishes or recovery resolves the orphan.
 
 ## Import contract
 

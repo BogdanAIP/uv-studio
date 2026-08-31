@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import tempfile
 import uuid
@@ -32,6 +33,8 @@ from .task_records import ProjectTaskRecordStore
 ARCHIVE_SCHEMA_VERSION = 1
 ARCHIVE_MANIFEST = ".uv-project-archive.json"
 PROJECT_PREFIX = "project"
+_MANAGED_MEDIA_ROOTS = frozenset({"sources", "assets", "artifacts", "exports"})
+_MANAGED_PUBLICATION_NAME = re.compile(r"^(?:src|art|aud)_[0-9a-f]{32}(?:[._-]|$)")
 
 
 class ProjectArchiveError(RuntimeError):
@@ -116,6 +119,69 @@ def _write_zip_directory(archive: zipfile.ZipFile, name: str) -> None:
     archive.writestr(info, b"")
 
 
+def _registered_media_paths(document: ProjectDocument) -> set[str]:
+    return {reference.path for reference in (*document.sources, *document.artifacts)}
+
+
+def _looks_like_managed_publication(project_dir: Path, path: Path) -> bool:
+    relative = path.relative_to(project_dir)
+    if len(relative.parts) < 2 or relative.parts[0] not in _MANAGED_MEDIA_ROOTS:
+        return False
+    name = relative.name[1:] if relative.name.startswith(".") else relative.name
+    return _MANAGED_PUBLICATION_NAME.match(name) is not None
+
+
+def _reject_unpublished_managed_media(
+    document: ProjectDocument,
+    project_dir: Path,
+    files: list[Path],
+) -> None:
+    """Fail closed when a UV-owned media publication is not metadata-complete.
+
+    Some legacy media publishers materialize a unique ``src_*``, ``art_*`` or
+    ``aud_*`` path before their ProjectReference transaction can acquire the shared
+    project fence. Export owns that fence, so including such a path would freeze a
+    split state and can also race a writer. Ordinary unregistered project files are
+    still portable; only UV-owned UUID publication names are treated as ambiguous.
+    """
+
+    registered = _registered_media_paths(document)
+    for path in files:
+        relative = path.relative_to(project_dir).as_posix()
+        if _looks_like_managed_publication(project_dir, path) and relative not in registered:
+            raise ProjectArchiveError(
+                "Project contains an unpublished managed media file; retry export after "
+                f"publication or recovery completes: {relative}"
+            )
+
+
+def _write_zip_file_and_record(
+    archive: zipfile.ZipFile,
+    project_dir: Path,
+    path: Path,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> dict[str, Any]:
+    """Write one live file once and describe the exact bytes written to the ZIP."""
+
+    if path.is_symlink() or not path.is_file():
+        raise ProjectArchiveError(f"Project file changed type during export: {path}")
+    name = _archive_relative_name(project_dir, path)
+    info = zipfile.ZipInfo.from_file(path, arcname=name)
+    info.compress_type = archive.compression
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with path.open("rb") as source, archive.open(info, "w", force_zip64=True) as output:
+            while chunk := source.read(chunk_size):
+                output.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
+    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        raise ProjectArchiveError(f"Could not capture project file during export: {path}") from exc
+    return {"path": name, "size": size, "sha256": digest.hexdigest()}
+
+
 def export_project(
     store: ProjectStore,
     project_id: str,
@@ -137,23 +203,8 @@ def export_project(
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         directories, files = _iter_project_entries(project_dir)
-        file_records: list[dict[str, Any]] = []
-        for path in files:
-            file_records.append(
-                {
-                    "path": _archive_relative_name(project_dir, path),
-                    "size": path.stat().st_size,
-                    "sha256": _sha256_file(path),
-                }
-            )
-
-        manifest = {
-            "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
-            "project_id": document.project_id,
-            "project_schema_version": stored_schema_version,
-            "created_at": utc_now_iso(),
-            "files": file_records,
-        }
+        _reject_unpublished_managed_media(document, project_dir, files)
+        created_at = utc_now_iso()
 
         temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
         try:
@@ -163,15 +214,24 @@ def export_project(
                 compression=zipfile.ZIP_DEFLATED,
                 allowZip64=True,
             ) as archive:
+                _write_zip_directory(archive, PROJECT_PREFIX)
+                for directory in directories:
+                    _write_zip_directory(archive, _archive_relative_name(project_dir, directory))
+                file_records = [
+                    _write_zip_file_and_record(archive, project_dir, path)
+                    for path in files
+                ]
+                manifest = {
+                    "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
+                    "project_id": document.project_id,
+                    "project_schema_version": stored_schema_version,
+                    "created_at": created_at,
+                    "files": file_records,
+                }
                 archive.writestr(
                     ARCHIVE_MANIFEST,
                     json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
                 )
-                _write_zip_directory(archive, PROJECT_PREFIX)
-                for directory in directories:
-                    _write_zip_directory(archive, _archive_relative_name(project_dir, directory))
-                for path in files:
-                    archive.write(path, _archive_relative_name(project_dir, path))
             os.replace(temp_path, destination)
         except Exception:
             temp_path.unlink(missing_ok=True)
