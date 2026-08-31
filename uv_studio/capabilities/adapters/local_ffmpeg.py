@@ -7,6 +7,7 @@ the canonical Project Store and subprocesses are invoked with argv + shell=False
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -511,22 +512,31 @@ class LocalFFmpegAdapter:
                 f"timeline.assemble refuses to overwrite existing output: {canonical_output!r}"
             )
 
-        project_dir = self.store.project_directory(project_id)
-        tasks_dir = project_dir / "tasks"
+        artifact_id = f"art_{uuid.uuid4().hex}"
         manifest_path: Path | None = None
+        staged_output: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
                 newline="\n",
-                prefix="ffconcat-",
+                prefix=".uv-ffconcat-",
                 suffix=".txt",
-                dir=tasks_dir,
+                dir=self.store.root,
                 delete=False,
             ) as handle:
                 manifest_path = Path(handle.name)
                 for item in input_paths:
                     handle.write(_ffconcat_quote(item))
+
+            with tempfile.NamedTemporaryFile(
+                prefix=f".uv-timeline-assemble-{artifact_id}-",
+                suffix=output_path.suffix,
+                dir=self.store.root,
+                delete=False,
+            ) as handle:
+                staged_output = Path(handle.name)
+            staged_output.unlink()
 
             command = [
                 self._tool("ffmpeg"),
@@ -544,14 +554,20 @@ class LocalFFmpegAdapter:
                 "copy",
                 "-movflags",
                 "+faststart",
-                str(output_path),
+                str(staged_output),
             ]
             self._invoke(command, timeout=self.assemble_timeout_sec, tool="ffmpeg")
-            if not output_path.is_file():
+            if staged_output.is_symlink() or not staged_output.is_file():
                 raise CapabilityToolFailed("ffmpeg reported success but output file was not created")
+            try:
+                output_size = staged_output.stat().st_size
+            except OSError as exc:
+                raise CapabilityToolFailed("ffmpeg output could not be validated") from exc
+            if output_size <= 0:
+                raise CapabilityToolFailed("ffmpeg reported success but output file is empty")
 
             artifact = ProjectReference(
-                id=f"art_{uuid.uuid4().hex}",
+                id=artifact_id,
                 kind="video",
                 path=canonical_output,
                 metadata={
@@ -561,15 +577,50 @@ class LocalFFmpegAdapter:
                     "assembly_mode": "concat_copy",
                 },
             )
-            try:
-                project = self.store.load_project(project_id)
-                self.store.update_project(
-                    project_id,
-                    artifacts=(*project.artifacts, artifact),
-                )
-            except Exception:
-                output_path.unlink(missing_ok=True)
-                raise
+
+            # Long-running FFmpeg work stays outside the canonical project tree.
+            # Only the final byte publication + Project reference transition takes
+            # the shared archive/project fence, so recovery can observe old or new
+            # state but never an unregistered arbitrary-path output in between.
+            from uv_studio.projects.task_records import ProjectTaskRecordStore
+
+            with ProjectTaskRecordStore(self.store).project_lock(project_id):
+                try:
+                    fenced_output = self.store.resolve_project_file(
+                        project_id,
+                        canonical_output,
+                        must_exist=False,
+                        allowed_roots=_OUTPUT_ROOTS,
+                    )
+                except (ProjectValidationError, ProjectStoreError) as exc:
+                    raise InvalidCapabilityInput(str(exc)) from exc
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise InvalidCapabilityInput(
+                        f"timeline.assemble refuses to overwrite existing output: {canonical_output!r}"
+                    )
+
+                final_written = False
+                try:
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    project = self.store.load_project(project_id)
+                    self.store.update_project(
+                        project_id,
+                        artifacts=(*project.artifacts, artifact),
+                    )
+                except Exception:
+                    if final_written:
+                        try:
+                            current = self.store.load_project(project_id)
+                            registered = any(item.id == artifact_id for item in current.artifacts)
+                        except Exception:
+                            # If durable metadata cannot be read after a possible
+                            # commit, preserve bytes rather than deleting data that
+                            # may already be referenced.
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
 
             return CapabilityExecutionResult.from_offer(
                 project_id=project_id,
@@ -584,6 +635,8 @@ class LocalFFmpegAdapter:
         finally:
             if manifest_path is not None:
                 manifest_path.unlink(missing_ok=True)
+            if staged_output is not None:
+                staged_output.unlink(missing_ok=True)
 
     def _invoke(
         self,
