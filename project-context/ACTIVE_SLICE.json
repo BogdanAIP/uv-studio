@@ -16,6 +16,7 @@
       "docs/PROJECT_ARCHIVES.md",
       "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
       "frontend/components/editor/ProductionWorkspacePanel.tsx",
+      "frontend/components/editor/ProductionSemanticsPanel.tsx",
       "uv_studio/projects/models.py",
       "uv_studio/projects/migrations.py",
       "uv_studio/projects/store.py",
