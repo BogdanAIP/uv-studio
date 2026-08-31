@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-08-31
@@ -9,13 +9,13 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is reopened in implementation/draft in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is frozen for review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
 Frozen head `87a018abebea1dbcd5959921603b53305b02d5f5` passed exact-head CI run #4150 **5/5**, but its required fresh ordinary-ChatGPT semantic review reported one surviving P2 recovery/concurrency finding. The development context independently classified it **CONFIRMED**: existing media publishers can create UV-owned `art_`/`aud_` bytes inside canonical project roots before their Project-reference transaction acquires the archive snapshot fence. The old export could therefore freeze split metadata/filesystem state, and its separate hash and ZIP reads could observe different live bytes.
 
-The review on `87a018abebea1dbcd5959921603b53305b02d5f5` is stale. PR #89 is draft. Read-only falsification found the same historical publication pattern beyond the two examples named by the reviewer, including additional render and prepared-audio paths. Stage 19 therefore hardens the recovery boundary itself rather than expanding into a broad renderer rewrite.
+That review on `87a018abebea1dbcd5959921603b53305b02d5f5` is stale. PR #89 was returned to draft before material recovery changes. Read-only falsification found the same historical publication pattern beyond the two examples named by the reviewer, including additional render and prepared-audio paths, so Stage 19 hardened the recovery boundary itself rather than expanding into a broad renderer rewrite.
 
-Current implementation head `f7a598af298e9a61b21a72b7262b630c0ef9c6d2` makes archive export fail closed around incomplete UV-owned media publication and computes manifest size/SHA from the exact bytes streamed into the ZIP. Focused hosted verification is now required before another review freeze.
+Current implementation head `6890ad79f0598d701881ebe264674d5d5c606891` contains the completed recovery fix and regression coverage. Exact implementation-head CI runs #4161 and #4162 both completed successfully with all five permanent checks green. This context-only transition freezes that implementation for a new exact-head review cycle; no further material changes are permitted while lifecycle state remains `review`.
 
 ## Implementation boundary
 
@@ -38,16 +38,16 @@ Archive import validates the manifest against the raw archived Project schema be
 
 Source upload proactively stages incomplete request bytes outside every canonical project directory and publishes final source bytes plus metadata under the shared project fence.
 
-For older publishers that still materialize unique media bytes before metadata registration, export now checks enumerated managed media roots against the frozen Project references. A UV-owned UUID publication name beginning `src_`, `art_` or `aud_` that is present under `sources/`, `assets/`, `artifacts/` or `exports/` but absent from frozen Project metadata makes export fail closed and commit no archive. Hidden derivative upload names are covered by the same rule. Ordinary unregistered files with non-managed names remain portable.
+For older publishers that still materialize unique media bytes before metadata registration, export checks enumerated managed media roots against the frozen Project references. A UV-owned UUID publication name beginning `src_`, `art_` or `aud_` that is present under `sources/`, `assets/`, `artifacts/` or `exports/` but absent from frozen Project metadata makes export fail closed and commit no archive. Hidden derivative upload names are covered by the same rule. Ordinary unregistered files with non-managed names remain portable.
 
-Accepted project files are now streamed once into the ZIP while size and SHA-256 are computed from that same stream. The manifest therefore describes the exact captured ZIP bytes rather than a prior live-file read.
+Accepted project files are streamed once into the ZIP while size and SHA-256 are computed from that same captured byte stream. The manifest therefore describes the exact bytes written to the archive rather than a prior live-file read.
 
 ## Acceptance synchronization
 
-The previous frozen head `87a018abebea1dbcd5959921603b53305b02d5f5` passed CI #4150 **5/5**, but that evidence is stale for merge after the material recovery fix.
+Implementation head `6890ad79f0598d701881ebe264674d5d5c606891` passed required CI twice: runs #4161 and #4162 are both **5/5** green.
 
-The new focused regression test pauses export after the snapshot fence is acquired, lets an unfenced legacy publisher create a UV-owned artifact and block on metadata registration, requires export to fail without committing a ZIP, then verifies publication completes after fence release and a retry round-trips both the artifact reference and exact bytes. It also proves arbitrary unregistered files remain portable while final/hidden UV-owned managed publication names fail closed.
+Focused regression coverage in `tests/test_project_archive_publication_race.py` proves that arbitrary unregistered project files remain portable while final/hidden UV-owned managed publication names fail closed; export hashes the exact bytes written to ZIP rather than pre-hashing live files; and when export owns the fence while an unfenced legacy publisher creates an artifact before metadata registration, export commits no archive, metadata completes after fence release, and a retry round-trips the registered reference and exact artifact bytes.
 
 ## Review and verification
 
-This material recovery/concurrency change remains in `draft` until the new implementation head passes required CI. Then context must return to `review`, the PR must be non-draft, the new exact head must pass all five declared checks, existing review threads must remain resolved, and a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0 must report zero surviving findings. Any later material change invalidates that review.
+Lifecycle is now `review`. The branch is frozen except for an explicit return to `draft` if new material findings require changes. PR #89 must be non-draft, the new context-only exact head must pass all five declared checks, existing review threads must remain resolved, and a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0 must report zero surviving findings. Any later material change invalidates that review.
