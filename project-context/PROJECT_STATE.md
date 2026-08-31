@@ -1,25 +1,25 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
-**Updated:** 2026-08-30
+**Updated:** 2026-08-31
 
 **Repository:** `BogdanAIP/uv-studio`
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is reopened in implementation/draft in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is frozen for independent review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The latest frozen head `a900c770f527956a709ec4523b1f23292d368a44` passed exact-head CI run #4131 **5/5**, but a new automated review thread then found one surviving P2 documentation-contract inconsistency. That head is therefore no longer a merge candidate and the slice is reopened.
+The latest earlier frozen head `a900c770f527956a709ec4523b1f23292d368a44` passed exact-head CI run #4131 **5/5**, but an automated review then found one surviving P2 archive-documentation contract inconsistency. That finding was confirmed and fixed. Documentation-fix implementation head `75b871f391055cef886fb9b047936f6ae870f7d7` passed exact-head CI run #4136 **5/5** on Ubuntu and Windows, including unit, API, real-media and browser user-outcome suites. The PR is non-draft again and this lifecycle/context freeze is the only later branch change. The exact frozen review head is the live PR head and must be bound explicitly in the next `REVIEW_REQUEST_V1`; its own exact-head CI must also pass 5/5 before merge.
 
-The confirmed finding is documentation-specific but contract-relevant: archive export intentionally excludes the ordinary technical file `tasks/.uv-task-records.lock` from portable backups while holding the shared project mutation fence, but `docs/PROJECT_ARCHIVES.md` still states that a portable archive is one complete canonical project directory and that every regular project file is declared and hashed. The archive document must explicitly define this technical transient-file exception and the stable-snapshot behavior under the project fence without weakening the existing symlink/special-entry fail-closed contract.
+The latest confirmed P2 was documentation-specific but contract-relevant: archive export intentionally excludes the ordinary technical file `tasks/.uv-task-records.lock` from portable backups while holding the shared project mutation fence, but `docs/PROJECT_ARCHIVES.md` still described every regular project file as portable. The fix is complete: the archive contract now defines a complete portable recovery snapshot of canonical recoverable state, explicitly excludes only the ordinary technical task-record lock, documents the stable snapshot under the shared project fence, and preserves fail-closed handling for a symlink or special entry at that lexical path.
 
-The earlier schema-v1 ProjectUnitOfWork undo/redo defect, Project Store documentation drift, archive schema-snapshot race, active D-070 inventory drift and technical-lock symlink defect remain fixed and covered.
+The earlier schema-v1 ProjectUnitOfWork undo/redo defect, Project Store documentation drift, archive schema-snapshot race, active D-070 inventory drift and technical-lock symlink defect remain fixed and covered. All current inline review threads are resolved.
 
 ## Implementation boundary
 
-This slice still implements only the D-070 Project identity/schema compatibility boundary:
+This slice implements only the D-070 Project identity/schema compatibility boundary:
 
 - advance the canonical Project document to schema v2;
 - keep schema-v1 project files and `.uvproj.zip` archives readable through the existing migration boundary;
@@ -46,7 +46,7 @@ ProjectUnitOfWork validation uses the same migration boundary for staged histori
 
 The implementation-head CI previously exposed a pre-existing timing race in two Windows browser acceptance scenarios around the intentional Production panel remount after a project transaction. The product frontend was not changed in this slice. Both affected tests wait for the old Production DOM instance to detach before entering the next step; no arbitrary sleep or weaker product assertion was introduced.
 
-Exact-head CI runs #4069, #4074, #4087, #4093, #4105, #4111, #4112, #4127 and #4131 passed their applicable five required checks. Because the new confirmed P2 requires a branch change, the next implementation head must pass all five checks again before another review freeze.
+Exact-head CI runs #4069, #4074, #4087, #4093, #4105, #4111, #4112, #4127, #4131 and documentation-fix #4136 passed their applicable five required checks. Because this review freeze changes the branch head only through lifecycle/context, a fresh exact-head 5/5 CI result is still required before merge.
 
 ## Accepted GitHub Actions security boundary
 
@@ -54,4 +54,4 @@ The previously merged Actions hardening remains unchanged. Maintained workflow A
 
 ## Review and verification
 
-This is material Project runtime/compatibility/recovery/security work and is no longer frozen while the confirmed archive-documentation contract drift is corrected. After the fix, the branch must return to `review`, the new exact `BASE_SHA..HEAD_SHA` must pass all five required CI checks, every inline review thread must be resolved, and a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` must report zero surviving findings. Any later material change invalidates that review and requires another fresh review.
+This is material Project runtime/compatibility/recovery/security work and is now frozen. The next required step is a fresh ordinary-ChatGPT independent semantic review under `.agents/skills/code-review/SKILL.md`, bound to the exact live PR `BASE_SHA..HEAD_SHA`. The result must be `CURRENT` with zero surviving findings. The exact frozen head must pass all five required CI checks, review threads must remain resolved, and any later material change invalidates the review and requires another fresh review.
