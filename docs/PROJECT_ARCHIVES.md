@@ -48,6 +48,8 @@ This lets import verify the entire portable recovery snapshot before it becomes 
 
 Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence spans raw Project-schema sampling, filesystem enumeration, hashing and ZIP capture, so a concurrent canonical mutation cannot make the manifest and archived bytes describe different project states.
 
+Source-media upload follows the same snapshot boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after the upload is complete does source publication acquire the shared project fence; the final move into `sources/`, media probe, canonical source-reference registration and failure cleanup remain inside that fence. Export therefore observes either the complete pre-publication project or the complete registered source state, never an in-progress `.upload` file or a final source file whose `project.json` reference is still waiting to commit.
+
 Export:
 
 1. checks the lexical technical lock path and fails closed if it is a symlink;
