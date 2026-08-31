@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
+  "lifecycle_state": "draft",
   "active_slice": {
     "id": "project-identity-v2-compat-reader",
     "kind": "stage",
@@ -33,6 +33,8 @@
       "uv_studio/api/project_workflow.py",
       "uv_studio/api/execution.py",
       "uv_studio/api/project_media.py",
+      "uv_studio/editor/targeted_edit_workflow.py",
+      "uv_studio/capabilities/adapters/local_ffmpeg.py",
       "uv_studio/capabilities/adapters/general_video_render.py",
       "uv_studio/capabilities/adapters/narrated_render.py",
       "tests/test_project_store.py",
@@ -41,6 +43,9 @@
       "tests/test_project_archive_lock_symlink.py",
       "tests/test_project_transactions.py",
       "tests/test_project_transactions_v1_compat.py",
+      "tests/test_direct_canonical_store_fence.py",
+      "tests/test_targeted_edit_workflow_service.py",
+      "tests/test_local_ffmpeg_adapter.py",
       "tests_api/test_projects_api.py",
       "tests_api/test_project_media_api.py",
       "e2e/test_named_generation_outcome.py",
