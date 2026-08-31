@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import threading
@@ -69,6 +70,31 @@ class ProjectArchivePublicationRaceTests(unittest.TestCase):
                 if item["path"] == "project/artifacts/preview/frame.txt"
             )
             self.assertEqual(record["size"], len(b"portable-arbitrary-file"))
+
+    def test_export_hashes_the_exact_bytes_written_to_zip(self) -> None:
+        payload = (b"exact-zip-byte-stream-" * 4096) + b"tail"
+        arbitrary = self.project_dir / "artifacts" / "preview" / "exact.bin"
+        arbitrary.parent.mkdir(parents=True, exist_ok=True)
+        arbitrary.write_bytes(payload)
+        archive_path = self.base / "single-read.uvproj.zip"
+
+        with mock.patch(
+            "uv_studio.projects.archive._sha256_file",
+            side_effect=AssertionError("export must not pre-hash live files"),
+        ):
+            export_project(self.source_store, self.project.project_id, archive_path)
+
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            archived = archive.read("project/artifacts/preview/exact.bin")
+            manifest = json.loads(archive.read(ARCHIVE_MANIFEST).decode("utf-8"))
+        record = next(
+            item
+            for item in manifest["files"]
+            if item["path"] == "project/artifacts/preview/exact.bin"
+        )
+        self.assertEqual(archived, payload)
+        self.assertEqual(record["size"], len(archived))
+        self.assertEqual(record["sha256"], hashlib.sha256(archived).hexdigest())
 
     def test_export_fails_closed_when_artifact_bytes_publish_before_reference(self) -> None:
         artifact_id = f"art_{uuid.uuid4().hex}"
