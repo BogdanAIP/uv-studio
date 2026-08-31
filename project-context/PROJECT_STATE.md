@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-08-31
@@ -9,13 +9,15 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is frozen for review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is reopened in implementation/draft in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-Frozen head `87a018abebea1dbcd5959921603b53305b02d5f5` passed exact-head CI run #4150 **5/5**, but its required fresh ordinary-ChatGPT semantic review reported one surviving P2 recovery/concurrency finding. The development context independently classified it **CONFIRMED**: existing media publishers can create UV-owned `art_`/`aud_` bytes inside canonical project roots before their Project-reference transaction acquires the archive snapshot fence. The old export could therefore freeze split metadata/filesystem state, and its separate hash and ZIP reads could observe different live bytes.
+Implementation head `6890ad79f0598d701881ebe264674d5d5c606891` passed required CI runs #4161 and #4162 **5/5**. Context-only frozen head `d93391d9f2fbbd2be41237b662c0bcf6d40abecc` then passed exact-head post-Ready CI #4165, but its required fresh ordinary-ChatGPT semantic review returned `FINDINGS` with two surviving P2 findings. The development context independently classified both findings **CONFIRMED**. That review/head are therefore not merge-valid after the required material repair.
 
-That review on `87a018abebea1dbcd5959921603b53305b02d5f5` is stale. PR #89 was returned to draft before material recovery changes. Read-only falsification found the same historical publication pattern beyond the two examples named by the reviewer, including additional render and prepared-audio paths, so Stage 19 hardened the recovery boundary itself rather than expanding into a broad renderer rewrite.
+Confirmed finding 1: archive recovery hardening recognizes incomplete UV-managed publication only from `src_` / `art_` / `aud_` UUID-style basenames. `timeline.assemble` is a supported counterexample: callers may choose an arbitrary canonical output such as `artifacts/joined.mp4`; FFmpeg writes that path before the adapter creates a separate `art_<uuid>` ProjectReference and before `update_project()` acquires the shared project fence. Export can therefore freeze old metadata while capturing the newly written arbitrary-named artifact. The recovery boundary must cover this publisher without making ordinary unregistered project files non-portable.
 
-Current implementation head `6890ad79f0598d701881ebe264674d5d5c606891` contains the completed recovery fix and regression coverage. Exact implementation-head CI runs #4161 and #4162 both completed successfully with all five permanent checks green. This context-only transition freezes that implementation for a new exact-head review cycle; no further material changes are permitted while lifecycle state remains `review`.
+Confirmed finding 2: the permanent browser user-outcome tests in `e2e/test_micro_drama_production_outcome.py` and `e2e/test_named_generation_outcome.py` were changed only on the test side to capture the old Shot-intent DOM element and wait until it disconnects after Scene creation. No production frontend fix accompanies those changes. That internal stale-element wait deliberately advances past the known production-form remount window that can discard a user's next Shot intent, weakening the acceptance gate rather than proving the user-visible race fixed. The waits must not remain as the permanent acceptance solution.
+
+No runtime/material files may change while lifecycle state is `review`; this context-only transition returns durable state to `draft`. PR #89 must also be converted back to GitHub Draft before material repairs begin. The GitHub connector's draft mutation currently fails on the known `Repository.fullDatabaseId` GraphQL schema error, so that UI transition may require the repository owner.
 
 ## Implementation boundary
 
@@ -38,16 +40,15 @@ Archive import validates the manifest against the raw archived Project schema be
 
 Source upload proactively stages incomplete request bytes outside every canonical project directory and publishes final source bytes plus metadata under the shared project fence.
 
-For older publishers that still materialize unique media bytes before metadata registration, export checks enumerated managed media roots against the frozen Project references. A UV-owned UUID publication name beginning `src_`, `art_` or `aud_` that is present under `sources/`, `assets/`, `artifacts/` or `exports/` but absent from frozen Project metadata makes export fail closed and commit no archive. Hidden derivative upload names are covered by the same rule. Ordinary unregistered files with non-managed names remain portable.
+The current archive guard rejects unregistered UUID-style UV-owned managed publication names and streams accepted files once into ZIP while computing manifest size/SHA-256 from the same bytes. That mechanism remains useful but is insufficient for supported arbitrary-named outputs such as `timeline.assemble`; the next repair must close that concrete gap without silently dropping ordinary portable files.
 
-Accepted project files are streamed once into the ZIP while size and SHA-256 are computed from that same captured byte stream. The manifest therefore describes the exact bytes written to the archive rather than a prior live-file read.
+## Repair plan
 
-## Acceptance synchronization
-
-Implementation head `6890ad79f0598d701881ebe264674d5d5c606891` passed required CI twice: runs #4161 and #4162 are both **5/5** green.
-
-Focused regression coverage in `tests/test_project_archive_publication_race.py` proves that arbitrary unregistered project files remain portable while final/hidden UV-owned managed publication names fail closed; export hashes the exact bytes written to ZIP rather than pre-hashing live files; and when export owns the fence while an unfenced legacy publisher creates an artifact before metadata registration, export commits no archive, metadata completes after fence release, and a retry round-trips the registered reference and exact artifact bytes.
+1. Preserve `timeline.assemble`'s caller-visible canonical `output_path`, but prevent incomplete bytes from becoming visible inside the canonical project tree before the matching ProjectReference can participate in the shared project fence. Add focused concurrency coverage for archive export versus arbitrary-named assembly publication.
+2. Remove the stale-DOM remount waits from the two permanent browser user-outcome tests. The gate must again exercise the immediate next-user-action sequence; if the production remount still loses input, fix the product behavior rather than synchronizing the acceptance test around it.
+3. Run focused tests, then all five required hosted CI checks on the new implementation head.
+4. Only after green implementation CI, return context to `review`, make the PR Ready, require exact frozen-head CI and a new fresh ordinary-ChatGPT semantic review. Any material change invalidates the review on `d93391d9f2fbbd2be41237b662c0bcf6d40abecc`.
 
 ## Review and verification
 
-Lifecycle is now `review`. The branch is frozen except for an explicit return to `draft` if new material findings require changes. PR #89 must be non-draft, the new context-only exact head must pass all five declared checks, existing review threads must remain resolved, and a fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0 must report zero surviving findings. Any later material change invalidates that review.
+Lifecycle is `draft`. Both findings from the fresh review at `d93391d9f2fbbd2be41237b662c0bcf6d40abecc` are CONFIRMED and must be repaired before the next freeze. The old semantic review is evidence for the defects only; it cannot be reused for merge after any fix.
