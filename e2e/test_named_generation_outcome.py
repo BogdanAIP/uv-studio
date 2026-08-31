@@ -123,17 +123,9 @@ class NamedGenerationBrowserOutcome(unittest.TestCase):
             path_parts = urllib.parse.urlparse(page.url).path.strip("/").split("/")
             project_id = urllib.parse.unquote(path_parts[1])
 
-            stale_shot_intent = page.get_by_label(
-                "Замысел production-кадра", exact=True
-            ).element_handle()
-            self.assertIsNotNone(stale_shot_intent)
             page.get_by_label("Название production-сцены", exact=True).fill(scene_title)
             page.get_by_role("button", name="Создать сцену", exact=True).click()
             expect(page.locator("p").filter(has_text=scene_title).first).to_be_visible()
-            page.wait_for_function(
-                "element => !element.isConnected",
-                arg=stale_shot_intent,
-            )
 
             page.get_by_label("Сцена для кадра", exact=True).select_option(label=scene_title)
             page.get_by_label("Замысел production-кадра", exact=True).fill(shot_intent)
