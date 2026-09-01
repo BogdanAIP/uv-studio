@@ -34,6 +34,7 @@ ARCHIVE_SCHEMA_VERSION = 1
 ARCHIVE_MANIFEST = ".uv-project-archive.json"
 PROJECT_PREFIX = "project"
 _MANAGED_MEDIA_ROOTS = frozenset({"sources", "assets", "artifacts", "exports"})
+_STRICT_REGISTERED_OUTPUT_ROOTS = frozenset({"artifacts", "exports"})
 _MANAGED_PUBLICATION_NAME = re.compile(r"^(?:src|art|aud)_[0-9a-f]{32}(?:[._-]|$)")
 
 
@@ -136,22 +137,80 @@ def _reject_unpublished_managed_media(
     project_dir: Path,
     files: list[Path],
 ) -> None:
-    """Fail closed when a UV-owned media publication is not metadata-complete.
+    """Fail closed when canonical media/output bytes have no owning metadata.
 
-    Some legacy media publishers materialize a unique ``src_*``, ``art_*`` or
-    ``aud_*`` path before their ProjectReference transaction can acquire the shared
-    project fence. Export owns that fence, so including such a path would freeze a
-    split state and can also race a writer. Ordinary unregistered project files are
-    still portable; only UV-owned UUID publication names are treated as ambiguous.
+    ``artifacts/`` and ``exports/`` are UV-owned output roots: every regular file
+    there must have a ProjectReference before it is portable. This deliberately
+    covers caller-selected ``timeline.assemble`` names plus WebVTT ``sub_*`` and
+    Generation ``generated_*`` paths, so a process crash after canonical
+    ``os.replace`` cannot turn orphan bytes into a valid recovery snapshot.
+
+    Historical source/asset publishers still use the narrower ``src_*``/``art_*``/
+    ``aud_*`` detector. Ordinary unregistered files outside strict output roots stay
+    portable.
     """
 
     registered = _registered_media_paths(document)
     for path in files:
-        relative = path.relative_to(project_dir).as_posix()
-        if _looks_like_managed_publication(project_dir, path) and relative not in registered:
+        relative_path = path.relative_to(project_dir)
+        relative = relative_path.as_posix()
+        root = relative_path.parts[0] if relative_path.parts else ""
+        if relative in registered:
+            continue
+        if root in _STRICT_REGISTERED_OUTPUT_ROOTS or _looks_like_managed_publication(
+            project_dir, path
+        ):
             raise ProjectArchiveError(
-                "Project contains an unpublished managed media file; retry export after "
-                f"publication or recovery completes: {relative}"
+                "Project contains an unpublished managed output; run startup recovery "
+                f"or repair the project before export: {relative}"
+            )
+
+
+def _reject_incomplete_generation_publications(
+    document: ProjectDocument,
+    project_dir: Path,
+) -> None:
+    """Reject generated artifacts whose durable Job has not reached matching success."""
+
+    for artifact in document.artifacts:
+        generation = artifact.metadata.get("generation")
+        if not isinstance(generation, dict):
+            continue
+        job_id = generation.get("job_id")
+        attempt_id = generation.get("attempt_id")
+        if not isinstance(job_id, str) or not isinstance(attempt_id, str):
+            raise ProjectArchiveError(
+                f"Generation artifact has incomplete durable provenance: {artifact.id}"
+            )
+        job_path = project_dir / "tasks" / f"{job_id}.json"
+        if job_path.is_symlink() or not job_path.is_file():
+            raise ProjectArchiveError(
+                f"Generation artifact has no safe durable Job record: {artifact.id}"
+            )
+        try:
+            raw = json.loads(job_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ProjectArchiveError(
+                f"Generation Job record is unreadable for artifact: {artifact.id}"
+            ) from exc
+        if not isinstance(raw, dict) or raw.get("record_type") != "generation_job":
+            raise ProjectArchiveError(
+                f"Generation artifact points to a non-generation task record: {artifact.id}"
+            )
+        attempts = raw.get("attempts")
+        current = attempts[-1] if isinstance(attempts, list) and attempts else None
+        if (
+            raw.get("status") != "succeeded"
+            or not isinstance(current, dict)
+            or current.get("status") != "succeeded"
+            or current.get("attempt_id") != attempt_id
+            or current.get("output_reference_id") != artifact.id
+            or not isinstance(current.get("take_id"), str)
+            or not current.get("take_id")
+        ):
+            raise ProjectArchiveError(
+                "Generation materialization is not durably complete; restart UV Studio "
+                f"to reconcile before export: {artifact.id}"
             )
 
 
@@ -204,6 +263,7 @@ def export_project(
 
         directories, files = _iter_project_entries(project_dir)
         _reject_unpublished_managed_media(document, project_dir, files)
+        _reject_incomplete_generation_publications(document, project_dir)
         created_at = utc_now_iso()
 
         temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
