@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-01
@@ -9,35 +9,37 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is frozen in `review` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The third repair is complete. Exact material/test head `fe2afbd7681ae06317941ba988e61c224227a619` passed CI #4331 (`33523018672`) **5/5** on Ubuntu and Windows. Final Draft docs/context head `1f9504f4d9391901f4f8e8386a7b412a0e0ba2e7` then passed authoritative post-body-sync CI #4336 (`33524495361`) **5/5**: `development-context`, both Ubuntu/Windows bootstrap jobs and both Ubuntu/Windows app-baseline jobs all succeeded, including full unit suites, API integration, HTTP probe, pinned real-media verification, frontend lint/audit/build and browser Product Truth.
+The third repair had been frozen at `5336999067b19fb0b692d6d41cf5f94958be56a1` and passed post-Ready CI #4339 **5/5**, but a fresh inline P2 then identified a remaining hard-crash recovery gap for still-mounted legacy `art_<uuid>.mp4` publishers. PR #89 was returned to Draft and the prior freeze/CI evidence is stale for merge authority.
 
-The two P2 inline review threads discovered on the previous frozen head were answered with exact repair/test/CI evidence and resolved after CI #4336. There are now zero unresolved review threads before this context-only `draft -> review` refreeze.
+## Fourth review repair in progress
 
-## Third review repair now frozen
+### P2 — recover crash-left legacy `art_<uuid>.mp4` outputs
+
+`audio_visualizer.py` and `music_video_render.py` both materialize final files directly as `artifacts/art_<32-hex>.mp4` before registering the owning `ProjectReference`. A hard process loss in that gap leaves canonical bytes without metadata. Archive correctly rejects those bytes as unpublished managed media, but the prior startup filename recovery recognized only `src_`, `sub_`, and `generated_attempt_`, so restart could not unblock export.
+
+Material repair `205731cf8dbe24b09aeb29599674ebbb06d19521` extends startup recovery to the legacy `art_` identity. Regression commit `3d7b9ef8cea0b54c2cb5ee58603e9aca4e1634da` proves an unregistered crash-left legacy artifact is quarantined outside the project and export succeeds after restart, while a registered `art_` artifact and a near-miss ordinary file remain untouched.
+
+The exact repair boundary is being re-checked against the two live producers before the fourth repair is accepted; both producers currently generate `artifacts/art_<32-hex>.mp4`.
+
+## Third review repair retained
 
 ### P2 — managed publication recovery matches reference identity
 
-`tasks/pub_<uuid>.json` markers persist both canonical `relative_path` and expected `reference_id`. Recovery treats a pending marker as already completed only when a registered Project source/artifact matches both that path and the marker identity.
-
-A dangling or historical ProjectReference that merely reuses the same path can no longer claim new crash-left bytes for a different publication. If the marker identity does not match the registered identity, materialized interrupted bytes are moved to quarantine outside the canonical project tree before the marker is cleared. Matching path + matching identity retains canonical bytes and clears only the stale marker.
+`tasks/pub_<uuid>.json` markers persist both canonical `relative_path` and expected `reference_id`. Recovery treats a pending marker as already completed only when a registered Project source/artifact matches both that path and the marker identity. Reused-path/different-reference crash-left bytes are quarantined outside the project before the marker is cleared.
 
 Deterministic regression: `tests/test_project_publication_recovery.py::test_recovery_quarantines_bytes_when_same_path_has_different_reference`.
 
 ### P2 — Generation recovery preserves explicit Take Undo
 
-Generation recovery consults durable `ProjectUnitOfWork` transaction/operation journals before creating a missing Take for an artifact-owning non-succeeded attempt.
-
-If no committed `production.register_take` history exists for the exact Shot/artifact, recovery is at the genuine pre-Take crash boundary and may create the missing Take through the normal Production command. If a matching Take committed and the latest durable operation for that exact transaction is `undo`, recovery preserves the original historical `take_id`, leaves current Production Semantics in the user's undone state, and reconciles the attempt without provider replay or replacement Take creation. Missing Take state with registration history but without authoritative latest Undo fails closed.
-
-A live Take must still belong to the exact Shot/artifact, and any already-persisted attempt `take_id` must agree with the resolved authority.
+Generation recovery consults durable `ProjectUnitOfWork` transaction/operation journals before creating a missing Take for an artifact-owning non-succeeded attempt. If the original Take was committed and the latest durable operation is Undo, recovery preserves the historical `take_id`, leaves current Production Semantics undone and reconciles without provider replay or replacement Take creation.
 
 Deterministic regression: `tests/test_generation_recovery.py::test_restart_preserves_explicit_undo_of_existing_take`.
 
 ## Previous Stage-19 invariants retained
 
-The frozen repair preserves:
+The repair preserves:
 
 - canonical Project schema v2 with schema-v1 project/archive readability and exact historical recipe identity;
 - fresh `ProjectUnitOfWork.commit()` rejection of raw schema-v1 `project.json`, while historical schema-v1 undo/redo migrates only for validation and restores exact recorded bytes;
@@ -61,23 +63,27 @@ The frozen repair preserves:
 - Second material/test repair `e037d20c773a141dc24f35369179a581d4081e9c`: CI #4311 **5/5**.
 - Final second-repair Draft head `4ef9f2f75497467f4b6ac68fb4b0961deef4fa99`: CI #4318 **5/5**.
 - Frozen `eaee4f1518638baaf8b4247e25183f2df1d70059`: post-Ready CI #4321 **5/5**, then two confirmed P2 findings.
-- `a47100a2c1d72c49a4392d44adcd504a1cbe605d`: managed-publication recovery requires exact path/reference identity.
-- `af1c198fed8356b6a80a7518eafa432dbe457af9`: Generation recovery preserves explicit durable Take Undo and fails closed on inconsistent missing-Take history.
-- `047da06d3090168983cd60a5cf0cdbfb34ecc5bd`: publication identity regression.
-- `fe2afbd7681ae06317941ba988e61c224227a619`: explicit Take Undo regression; material/test CI #4331 **5/5 SUCCESS**.
-- `1f9504f4d9391901f4f8e8386a7b412a0e0ba2e7`: final Draft docs/context head; authoritative post-body-sync CI #4336 (`33524495361`) **5/5 SUCCESS**.
-- Both current P2 review threads resolved after #4336; unresolved thread count was zero before refreeze.
+- Third repair material/test head `fe2afbd7681ae06317941ba988e61c224227a619`: CI #4331 **5/5**.
+- Final third-repair Draft head `1f9504f4d9391901f4f8e8386a7b412a0e0ba2e7`: CI #4336 **5/5**.
+- Frozen third-repair head `5336999067b19fb0b692d6d41cf5f94958be56a1`: post-Ready CI #4339 **5/5**, then one confirmed P2 finding for legacy `art_` crash recovery.
+- `205731cf8dbe24b09aeb29599674ebbb06d19521`: legacy `art_` startup recovery repair.
+- `3d7b9ef8cea0b54c2cb5ee58603e9aca4e1634da`: deterministic legacy `art_` recovery/boundary regressions; CI #4344 started on this material/test head.
 
-## Current review gate
+## Current repair gate
 
-Lifecycle is now `review`; no further material/runtime/test edits are authorized on this frozen branch unless a later confirmed finding first returns the slice to `draft`.
+Lifecycle is `draft`. The fourth-repair material/test CI and exact recovery boundary must be accepted before the open P2 thread can be resolved or the branch can be refrozen.
 
 Next required sequence:
 
-1. return PR #89 from Draft to Ready without changing this frozen head;
-2. require authoritative post-Ready exact-head CI **5/5**;
-3. re-resolve live base/head identity and verify zero unresolved review threads;
-4. run a completely fresh ordinary-ChatGPT semantic review under BASE `.agents/skills/code-review/SKILL.md` v1.0.
+1. finish the exact legacy `art_` recovery boundary and deterministic regression coverage;
+2. require exact Draft material/test CI **5/5**;
+3. synchronize current Project/PR context with the fourth repair and require final exact Draft-head CI **5/5**;
+4. reply to and resolve the remaining P2 review thread with exact repair/test/CI evidence;
+5. verify zero unresolved review threads;
+6. perform one context-only `draft -> review` refreeze;
+7. return PR #89 to Ready without changing the frozen head;
+8. require authoritative post-Ready exact-head CI **5/5**;
+9. re-resolve live base/head/thread identity and run another completely fresh ordinary-ChatGPT semantic review under BASE `.agents/skills/code-review/SKILL.md` v1.0.
 
 Merge remains prohibited until a later `CURRENT` review reports zero findings and final base/head/CI/thread identity is re-resolved. Lifecycle closure remains a separate follow-up after merge.
 
