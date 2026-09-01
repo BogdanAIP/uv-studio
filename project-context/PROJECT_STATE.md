@@ -1,21 +1,21 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
-**Updated:** 2026-08-31
+**Updated:** 2026-09-01
 
 **Repository:** `BogdanAIP/uv-studio`
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is frozen for review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is reopened in `draft` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The accepted material implementation head is `6f348633c7091c747062c1e3b18b05fbfeb83e1b`. Exact-head CI #4191 (run `33414854256`) passed all five required checks: `development-context`, Ubuntu/Windows bootstrap, and Ubuntu/Windows app-baseline. Both app-baseline jobs passed API integration, real-media verification, frontend lint/audit/build and the permanent Stage 4C + Stage 5 browser Product Truth suite.
+The previously accepted material implementation head `6f348633c7091c747062c1e3b18b05fbfeb83e1b` passed CI #4191 5/5. Its context-only frozen head `2740c00b953d2a816bec3dfb52572289b221c4fa` also passed authoritative post-Ready CI #4195 5/5. Those green runs no longer authorize review or merge: inspection of unresolved review threads on the frozen head found another reachable P2 archive/publication race. The development context independently classified that thread **CONFIRMED**, and lifecycle/PR returned to Draft before any further material repair.
 
-The earlier frozen head `d93391d9f2fbbd2be41237b662c0bcf6d40abecc` passed CI #4165 but its required fresh ordinary-ChatGPT review returned two surviving P2 findings. The development context independently classified both findings **CONFIRMED**, returned lifecycle/PR to Draft, and repaired them materially. That old review is stale and cannot authorize merge.
+The surviving P2 is concrete on two supported publishers. `WebVTTSubtitleAdapter` writes `artifacts/sub_<uuid>.vtt` before registering its `ProjectReference`, while `GenerationService.run` gives its executor the canonical `artifacts/generated_<attempt>.*` destination and registers the generated artifact only after the executor returns. Neither publisher participates in the shared archive project fence during byte publication. The archive fallback currently recognizes only unregistered UUID-like `src_`, `art_` and `aud_` names, so `sub_` and `generated_` can be captured with frozen metadata that does not yet contain their canonical identities.
 
-This context-only freeze moves lifecycle `draft -> review` after the repaired material head passed exact-head CI. PR #89 must become GitHub Ready without changing this frozen head; the final frozen head then requires authoritative **5/5** CI and a new fresh ordinary-ChatGPT semantic review under the BASE `code-review` v1.0 policy before merge.
+This Draft repair is intentionally narrow. Current supported subtitle/generation publishers will be staged outside every canonical project directory and will publish final bytes plus metadata under the shared project fence, rather than broadening basename heuristics and continuing to rely on filename conventions.
 
 ## Implementation boundary
 
@@ -30,49 +30,35 @@ This slice remains bounded to the D-070 Project identity/schema compatibility an
 
 Recipe endpoint retirement, execution-plan retirement, Product Orchestrator redesign/retirement, Stage8 retirement and later D-070 compression work remain outside this slice.
 
-## Implemented compatibility and recovery boundary
+## Existing compatibility and recovery work
 
 `ProjectStore` routes loaded JSON through `migrate_project_data`; schema v2 keeps legacy recipe information in compatibility state. Current direct compatibility readers use the explicit accessor, while historical v1 bytes remain readable and exact transaction snapshots remain authoritative for undo/redo.
 
-Archive import validates the manifest against the raw archived Project schema before migration. Export holds `ProjectTaskRecordStore.project_lock` while freezing Project metadata and enumerating the project tree. The technical `tasks/.uv-task-records.lock` remains non-portable only when it is an ordinary file; symlink occupancy still fails closed.
+Archive import validates the manifest against the raw archived Project schema before migration. Export holds `ProjectTaskRecordStore.project_lock` while freezing Project metadata and enumerating the project tree. The technical `tasks/.uv-task-records.lock` remains non-portable only when it is an ordinary file; symlink occupancy fails closed.
 
-Source upload proactively stages incomplete request bytes outside every canonical project directory and publishes final source bytes plus metadata under the shared project fence.
+Source upload stages incomplete request bytes outside every canonical project directory and publishes final source bytes plus metadata under the shared project fence. Accepted archive files are streamed once into ZIP while manifest size/SHA-256 are computed from the exact bytes written into the archive.
 
-The archive guard remains a recovery fallback for historical UUID-named UV-owned media publishers: unregistered `src_` / `art_` / `aud_` managed publication names fail closed, while ordinary unregistered files with non-managed names remain portable. Accepted archive files are streamed once into ZIP while manifest size/SHA-256 are computed from the same captured bytes.
+The archive UUID-name guard remains only a fallback for historical publishers: unregistered managed `src_` / `art_` / `aud_` names under managed roots fail closed, while ordinary user/unmanaged files remain portable. It is not sufficient authority for current publishers whose canonical filenames use other conventions.
 
-`timeline.assemble` no longer relies on that basename heuristic. FFconcat manifest and completed FFmpeg output are staged at the Project Store root, outside every canonical project directory. After FFmpeg succeeds, the adapter acquires the shared project fence, revalidates that the caller-selected destination is absent, atomically moves the staged output to that exact canonical path, and registers the separately allocated `art_<uuid>` ProjectReference before releasing the fence. Rollback removes published bytes when metadata definitely did not commit, while preserving bytes if durable metadata cannot be read after a possible commit.
-
-The regression `test_timeline_assemble_stages_arbitrary_output_until_archive_fence_releases` freezes an export while it owns the project fence, lets `timeline.assemble` finish FFmpeg staging, proves `artifacts/joined.mp4` is still absent from the canonical project while assembly is blocked, then releases export. The first archive contains neither the arbitrary output nor its future ProjectReference; assembly then publishes both, and a retry archive/import preserves the same `art_<uuid>` identity, canonical path and bytes.
+`timeline.assemble` already follows the stronger current-publisher pattern: ffconcat manifest and completed FFmpeg output are staged at the Project Store root outside every canonical project directory. After FFmpeg succeeds, the adapter acquires the shared project fence, revalidates the caller-selected destination, atomically moves staged output to the canonical path, and registers the separately allocated `art_<uuid>` reference before releasing the fence. Its deterministic archive-concurrency regression proves the first archive sees neither bytes nor reference while publication is waiting on the fence, and a later archive/import preserves both exact bytes and identity.
 
 ## Production-form acceptance repair
 
-The confirmed browser finding exposed a real same-project form race rather than a test-only synchronization issue. `ProductionWorkspacePanel` previously keyed `ProductionSemanticsPanel` by `${projectId}:${history.cursor}`, forcing a React remount whenever history advanced. The permanent browser tests had been waiting for that remount before entering the next field, which masked the actual user-visible race.
+The earlier fresh semantic review at `d93391d9f2fbbd2be41237b662c0bcf6d40abecc` returned two P2 findings; both remain materially repaired.
 
-The panel is now keyed only by `projectId`, and both Product Truth tests again perform the immediate visible user sequence without waiting for an internal stale DOM node to disconnect.
+The first exposed arbitrary `timeline.assemble` publication outside the archive fence and led to the staged/fenced publication path above. The second found that permanent browser tests waited for a stale DOM element to disconnect, masking a real user-visible Production form remount race. Production UI was fixed instead of weakening acceptance: the Production panel no longer remounts on history cursor changes, internal command refreshes no longer trigger a duplicate delayed child reload that can erase unsaved form input, and external Undo/Redo uses a monotonic semantics refresh revision so returning to an old numeric history cursor still reloads canonical state.
 
-Removing the remount exposed a second real race: after an internal production command, `ProductionSemanticsPanel.mutate()` reloaded canonical state while the form was busy, but the parent then performed a second delayed history-driven reload after the form became editable. That duplicate reload could overwrite newly entered unsaved fields such as micro-drama story title. The parent now calls `refresh(false)` for an internal production mutation: it refreshes Project/Timeline/History and records the observed durable history cursor without re-signalling the child, because the child has already reloaded its own command result.
+The permanent Product Truth tests again perform the immediate visible user sequence without internal DOM synchronization. CI #4191 passed the repaired named-generation Undo and micro-drama workflows on Ubuntu and Windows.
 
-A third acceptance edge appeared on Undo. Using the numeric durable history cursor itself as the child refresh signal was insufficient because Undo can return to an older cursor value the child has already seen. `ProductionWorkspacePanel` therefore uses a monotonic `semanticsRefreshRevision` as the child effect token while keeping `observedHistoryCursor` only for durable change detection. Internal production commands update the observed cursor without incrementing the token; a genuinely different external history transition such as Undo/Redo increments the token even when history returns to an old numeric cursor. This preserves unsaved local input across same-project command refreshes while reliably reloading canonical production semantics after external history operations.
+## Current repair target
 
-CI #4191 proves the repaired behavior on both operating systems. The named-generation outcome creates Scene -> Shot -> generated Take, accepts it into Timeline, performs visible Undo, observes the accepted badge disappear, confirms `accepted_take_id` is cleared while the generated Take/job remains durable, and keeps the generation result visible. The micro-drama outcome also passes its immediate Scene/Shot/Take and story/continuity workflow without remount synchronization.
+The new confirmed P2 broadens the publication audit from `timeline.assemble` to two additional current supported publishers:
 
-## Repair sequence and verification
+1. `WebVTTSubtitleAdapter`: render bytes may be prepared freely, but canonical `artifacts/sub_<uuid>.vtt` must not appear until the publisher owns the shared project fence; final move and reference registration must complete inside that fence with fail-safe cleanup.
+2. `GenerationService.run`: long-running executor work must occur against a staging path outside the canonical project tree; after successful validation, canonical `artifacts/generated_<attempt>.*` publication, artifact registration, Take registration and durable job success must remain coherent with the shared project fence and existing transaction semantics.
 
-Material repair sequence after the confirmed review findings includes:
-
-- `39611853545ddd7a09b36a1335bd34b1d1d9e00c` — scope the production-form repair path;
-- `2e7382c2d1edb59bd4c6b00a47912c9f71c91a8e` — preserve Production form input across history refresh;
-- `9f571ec464b043399ce6b205753aebc8a1b2eab0` — restore immediate named-generation user outcome;
-- `1fa7433ad78a3582bea6c0bdf70757d9e17dd543` — restore immediate micro-drama user outcome;
-- `3d58f2c4c239b241371ac388c9cacecc8de1d088` — stage arbitrary timeline assembly output and publish bytes/reference under the shared project fence;
-- `8d3ccf0f212c3b1bf6c2ecbab5cbd19744dfb694` — deterministic archive-versus-`timeline.assemble` regression;
-- `9d5a069c5018a452e2e5d3b2ce1c7a3c36bfe55e` — synchronize archive recovery documentation with the two publication mechanisms;
-- `64883907a4fbe6cb2f0dd5f129cb69a541be4e56` — remove the history-cursor remount from the Production workspace;
-- `ab871417ba2f386b3731eab2d6de2ae5a3184abf` — suppress the duplicate delayed child reload after internal production mutations;
-- `6f348633c7091c747062c1e3b18b05fbfeb83e1b` — use a monotonic semantics refresh revision so external Undo/Redo cannot be lost when history returns to an old cursor value.
-
-CI #4189 on `ab871417ba2f386b3731eab2d6de2ae5a3184abf` was intentionally treated as a failed acceptance cycle: both operating systems reproduced the same named-generation Undo UI failure while the micro-drama outcome already passed. The final material fix at `6f348633c7091c747062c1e3b18b05fbfeb83e1b` then passed exact-head CI #4191 **5/5**, including the browser suite on Ubuntu and Windows.
+Focused regressions must reproduce archive overlap deterministically, proving an archive holding the fence cannot capture staged bytes without their metadata, while a later archive/import preserves the exact published identity/path/bytes. Existing generation recovery, cancellation, idempotency, authorization and Product Truth behavior must remain intact.
 
 ## Review and verification
 
-Lifecycle is now `review`. Both P2 findings from the stale review at `d93391d9f2fbbd2be41237b662c0bcf6d40abecc` are materially repaired and exact-head hosted CI is green on the accepted implementation head. No earlier semantic review may be reused. The final context-only frozen head must remain unchanged while PR #89 becomes Ready, pass authoritative exact-head CI **5/5**, and receive a new fresh ordinary-ChatGPT semantic review with no surviving findings before merge.
+Lifecycle is `draft`. All reviews and CI evidence tied to earlier frozen heads are stale for merge authority after this confirmed material defect. After the subtitle/generation publication repair, focused tests and a new exact material-head CI 5/5 are required. Only then may the context be frozen `draft -> review`, the PR returned to Ready, authoritative frozen-head CI rerun, unresolved threads cleared, and a new fresh ordinary-ChatGPT semantic review under the BASE `code-review` v1.0 policy be requested.
