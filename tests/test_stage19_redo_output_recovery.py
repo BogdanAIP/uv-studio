@@ -8,6 +8,7 @@ from pathlib import Path
 from uv_studio.generation.jobs import GenerationJobManager
 from uv_studio.generation.recovery import recover_interrupted_project_jobs
 from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
@@ -122,6 +123,47 @@ class Stage19RedoOutputRecoveryTests(unittest.TestCase):
         self.assertTrue(output.is_file())
         self.assertEqual(output.read_bytes(), payload)
 
+    def test_archive_preserves_generated_bytes_owned_by_redo_branch(self) -> None:
+        artifact, output, payload, take_id = self._register_output_and_take()
+        self._undo_take_and_output()
+
+        archive_path = Path(self.tmp.name) / "redo-owned.uvproj.zip"
+        self.assertEqual(
+            export_project(self.store, self.project.project_id, archive_path),
+            archive_path,
+        )
+
+        imported_store = ProjectStore(Path(self.tmp.name) / "imported-projects")
+        imported = import_project(imported_store, archive_path)
+        self.assertEqual(imported.project_id, self.project.project_id)
+        self.assertFalse(any(item.id == artifact.id for item in imported.artifacts))
+
+        imported_production = ProductionSemanticService(imported_store)
+        imported_state = imported_production.state(imported.project_id)
+        self.assertFalse(any(take.take_id == take_id for take in imported_state.takes))
+
+        imported_output = imported_store.resolve_project_file(
+            imported.project_id,
+            artifact.path,
+            allowed_roots=("artifacts",),
+        )
+        self.assertTrue(imported_output.is_file())
+        self.assertEqual(imported_output.read_bytes(), payload)
+
+        imported_uow = ProjectUnitOfWork(imported_store)
+        imported_uow.redo(imported.project_id)
+        imported_uow.redo(imported.project_id)
+
+        restored = imported_store.load_project(imported.project_id)
+        restored_artifacts = [item for item in restored.artifacts if item.id == artifact.id]
+        self.assertEqual(len(restored_artifacts), 1)
+        self.assertEqual(restored_artifacts[0].path, artifact.path)
+        restored_state = imported_production.state(imported.project_id)
+        restored_takes = [take for take in restored_state.takes if take.take_id == take_id]
+        self.assertEqual(len(restored_takes), 1)
+        self.assertEqual(restored_takes[0].reference_id, artifact.id)
+        self.assertEqual(imported_output.read_bytes(), payload)
+
     def test_new_commit_truncates_redo_protection_and_orphan_is_quarantined(self) -> None:
         _artifact, output, payload, _take_id = self._register_output_and_take()
         self._undo_take_and_output()
@@ -132,6 +174,13 @@ class Stage19RedoOutputRecoveryTests(unittest.TestCase):
             title="Truncate redo",
         )
         self.assertFalse(self.uow.history(self.project.project_id).can_redo)
+
+        with self.assertRaises(ProjectArchiveError):
+            export_project(
+                self.store,
+                self.project.project_id,
+                Path(self.tmp.name) / "truncated-redo.uvproj.zip",
+            )
 
         self.assertEqual(
             recover_interrupted_project_jobs(
