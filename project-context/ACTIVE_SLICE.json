@@ -37,6 +37,8 @@
       "uv_studio/api/execution.py",
       "uv_studio/api/project_media.py",
       "uv_studio/editor/targeted_edit_workflow.py",
+      "uv_studio/capabilities/adapters/__init__.py",
+      "uv_studio/capabilities/adapters/crash_safe_ffmpeg.py",
       "uv_studio/capabilities/adapters/local_ffmpeg.py",
       "uv_studio/capabilities/adapters/general_video_render.py",
       "uv_studio/capabilities/adapters/narrated_render.py",
