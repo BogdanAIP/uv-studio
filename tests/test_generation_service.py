@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import json
 import tempfile
+import threading
 import unittest
+import zipfile
 from pathlib import Path
+from unittest import mock
 
+import uv_studio.projects.archive as project_archive
 from uv_studio.capabilities.authorization import (
     ExecutionConsentRequired,
     OneShotAuthorizationStore,
@@ -29,6 +34,7 @@ from uv_studio.generation.models import (
 )
 from uv_studio.generation.service import GenerationService
 from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.projects.archive import export_project, import_project
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.store import ProjectStore
 from uv_studio.projects.timeline import TimelineStore
@@ -42,6 +48,25 @@ class _FakeImageExecutor:
     def execute(self, *, output_path: Path, **kwargs):
         self.calls += 1
         output_path.write_bytes(b"stage14-test-image")
+        return {"test_executor": True, "call": self.calls}
+
+
+class _ObservedImageExecutor:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.output_path: Path | None = None
+        self.rendered = threading.Event()
+        self.release = threading.Event()
+        self.returned = threading.Event()
+
+    def execute(self, *, output_path: Path, **kwargs):
+        self.calls += 1
+        self.output_path = output_path
+        output_path.write_bytes(b"generation-through-staging")
+        self.rendered.set()
+        if not self.release.wait(timeout=5):
+            raise RuntimeError("test did not release generation executor")
+        self.returned.set()
         return {"test_executor": True, "call": self.calls}
 
 
@@ -192,6 +217,117 @@ class GenerationServiceTests(unittest.TestCase):
         durable_job = self.service.jobs.get(self.project.project_id, completed.job_id)
         self.assertEqual(durable_job.status.value, "succeeded")
         self.assertEqual(durable_job.current_attempt.output_reference_id, artifact.id)
+
+    def test_generation_publication_waits_behind_archive_fence(self) -> None:
+        observed_executor = _ObservedImageExecutor()
+        self.service.executor = observed_executor
+        submitted = self._submit("idem_archive_fence")
+        base = Path(self.tmp.name)
+        archive_path = base / "generation-before-publication.uvproj.zip"
+        retry_path = base / "generation-after-publication.uvproj.zip"
+        target_store = ProjectStore(base / "target-projects")
+        project_dir = self.store.project_directory(self.project.project_id)
+
+        schema_sampled = threading.Event()
+        release_export = threading.Event()
+        generation_completed = threading.Event()
+        export_errors: list[BaseException] = []
+        generation_errors: list[BaseException] = []
+        completed_jobs: list[object] = []
+        original_raw_schema = project_archive._raw_project_schema_version
+
+        def sampled_schema(project_path: Path) -> int:
+            version = original_raw_schema(project_path)
+            schema_sampled.set()
+            if not release_export.wait(timeout=5):
+                raise RuntimeError("test did not release archive snapshot")
+            return version
+
+        def run_generation() -> None:
+            try:
+                completed_jobs.append(
+                    self.service.run(self.project.project_id, submitted.job.job_id)
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                generation_errors.append(exc)
+            finally:
+                generation_completed.set()
+
+        def run_export() -> None:
+            try:
+                export_project(self.store, self.project.project_id, archive_path)
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                export_errors.append(exc)
+
+        generation_thread = threading.Thread(target=run_generation, daemon=True)
+        export_thread = threading.Thread(target=run_export, daemon=True)
+        with mock.patch(
+            "uv_studio.projects.archive._raw_project_schema_version",
+            side_effect=sampled_schema,
+        ):
+            generation_thread.start()
+            try:
+                self.assertTrue(observed_executor.rendered.wait(timeout=5))
+                self.assertIsNotNone(observed_executor.output_path)
+                self.assertEqual(observed_executor.output_path.parent, self.store.root)
+                self.assertNotIn(project_dir, observed_executor.output_path.parents)
+
+                running = self.service.jobs.get(self.project.project_id, submitted.job.job_id)
+                attempt = running.current_attempt
+                self.assertIsNotNone(attempt)
+                relative_path = f"artifacts/generated_{attempt.attempt_id}.png"
+                final_output = project_dir / relative_path
+                self.assertFalse(final_output.exists())
+
+                export_thread.start()
+                self.assertTrue(schema_sampled.wait(timeout=5))
+                observed_executor.release.set()
+                self.assertTrue(observed_executor.returned.wait(timeout=5))
+                self.assertFalse(final_output.exists())
+                self.assertFalse(
+                    generation_completed.wait(timeout=0.2),
+                    "canonical generation publication must wait behind archive snapshot fence",
+                )
+            finally:
+                observed_executor.release.set()
+                release_export.set()
+                export_thread.join(timeout=5)
+                generation_thread.join(timeout=5)
+
+        self.assertFalse(export_thread.is_alive())
+        self.assertFalse(generation_thread.is_alive())
+        self.assertEqual(export_errors, [])
+        self.assertEqual(generation_errors, [])
+        self.assertEqual(len(completed_jobs), 1)
+
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            self.assertNotIn(f"project/{relative_path}", archive.namelist())
+            archived_project = json.loads(archive.read("project/project.json").decode("utf-8"))
+        self.assertFalse(
+            any(item.get("path") == relative_path for item in archived_project.get("artifacts", []))
+        )
+
+        completed = self.service.jobs.get(self.project.project_id, submitted.job.job_id)
+        self.assertEqual(completed.status.value, "succeeded")
+        artifact = next(
+            item
+            for item in self.store.load_project(self.project.project_id).artifacts
+            if item.id == completed.current_attempt.output_reference_id
+        )
+        self.assertEqual(artifact.path, relative_path)
+        self.assertEqual(final_output.read_bytes(), b"generation-through-staging")
+
+        export_project(self.store, self.project.project_id, retry_path)
+        imported = import_project(target_store, retry_path)
+        imported_artifact = next(item for item in imported.artifacts if item.id == artifact.id)
+        self.assertEqual(imported_artifact.path, artifact.path)
+        imported_output = target_store.resolve_project_file(
+            imported.project_id,
+            imported_artifact.path,
+            must_exist=True,
+            allowed_roots=("artifacts",),
+        )
+        self.assertEqual(imported_output.read_bytes(), b"generation-through-staging")
 
     def test_continuation_is_feature_gated_and_records_durable_lineage(self) -> None:
         parent = self._submit("idem_parent")
