@@ -56,22 +56,25 @@ Historical UV-owned media names remain a compatibility fallback. A regular file 
 
 WebVTT subtitle export renders to staging outside the project tree and publishes `artifacts/sub_<uuid>.vtt` under the shared fence. If ordinary exception cleanup can prove metadata did not commit, canonical bytes are removed immediately. If the process dies after the final move, startup reconciliation identifies an unregistered `sub_<uuid>` output, moves it to a quarantine file at the Project Store root and leaves the canonical project free of orphan subtitle bytes. Export also rejects such an unreconciled self-identifying orphan.
 
-Named Generation stages provider output outside every canonical project directory. The executor receives the staging `Path`, not `artifacts/generated_<attempt>.*`. After a non-empty regular output is validated, Generation acquires the shared project fence, revalidates the durable Job state and final path, then publishes bytes, Project artifact metadata, Take state and Job success through their existing authorities.
+Named Generation stages provider output outside every canonical project directory. The executor receives the staging `Path`, not `artifacts/generated_<attempt>.*`. After a non-empty regular output is validated, Generation acquires the shared project fence, revalidates the durable Job state and final path, then publishes bytes, Project artifact metadata, Take state and Job success through their existing authorities. Generation Job start/succeed/fail/cancel transitions use this same cross-runtime fence, so another runtime cannot cancel/fail the Job inside the consequence-bearing publication critical section.
 
-Generation restart recovery explicitly handles the durable intermediate states that can remain if the process dies inside that final sequence:
+Generation restart recovery explicitly handles durable intermediate states that can remain if the process dies or local persistence fails inside that final sequence:
 
 - bytes without ProjectReference: the self-identifying generated output is moved out of the project tree and the running Job is failed/retryable; no provider work is replayed;
-- durable artifact ProjectReference but no Take: recovery validates the exact artifact provenance/bytes, creates the missing Take through the normal Production command and marks the same Job/Attempt succeeded;
-- durable artifact + matching Take while Job is still running: recovery reuses that Take and marks the same Job/Attempt succeeded;
+- durable artifact ProjectReference but no Take: the current Job remains recoverable rather than being marked terminal; recovery validates exact persisted bytes/provenance, creates the missing Take through the normal Production command and records success for the same Job/Attempt;
+- durable artifact + matching Take before Job success: recovery validates and reuses that Take, then records success without provider replay;
+- a legacy current-attempt `FAILED` or `CANCELLED` split state that already has a durable artifact: recovery may repair it to `SUCCEEDED` only after the same strict byte/provenance validation; retry is rejected while such a current failed attempt still has durable artifact evidence pending recovery;
 - already succeeded Job: no materialization is replayed.
 
-Archive export rejects generation artifact provenance unless the matching durable Job is already `succeeded` with the same attempt, output reference and Take identity. This prevents an artifact or visible Take from being silently archived while its Job still claims `RUNNING`/failed outcome.
+Recovery does not treat a merely non-empty file as success evidence. It checks the ProjectReference's persisted `size_bytes` and SHA-256 against the canonical file and verifies the durable generation identity/provenance against the Job: Job ID, current Attempt ID, model, capability/offer/adapter execution mapping, request digest and generation contract must agree before a Take can be created/reused or Job success recorded.
+
+Archive export independently rejects generation artifact provenance unless the matching durable Job/current attempt is already `succeeded` with the same output reference and Take identity. It also validates the same Job/request provenance and compares each Generation artifact's persisted size/SHA-256 with the size/SHA-256 computed while streaming the exact bytes into the ZIP. A file changed after successful generation therefore causes export to fail; the archive's own manifest hash cannot silently replace the Generation artifact's original digest authority.
 
 Before publication reconciliation, startup invokes ProjectUnitOfWork history recovery. A crash during an artifact/Take transaction is therefore resolved to its exact durable UOW state before Generation decides whether to complete locally or fail the abandoned Job.
 
-Source-media upload keeps its existing proactive boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after upload completion does source publication acquire the shared project fence; final move, FFprobe validation, portable metadata derivation, source registration and ordinary failure cleanup remain inside that fence. The historical `src_` archive fallback stays fail-closed for a source file that survives without its ProjectReference.
+Source-media upload keeps its existing proactive boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after upload completion does source publication acquire the shared project fence; final move, FFprobe validation, portable metadata derivation, source registration and ordinary failure cleanup remain inside that fence. Hard process loss can bypass the ordinary exception handler after the final move, so startup reconciliation also scans `sources/` for unregistered self-identifying `src_<uuid>.*` outputs and moves them to quarantine outside the project tree. Registered source references are preserved. The `src_` archive fallback stays fail-closed before reconciliation.
 
-For every accepted portable file, export computes size and SHA-256 while streaming that exact byte sequence directly into the ZIP. It does not hash one live read and later perform a second live read for ZIP capture. A concurrent non-authoritative file change can therefore either cause export to fail while opening/capturing the file or produce a manifest record for exactly the bytes stored in the ZIP; it cannot produce a two-read hash/ZIP mismatch.
+For every accepted portable file, export computes size and SHA-256 while streaming that exact byte sequence directly into the ZIP. It does not hash one live read and later perform a second live read for ZIP capture. A concurrent non-authoritative file change can therefore either cause export to fail while opening/capturing the file or produce a manifest record for exactly the bytes stored in the ZIP; it cannot produce a two-read hash/ZIP mismatch. For Generation outputs, that exact streamed size/hash must additionally equal the persisted Generation artifact size/digest.
 
 Export:
 
@@ -82,14 +85,14 @@ Export:
 5. rejects any validated pending `pub_<uuid>` managed-publication marker;
 6. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
 7. rejects an unregistered self-identifying UV publication (`src_`, `art_`, `aud_`, `sub_`, `generated_attempt_`);
-8. rejects a Generation artifact whose durable Job does not match a completed success outcome;
-9. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes;
+8. rejects a Generation artifact whose durable Job/current attempt/output/Take/provenance is not a completed coherent success outcome;
+9. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes and, for Generation artifacts, requires the streamed size/hash to equal persisted Generation artifact authority;
 10. writes the manifest describing those captured bytes;
 11. atomically replaces the requested archive destination when complete.
 
 The destination may not be inside the project being archived. That prevents a backup from recursively including itself.
 
-An export rejected because publication/recovery is incomplete is not a corrupt backup: no destination archive is committed. Restart/reconciliation resolves current `timeline.assemble`, WebVTT and Generation crash states without replaying renderer/provider work; the caller can retry export after reconciliation completes.
+An export rejected because publication/recovery is incomplete is not a corrupt backup: no destination archive is committed. Restart/reconciliation resolves current source-upload, `timeline.assemble`, WebVTT and Generation crash states without replaying renderer/provider work; the caller can retry export after reconciliation completes. If Generation bytes or provenance disagree with durable authority, recovery/export fail closed rather than promoting or archiving altered media.
 
 ## Import contract
 
