@@ -51,6 +51,7 @@
       "tests/test_project_archive_lock_symlink.py",
       "tests/test_project_archive_publication_race.py",
       "tests/test_project_publication_recovery.py",
+      "tests/test_publisher_crash_boundaries.py",
       "tests/test_project_transactions.py",
       "tests/test_project_transactions_v1_compat.py",
       "tests/test_direct_canonical_store_fence.py",
