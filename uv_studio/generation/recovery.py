@@ -11,18 +11,29 @@ artifact metadata is already durable are completed from canonical evidence inste
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
 import uuid
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.production.semantics import (
+    PRODUCTION_SEMANTICS_PATH,
+    ProductionSemanticError,
+    ProductionSemanticsDocument,
+)
 from uv_studio.projects.models import ProjectDocument, ProjectReference, utc_now_iso
 from uv_studio.projects.publication import recover_managed_publications
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
-from uv_studio.projects.transactions import ProjectUnitOfWork
+from uv_studio.projects.transactions import (
+    ProjectTransactionError,
+    ProjectUnitOfWork,
+    _snapshot_content,
+)
 
 from .jobs import (
     GenerationExecutionAttempt,
@@ -67,6 +78,131 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _snapshot_production(snapshot: Any) -> ProductionSemanticsDocument | None:
+    try:
+        content = _snapshot_content(snapshot)
+        if content is None:
+            return None
+        raw = json.loads(content.decode("utf-8"))
+        return ProductionSemanticsDocument.from_dict(raw)
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ProductionSemanticError,
+        ProjectTransactionError,
+    ) as exc:
+        raise GenerationJobError(
+            "generation recovery found invalid Production Take history"
+        ) from exc
+
+
+def _generation_take_history(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    shot_id: str,
+    reference_id: str,
+) -> tuple[str, str | None] | None:
+    """Resolve one historical Take registration and its latest Undo/Redo operation.
+
+    If no committed ``production.register_take`` transaction ever created a Take for
+    this exact Shot/artifact pair, recovery may still be completing the pre-Take
+    crash boundary and is allowed to create the missing Take. If such a transaction
+    exists, its durable operation history decides whether absence is an explicit user
+    Undo or inconsistent state. Multiple matching creations are ambiguous and fail
+    closed rather than inventing another Take identity.
+    """
+
+    uow = ProjectUnitOfWork(store)
+    try:
+        uow.history(project_id)
+    except ProjectTransactionError as exc:
+        raise GenerationJobError("generation recovery found invalid UOW history") from exc
+
+    project_dir = store.project_directory(project_id)
+    transactions_dir = project_dir / "history" / "transactions"
+    operations_dir = project_dir / "history" / "operations"
+    if transactions_dir.is_symlink() or not transactions_dir.is_dir():
+        raise GenerationJobError("generation recovery Take transaction history is unsafe")
+    if operations_dir.is_symlink() or not operations_dir.is_dir():
+        raise GenerationJobError("generation recovery Take operation history is unsafe")
+
+    candidates: list[tuple[str, str]] = []
+    for path in sorted(transactions_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise GenerationJobError("generation recovery Take transaction history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise GenerationJobError("generation recovery Take transaction history is invalid") from exc
+        if (
+            record.get("phase") != "committed"
+            or record.get("operation") != "commit"
+            or record.get("command") != "production.register_take"
+        ):
+            continue
+        transaction_id = record.get("transaction_id")
+        changes = record.get("changes")
+        if not isinstance(transaction_id, str) or not transaction_id:
+            raise GenerationJobError("generation recovery Take transaction lost identity")
+        if not isinstance(changes, list):
+            raise GenerationJobError("generation recovery Take transaction has invalid changes")
+        for change in changes:
+            try:
+                relative, before, after = uow._validated_change(change)
+            except ProjectTransactionError as exc:
+                raise GenerationJobError(
+                    "generation recovery Take transaction change is invalid"
+                ) from exc
+            if relative != PRODUCTION_SEMANTICS_PATH:
+                continue
+            before_doc = _snapshot_production(before)
+            after_doc = _snapshot_production(after)
+            before_ids = set() if before_doc is None else {take.take_id for take in before_doc.takes}
+            if after_doc is None:
+                continue
+            for take in after_doc.takes:
+                if take.take_id in before_ids:
+                    continue
+                if take.shot_id == shot_id and take.reference_id == reference_id:
+                    candidates.append((take.take_id, transaction_id))
+
+    candidates = sorted(set(candidates))
+    if not candidates:
+        return None
+    if len(candidates) != 1:
+        raise GenerationJobError("generation recovery Take history is ambiguous")
+    take_id, transaction_id = candidates[0]
+
+    operations: list[tuple[str, str, str]] = []
+    for path in sorted(operations_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise GenerationJobError("generation recovery Take operation history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise GenerationJobError("generation recovery Take operation history is invalid") from exc
+        if record.get("phase") != "committed" or record.get("transaction_id") != transaction_id:
+            continue
+        operation = record.get("operation")
+        created_at = record.get("created_at")
+        record_id = record.get("record_id")
+        if operation not in {"undo", "redo"}:
+            continue
+        if not isinstance(created_at, str) or not created_at:
+            raise GenerationJobError("generation recovery Take operation lost created_at")
+        if not isinstance(record_id, str) or not record_id:
+            raise GenerationJobError("generation recovery Take operation lost identity")
+        operations.append((created_at, record_id, operation))
+
+    if not operations:
+        return take_id, None
+    operations.sort()
+    if len(operations) >= 2 and operations[-1][0] == operations[-2][0]:
+        raise GenerationJobError("generation recovery Take operation ordering is ambiguous")
+    return take_id, operations[-1][2]
 
 
 def _quarantine_unregistered_managed_outputs(
@@ -305,22 +441,44 @@ def _reconcile_attempt_materialization(
         raise GenerationJobError("generation recovery found multiple Takes for one attempt output")
     if artifact_takes:
         take_id = artifact_takes[0].take_id
+        if attempt.take_id is not None and attempt.take_id != take_id:
+            raise GenerationJobError(
+                "generation recovery live Take disagrees with persisted attempt provenance"
+            )
     else:
-        generation = artifact.metadata.get("generation")
-        model_id = generation.get("model_id") if isinstance(generation, dict) else None
-        label = f"Recovered generated output · {model_id}" if model_id else "Recovered generated output"
-        take_id = f"take_{uuid.uuid4().hex}"
-        production.register_take(
+        history = _generation_take_history(
+            manager.project_store,
             job.project_id,
-            take_id=take_id,
             shot_id=shot_id,
             reference_id=artifact.id,
-            label=label,
-            notes=(
-                f"Recovered generation job {job.job_id}; "
-                f"attempt {attempt.attempt_id} after interrupted local publication"
-            ),
         )
+        if history is not None:
+            historical_take_id, latest_operation = history
+            if attempt.take_id is not None and attempt.take_id != historical_take_id:
+                raise GenerationJobError(
+                    "generation recovery Take history disagrees with persisted attempt provenance"
+                )
+            if latest_operation != "undo":
+                raise GenerationJobError(
+                    "generation recovery found a missing Take despite durable registration history"
+                )
+            take_id = historical_take_id
+        else:
+            generation = artifact.metadata.get("generation")
+            model_id = generation.get("model_id") if isinstance(generation, dict) else None
+            label = f"Recovered generated output · {model_id}" if model_id else "Recovered generated output"
+            take_id = f"take_{uuid.uuid4().hex}"
+            production.register_take(
+                job.project_id,
+                take_id=take_id,
+                shot_id=shot_id,
+                reference_id=artifact.id,
+                label=label,
+                notes=(
+                    f"Recovered generation job {job.job_id}; "
+                    f"attempt {attempt.attempt_id} after interrupted local publication"
+                ),
+            )
 
     completed = _mark_reconciled_success(
         manager,
