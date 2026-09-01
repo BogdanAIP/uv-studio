@@ -20,6 +20,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from uv_studio.production.semantics import (
+    PRODUCTION_SEMANTICS_PATH,
+    ProductionSemanticError,
+    ProductionSemanticsDocument,
+)
+
 from .models import (
     PROJECT_SCHEMA_VERSION,
     ProjectDocument,
@@ -30,6 +36,7 @@ from .models import (
 from .publication import ManagedPublicationError, pending_managed_publications
 from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
 from .task_records import ProjectTaskRecordStore
+from .transactions import ProjectTransactionError, ProjectUnitOfWork, _snapshot_content
 
 ARCHIVE_SCHEMA_VERSION = 1
 ARCHIVE_MANIFEST = ".uv-project-archive.json"
@@ -173,13 +180,158 @@ def _reject_unpublished_managed_media(
             )
 
 
+def _load_production_semantics(project_dir: Path) -> ProductionSemanticsDocument:
+    path = project_dir.joinpath(*PurePosixPath(PRODUCTION_SEMANTICS_PATH).parts)
+    if path.is_symlink() or not path.is_file():
+        raise ProjectArchiveError("Generation archive authority requires safe Production Semantics")
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return ProductionSemanticsDocument.from_dict(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ProductionSemanticError) as exc:
+        raise ProjectArchiveError("Production Semantics is invalid for Generation archive authority") from exc
+
+
+def _snapshot_production(snapshot: Any) -> ProductionSemanticsDocument | None:
+    try:
+        content = _snapshot_content(snapshot)
+        if content is None:
+            return None
+        raw = json.loads(content.decode("utf-8"))
+        return ProductionSemanticsDocument.from_dict(raw)
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ProductionSemanticError,
+        ProjectTransactionError,
+    ) as exc:
+        raise ProjectArchiveError("Generation Take history contains invalid Production snapshot") from exc
+
+
+def _matching_take(document: ProductionSemanticsDocument | None, take_id: str):
+    if document is None:
+        return None
+    for take in document.takes:
+        if take.take_id == take_id:
+            return take
+    return None
+
+
+def _history_proves_undone_generation_take(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    take_id: str,
+    shot_id: str,
+    reference_id: str,
+) -> bool:
+    """Prove that a missing Generation Take was removed by explicit durable Undo.
+
+    Generation Job records are intentionally outside user Undo/Redo history. A
+    succeeded attempt therefore retains immutable historical ``take_id`` provenance
+    even when the Production Take is later undone. Archive may accept that absence
+    only when the existing UOW transaction/operation journals prove the exact Take
+    was created and the last committed operation for that transaction is ``undo``.
+    Out-of-band deletion or a later redo remains fail-closed.
+    """
+
+    uow = ProjectUnitOfWork(store)
+    try:
+        uow.history(project_id)
+    except ProjectTransactionError as exc:
+        raise ProjectArchiveError("Generation Take history is invalid") from exc
+
+    project_dir = store.project_directory(project_id)
+    transactions_dir = project_dir / "history" / "transactions"
+    operations_dir = project_dir / "history" / "operations"
+    if transactions_dir.is_symlink() or not transactions_dir.is_dir():
+        raise ProjectArchiveError("Generation Take transaction history is unsafe")
+    if operations_dir.is_symlink() or not operations_dir.is_dir():
+        raise ProjectArchiveError("Generation Take operation history is unsafe")
+
+    creation_ids: list[str] = []
+    for path in sorted(transactions_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise ProjectArchiveError("Generation Take transaction history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise ProjectArchiveError("Generation Take transaction history is invalid") from exc
+        if (
+            record.get("phase") != "committed"
+            or record.get("operation") != "commit"
+            or record.get("command") != "production.register_take"
+        ):
+            continue
+        changes = record.get("changes")
+        if not isinstance(changes, list):
+            raise ProjectArchiveError("Generation Take transaction has invalid changes")
+        for change in changes:
+            try:
+                relative, before, after = uow._validated_change(change)
+            except ProjectTransactionError as exc:
+                raise ProjectArchiveError("Generation Take transaction change is invalid") from exc
+            if relative != PRODUCTION_SEMANTICS_PATH:
+                continue
+            before_doc = _snapshot_production(before)
+            after_doc = _snapshot_production(after)
+            before_take = _matching_take(before_doc, take_id)
+            after_take = _matching_take(after_doc, take_id)
+            if after_take is None:
+                continue
+            if before_take is not None:
+                continue
+            if after_take.shot_id == shot_id and after_take.reference_id == reference_id:
+                transaction_id = record.get("transaction_id")
+                if not isinstance(transaction_id, str) or not transaction_id:
+                    raise ProjectArchiveError("Generation Take transaction lost identity")
+                creation_ids.append(transaction_id)
+
+    creation_ids = sorted(set(creation_ids))
+    if not creation_ids:
+        return False
+    if len(creation_ids) != 1:
+        raise ProjectArchiveError("Generation Take history is ambiguous")
+    transaction_id = creation_ids[0]
+
+    operations: list[tuple[str, str, str]] = []
+    for path in sorted(operations_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise ProjectArchiveError("Generation Take operation history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise ProjectArchiveError("Generation Take operation history is invalid") from exc
+        if record.get("phase") != "committed" or record.get("transaction_id") != transaction_id:
+            continue
+        operation = record.get("operation")
+        created_at = record.get("created_at")
+        record_id = record.get("record_id")
+        if operation not in {"undo", "redo"}:
+            continue
+        if not isinstance(created_at, str) or not created_at:
+            raise ProjectArchiveError("Generation Take operation lost created_at")
+        if not isinstance(record_id, str) or not record_id:
+            raise ProjectArchiveError("Generation Take operation lost identity")
+        operations.append((created_at, record_id, operation))
+
+    if not operations:
+        return False
+    operations.sort()
+    if len(operations) >= 2 and operations[-1][0] == operations[-2][0]:
+        raise ProjectArchiveError("Generation Take operation ordering is ambiguous")
+    return operations[-1][2] == "undo"
+
+
 def _generation_digest_authority(
+    store: ProjectStore,
+    project_id: str,
     document: ProjectDocument,
     project_dir: Path,
 ) -> dict[str, tuple[int, str]]:
     """Validate Generation authority and return expected digest for exact ZIP capture."""
 
     expected_digests: dict[str, tuple[int, str]] = {}
+    production: ProductionSemanticsDocument | None = None
     for artifact in document.artifacts:
         generation = artifact.metadata.get("generation")
         if not isinstance(generation, dict):
@@ -206,15 +358,26 @@ def _generation_digest_authority(
                 f"Generation artifact points to a non-generation task record: {artifact.id}"
             )
         attempts = raw.get("attempts")
-        current = attempts[-1] if isinstance(attempts, list) and attempts else None
+        if not isinstance(attempts, list):
+            raise ProjectArchiveError(
+                f"Generation Job has invalid attempt history for artifact: {artifact.id}"
+            )
+        matching_attempts = [
+            attempt
+            for attempt in attempts
+            if isinstance(attempt, dict) and attempt.get("attempt_id") == attempt_id
+        ]
+        if len(matching_attempts) != 1:
+            raise ProjectArchiveError(
+                f"Generation artifact does not resolve to one durable attempt: {artifact.id}"
+            )
+        attempt = matching_attempts[0]
+        take_id = attempt.get("take_id")
         if (
-            raw.get("status") != "succeeded"
-            or not isinstance(current, dict)
-            or current.get("status") != "succeeded"
-            or current.get("attempt_id") != attempt_id
-            or current.get("output_reference_id") != artifact.id
-            or not isinstance(current.get("take_id"), str)
-            or not current.get("take_id")
+            attempt.get("status") != "succeeded"
+            or attempt.get("output_reference_id") != artifact.id
+            or not isinstance(take_id, str)
+            or not take_id
         ):
             raise ProjectArchiveError(
                 "Generation materialization is not durably complete; restart UV Studio "
@@ -224,6 +387,11 @@ def _generation_digest_authority(
         request = raw.get("request")
         mapping = request.get("execution_mapping") if isinstance(request, dict) else None
         contract = request.get("generation_contract") if isinstance(request, dict) else None
+        shot_id = request.get("shot_id") if isinstance(request, dict) else None
+        if not isinstance(shot_id, str) or not shot_id:
+            raise ProjectArchiveError(
+                f"Generation Job lost shot authority for artifact: {artifact.id}"
+            )
         authority = {
             "job_id": raw.get("job_id"),
             "attempt_id": attempt_id,
@@ -245,6 +413,25 @@ def _generation_digest_authority(
         if not isinstance(contract, dict) or generation.get("contract") != contract:
             raise ProjectArchiveError(
                 f"Generation artifact contract disagrees with durable Job: {artifact.id}"
+            )
+
+        if production is None:
+            production = _load_production_semantics(project_dir)
+        take = _matching_take(production, take_id)
+        if take is not None:
+            if take.shot_id != shot_id or take.reference_id != artifact.id:
+                raise ProjectArchiveError(
+                    f"Generation Take disagrees with current Production authority: {artifact.id}"
+                )
+        elif not _history_proves_undone_generation_take(
+            store,
+            project_id,
+            take_id=take_id,
+            shot_id=shot_id,
+            reference_id=artifact.id,
+        ):
+            raise ProjectArchiveError(
+                f"Generation Take is missing without durable Undo authority: {artifact.id}"
             )
 
         expected_name = f"generated_{attempt_id}"
@@ -324,7 +511,12 @@ def export_project(
         directories, files = _iter_project_entries(project_dir)
         _reject_interrupted_publications(store, project_id)
         _reject_unpublished_managed_media(document, project_dir, files)
-        generation_digests = _generation_digest_authority(document, project_dir)
+        generation_digests = _generation_digest_authority(
+            store,
+            project_id,
+            document,
+            project_dir,
+        )
         created_at = utc_now_iso()
 
         temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
