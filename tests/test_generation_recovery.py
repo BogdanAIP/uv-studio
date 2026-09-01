@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,17 +97,29 @@ class GenerationRecoveryTests(unittest.TestCase):
             relative_path,
             allowed_roots=("artifacts",),
         )
-        output.write_bytes(b"crash-recovery-image")
+        output_bytes = b"crash-recovery-image"
+        output.write_bytes(output_bytes)
+        mapping = running.request["execution_mapping"]
+        contract = running.request["generation_contract"]
         artifact = ProjectReference(
             id=artifact_id,
             kind="image",
             path=relative_path,
             metadata={
+                "size_bytes": len(output_bytes),
+                "sha256": hashlib.sha256(output_bytes).hexdigest(),
                 "generation": {
                     "job_id": running.job_id,
                     "attempt_id": attempt.attempt_id,
-                    "model_id": "uv.image.standard",
-                }
+                    "model_id": running.request["model_id"],
+                    "capability_id": mapping["capability_id"],
+                    "offer_id": mapping["offer_id"],
+                    "adapter_id": mapping["adapter_id"],
+                    "request_digest": running.request_digest,
+                    "contract": contract,
+                    "lineage": None,
+                },
+                "executor": {"test_fixture": True},
             },
         )
         project = self.store.load_project(self.project.project_id)
