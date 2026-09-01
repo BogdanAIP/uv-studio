@@ -19,6 +19,7 @@ from typing import Any, Mapping
 from uv_studio.projects.identity import assert_project_identity_transition
 from uv_studio.projects.migrations import migrate_project_data
 from uv_studio.projects.models import (
+    PROJECT_SCHEMA_VERSION,
     ProjectDocument,
     ProjectValidationError,
     utc_now_iso,
@@ -172,9 +173,18 @@ def _canonical_document_path(value: Any) -> str:
     return canonical
 
 
-def _strict_json_bytes(data: Mapping[str, Any]) -> bytes:
+def _strict_json_bytes(
+    data: Mapping[str, Any],
+    *,
+    relative_path: str | None = None,
+) -> bytes:
     if not isinstance(data, Mapping):
         raise ProjectTransactionError("transaction document must be a JSON object")
+    if relative_path == PROJECT_FILENAME and data.get("schema_version") != PROJECT_SCHEMA_VERSION:
+        raise ProjectTransactionError(
+            f"new transaction project.json must use schema v{PROJECT_SCHEMA_VERSION}; "
+            "legacy schema bytes are valid only as historical undo/redo snapshots"
+        )
     try:
         text = json.dumps(
             dict(data),
@@ -282,7 +292,10 @@ class ProjectUnitOfWork:
                 relative_path = _canonical_document_path(raw_path)
                 if relative_path in encoded:
                     raise ProjectTransactionError(f"duplicate transaction path: {relative_path!r}")
-                encoded[relative_path] = _strict_json_bytes(data)
+                encoded[relative_path] = _strict_json_bytes(
+                    data,
+                    relative_path=relative_path,
+                )
             self._validate_documents(project_id, current_project, encoded)
 
             changes: list[dict[str, Any]] = []
@@ -443,6 +456,9 @@ class ProjectUnitOfWork:
         if project_bytes is not None:
             try:
                 raw = json.loads(project_bytes.decode("utf-8"))
+                # Historical undo/redo snapshots may contain exact schema-v1 bytes.
+                # Fresh commit() input is constrained earlier in _strict_json_bytes,
+                # so migration here exists only to validate historical authority.
                 proposed_project = ProjectDocument.from_dict(migrate_project_data(raw))
             except (UnicodeDecodeError, json.JSONDecodeError, ProjectValidationError) as exc:
                 raise ProjectTransactionError(f"invalid staged project.json: {exc}") from exc
