@@ -19,6 +19,7 @@ from pathlib import Path
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.models import ProjectDocument, ProjectReference, utc_now_iso
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
+from uv_studio.projects.transactions import ProjectUnitOfWork
 
 from .jobs import (
     GenerationExecutionAttempt,
@@ -237,6 +238,10 @@ def recover_interrupted_project_jobs(
     recovered: list[GenerationJob] = []
     production = ProductionSemanticService(manager.project_store)
     with manager.records.project_lock(project_id):
+        # ProjectUnitOfWork has its own durable prepared journal. Recover it first so
+        # publication reconciliation never treats a half-applied artifact/Take commit
+        # as durable truth and then later has that UOW roll it back underneath a Job.
+        ProjectUnitOfWork(manager.project_store).history(project_id)
         manager.project_store.load_project(project_id)
         _quarantine_unregistered_managed_outputs(manager.project_store, project_id)
 
