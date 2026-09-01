@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -245,6 +247,7 @@ class GenerationService:
         if not isinstance(inputs, Mapping) or not isinstance(contract_raw, Mapping):
             return self._fail_running(running, attempt, "generation request lost inputs/contract")
 
+        staged_output: Path | None = None
         try:
             model = self.model_registry.get(model_id)
             offer = self.model_registry.capability_registry.get_offer(model.offer_id)
@@ -274,8 +277,20 @@ class GenerationService:
                 relative_path,
                 allowed_roots=("artifacts",),
             )
-            if output_path.exists():
+            if output_path.exists() or output_path.is_symlink():
                 raise GenerationOutputError("allocated generation output path already exists")
+
+            # Provider execution can be long-running. Keep its output outside every
+            # canonical project directory so archive recovery can continue to observe
+            # the old durable project state until final publication begins.
+            with tempfile.NamedTemporaryFile(
+                prefix=f".uv-generation-{attempt.attempt_id}-",
+                suffix=suffix,
+                dir=self.project_store.root,
+                delete=False,
+            ) as handle:
+                staged_output = Path(handle.name)
+            staged_output.unlink()
 
             executor_metadata = self.executor.execute(
                 project_id=project_id,
@@ -285,65 +300,78 @@ class GenerationService:
                 offer=offer,
                 inputs=dict(inputs),
                 contract=contract,
-                output_path=output_path,
+                output_path=staged_output,
             )
             if not isinstance(executor_metadata, Mapping):
                 raise GenerationOutputError("generation executor metadata must be a JSON object")
-            self._validate_output(output_path)
+            self._validate_output(staged_output)
 
-            with self.project_store._lock:
+            # Publication is the consequence-bearing transition. The shared
+            # cross-runtime project fence owns job revalidation, byte publication,
+            # Project artifact registration, Take registration and durable success.
+            with self.jobs.records.project_lock(project_id):
                 current = self.jobs.get(project_id, job_id)
                 if current.status is GenerationStatus.CANCELLED:
-                    output_path.unlink(missing_ok=True)
                     return current
                 if current.status is not GenerationStatus.RUNNING:
-                    output_path.unlink(missing_ok=True)
                     raise GenerationJobConflict(
                         f"generation job changed to {current.status.value!r} before materialization"
                     )
 
-                reference = self._register_artifact(
-                    project_id=project_id,
-                    artifact_id=artifact_id,
-                    relative_path=relative_path,
-                    output_path=output_path,
-                    model=model,
-                    offer=offer,
-                    job=current,
-                    attempt=attempt,
-                    contract=contract,
-                    executor_metadata=executor_metadata,
-                )
-                self.production.register_take(
+                fenced_output = self.project_store.resolve_project_file(
                     project_id,
-                    take_id=take_id,
-                    shot_id=shot_id,
-                    reference_id=reference.id,
-                    label=f"Generated · {model.title}",
-                    notes=f"Generation job {current.job_id}; attempt {attempt.attempt_id}",
+                    relative_path,
+                    allowed_roots=("artifacts",),
                 )
-                return self.jobs.succeed(
-                    project_id,
-                    job_id,
-                    attempt_id=attempt.attempt_id,
-                    output_reference_id=reference.id,
-                    take_id=take_id,
-                )
-        except Exception as exc:
-            output_path = locals().get("output_path")
-            if isinstance(output_path, Path):
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise GenerationOutputError("allocated generation output path already exists")
+
+                final_written = False
                 try:
-                    project = self.project_store.load_project(project_id)
-                    registered = any(
-                        item.path == output_path.relative_to(
-                            self.project_store.project_directory(project_id)
-                        ).as_posix()
-                        for item in project.artifacts
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    reference = self._register_artifact(
+                        project_id=project_id,
+                        artifact_id=artifact_id,
+                        relative_path=relative_path,
+                        output_path=fenced_output,
+                        model=model,
+                        offer=offer,
+                        job=current,
+                        attempt=attempt,
+                        contract=contract,
+                        executor_metadata=executor_metadata,
+                    )
+                    self.production.register_take(
+                        project_id,
+                        take_id=take_id,
+                        shot_id=shot_id,
+                        reference_id=reference.id,
+                        label=f"Generated · {model.title}",
+                        notes=f"Generation job {current.job_id}; attempt {attempt.attempt_id}",
+                    )
+                    return self.jobs.succeed(
+                        project_id,
+                        job_id,
+                        attempt_id=attempt.attempt_id,
+                        output_reference_id=reference.id,
+                        take_id=take_id,
                     )
                 except Exception:
-                    registered = True
-                if not registered:
-                    output_path.unlink(missing_ok=True)
+                    if final_written:
+                        try:
+                            current_project = self.project_store.load_project(project_id)
+                            registered = any(
+                                item.id == artifact_id for item in current_project.artifacts
+                            )
+                        except Exception:
+                            # A failed read after a possible transaction commit is
+                            # ambiguous. Preserve bytes that may already be durable.
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
+        except Exception as exc:
             try:
                 current = self.jobs.get(project_id, job_id)
                 if current.status is GenerationStatus.RUNNING:
@@ -356,6 +384,9 @@ class GenerationService:
             except Exception:
                 pass
             raise
+        finally:
+            if staged_output is not None:
+                staged_output.unlink(missing_ok=True)
 
     def cancel(self, project_id: str, job_id: str) -> GenerationJob:
         return self.jobs.cancel(project_id, job_id)
