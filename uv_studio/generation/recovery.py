@@ -61,9 +61,9 @@ INTERRUPTED_RUNNING_ERROR = (
     "and no automatic rerun was attempted; explicit retry is required"
 )
 
-_MANAGED_OUTPUT_ROOTS = ("sources", "artifacts", "exports")
+_MANAGED_OUTPUT_ROOTS = ("sources", "assets", "artifacts", "exports")
 _CRASH_IDENTIFIABLE_OUTPUT_NAME = re.compile(
-    r"^(?:src_[0-9a-f]{32}|art_[0-9a-f]{32}|sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
+    r"^\.?(?:src_[0-9a-f]{32}|art_[0-9a-f]{32}|aud_[0-9a-f]{32}|sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
 )
 
 
