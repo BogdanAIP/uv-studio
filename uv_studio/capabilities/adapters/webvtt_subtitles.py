@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
 import re
+import tempfile
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -14,6 +16,7 @@ from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.prepared_speech import canonical_revision_sha256
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
+from uv_studio.projects.task_records import ProjectTaskRecordStore
 
 from ..execution import (
     CapabilityExecutionResult,
@@ -194,6 +197,7 @@ class WebVTTSubtitleAdapter:
         artifact_id = f"sub_{uuid.uuid4().hex}"
         relative_path = f"artifacts/{artifact_id}.vtt"
         output: Path | None = None
+        staged_output: Path | None = None
         try:
             output = self.store.resolve_project_file(
                 project_id,
@@ -203,7 +207,21 @@ class WebVTTSubtitleAdapter:
             )
             if output.exists() or output.is_symlink():
                 raise InvalidCapabilityInput("subtitle export refuses to overwrite an existing artifact")
-            output.write_bytes(encoded)
+
+            # Prepare complete bytes outside every canonical project directory. Archive
+            # recovery can therefore observe the old state while rendering occurs.
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=f".uv-webvtt-{artifact_id}-",
+                suffix=".vtt",
+                dir=self.store.root,
+                delete=False,
+            ) as handle:
+                staged_output = Path(handle.name)
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+
             artifact = ProjectReference(
                 id=artifact_id,
                 kind="subtitle",
@@ -228,12 +246,46 @@ class WebVTTSubtitleAdapter:
                     "lifecycle": "subtitle_export",
                 },
             )
-            project = self.store.load_project(project_id)
-            self.store.update_project(project_id, artifacts=(*project.artifacts, artifact))
-        except Exception:
-            if output is not None:
-                output.unlink(missing_ok=True)
-            raise
+
+            # Final bytes and their Project identity publish in one recovery-fenced
+            # critical section. A concurrent archive sees either neither or both.
+            with ProjectTaskRecordStore(self.store).project_lock(project_id):
+                fenced_output = self.store.resolve_project_file(
+                    project_id,
+                    relative_path,
+                    must_exist=False,
+                    allowed_roots=("artifacts",),
+                )
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise InvalidCapabilityInput(
+                        "subtitle export refuses to overwrite an existing artifact"
+                    )
+
+                final_written = False
+                try:
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    project = self.store.load_project(project_id)
+                    self.store.update_project(
+                        project_id,
+                        artifacts=(*project.artifacts, artifact),
+                    )
+                except Exception:
+                    if final_written:
+                        try:
+                            current = self.store.load_project(project_id)
+                            registered = any(item.id == artifact_id for item in current.artifacts)
+                        except Exception:
+                            # If durable metadata cannot be read after a possible
+                            # commit, preserve bytes that may already be referenced.
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
+
+        finally:
+            if staged_output is not None:
+                staged_output.unlink(missing_ok=True)
 
         return CapabilityExecutionResult.from_offer(
             project_id=project_id,
