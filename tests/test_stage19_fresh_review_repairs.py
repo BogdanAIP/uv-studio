@@ -21,6 +21,7 @@ from uv_studio.capabilities.models import (
 )
 from uv_studio.capabilities.registry import CapabilityRegistry
 from uv_studio.generation.jobs import (
+    GenerationExecutionAttempt,
     GenerationJobConflict,
     GenerationJobError,
     GenerationJobManager,
@@ -33,11 +34,16 @@ from uv_studio.generation.recovery import (
 )
 from uv_studio.generation.service import GenerationService
 from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.production.semantics import (
+    PRODUCTION_SEMANTICS_PATH,
+    ProductionSemanticsDocument,
+)
 from uv_studio.projects.archive import ProjectArchiveError, export_project
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.source_media import ProjectSourceMediaStore
 from uv_studio.projects.store import ProjectStore
 from uv_studio.projects.models import utc_now_iso
+from uv_studio.projects.transactions import ProjectUnitOfWork
 
 
 class _ImageExecutor:
@@ -231,6 +237,61 @@ class Stage19FreshReviewRepairTests(unittest.TestCase):
         self.assertEqual(completed.current_attempt.output_reference_id, artifact.id)
         self.assertEqual(self.executor.calls, 1)
 
+    def test_historical_older_attempt_artifact_is_reconciled_by_its_own_identity(self) -> None:
+        running, artifact = self._run_until_take_failure("idem_historical_retry")
+        attempt0 = running.current_attempt
+        self.assertIsNotNone(attempt0)
+        ended_at = utc_now_iso()
+        failed0 = replace(
+            attempt0,
+            status=GenerationStatus.FAILED,
+            ended_at=ended_at,
+            error="legacy attempt zero failed after artifact commit",
+        )
+        failed1 = GenerationExecutionAttempt(
+            attempt_id="attempt_legacy_retry_one",
+            retry_index=1,
+            status=GenerationStatus.FAILED,
+            started_at=ended_at,
+            ended_at=ended_at,
+            error="legacy retry failed without materialization",
+        )
+        legacy = replace(
+            running,
+            status=GenerationStatus.FAILED,
+            updated_at=ended_at,
+            attempts=(failed0, failed1),
+        )
+        with self.service.jobs.records.project_lock(self.project.project_id):
+            self.service.jobs.records.write(
+                self.project.project_id,
+                legacy.job_id,
+                legacy.to_dict(),
+            )
+
+        with self.assertRaisesRegex(GenerationJobConflict, "durable artifact pending recovery"):
+            self.service.jobs.start_execution(self.project.project_id, legacy.job_id)
+
+        self.assertEqual(
+            recover_interrupted_project_jobs(self.service.jobs, self.project.project_id),
+            (),
+        )
+        repaired = self.service.jobs.get(self.project.project_id, legacy.job_id)
+        self.assertEqual(repaired.status, GenerationStatus.FAILED)
+        self.assertEqual(repaired.attempts[0].status, GenerationStatus.SUCCEEDED)
+        self.assertEqual(repaired.attempts[0].output_reference_id, artifact.id)
+        self.assertIsNotNone(repaired.attempts[0].take_id)
+        self.assertEqual(repaired.attempts[1].status, GenerationStatus.FAILED)
+        state = ProductionSemanticService(self.store).state(self.project.project_id)
+        recovered_takes = [take for take in state.takes if take.reference_id == artifact.id]
+        self.assertEqual(len(recovered_takes), 1)
+        self.assertEqual(recovered_takes[0].take_id, repaired.attempts[0].take_id)
+        self.assertEqual(self.executor.calls, 1)
+
+        archive_path = Path(self.tmp.name) / "historical-attempt.uvproj.zip"
+        export_project(self.store, self.project.project_id, archive_path)
+        self.assertTrue(archive_path.is_file())
+
     def test_cross_runtime_cancel_waits_for_publication_fence(self) -> None:
         submitted = self._submit("idem_cross_runtime_cancel")
         artifact_committed = threading.Event()
@@ -347,6 +408,75 @@ class Stage19FreshReviewRepairTests(unittest.TestCase):
 
         archive_path = Path(self.tmp.name) / "corrupt-generation.uvproj.zip"
         with self.assertRaisesRegex(ProjectArchiveError, "persisted size/digest"):
+            export_project(self.store, self.project.project_id, archive_path)
+        self.assertFalse(archive_path.exists())
+
+    def test_archive_accepts_generation_take_removed_by_explicit_undo(self) -> None:
+        submitted = self._submit("idem_take_undo")
+        completed = self.service.run(self.project.project_id, submitted.job.job_id)
+        attempt = completed.current_attempt
+        self.assertIsNotNone(attempt)
+        artifact = self._artifact_for_current_attempt(completed)
+        take_id = attempt.take_id
+        self.assertIsNotNone(take_id)
+
+        ProjectUnitOfWork(self.store).undo(self.project.project_id)
+        state = ProductionSemanticService(self.store).state(self.project.project_id)
+        self.assertFalse(any(take.take_id == take_id for take in state.takes))
+        durable = self.service.jobs.get(self.project.project_id, completed.job_id)
+        self.assertEqual(durable.status, GenerationStatus.SUCCEEDED)
+        self.assertEqual(durable.current_attempt.take_id, take_id)
+
+        # A new command truncates the stale redo branch. The durable undo operation
+        # must still prove why immutable Job provenance names a Take absent from the
+        # current Production state.
+        ProductionSemanticService(self.store).create_scene(
+            self.project.project_id,
+            scene_id="scene_after_generation_undo",
+            title="After Undo",
+        )
+
+        archive_path = Path(self.tmp.name) / "generation-take-undone.uvproj.zip"
+        export_project(self.store, self.project.project_id, archive_path)
+        self.assertTrue(archive_path.is_file())
+        self.assertTrue(
+            any(
+                item.id == artifact.id
+                for item in self.store.load_project(self.project.project_id).artifacts
+            )
+        )
+
+    def test_archive_rejects_generation_take_missing_without_undo_authority(self) -> None:
+        submitted = self._submit("idem_take_out_of_band")
+        completed = self.service.run(self.project.project_id, submitted.job.job_id)
+        attempt = completed.current_attempt
+        self.assertIsNotNone(attempt)
+        take_id = attempt.take_id
+        self.assertIsNotNone(take_id)
+
+        state = ProductionSemanticService(self.store).state(self.project.project_id)
+        updated_shots = tuple(
+            replace(
+                shot,
+                take_ids=tuple(item for item in shot.take_ids if item != take_id),
+                accepted_take_id=(None if shot.accepted_take_id == take_id else shot.accepted_take_id),
+            )
+            for shot in state.shots
+        )
+        corrupted = ProductionSemanticsDocument(
+            scenes=state.scenes,
+            shots=updated_shots,
+            takes=tuple(take for take in state.takes if take.take_id != take_id),
+        )
+        semantics_path = self.store.resolve_project_file(
+            self.project.project_id,
+            PRODUCTION_SEMANTICS_PATH,
+            allowed_roots=("production",),
+        )
+        self.store._atomic_write_json(semantics_path, corrupted.to_dict())
+
+        archive_path = Path(self.tmp.name) / "generation-take-missing.uvproj.zip"
+        with self.assertRaisesRegex(ProjectArchiveError, "missing without durable Undo authority"):
             export_project(self.store, self.project.project_id, archive_path)
         self.assertFalse(archive_path.exists())
 
