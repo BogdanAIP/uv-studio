@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-01
@@ -9,9 +9,9 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` remains in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is frozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-Frozen review head `4b8ec3492b3c19e897bfb09421c68d1a945e9e5e` passed authoritative post-Ready CI #4381 (`33554207955`) **5/5**, but a new inline P2 then identified that archive validation rejected generated output bytes intentionally retained for the current durable `ProjectUnitOfWork` Redo branch after output/Take Undo. PR #89 was returned to Draft before material repair work.
+The final synchronized Draft head before this context-only refreeze was `735af242b6e13a5c0103a923820c445bcc2f6d8f`. Its post-body-sync CI #4401 (`33556910096`) passed **5/5** on Ubuntu and Windows: development-context, both full unit suites and both app-baseline API/real-media/frontend/browser Product Truth jobs all succeeded. The archive/Redo inline P2 was then replied to with repair evidence and resolved; live inline review threads were rechecked with zero unresolved findings before refreeze.
 
 ## Seventh Draft repair completed
 
@@ -21,9 +21,7 @@ Regression `e70f4cf94005fd3a7618bc5c74eef7310a1c1b11` adds a real `two Undo -> e
 
 Runtime repair `e782e1fdea7eaf0984418e08a763a12ba3834454` makes archive managed-media validation accept paths owned either by current Project references or by committed `project.json` after-snapshots reachable from the current durable `history.entries[history.cursor:]` Redo suffix. Historical schema-v1 snapshots are migrated only for validation. Invalid Redo transaction history fails closed. Redo truncation removes that authority automatically.
 
-Initial CI #4390 (`33555834310`) exposed only a Windows test portability assertion caused by equivalent long-vs-8.3 temp paths. Test-only commit `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` changed the assertion to `Path.samefile()` without runtime changes.
-
-Exact material/test head `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` passed CI #4392 (`33556182876`) **5/5** on Ubuntu and Windows, including both full unit suites and both app-baseline API/real-media/frontend/browser Product Truth jobs.
+Initial CI #4390 (`33555834310`) exposed only a Windows test portability assertion caused by equivalent long-vs-8.3 temp paths. Test-only commit `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` changed the assertion to `Path.samefile()` without runtime changes. Material/test head `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` passed CI #4392 (`33556182876`) **5/5**; final synchronized Draft head `735af242b6e13a5c0103a923820c445bcc2f6d8f` passed CI #4401 **5/5**.
 
 ## Previous repair evidence retained
 
@@ -31,22 +29,19 @@ Exact material/test head `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` passed CI #4
 - prepared-audio `assets/aud_<uuid>` and `.upload/.promote` crash-left recovery: `44d7e036230f50e2a82cd908da13ec67508bd041` + `9b56d5f2fb071e212bf9fcf5900301d8f6ac1d28`, CI #4374 5/5;
 - all earlier Stage-19 schema-v1/v2, archive snapshot/digest, publication fencing, Generation reconciliation, Production Take Undo, source/WebVTT/legacy-art recovery, arbitrary-path marker and Product Truth repairs remain in force.
 
-## Current Draft gate
+## Frozen review gate
 
-The final context-synchronized Draft head is resolved externally from live GitHub identity rather than self-recorded inside this commit. CI #4392 is accepted material repair evidence but is stale for that final context-synchronized gate.
+This refreeze is context-only. The exact frozen review HEAD is resolved externally from live GitHub after the context commits; no runtime, test, schema or product behavior may change while lifecycle remains `review`.
 
 Required sequence:
 
-1. exact synchronized Draft-head CI **5/5**;
-2. reply to and resolve the current inline P2 with concrete repair/CI evidence;
-3. re-resolve live repository/base/head/thread identity;
-4. context-only refreeze `draft -> review`;
-5. return PR #89 to **Ready for review** without changing the frozen Git head;
-6. authoritative post-Ready exact-head CI **5/5**;
-7. completely fresh ordinary-ChatGPT semantic review under governing BASE `.agents/skills/code-review/SKILL.md` v1.0;
-8. merge only on `CURRENT` PASS / zero findings with unchanged identity and zero unresolved threads.
+1. mark PR #89 **Ready for review** without changing the frozen Git head;
+2. require authoritative post-Ready exact-head CI **5/5**;
+3. re-resolve live repository/base/head identity and verify zero unresolved review threads;
+4. run a completely fresh ordinary-ChatGPT semantic review under governing BASE `.agents/skills/code-review/SKILL.md` v1.0 against the exact frozen BASE..HEAD;
+5. merge only if the review result is `CURRENT` with zero findings and final live base/head/CI/thread identity remains clean.
 
-After merge, D-038 lifecycle closure to `idle` remains mandatory.
+After merge, D-038 lifecycle closure to `idle` remains mandatory before starting the declared handoff.
 
 ## Out of scope
 
