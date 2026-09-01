@@ -27,6 +27,7 @@ from .models import (
     utc_now_iso,
     validate_identifier,
 )
+from .publication import ManagedPublicationError, pending_managed_publications
 from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
 from .task_records import ProjectTaskRecordStore
 
@@ -34,8 +35,9 @@ ARCHIVE_SCHEMA_VERSION = 1
 ARCHIVE_MANIFEST = ".uv-project-archive.json"
 PROJECT_PREFIX = "project"
 _MANAGED_MEDIA_ROOTS = frozenset({"sources", "assets", "artifacts", "exports"})
-_STRICT_REGISTERED_OUTPUT_ROOTS = frozenset({"artifacts", "exports"})
-_MANAGED_PUBLICATION_NAME = re.compile(r"^(?:src|art|aud)_[0-9a-f]{32}(?:[._-]|$)")
+_MANAGED_PUBLICATION_NAME = re.compile(
+    r"^(?:(?:src|art|aud|sub)_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
+)
 
 
 class ProjectArchiveError(RuntimeError):
@@ -132,37 +134,42 @@ def _looks_like_managed_publication(project_dir: Path, path: Path) -> bool:
     return _MANAGED_PUBLICATION_NAME.match(name) is not None
 
 
+def _reject_interrupted_publications(store: ProjectStore, project_id: str) -> None:
+    """Fail closed on a crash-left arbitrary-path publication marker."""
+
+    try:
+        pending = pending_managed_publications(store, project_id)
+    except ManagedPublicationError as exc:
+        raise ProjectArchiveError(f"Managed publication recovery state is invalid: {exc}") from exc
+    if pending:
+        paths = sorted(str(item["relative_path"]) for item in pending)
+        raise ProjectArchiveError(
+            "Project has interrupted managed publication state; restart UV Studio "
+            f"to reconcile before export: {paths!r}"
+        )
+
+
 def _reject_unpublished_managed_media(
     document: ProjectDocument,
     project_dir: Path,
     files: list[Path],
 ) -> None:
-    """Fail closed when canonical media/output bytes have no owning metadata.
+    """Fail closed when a self-identifying UV publication lacks Project metadata.
 
-    ``artifacts/`` and ``exports/`` are UV-owned output roots: every regular file
-    there must have a ProjectReference before it is portable. This deliberately
-    covers caller-selected ``timeline.assemble`` names plus WebVTT ``sub_*`` and
-    Generation ``generated_*`` paths, so a process crash after canonical
-    ``os.replace`` cannot turn orphan bytes into a valid recovery snapshot.
-
-    Historical source/asset publishers still use the narrower ``src_*``/``art_*``/
-    ``aud_*`` detector. Ordinary unregistered files outside strict output roots stay
-    portable.
+    Historical source/artifact/audio names plus current WebVTT ``sub_<uuid>`` and
+    Generation ``generated_attempt_<uuid>`` names are unambiguous UV-owned
+    publications. Ordinary unregistered files remain portable. Arbitrary-path
+    ``timeline.assemble`` is covered by its durable publication marker instead of a
+    filename guess.
     """
 
     registered = _registered_media_paths(document)
     for path in files:
-        relative_path = path.relative_to(project_dir)
-        relative = relative_path.as_posix()
-        root = relative_path.parts[0] if relative_path.parts else ""
-        if relative in registered:
-            continue
-        if root in _STRICT_REGISTERED_OUTPUT_ROOTS or _looks_like_managed_publication(
-            project_dir, path
-        ):
+        relative = path.relative_to(project_dir).as_posix()
+        if _looks_like_managed_publication(project_dir, path) and relative not in registered:
             raise ProjectArchiveError(
-                "Project contains an unpublished managed output; run startup recovery "
-                f"or repair the project before export: {relative}"
+                "Project contains an unpublished managed media file; restart UV Studio "
+                f"to reconcile publication before export: {relative}"
             )
 
 
@@ -262,6 +269,7 @@ def export_project(
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         directories, files = _iter_project_entries(project_dir)
+        _reject_interrupted_publications(store, project_id)
         _reject_unpublished_managed_media(document, project_dir, files)
         _reject_incomplete_generation_publications(document, project_dir)
         created_at = utc_now_iso()
