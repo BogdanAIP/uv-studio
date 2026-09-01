@@ -26,6 +26,7 @@ from uv_studio.production.semantics import (
     ProductionSemanticsDocument,
 )
 
+from .migrations import migrate_project_data
 from .models import (
     PROJECT_SCHEMA_VERSION,
     ProjectDocument,
@@ -34,7 +35,7 @@ from .models import (
     validate_identifier,
 )
 from .publication import ManagedPublicationError, pending_managed_publications
-from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
+from .store import PROJECT_DIRECTORIES, PROJECT_FILENAME, ProjectAlreadyExists, ProjectStore
 from .task_records import ProjectTaskRecordStore
 from .transactions import ProjectTransactionError, ProjectUnitOfWork, _snapshot_content
 
@@ -133,6 +134,72 @@ def _registered_media_paths(document: ProjectDocument) -> set[str]:
     return {reference.path for reference in (*document.sources, *document.artifacts)}
 
 
+def _snapshot_project(snapshot: Any) -> ProjectDocument | None:
+    """Read one historical project.json snapshot through the current schema boundary."""
+
+    try:
+        content = _snapshot_content(snapshot)
+        if content is None:
+            return None
+        raw = json.loads(content.decode("utf-8"))
+        return ProjectDocument.from_dict(migrate_project_data(raw))
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ProjectTransactionError,
+        ProjectValidationError,
+    ) as exc:
+        raise ProjectArchiveError("Project redo history contains invalid Project snapshot") from exc
+
+
+def _redoable_media_paths(store: ProjectStore, project_id: str) -> set[str]:
+    """Return media paths owned by the current durable UOW redo suffix.
+
+    ProjectUnitOfWork snapshots canonical JSON, not binary media. After a reference
+    transaction is undone, its already-published bytes intentionally remain in the
+    project so Redo can restore the exact reference. Archives must preserve those
+    bytes while the transaction is still reachable through
+    ``history.entries[history.cursor:]``. A later canonical commit truncates that
+    suffix and removes this authority automatically.
+    """
+
+    uow = ProjectUnitOfWork(store)
+    try:
+        history = uow.history(project_id)
+    except ProjectTransactionError as exc:
+        raise ProjectArchiveError("Project redo history is invalid") from exc
+
+    protected: set[str] = set()
+    for entry in history.entries[history.cursor :]:
+        try:
+            record = uow._load_record(
+                uow._record_path(project_id, entry.transaction_id, transaction=True)
+            )
+        except ProjectTransactionError as exc:
+            raise ProjectArchiveError("Project redo transaction history is invalid") from exc
+        if (
+            record.get("phase") != "committed"
+            or record.get("operation") != "commit"
+            or record.get("transaction_id") != entry.transaction_id
+        ):
+            raise ProjectArchiveError("Project redo transaction disagrees with history index")
+        changes = record.get("changes")
+        if not isinstance(changes, list) or not changes:
+            raise ProjectArchiveError("Project redo transaction has invalid changes")
+        for change in changes:
+            try:
+                relative, _before, after = uow._validated_change(change)
+            except ProjectTransactionError as exc:
+                raise ProjectArchiveError("Project redo transaction change is invalid") from exc
+            if relative != PROJECT_FILENAME:
+                continue
+            project = _snapshot_project(after)
+            if project is None:
+                raise ProjectArchiveError("Project redo transaction cannot remove project.json")
+            protected.update(_registered_media_paths(project))
+    return protected
+
+
 def _looks_like_managed_publication(project_dir: Path, path: Path) -> bool:
     relative = path.relative_to(project_dir)
     if len(relative.parts) < 2 or relative.parts[0] not in _MANAGED_MEDIA_ROOTS:
@@ -157,23 +224,27 @@ def _reject_interrupted_publications(store: ProjectStore, project_id: str) -> No
 
 
 def _reject_unpublished_managed_media(
+    store: ProjectStore,
+    project_id: str,
     document: ProjectDocument,
     project_dir: Path,
     files: list[Path],
 ) -> None:
-    """Fail closed when a self-identifying UV publication lacks Project metadata.
+    """Fail closed when a self-identifying UV publication lacks durable ownership.
 
     Historical source/artifact/audio names plus current WebVTT ``sub_<uuid>`` and
     Generation ``generated_attempt_<uuid>`` names are unambiguous UV-owned
-    publications. Ordinary unregistered files remain portable. Arbitrary-path
-    ``timeline.assemble`` is covered by its durable publication marker instead of a
-    filename guess.
+    publications. Ordinary unregistered files remain portable. A path is also
+    durably owned while its ProjectReference is reachable through the current UOW
+    Redo suffix, because the binary bytes are required to make that Redo exact.
+    Arbitrary-path ``timeline.assemble`` is covered by its durable publication marker
+    instead of a filename guess.
     """
 
-    registered = _registered_media_paths(document)
+    owned = _registered_media_paths(document) | _redoable_media_paths(store, project_id)
     for path in files:
         relative = path.relative_to(project_dir).as_posix()
-        if _looks_like_managed_publication(project_dir, path) and relative not in registered:
+        if _looks_like_managed_publication(project_dir, path) and relative not in owned:
             raise ProjectArchiveError(
                 "Project contains an unpublished managed media file; restart UV Studio "
                 f"to reconcile publication before export: {relative}"
@@ -510,7 +581,7 @@ def export_project(
 
         directories, files = _iter_project_entries(project_dir)
         _reject_interrupted_publications(store, project_id)
-        _reject_unpublished_managed_media(document, project_dir, files)
+        _reject_unpublished_managed_media(store, project_id, document, project_dir, files)
         generation_digests = _generation_digest_authority(
             store,
             project_id,
