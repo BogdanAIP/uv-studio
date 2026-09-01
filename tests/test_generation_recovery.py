@@ -24,6 +24,7 @@ from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.store import ProjectStore
+from uv_studio.projects.transactions import ProjectUnitOfWork
 
 
 class GenerationRecoveryTests(unittest.TestCase):
@@ -246,6 +247,43 @@ class GenerationRecoveryTests(unittest.TestCase):
             production.state(self.project.project_id).shot("shot_recovery").take_ids,
             ("take_recovery_existing",),
         )
+
+    def test_restart_preserves_explicit_undo_of_existing_take(self) -> None:
+        production = self._ensure_production()
+        job = self._job(key="idem_recovery_take_undo", prompt="take explicitly undone")
+        running = self.manager.start_execution(self.project.project_id, job.job_id)
+        artifact = self._register_running_artifact(
+            running,
+            artifact_id="artifact_recovery_take_undone",
+        )
+        take_id = "take_recovery_explicitly_undone"
+        production.register_take(
+            self.project.project_id,
+            take_id=take_id,
+            shot_id="shot_recovery",
+            reference_id=artifact.id,
+            label="Take that user will undo",
+        )
+        uow = ProjectUnitOfWork(self.store)
+        undo = uow.undo(self.project.project_id)
+        self.assertEqual(undo.operation, "undo")
+        self.assertEqual(
+            production.state(self.project.project_id).shot("shot_recovery").take_ids,
+            (),
+        )
+        self.assertTrue(uow.history(self.project.project_id).can_redo)
+
+        recovered = recover_interrupted_project_jobs(self.manager, self.project.project_id)
+        self.assertEqual(recovered, ())
+        durable = self.manager.get(self.project.project_id, job.job_id)
+        self.assertEqual(durable.status, GenerationStatus.SUCCEEDED)
+        self.assertEqual(durable.current_attempt.output_reference_id, artifact.id)
+        self.assertEqual(durable.current_attempt.take_id, take_id)
+        self.assertEqual(
+            production.state(self.project.project_id).shot("shot_recovery").take_ids,
+            (),
+        )
+        self.assertTrue(uow.history(self.project.project_id).can_redo)
 
     def test_explicit_retry_requeues_recovered_job_before_new_attempt(self) -> None:
         job = self._job(key="idem_recovery_retry", prompt="retry")
