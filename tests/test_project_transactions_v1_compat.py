@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
-from uv_studio.projects.transactions import ProjectUnitOfWork
+from uv_studio.projects.transactions import ProjectTransactionError, ProjectUnitOfWork
 
 
 class LegacyProjectTransactionCompatibilityTests(unittest.TestCase):
@@ -60,6 +60,38 @@ class LegacyProjectTransactionCompatibilityTests(unittest.TestCase):
             self.assertEqual(redone.history.cursor, 1)
             self.assertEqual(project_path.read_bytes(), v2_bytes)
             self.assertEqual(store.load_project(project.project_id).title, "Migrated transaction")
+
+    def test_fresh_commit_rejects_schema_v1_project_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ProjectStore(Path(tmp) / "projects")
+            project = store.create_project(
+                title="Current transaction",
+                recipe_id="general_video",
+                project_id="prj_current_transaction",
+            )
+            project_path = store.project_path(project.project_id)
+            original_bytes = project_path.read_bytes()
+            legacy_payload = json.loads(original_bytes.decode("utf-8"))
+            compatibility = legacy_payload.pop("compatibility")
+            legacy_payload["schema_version"] = 1
+            legacy_payload["recipe_id"] = compatibility["recipe_id"]
+            legacy_payload["title"] = "Illegal downgrade"
+
+            uow = ProjectUnitOfWork(store)
+            with self.assertRaisesRegex(
+                ProjectTransactionError,
+                "new transaction project.json must use schema v2",
+            ):
+                uow.commit(
+                    project.project_id,
+                    command="project.illegal_schema_downgrade",
+                    documents={PROJECT_FILENAME: legacy_payload},
+                )
+
+            self.assertEqual(project_path.read_bytes(), original_bytes)
+            self.assertEqual(store.load_project(project.project_id).schema_version, 2)
+            self.assertEqual(store.load_project(project.project_id).title, "Current transaction")
+            self.assertEqual(uow.history(project.project_id).cursor, 0)
 
 
 if __name__ == "__main__":
