@@ -57,7 +57,7 @@ INTERRUPTED_RUNNING_ERROR = (
 
 _MANAGED_OUTPUT_ROOTS = ("sources", "artifacts", "exports")
 _CRASH_IDENTIFIABLE_OUTPUT_NAME = re.compile(
-    r"^(?:src_[0-9a-f]{32}|sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
+    r"^(?:src_[0-9a-f]{32}|art_[0-9a-f]{32}|sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
 )
 
 
@@ -212,10 +212,11 @@ def _quarantine_unregistered_managed_outputs(
     """Move crash-identifiable unregistered publisher bytes out of the project tree.
 
     Ordinary unregistered project files remain portable for compatibility. Current
-    source upload ``src_<uuid>``, WebVTT ``sub_<uuid>`` and Generation
-    ``generated_attempt_<uuid>`` final names are self-identifying and can therefore
-    be recovered after hard process loss. Arbitrary-path ``timeline.assemble`` is
-    recovered only through its durable publication marker, never by filename guess.
+    source upload ``src_<uuid>``, legacy renderer ``art_<uuid>``, WebVTT
+    ``sub_<uuid>`` and Generation ``generated_attempt_<uuid>`` final names are
+    self-identifying and can therefore be recovered after hard process loss.
+    Arbitrary-path ``timeline.assemble`` is recovered only through its durable
+    publication marker, never by filename guess.
     """
 
     project = store.load_project(project_id)
@@ -590,8 +591,8 @@ def recover_interrupted_project_jobs(
         manager.project_store.load_project(project_id)
 
         # Arbitrary-path timeline publication is identified only by a durable marker.
-        # Current source/WebVTT/Generation names are self-identifying and can be
-        # quarantined directly when bytes exist without owning Project metadata.
+        # Current source/legacy-art/WebVTT/Generation names are self-identifying and
+        # can be quarantined directly when bytes exist without owning Project metadata.
         recover_managed_publications(manager.project_store, project_id)
         _quarantine_unregistered_managed_outputs(manager.project_store, project_id)
 
