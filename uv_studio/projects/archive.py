@@ -173,12 +173,13 @@ def _reject_unpublished_managed_media(
             )
 
 
-def _reject_incomplete_generation_publications(
+def _generation_digest_authority(
     document: ProjectDocument,
     project_dir: Path,
-) -> None:
-    """Reject generated artifacts whose durable Job has not reached matching success."""
+) -> dict[str, tuple[int, str]]:
+    """Validate Generation authority and return expected digest for exact ZIP capture."""
 
+    expected_digests: dict[str, tuple[int, str]] = {}
     for artifact in document.artifacts:
         generation = artifact.metadata.get("generation")
         if not isinstance(generation, dict):
@@ -219,6 +220,58 @@ def _reject_incomplete_generation_publications(
                 "Generation materialization is not durably complete; restart UV Studio "
                 f"to reconcile before export: {artifact.id}"
             )
+
+        request = raw.get("request")
+        mapping = request.get("execution_mapping") if isinstance(request, dict) else None
+        contract = request.get("generation_contract") if isinstance(request, dict) else None
+        authority = {
+            "job_id": raw.get("job_id"),
+            "attempt_id": attempt_id,
+            "model_id": request.get("model_id") if isinstance(request, dict) else None,
+            "capability_id": mapping.get("capability_id") if isinstance(mapping, dict) else None,
+            "offer_id": mapping.get("offer_id") if isinstance(mapping, dict) else None,
+            "adapter_id": mapping.get("adapter_id") if isinstance(mapping, dict) else None,
+            "request_digest": raw.get("request_digest"),
+        }
+        for field_name, expected_value in authority.items():
+            if not isinstance(expected_value, str) or not expected_value:
+                raise ProjectArchiveError(
+                    f"Generation Job lost {field_name} authority for artifact: {artifact.id}"
+                )
+            if generation.get(field_name) != expected_value:
+                raise ProjectArchiveError(
+                    f"Generation artifact {field_name} disagrees with durable Job: {artifact.id}"
+                )
+        if not isinstance(contract, dict) or generation.get("contract") != contract:
+            raise ProjectArchiveError(
+                f"Generation artifact contract disagrees with durable Job: {artifact.id}"
+            )
+
+        expected_name = f"generated_{attempt_id}"
+        artifact_name = PurePosixPath(artifact.path).name
+        if not (artifact_name == expected_name or artifact_name.startswith(expected_name + ".")):
+            raise ProjectArchiveError(
+                f"Generation artifact path disagrees with durable attempt: {artifact.id}"
+            )
+        size_bytes = artifact.metadata.get("size_bytes")
+        sha256 = artifact.metadata.get("sha256")
+        if (
+            isinstance(size_bytes, bool)
+            or not isinstance(size_bytes, int)
+            or size_bytes <= 0
+            or not isinstance(sha256, str)
+            or len(sha256) != 64
+            or any(ch not in "0123456789abcdef" for ch in sha256)
+        ):
+            raise ProjectArchiveError(
+                f"Generation artifact has invalid size/digest authority: {artifact.id}"
+            )
+        if artifact.path in expected_digests:
+            raise ProjectArchiveError(
+                f"Multiple Generation artifacts claim one output path: {artifact.path}"
+            )
+        expected_digests[artifact.path] = (size_bytes, sha256)
+    return expected_digests
 
 
 def _write_zip_file_and_record(
@@ -271,7 +324,7 @@ def export_project(
         directories, files = _iter_project_entries(project_dir)
         _reject_interrupted_publications(store, project_id)
         _reject_unpublished_managed_media(document, project_dir, files)
-        _reject_incomplete_generation_publications(document, project_dir)
+        generation_digests = _generation_digest_authority(document, project_dir)
         created_at = utc_now_iso()
 
         temp_path = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
@@ -285,10 +338,19 @@ def export_project(
                 _write_zip_directory(archive, PROJECT_PREFIX)
                 for directory in directories:
                     _write_zip_directory(archive, _archive_relative_name(project_dir, directory))
-                file_records = [
-                    _write_zip_file_and_record(archive, project_dir, path)
-                    for path in files
-                ]
+                file_records: list[dict[str, Any]] = []
+                for path in files:
+                    record = _write_zip_file_and_record(archive, project_dir, path)
+                    relative = path.relative_to(project_dir).as_posix()
+                    expected = generation_digests.get(relative)
+                    if expected is not None and (
+                        record["size"] != expected[0] or record["sha256"] != expected[1]
+                    ):
+                        raise ProjectArchiveError(
+                            "Generation output bytes do not match persisted size/digest: "
+                            f"{relative}"
+                        )
+                    file_records.append(record)
                 manifest = {
                     "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
                     "project_id": document.project_id,
