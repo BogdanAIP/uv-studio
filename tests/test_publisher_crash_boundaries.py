@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -181,17 +182,28 @@ class PublisherCrashBoundaryTests(unittest.TestCase):
                 relative_path,
                 allowed_roots=("artifacts",),
             )
-            output.write_bytes(b"generation-crash-boundary")
+            output_bytes = b"generation-crash-boundary"
+            output.write_bytes(output_bytes)
+            mapping = request["execution_mapping"]
             artifact = ProjectReference(
                 id="artifact_generation_crash_boundary",
                 kind="image",
                 path=relative_path,
                 metadata={
+                    "size_bytes": len(output_bytes),
+                    "sha256": hashlib.sha256(output_bytes).hexdigest(),
                     "generation": {
                         "job_id": job.job_id,
                         "attempt_id": attempt.attempt_id,
-                        "model_id": "uv.image.standard",
-                    }
+                        "model_id": request["model_id"],
+                        "capability_id": mapping["capability_id"],
+                        "offer_id": mapping["offer_id"],
+                        "adapter_id": mapping["adapter_id"],
+                        "request_digest": digest,
+                        "contract": request["generation_contract"],
+                        "lineage": None,
+                    },
+                    "executor": {"test_fixture": True},
                 },
             )
             current = store.load_project(project.project_id)
