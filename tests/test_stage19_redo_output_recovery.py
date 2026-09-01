@@ -128,10 +128,9 @@ class Stage19RedoOutputRecoveryTests(unittest.TestCase):
         self._undo_take_and_output()
 
         archive_path = Path(self.tmp.name) / "redo-owned.uvproj.zip"
-        self.assertEqual(
-            export_project(self.store, self.project.project_id, archive_path),
-            archive_path,
-        )
+        exported = export_project(self.store, self.project.project_id, archive_path)
+        self.assertTrue(exported.is_file())
+        self.assertTrue(exported.samefile(archive_path))
 
         imported_store = ProjectStore(Path(self.tmp.name) / "imported-projects")
         imported = import_project(imported_store, archive_path)
