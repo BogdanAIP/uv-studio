@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-01
@@ -9,77 +9,49 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is frozen in `review` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The previous frozen review head `e31f42afe652d7238be99388084a81684626fe08` passed post-Ready CI #4265 **5/5**, but its fresh ordinary-ChatGPT semantic review returned three `CURRENT` findings. All three were independently confirmed, PR #89 returned to Draft, and that review/freeze evidence became stale for merge authority.
+Frozen head `a6324ec9f4113f62e82e19004a1ab82b276f8b3a` passed authoritative post-Ready CI #4298 **5/5**, but a completely fresh ordinary-ChatGPT semantic review returned two new `CURRENT` P1 findings. Both were independently confirmed against the exact frozen code. The review/freeze/CI evidence is therefore stale for merge authority and material repair is authorized only after this `review -> draft` transition.
 
-The three findings are now materially repaired. Exact Draft repair head `1ad82d4c0475eb4fc05ad79ab45ede375601538d` passed authoritative CI #4293 (`33501919168`) **5/5**: `development-context`, both Ubuntu/Windows bootstrap jobs and both Ubuntu/Windows app-baseline jobs all succeeded, including API integration, pinned real-media verification, frontend lint/audit/build and browser Product Truth. The three corresponding GitHub review threads were answered with exact repair/test/CI evidence and resolved before this context-only `draft -> review` freeze.
+## Confirmed fresh-review findings
 
-## Fresh-review repair now frozen
+### P1 — historical older-attempt Generation artifact can remain permanently unarchivable
 
-### P1 — durable Generation artifact vs terminal Job state
+The accepted BASE runtime could publish/register a Generation artifact, then fail before Take/Job success, mark that attempt `FAILED`, and permit a later retry. That creates a supported historical state where a durable artifact belongs to an older attempt while a newer attempt is current.
 
-Generation Job start/succeed/fail/cancel transitions use the same cross-runtime `ProjectTaskRecordStore.project_lock(project_id)` as final publication and archive export. A second runtime cannot interleave a terminal Job mutation after final publication has entered the consequence-bearing fence.
+Current recovery scopes artifact discovery to `job.current_attempt`, so it cannot reconcile the older registered artifact. Current archive validation iterates every Generation ProjectReference but requires each one to match `attempts[-1]`, so the older durable reference can never become portable. The repair must reconcile and validate Generation authority by the artifact's own attempt identity rather than assuming every artifact belongs to the current attempt.
 
-Once the current attempt has a durable Generation ProjectReference, `fail()` and `cancel()` refuse to terminalize it until reconciliation, and retry of a failed current attempt is refused while durable artifact evidence remains pending recovery. Startup reconciliation handles `RUNNING` and can also repair a legacy current-attempt `FAILED`/`CANCELLED` split left by an older implementation without replaying provider execution.
+### P1 — SUCCEEDED Job can outlive its Production Take after ordinary Undo
 
-### P1 — exact Generation byte/provenance verification
+Successful Generation persists artifact ProjectReference, Production Take, and Job success in separate durable operations. Project-level Undo can legitimately undo the `production.register_take` transaction while durable Generation Job provenance remains outside user Undo history.
 
-Before Take creation/reuse or Job success, Generation recovery verifies the durable Job/Attempt/model/capability/offer/adapter/request digest/contract, attempt-derived canonical path, persisted positive `size_bytes`, persisted SHA-256 and the exact live regular-file size/SHA-256.
-
-Archive export independently validates coherent succeeded Job/current-attempt/output/Take/provenance and compares persisted Generation size/SHA-256 with the size/SHA-256 computed from the exact bytes streamed into the ZIP. Changed, truncated or substituted generated media therefore fails closed.
-
-### P2 — source final-move crash recovery
-
-Startup managed-output reconciliation scans `sources/` as well as `artifacts/` and `exports/`. Unregistered self-identifying `sources/src_<uuid>.*` bytes left by hard process loss after source final move are moved to quarantine at the Project Store root; registered source references are preserved. Archive remains fail-closed before reconciliation and can succeed afterward.
-
-The source boundary itself is unchanged: request streaming/staging remains outside the canonical project tree, while final move, FFprobe validation, portable metadata derivation and source registration remain inside the shared project fence.
-
-## Deterministic regression evidence
-
-`tests/test_stage19_fresh_review_repairs.py` covers the exact review failure boundaries:
-
-1. `GenerationService.run()` with simulated Take persistence failure after durable artifact registration remains recoverable and reconciles to the same artifact/Take/Job success without provider replay;
-2. a legacy current-attempt terminal split with durable artifact blocks retry until reconciliation and then recovers to success;
-3. cross-runtime cancel blocks behind the Generation publication fence and cannot split a successful publication;
-4. same-size changed Generation bytes are rejected by startup recovery;
-5. mismatched persisted Generation request provenance is rejected;
-6. changed bytes of an already succeeded Generation artifact are rejected during archive export;
-7. an unregistered `sources/src_<uuid>` crash orphan blocks archive before recovery, is quarantined on restart and no longer blocks archive afterward.
-
-Existing artifact-only and artifact+Take recovery fixtures carry the same durable size/digest/provenance shape written by `GenerationService`.
+Current archive validation only checks that the succeeded attempt contains a non-empty `take_id`; it does not resolve current Production Semantics. This can archive a Job claiming a Take that is absent from current Production authority. The repair must validate the actual Take/Shot/reference relationship and preserve explicit Undo/Redo semantics rather than treating the Job's string field alone as current Take authority.
 
 ## Previously repaired Stage-19 behavior retained
 
-The frozen repair preserves:
+The new repair must preserve all earlier accepted behavior:
 
 - canonical Project schema v2 with schema-v1 project/archive readability and exact historical recipe identity;
-- fresh `ProjectUnitOfWork.commit()` rejection of raw schema-v1 `project.json`, while historical schema-v1 undo/redo migrates only for validation and restores exact recorded bytes;
-- archive raw-schema consistency, exact streamed ZIP hashing, technical lock-file exclusion and symlink fail-closed behavior;
-- arbitrary-path `timeline.assemble` durable publication markers and crash quarantine;
-- WebVTT `sub_<uuid>` orphan quarantine;
+- fresh `ProjectUnitOfWork.commit()` rejection of raw schema-v1 `project.json`, with historical schema-v1 undo/redo migrated only for validation and restored as exact bytes;
+- coherent cross-runtime Generation Job/publication fencing;
+- exact Generation byte/digest/provenance verification and no provider replay during restart reconciliation;
+- source `src_<uuid>` crash-orphan quarantine;
+- arbitrary-path `timeline.assemble` durable publication markers;
+- WebVTT `sub_<uuid>` orphan handling;
+- archive raw-schema consistency, exact streamed ZIP hashing, technical lock-file exception and symlink fail-closed behavior;
 - Product Truth immediate-next-action behavior and Production Undo/Redo refresh repair.
 
 ## Verification history
 
-- Material repair commits: `11563cac943402c3c3a8df1475083b1eb94ede4e`, `27a672121db2144efc39fe416451f9f6f8dd03d9`, `497f30230fcd061f99d83522c6be7fdd06361776`.
-- Focused fresh-review regressions: `c93bac4a02889083d501148fff915fbb957a4c1f`.
-- Recovery fixture alignment through `4948ea7d5b8545874e887c2559677092a17a4397`.
-- Final Draft runtime/test/docs head `1ad82d4c0475eb4fc05ad79ab45ede375601538d`: CI #4293 (`33501919168`) **5/5 SUCCESS**.
-- All inline review threads resolved before refreeze.
+- Frozen head `e31f42afe652d7238be99388084a81684626fe08`: post-Ready CI #4265 **5/5**, then three confirmed findings.
+- Draft repair head `1ad82d4c0475eb4fc05ad79ab45ede375601538d`: CI #4293 **5/5**.
+- Frozen head `a6324ec9f4113f62e82e19004a1ab82b276f8b3a`: post-Ready CI #4298 **5/5**, then fresh review returned the two confirmed P1 findings above.
 
-## Current review gate
+## Current repair gate
 
-Lifecycle is now `review`; no further material/runtime/test edits are authorized on this frozen branch unless a later confirmed finding first returns the slice to `draft`.
+Lifecycle is `draft`. Next required work is bounded to the two confirmed Generation authority defects and focused regressions for their exact reachable states. After material repair and documentation synchronization, require exact Draft-head CI **5/5**, resolve any corresponding review threads with evidence, perform one context-only `draft -> review` freeze, return PR #89 to Ready, require post-Ready exact-head CI **5/5**, and run another completely fresh semantic review under BASE code-review v1.0.
 
-Next required sequence:
-
-1. return PR #89 from Draft to Ready without changing this frozen head;
-2. require authoritative post-Ready exact-head CI **5/5**;
-3. re-resolve live base/head identity and verify zero unresolved review threads;
-4. run a completely fresh ordinary-ChatGPT semantic review under BASE `.agents/skills/code-review/SKILL.md` v1.0.
-
-Merge remains prohibited until a later `CURRENT` review reports zero findings and final base/head/CI/thread identity is re-resolved. Lifecycle closure remains a separate follow-up after merge.
+Merge remains prohibited until a later `CURRENT` review reports zero findings and final live base/head/CI/thread identity is re-resolved.
 
 ## Out of scope
 
