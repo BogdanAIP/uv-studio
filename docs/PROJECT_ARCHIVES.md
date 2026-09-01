@@ -46,37 +46,50 @@ This lets import verify the entire portable recovery snapshot before it becomes 
 
 ## Export contract
 
-Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence freezes canonical Project metadata and every publisher that participates in that authority while export samples the raw schema and enumerates the project filesystem.
+Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence freezes canonical Project metadata and every participating publisher while export samples the raw schema and enumerates the project filesystem.
 
-For historical media publishers that still materialize unique UUID-named UV-owned bytes before their Project-reference transaction acquires the fence, the archive boundary is additionally fail-closed. A regular file in a managed media root (`sources/`, `assets/`, `artifacts/` or `exports/`) whose UV-owned UUID name starts with `src_`, `art_` or `aud_` must already be represented by the frozen Project `sources`/`artifacts` references. The same rule catches hidden in-project upload names derived from those identities. If such a file exists without its reference, export stops instead of freezing an ambiguous publication state; after the publisher completes registration or recovery/cleanup, a retry can export the complete state. Ordinary unregistered project files with non-managed names remain portable and are not reclassified as transient content.
+The live fence is a concurrency boundary, not a crash transaction. Current publication recovery therefore adds fail-closed durable evidence for states that can survive process loss.
 
-That basename check is only a historical compatibility fallback. Current publishers must not depend on their filename happening to match the fallback. Long-running or provider-driven work is staged at the Project Store root, outside every canonical project directory, and the final canonical byte publication plus the metadata that owns those bytes occurs inside the shared project fence.
+Historical UV-owned media names remain a compatibility fallback. A regular file in a managed media root (`sources/`, `assets/`, `artifacts/` or `exports/`) whose UV-owned name starts with `src_`, `art_` or `aud_` must already be represented by the frozen Project `sources`/`artifacts` references. Current self-identifying WebVTT `sub_<uuid>` and Generation `generated_attempt_<uuid>` outputs follow the same fail-closed archive rule when they exist without a ProjectReference. Ordinary unregistered project files with unrelated names remain portable and are not reclassified as transient content.
 
-For every accepted portable file, export computes size and SHA-256 while streaming that exact byte sequence directly into the ZIP. It does not hash one live read and later perform a second live read for ZIP capture. A concurrent non-authoritative file change can therefore either cause export to fail while opening/capturing the file or produce a manifest record for exactly the bytes stored in the ZIP; it cannot produce the former two-read hash/ZIP mismatch.
+`timeline.assemble` needs a separate mechanism because its public contract permits an arbitrary caller-selected output name. Rendering remains staged at the Project Store root. Inside the final shared project fence, immediately before the canonical `os.replace`, the publisher writes a durable `tasks/pub_<uuid>.json` managed-publication marker containing the exact canonical output path and expected reference identity. Normal completion removes the marker only after the matching ProjectReference is durable. If export acquires the project fence and any validated publication marker remains, export fails closed instead of snapshotting the project. Startup reconciliation clears a stale marker for an already registered output or moves an unregistered interrupted output outside the canonical project tree before clearing the marker.
 
-Source-media upload follows the snapshot boundary proactively. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after the upload is complete does source publication acquire the shared project fence; the final move into `sources/`, media probe, canonical source-reference registration and failure cleanup remain inside that fence. Export therefore observes either the complete pre-publication project or the complete registered source state, never an in-progress `.upload` file or a final source file whose `project.json` reference is still waiting to commit.
+WebVTT subtitle export renders to staging outside the project tree and publishes `artifacts/sub_<uuid>.vtt` under the shared fence. If ordinary exception cleanup can prove metadata did not commit, canonical bytes are removed immediately. If the process dies after the final move, startup reconciliation identifies an unregistered `sub_<uuid>` output, moves it to a quarantine file at the Project Store root and leaves the canonical project free of orphan subtitle bytes. Export also rejects such an unreconciled self-identifying orphan.
 
-`timeline.assemble` also uses proactive staging because its public contract permits an arbitrary caller-selected canonical output path such as `artifacts/joined.mp4`, so UUID-basename recovery detection cannot identify an incomplete publication. Its concat manifest and completed FFmpeg output live at the Project Store root, outside every canonical project directory. After FFmpeg succeeds, assembly acquires the shared project fence, revalidates that the requested canonical destination is still absent, atomically moves the staged bytes into that destination, and registers the separately allocated `art_<uuid>` ProjectReference before releasing the fence. Export can therefore observe the complete state before assembly publication or the complete registered state after it, but not an arbitrary-named output whose reference is still waiting to commit.
+Named Generation stages provider output outside every canonical project directory. The executor receives the staging `Path`, not `artifacts/generated_<attempt>.*`. After a non-empty regular output is validated, Generation acquires the shared project fence, revalidates the durable Job state and final path, then publishes bytes, Project artifact metadata, Take state and Job success through their existing authorities.
 
-WebVTT subtitle export follows the same rule for canonical `artifacts/sub_<uuid>.vtt`. The complete text is rendered and flushed to a staging file at the Project Store root. Only then does publication enter the shared project fence, revalidate the final destination, atomically move the bytes to `artifacts/` and append the matching subtitle `ProjectReference`. Failure cleanup removes canonical bytes when metadata definitely did not commit, while preserving bytes if durable metadata cannot be read after a possible commit.
+Generation restart recovery explicitly handles the durable intermediate states that can remain if the process dies inside that final sequence:
 
-Named Generation also stages provider output outside every canonical project directory. The executor receives the staging `Path`, not `artifacts/generated_<attempt>.*`. After a non-empty regular output is validated, Generation acquires the shared project fence, revalidates the durable Job state and final path, atomically publishes the bytes, registers the artifact, registers the Take and records Job success before releasing the fence. A concurrent archive therefore cannot capture generated bytes without their artifact/Take provenance. The normal product installation remains fail-closed with no configured Generation executor; the opt-in browser Product Truth executor writes only to the supplied `Path`, so the staging seam is the same authority future provider transports must honor.
+- bytes without ProjectReference: the self-identifying generated output is moved out of the project tree and the running Job is failed/retryable; no provider work is replayed;
+- durable artifact ProjectReference but no Take: recovery validates the exact artifact provenance/bytes, creates the missing Take through the normal Production command and marks the same Job/Attempt succeeded;
+- durable artifact + matching Take while Job is still running: recovery reuses that Take and marks the same Job/Attempt succeeded;
+- already succeeded Job: no materialization is replayed.
+
+Archive export rejects generation artifact provenance unless the matching durable Job is already `succeeded` with the same attempt, output reference and Take identity. This prevents an artifact or visible Take from being silently archived while its Job still claims `RUNNING`/failed outcome.
+
+Before publication reconciliation, startup invokes ProjectUnitOfWork history recovery. A crash during an artifact/Take transaction is therefore resolved to its exact durable UOW state before Generation decides whether to complete locally or fail the abandoned Job.
+
+Source-media upload keeps its existing proactive boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after upload completion does source publication acquire the shared project fence; final move, FFprobe validation, portable metadata derivation, source registration and ordinary failure cleanup remain inside that fence. The historical `src_` archive fallback stays fail-closed for a source file that survives without its ProjectReference.
+
+For every accepted portable file, export computes size and SHA-256 while streaming that exact byte sequence directly into the ZIP. It does not hash one live read and later perform a second live read for ZIP capture. A concurrent non-authoritative file change can therefore either cause export to fail while opening/capturing the file or produce a manifest record for exactly the bytes stored in the ZIP; it cannot produce a two-read hash/ZIP mismatch.
 
 Export:
 
 1. checks the lexical technical lock path and fails closed if it is a symlink;
 2. acquires the shared project mutation fence;
-3. loads and validates the canonical `project.json` and samples its raw schema;
-4. rejects symlinks/special filesystem entries during project enumeration;
-5. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
-6. rejects an enumerated historical UV-owned `src_`/`art_`/`aud_` managed-media publication that is absent from the frozen Project references;
-7. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes;
-8. writes the manifest describing those captured bytes;
-9. atomically replaces the requested archive destination when complete.
+3. loads and validates canonical `project.json` and samples its raw schema;
+4. enumerates project entries and rejects symlinks/special filesystem entries;
+5. rejects any validated pending `pub_<uuid>` managed-publication marker;
+6. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
+7. rejects an unregistered self-identifying UV publication (`src_`, `art_`, `aud_`, `sub_`, `generated_attempt_`);
+8. rejects a Generation artifact whose durable Job does not match a completed success outcome;
+9. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes;
+10. writes the manifest describing those captured bytes;
+11. atomically replaces the requested archive destination when complete.
 
 The destination may not be inside the project being archived. That prevents a backup from recursively including itself.
 
-The project fence is a snapshot-consistency boundary, not archive payload. Export never relies on the lock file as recoverable state and never weakens the general symlink rejection rule to omit it. An export rejected because a historical managed publication is incomplete is not a corrupt backup: no destination archive is committed, and the caller may retry after the publisher finishes or recovery resolves the orphan.
+An export rejected because publication/recovery is incomplete is not a corrupt backup: no destination archive is committed. Restart/reconciliation resolves current `timeline.assemble`, WebVTT and Generation crash states without replaying renderer/provider work; the caller can retry export after reconciliation completes.
 
 ## Import contract
 
@@ -92,11 +105,11 @@ Import is fail-closed:
 8. validate `project_id` before using it as a path component;
 9. extract into a temporary directory beneath the canonical Project Store root;
 10. verify every extracted size and SHA-256;
-11. parse/migrate/validate staged `project.json`;
-12. require manifest/project identity and schema to agree;
+11. compare manifest `project_schema_version` with the raw staged `project.json` schema before migration;
+12. parse/migrate/validate staged `project.json` and require project identity to agree;
 13. atomically rename the validated staged directory into the canonical store.
 
-A duplicate `project_id` fails. Import never silently replaces an existing project.
+A duplicate `project_id` fails. Import never silently replaces an existing project. Historical schema-v1 project bytes remain exact archive authority on import/re-export while the in-memory Project view migrates to the current schema.
 
 If any validation/extraction/final commit fails, no partial canonical project is left behind.
 
@@ -154,6 +167,6 @@ Automatic/scheduled backups are intentionally a separate future policy. The arch
 
 ## Recovery rule
 
-A portable archive is a complete project-level recovery unit for canonical recoverable project state. Runtime coordination artifacts such as the ordinary technical task-record lock file are recreated by the Project Store and are not part of the portable recovery payload. Restore into a Project Store that does not already contain the same `project_id`.
+A portable archive is a complete project-level recovery unit for canonical recoverable project state. Runtime coordination artifacts such as the ordinary technical lock file are recreated by the Project Store and are not part of the portable recovery payload. Pending publication markers are not valid archive state: export refuses them until restart reconciliation has produced either registered canonical state or quarantined non-canonical evidence.
 
 Conflict/clone/replace policies, if later added, must be explicit operations rather than weakening this fail-closed import contract.
