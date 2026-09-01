@@ -3,7 +3,7 @@
 In-process FastAPI background tasks are deliberately not treated as durable workers.
 If the process exits, persisted queued/running Jobs are reconciled on the next
 application startup. Provider work is never replayed automatically. Canonical
-output bytes that were published without owning Project metadata are moved out of
+managed output bytes that were published without owning metadata are moved out of
 the project tree before abandoned Jobs are failed; a Generation attempt whose
 artifact metadata is already durable is completed from canonical evidence instead.
 """
@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
 from dataclasses import replace
 from pathlib import Path
 
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.models import ProjectDocument, ProjectReference, utc_now_iso
+from uv_studio.projects.publication import recover_managed_publications
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 from uv_studio.projects.transactions import ProjectUnitOfWork
 
@@ -42,6 +44,9 @@ INTERRUPTED_RUNNING_ERROR = (
 )
 
 _MANAGED_OUTPUT_ROOTS = ("artifacts", "exports")
+_CRASH_IDENTIFIABLE_OUTPUT_NAME = re.compile(
+    r"^(?:sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
+)
 
 
 def _persist(manager: GenerationJobManager, job: GenerationJob) -> GenerationJob:
@@ -59,13 +64,13 @@ def _quarantine_unregistered_managed_outputs(
     store: ProjectStore,
     project_id: str,
 ) -> tuple[Path, ...]:
-    """Move canonical output bytes lacking Project identity out of the project tree.
+    """Move crash-identifiable unregistered publisher bytes out of the project tree.
 
-    ``artifacts/`` and ``exports/`` are UV-owned output roots. A process crash can
-    release the OS fence after ``os.replace`` but before metadata publication. Such
-    bytes are not safe canonical state, but deleting them would discard potentially
-    valuable output. Recovery therefore moves them to the Project Store root where
-    they are preserved for diagnostics/manual salvage and cannot enter an archive.
+    Ordinary unregistered project files remain portable for compatibility. Only
+    current publishers with self-identifying final names (WebVTT ``sub_<uuid>`` and
+    Generation ``generated_attempt_<uuid>``) are inferred from the filesystem.
+    Arbitrary-path ``timeline.assemble`` is recovered only through its durable
+    publication marker, never by guessing from the filename.
     """
 
     project = store.load_project(project_id)
@@ -84,7 +89,7 @@ def _quarantine_unregistered_managed_outputs(
             if not path.is_file():
                 continue
             relative = path.relative_to(project_dir).as_posix()
-            if relative in registered:
+            if relative in registered or _CRASH_IDENTIFIABLE_OUTPUT_NAME.match(path.name) is None:
                 continue
             destination = store.root / (
                 f".uv-recovered-orphan-{project_id}-{uuid.uuid4().hex}-{path.name}"
@@ -243,6 +248,11 @@ def recover_interrupted_project_jobs(
         # as durable truth and then later has that UOW roll it back underneath a Job.
         ProjectUnitOfWork(manager.project_store).history(project_id)
         manager.project_store.load_project(project_id)
+
+        # Arbitrary-path timeline publication is identified only by a durable marker
+        # written immediately before canonical os.replace. Current self-identifying
+        # WebVTT/Generation names can be reconciled directly from the filesystem.
+        recover_managed_publications(manager.project_store, project_id)
         _quarantine_unregistered_managed_outputs(manager.project_store, project_id)
 
         # Complete any consequence-bearing Generation materialization that crossed
