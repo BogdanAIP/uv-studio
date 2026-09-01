@@ -62,6 +62,7 @@
       "tests/test_generation_service.py",
       "tests/test_generation_recovery.py",
       "tests/test_stage19_fresh_review_repairs.py",
+      "tests/test_stage19_art_orphan_recovery.py",
       "tests_api/test_projects_api.py",
       "tests_api/test_project_media_api.py",
       "e2e/test_named_generation_outcome.py",
