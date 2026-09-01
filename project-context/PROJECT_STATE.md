@@ -33,7 +33,9 @@ Exact material/test head `2a20a19f4a51e5ab4c59ca2d8f1ce02da6af02c5` passed CI #4
 
 ## Current Draft gate
 
-This context synchronization commit creates a later Draft head, so CI #4392 is material repair evidence but not the final Draft-head gate. Required sequence:
+Exact synchronized Draft head: `2b69340bcc0f0232299a190c91047c9bf23e4b49`.
+
+CI #4392 is accepted material repair evidence but is stale for the final context-synchronized gate. Required sequence:
 
 1. exact synchronized Draft-head CI **5/5**;
 2. reply to and resolve the current inline P2 with concrete repair/CI evidence;
