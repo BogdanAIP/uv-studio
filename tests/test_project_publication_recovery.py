@@ -109,6 +109,43 @@ class ManagedPublicationRecoveryTests(unittest.TestCase):
         with zipfile.ZipFile(archive, "r") as zipped:
             self.assertIn(f"project/{relative_path}", zipped.namelist())
 
+    def test_recovery_quarantines_bytes_when_same_path_has_different_reference(self) -> None:
+        relative_path = "artifacts/reused-dangling-path.mp4"
+        old_artifact = ProjectReference(
+            id="art_publication_old_owner",
+            kind="video",
+            path=relative_path,
+            metadata={"capability_id": "timeline.assemble", "fixture": "dangling"},
+        )
+        project = self.store.load_project(self.project.project_id)
+        self.store.update_project(
+            self.project.project_id,
+            artifacts=(*project.artifacts, old_artifact),
+        )
+
+        publication_id = self._begin(
+            relative_path,
+            reference_id="art_publication_new_owner",
+        )
+        output = self.store.resolve_project_file(
+            self.project.project_id,
+            relative_path,
+            allowed_roots=("artifacts",),
+        )
+        output.write_bytes(b"new-crash-left-bytes")
+
+        quarantined = recover_managed_publications(self.store, self.project.project_id)
+        self.assertEqual(len(quarantined), 1)
+        self.assertEqual(quarantined[0].read_bytes(), b"new-crash-left-bytes")
+        self.assertFalse(output.exists())
+        self.assertEqual(pending_managed_publications(self.store, self.project.project_id), ())
+        durable = self.store.load_project(self.project.project_id)
+        self.assertEqual(
+            [(item.id, item.path) for item in durable.artifacts],
+            [(old_artifact.id, relative_path)],
+        )
+        self.assertIn(publication_id, quarantined[0].name)
+
     def test_ordinary_unregistered_artifact_remains_portable(self) -> None:
         ordinary = self.project_dir / "artifacts" / "preview" / "frame.txt"
         ordinary.parent.mkdir(parents=True, exist_ok=True)
