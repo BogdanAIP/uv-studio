@@ -72,6 +72,14 @@ History is project-owned and portable. Undo/redo verifies that current canonical
 
 Timeline commands, source-media registration and Studio export registration use this authority. New semantic production commands must commit all related production/reference/timeline changes in one unit of work rather than composing independent stores.
 
+## Media publication and recovery fencing
+
+Canonical media bytes and their Project identities form one recoverable publication state even though large media bytes are not copied into transaction journals. Current publishers that may perform long-running work prepare incomplete or provider-produced bytes at the Project Store root, outside every canonical project directory. Only the short consequence-bearing publication step enters the shared cross-runtime project fence, moves complete bytes to the canonical project-relative path and registers the matching Project/Production/Job metadata before releasing that fence.
+
+Source upload, `timeline.assemble`, WebVTT subtitle export and named Generation use this proactive staging pattern. A concurrent portable archive therefore observes either the complete pre-publication project or the complete registered publication; it must not recover canonical bytes without the identity/provenance that makes those bytes part of the project.
+
+The archive-side UUID-name detector for unregistered `src_` / `art_` / `aud_` files is a fail-closed compatibility fallback for historical publishers, not the authority for current publication. Current publishers must participate in the shared staging/fence protocol even when their canonical filenames use other conventions such as `sub_`, `generated_` or caller-selected output names.
+
 ## Compatibility debt
 
 Generic compatibility APIs still accept explicit recipe identity and may expose a compatibility `recipe_id` field, but they derive it from the schema-v2 compatibility boundary. Lower Project Store creation no longer supplies an implicit `general_video` default. Modern Studio creation uses the dedicated Production Direction path.
