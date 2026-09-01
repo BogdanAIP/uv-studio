@@ -170,8 +170,10 @@ def recover_managed_publications(
 ) -> tuple[Path, ...]:
     """Reconcile crash-left arbitrary-path publication markers without data loss.
 
-    A registered path is already canonical truth, so only its stale marker is
-    removed. An unregistered path is moved outside the project tree rather than
+    A publication is already canonical only when its registered ProjectReference
+    matches the marker's path and, when present, the marker's expected reference
+    identity. A path owned by a different reference must not claim crash-left bytes.
+    Unregistered/interrupted bytes are moved outside the project tree rather than
     deleted. A marker with no materialized path is simply cleared. No provider or
     renderer is replayed.
     """
@@ -180,17 +182,25 @@ def recover_managed_publications(
     quarantined: list[Path] = []
     with records.project_lock(project_id):
         project = store.load_project(project_id)
-        registered = {item.path for item in (*project.sources, *project.artifacts)}
+        registered_by_path: dict[str, set[str]] = {}
+        for item in (*project.sources, *project.artifacts):
+            registered_by_path.setdefault(item.path, set()).add(item.id)
+
         for marker in pending_managed_publications(store, project_id):
             publication_id = marker["publication_id"]
             relative_path = marker["relative_path"]
+            expected_reference_id = marker.get("reference_id")
+            registered_ids = registered_by_path.get(relative_path, set())
+            publication_registered = bool(registered_ids) and (
+                expected_reference_id is None or expected_reference_id in registered_ids
+            )
             root = PurePosixPath(relative_path).parts[0]
             output = store.resolve_project_file(
                 project_id,
                 relative_path,
                 allowed_roots=(root,),
             )
-            if relative_path not in registered and (output.exists() or output.is_symlink()):
+            if not publication_registered and (output.exists() or output.is_symlink()):
                 if output.is_symlink() or not output.is_file():
                     raise ManagedPublicationError(
                         f"interrupted publication path is not a regular file: {relative_path!r}"
