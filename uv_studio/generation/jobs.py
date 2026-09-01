@@ -382,13 +382,9 @@ class GenerationJobManager:
                 raise GenerationJobConflict(
                     f"job {job.job_id!r} cannot start from status {job.status.value!r}"
                 )
-            if (
-                job.status is GenerationStatus.FAILED
-                and job.current_attempt is not None
-                and self._attempt_has_durable_artifact(job, job.current_attempt.attempt_id)
-            ):
+            if job.status is GenerationStatus.FAILED and self._has_unreconciled_durable_artifact(job):
                 raise GenerationJobConflict(
-                    "failed generation attempt already has a durable artifact pending recovery"
+                    "generation job has a durable artifact pending recovery"
                 )
             attempt = GenerationExecutionAttempt(
                 attempt_id=f"attempt_{uuid.uuid4().hex}",
@@ -445,9 +441,9 @@ class GenerationJobManager:
         with self.records.project_lock(project_id):
             job = self._read_unlocked(project_id, job_id)
             attempt = self._require_running_attempt(job, attempt_id)
-            if self._attempt_has_durable_artifact(job, attempt_id):
+            if self._has_unreconciled_durable_artifact(job):
                 raise GenerationJobConflict(
-                    "generation attempt has a durable artifact and must be reconciled before failure"
+                    "generation job has a durable artifact and must be reconciled before failure"
                 )
             completed = replace(
                 attempt,
@@ -477,9 +473,9 @@ class GenerationJobManager:
                 attempt = job.current_attempt
                 if attempt is None:  # pragma: no cover - dataclass invariant
                     raise GenerationJobError("running job lost its current attempt")
-                if self._attempt_has_durable_artifact(job, attempt.attempt_id):
+                if self._has_unreconciled_durable_artifact(job):
                     raise GenerationJobConflict(
-                        "generation attempt has a durable artifact and must be reconciled before cancellation"
+                        "generation job has a durable artifact and must be reconciled before cancellation"
                     )
                 ended_at = utc_now_iso()
                 cancelled = replace(
@@ -526,6 +522,21 @@ class GenerationJobManager:
                 generation.get("job_id") == job.job_id
                 and generation.get("attempt_id") == attempt_id
             ):
+                return True
+        return False
+
+    def _has_unreconciled_durable_artifact(self, job: GenerationJob) -> bool:
+        """Guard retries/terminal transitions across every historical attempt."""
+
+        attempts = {attempt.attempt_id: attempt for attempt in job.attempts}
+        project = self.project_store.load_project(job.project_id)
+        for artifact in project.artifacts:
+            generation = artifact.metadata.get("generation")
+            if not isinstance(generation, Mapping) or generation.get("job_id") != job.job_id:
+                continue
+            attempt_id = generation.get("attempt_id")
+            attempt = attempts.get(attempt_id) if isinstance(attempt_id, str) else None
+            if attempt is None or attempt.status is not GenerationStatus.SUCCEEDED:
                 return True
         return False
 
