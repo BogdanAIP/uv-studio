@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-01
@@ -9,11 +9,9 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is reopened in `draft` in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is frozen for review in PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The repaired implementation remains unchanged from material head `a3ad22bf1bcca52ada4f887715e9a3fcf45a98ea`, which passed exact-head CI #4208 5/5. Documentation-only Draft head `c11ca20bbf09dba23fa146d55797cb060736a802` passed CI #4212 and #4213. The later context-only frozen head `f93f7bfe7bf8e56744410ef4f5310e9e4107c919` passed authoritative post-Ready CI #4216 5/5, but a new inline P2 found one inaccurate concurrency sentence in this state document. That finding is **CONFIRMED**: source upload staging is outside the project tree, but `_publish_source_upload` holds the shared project fence across final publication, FFprobe validation, metadata derivation and source registration. PR and lifecycle returned to Draft before correcting the durable context.
-
-No runtime, test or product behavior change is required for this finding.
+The repaired implementation remains unchanged from material head `a3ad22bf1bcca52ada4f887715e9a3fcf45a98ea`, which passed exact-head CI #4208 5/5. The later context assertion about project-fence duration was corrected on Draft head `734c83dff65939d5720400ac46de2d602317f2c8`. Exact-head CI #4219 passed all five required checks after re-running only the Windows app-baseline job; its first attempt failed because `Invoke-WebRequest` to `download.kde.org` timed out while provisioning the pinned Kdenlive/FFmpeg/MLT bundle, while the re-run passed API integration, pinned media toolchain, real-media verification, frontend lint/audit/build and browser Product Truth. The related P2 review thread is resolved. No runtime, test or product behavior changed in this documentation repair.
 
 ## Implemented boundary
 
@@ -39,21 +37,29 @@ For `timeline.assemble`, WebVTT and named Generation, long render/provider work 
 
 Earlier review cycles and CI evidence tied to older frozen heads are stale for merge authority after subsequent changes.
 
-Current implementation evidence remains:
+Current accepted implementation evidence:
 
 - material repair head `a3ad22bf1bcca52ada4f887715e9a3fcf45a98ea`;
 - CI #4208: 5/5 required checks green;
-- documentation-only Draft head `c11ca20bbf09dba23fa146d55797cb060736a802`;
-- CI #4212: success;
-- CI #4213: success;
-- previous frozen head `f93f7bfe7bf8e56744410ef4f5310e9e4107c919`;
-- authoritative post-Ready CI #4216: 5/5 success before this documentation correction.
+- corrected Draft head `734c83dff65939d5720400ac46de2d602317f2c8`;
+- CI #4219: 5/5 required checks green after a single Windows app-baseline infrastructure retry;
+- all inline review threads resolved before this freeze.
 
 The focused deterministic regressions prove that archive export holding the shared fence cannot capture WebVTT or Generation canonical bytes without their registered Project metadata, while a later archive/import preserves the complete published identity/path/bytes. Existing generation recovery, cancellation, idempotency, authorization and Product Truth behavior remain covered by the permanent suite.
 
-## Current repair target
+## Final review gate
 
-This repair is context-only: keep the source-probe exception explicit and avoid the false blanket claim that all long media work is outside the project fence. After this correction, the exact Draft head must pass the required CI, then the context may freeze `draft -> review` again. The PR must become Ready on that exact frozen head, authoritative post-Ready CI must pass 5/5, all review threads must be resolved, and a new fresh ordinary-ChatGPT semantic review under the BASE `.agents/skills/code-review/SKILL.md` v1.0 policy must report zero surviving findings.
+Lifecycle is now `review`. The frozen exact head must remain unchanged except for PR metadata operations.
+
+Before merge, PR #89 requires:
+
+1. Ready-for-review state on the exact frozen head;
+2. authoritative exact frozen-head CI with all five required checks green;
+3. no unresolved review threads;
+4. a new fresh ordinary-ChatGPT semantic review under the BASE `.agents/skills/code-review/SKILL.md` v1.0 policy with zero surviving findings;
+5. final re-resolution of PR base/head identity immediately before merge.
+
+Any material code, test or behavior change invalidates the review cycle and requires returning lifecycle to `draft`.
 
 ## Out of scope
 
