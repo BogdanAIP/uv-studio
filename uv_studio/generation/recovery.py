@@ -26,15 +26,17 @@ from uv_studio.production.semantics import (
     ProductionSemanticError,
     ProductionSemanticsDocument,
 )
-from uv_studio.projects.migrations import migrate_project_data
+from uv_studio.projects.generation_authority import (
+    GenerationReferenceAuthorityError,
+    validate_generation_reference_bytes,
+)
 from uv_studio.projects.models import (
     ProjectDocument,
     ProjectReference,
-    ProjectValidationError,
     utc_now_iso,
 )
 from uv_studio.projects.publication import recover_managed_publications
-from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore, ProjectStoreError
+from uv_studio.projects.store import ProjectStore, ProjectStoreError
 from uv_studio.projects.transactions import (
     ProjectTransactionError,
     ProjectUnitOfWork,
@@ -78,80 +80,67 @@ def _registered_output_paths(project: ProjectDocument) -> set[str]:
     return {item.path for item in (*project.sources, *project.artifacts)}
 
 
-def _snapshot_project(snapshot: Any) -> ProjectDocument | None:
-    """Read one historical project.json snapshot through the current schema boundary."""
-
-    try:
-        content = _snapshot_content(snapshot)
-        if content is None:
-            return None
-        raw = json.loads(content.decode("utf-8"))
-        return ProjectDocument.from_dict(migrate_project_data(raw))
-    except (
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-        ProjectTransactionError,
-        ProjectValidationError,
-    ) as exc:
-        raise GenerationJobError(
-            "generation recovery found invalid Project history"
-        ) from exc
-
-
-def _redoable_output_paths(store: ProjectStore, project_id: str) -> set[str]:
-    """Return managed paths owned by the current durable UOW redo branch.
-
-    Binary media is intentionally outside ProjectUnitOfWork snapshots. A Project
-    reference transaction can therefore be undone while the already-published bytes
-    remain in place so Redo can restore the reference. Startup recovery must not
-    quarantine those bytes while that exact transaction remains reachable through
-    ``history.entries[history.cursor:]``. A later commit truncates that suffix and
-    automatically removes the protection.
-    """
-
-    uow = ProjectUnitOfWork(store)
-    try:
-        history = uow.history(project_id)
-    except ProjectTransactionError as exc:
-        raise GenerationJobError("generation recovery found invalid UOW history") from exc
-
-    protected: set[str] = set()
-    for entry in history.entries[history.cursor :]:
-        try:
-            record = uow._load_record(
-                uow._record_path(project_id, entry.transaction_id, transaction=True)
-            )
-        except ProjectTransactionError as exc:
-            raise GenerationJobError(
-                "generation recovery found invalid redo transaction history"
-            ) from exc
-        if (
-            record.get("phase") != "committed"
-            or record.get("operation") != "commit"
-            or record.get("transaction_id") != entry.transaction_id
-        ):
-            raise GenerationJobError(
-                "generation recovery redo transaction disagrees with history index"
-            )
-        changes = record.get("changes")
-        if not isinstance(changes, list) or not changes:
-            raise GenerationJobError("generation recovery redo transaction has invalid changes")
-        for change in changes:
-            try:
-                relative, _before, after = uow._validated_change(change)
-            except ProjectTransactionError as exc:
+def _merge_redo_references(references: tuple[ProjectReference, ...]) -> tuple[ProjectReference, ...]:
+    by_id: dict[str, ProjectReference] = {}
+    by_path: dict[str, ProjectReference] = {}
+    merged: list[ProjectReference] = []
+    for reference in references:
+        existing_id = by_id.get(reference.id)
+        if existing_id is not None:
+            if existing_id.to_dict() != reference.to_dict():
                 raise GenerationJobError(
-                    "generation recovery redo transaction change is invalid"
-                ) from exc
-            if relative != PROJECT_FILENAME:
-                continue
-            project = _snapshot_project(after)
-            if project is None:
-                raise GenerationJobError(
-                    "generation recovery redo transaction cannot remove project.json"
+                    f"generation recovery found ambiguous redo reference identity: {reference.id}"
                 )
-            protected.update(_registered_output_paths(project))
-    return protected
+            continue
+        existing_path = by_path.get(reference.path)
+        if existing_path is not None:
+            if existing_path.to_dict() != reference.to_dict():
+                raise GenerationJobError(
+                    f"generation recovery found ambiguous redo reference path: {reference.path}"
+                )
+            continue
+        by_id[reference.id] = reference
+        by_path[reference.path] = reference
+        merged.append(reference)
+    return tuple(merged)
+
+
+def _redoable_output_references(store: ProjectStore, project_id: str) -> tuple[ProjectReference, ...]:
+    """Return full managed reference authority reachable through the current Redo branch."""
+
+    try:
+        documents = ProjectUnitOfWork(store).redo_project_documents(project_id)
+    except ProjectTransactionError as exc:
+        raise GenerationJobError("generation recovery found invalid UOW redo history") from exc
+    return _merge_redo_references(
+        tuple(
+            reference
+            for document in documents
+            for reference in (*document.sources, *document.artifacts)
+        )
+    )
+
+
+def _validate_redo_generation_references(
+    manager: GenerationJobManager,
+    project_id: str,
+    references: tuple[ProjectReference, ...],
+) -> None:
+    """Prove exact bytes/provenance before any redo-owned Generation path is preserved."""
+
+    for reference in references:
+        if not isinstance(reference.metadata.get("generation"), dict):
+            continue
+        try:
+            validate_generation_reference_bytes(
+                manager.project_store,
+                project_id,
+                reference,
+            )
+        except GenerationReferenceAuthorityError as exc:
+            raise GenerationJobError(
+                f"generation recovery redo-owned Generation authority is invalid: {exc}"
+            ) from exc
 
 
 def _sha256_file(path: Path) -> str:
@@ -290,22 +279,13 @@ def _generation_take_history(
 def _quarantine_unregistered_managed_outputs(
     store: ProjectStore,
     project_id: str,
+    redoable_references: tuple[ProjectReference, ...],
 ) -> tuple[Path, ...]:
-    """Move crash-identifiable unregistered publisher bytes out of the project tree.
-
-    Ordinary unregistered project files remain portable for compatibility. Current
-    source upload ``src_<uuid>``, legacy renderer ``art_<uuid>``, WebVTT
-    ``sub_<uuid>`` and Generation ``generated_attempt_<uuid>`` final names are
-    self-identifying and can therefore be recovered after hard process loss.
-    Paths still owned by the current durable UOW redo branch are preserved because
-    their bytes intentionally remain outside JSON snapshots so Redo can restore the
-    owning ProjectReference. Arbitrary-path ``timeline.assemble`` is recovered only
-    through its durable publication marker, never by filename guess.
-    """
+    """Move crash-identifiable unregistered publisher bytes out of the project tree."""
 
     project = store.load_project(project_id)
     registered = _registered_output_paths(project)
-    redoable = _redoable_output_paths(store, project_id)
+    redoable = {reference.path for reference in redoable_references}
     project_dir = store.project_directory(project_id)
     quarantined: list[Path] = []
     for root_name in _MANAGED_OUTPUT_ROOTS:
@@ -673,28 +653,32 @@ def recover_interrupted_project_jobs(
     recovered: list[GenerationJob] = []
     production = ProductionSemanticService(manager.project_store)
     with manager.records.project_lock(project_id):
-        # ProjectUnitOfWork has its own durable prepared journal. Recover it first so
-        # publication reconciliation never treats a half-applied artifact/Take commit
-        # as durable truth and then later has that UOW roll it back underneath a Job.
+        # Recover crash-left UOW state before deriving the current Redo suffix.
         ProjectUnitOfWork(manager.project_store).history(project_id)
         manager.project_store.load_project(project_id)
+        redoable_references = _redoable_output_references(
+            manager.project_store,
+            project_id,
+        )
+        # Redo-owned Generation paths are not trusted by pathname alone. Validate
+        # their historical ProjectReference against durable Job/Attempt/provenance
+        # and exact bytes before any startup recovery mutation can preserve them.
+        _validate_redo_generation_references(
+            manager,
+            project_id,
+            redoable_references,
+        )
 
-        # Arbitrary-path timeline publication is identified only by a durable marker.
-        # Current source/legacy-art/WebVTT/Generation names are self-identifying and
-        # can be quarantined directly when bytes exist without owning Project metadata.
         recover_managed_publications(manager.project_store, project_id)
-        _quarantine_unregistered_managed_outputs(manager.project_store, project_id)
+        _quarantine_unregistered_managed_outputs(
+            manager.project_store,
+            project_id,
+            redoable_references,
+        )
 
-        # Reconcile every artifact-owning attempt, not merely attempts[-1]. This is
-        # required for historical states in which an older failed attempt published a
-        # ProjectReference before a later retry was appended. Already-succeeded
-        # attempts are intentionally not recreated here; their Take may have been
-        # removed by explicit user Undo and remains governed by UOW history.
         for job in manager.list(project_id):
             _reconcile_materializations(manager, production, job)
 
-        # Re-read after materialization reconciliation. Only current work with no
-        # durable materialized outcome remains abandoned and becomes retryable.
         for job in manager.list(project_id):
             if job.status is GenerationStatus.QUEUED:
                 now = utc_now_iso()
