@@ -26,16 +26,20 @@ from uv_studio.production.semantics import (
     ProductionSemanticsDocument,
 )
 
-from .migrations import migrate_project_data
+from .generation_authority import (
+    GenerationReferenceAuthorityError,
+    generation_reference_authority,
+)
 from .models import (
     PROJECT_SCHEMA_VERSION,
     ProjectDocument,
+    ProjectReference,
     ProjectValidationError,
     utc_now_iso,
     validate_identifier,
 )
 from .publication import ManagedPublicationError, pending_managed_publications
-from .store import PROJECT_DIRECTORIES, PROJECT_FILENAME, ProjectAlreadyExists, ProjectStore
+from .store import PROJECT_DIRECTORIES, ProjectAlreadyExists, ProjectStore
 from .task_records import ProjectTaskRecordStore
 from .transactions import ProjectTransactionError, ProjectUnitOfWork, _snapshot_content
 
@@ -62,6 +66,16 @@ class ArchiveLimits:
     max_total_uncompressed_bytes: int = 100 * 1024**3
     max_single_file_bytes: int = 50 * 1024**3
     max_manifest_bytes: int = 4 * 1024**2
+
+
+@dataclass(frozen=True)
+class _RedoMediaAuthority:
+    sources: tuple[ProjectReference, ...]
+    artifacts: tuple[ProjectReference, ...]
+
+    @property
+    def paths(self) -> set[str]:
+        return {reference.path for reference in (*self.sources, *self.artifacts)}
 
 
 DEFAULT_LIMITS = ArchiveLimits()
@@ -134,70 +148,53 @@ def _registered_media_paths(document: ProjectDocument) -> set[str]:
     return {reference.path for reference in (*document.sources, *document.artifacts)}
 
 
-def _snapshot_project(snapshot: Any) -> ProjectDocument | None:
-    """Read one historical project.json snapshot through the current schema boundary."""
+def _merge_reference_authority(
+    references: tuple[ProjectReference, ...],
+    *,
+    label: str,
+) -> tuple[ProjectReference, ...]:
+    by_id: dict[str, ProjectReference] = {}
+    by_path: dict[str, ProjectReference] = {}
+    merged: list[ProjectReference] = []
+    for reference in references:
+        existing_id = by_id.get(reference.id)
+        if existing_id is not None:
+            if existing_id.to_dict() != reference.to_dict():
+                raise ProjectArchiveError(f"{label} reference identity is ambiguous: {reference.id}")
+            continue
+        existing_path = by_path.get(reference.path)
+        if existing_path is not None:
+            if existing_path.to_dict() != reference.to_dict():
+                raise ProjectArchiveError(f"{label} reference path is ambiguous: {reference.path}")
+            continue
+        by_id[reference.id] = reference
+        by_path[reference.path] = reference
+        merged.append(reference)
+    return tuple(merged)
+
+
+def _redoable_media_authority(store: ProjectStore, project_id: str) -> _RedoMediaAuthority:
+    """Return full media reference authority reachable through the current Redo suffix."""
 
     try:
-        content = _snapshot_content(snapshot)
-        if content is None:
-            return None
-        raw = json.loads(content.decode("utf-8"))
-        return ProjectDocument.from_dict(migrate_project_data(raw))
-    except (
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-        ProjectTransactionError,
-        ProjectValidationError,
-    ) as exc:
-        raise ProjectArchiveError("Project redo history contains invalid Project snapshot") from exc
-
-
-def _redoable_media_paths(store: ProjectStore, project_id: str) -> set[str]:
-    """Return media paths owned by the current durable UOW redo suffix.
-
-    ProjectUnitOfWork snapshots canonical JSON, not binary media. After a reference
-    transaction is undone, its already-published bytes intentionally remain in the
-    project so Redo can restore the exact reference. Archives must preserve those
-    bytes while the transaction is still reachable through
-    ``history.entries[history.cursor:]``. A later canonical commit truncates that
-    suffix and removes this authority automatically.
-    """
-
-    uow = ProjectUnitOfWork(store)
-    try:
-        history = uow.history(project_id)
+        documents = ProjectUnitOfWork(store).redo_project_documents(project_id)
     except ProjectTransactionError as exc:
         raise ProjectArchiveError("Project redo history is invalid") from exc
 
-    protected: set[str] = set()
-    for entry in history.entries[history.cursor :]:
-        try:
-            record = uow._load_record(
-                uow._record_path(project_id, entry.transaction_id, transaction=True)
-            )
-        except ProjectTransactionError as exc:
-            raise ProjectArchiveError("Project redo transaction history is invalid") from exc
-        if (
-            record.get("phase") != "committed"
-            or record.get("operation") != "commit"
-            or record.get("transaction_id") != entry.transaction_id
-        ):
-            raise ProjectArchiveError("Project redo transaction disagrees with history index")
-        changes = record.get("changes")
-        if not isinstance(changes, list) or not changes:
-            raise ProjectArchiveError("Project redo transaction has invalid changes")
-        for change in changes:
-            try:
-                relative, _before, after = uow._validated_change(change)
-            except ProjectTransactionError as exc:
-                raise ProjectArchiveError("Project redo transaction change is invalid") from exc
-            if relative != PROJECT_FILENAME:
-                continue
-            project = _snapshot_project(after)
-            if project is None:
-                raise ProjectArchiveError("Project redo transaction cannot remove project.json")
-            protected.update(_registered_media_paths(project))
-    return protected
+    sources = _merge_reference_authority(
+        tuple(reference for document in documents for reference in document.sources),
+        label="Redo source",
+    )
+    artifacts = _merge_reference_authority(
+        tuple(reference for document in documents for reference in document.artifacts),
+        label="Redo artifact",
+    )
+    combined = _merge_reference_authority((*sources, *artifacts), label="Redo media")
+    source_ids = {reference.id for reference in sources}
+    return _RedoMediaAuthority(
+        sources=tuple(reference for reference in combined if reference.id in source_ids),
+        artifacts=tuple(reference for reference in combined if reference.id not in source_ids),
+    )
 
 
 def _looks_like_managed_publication(project_dir: Path, path: Path) -> bool:
@@ -224,24 +221,14 @@ def _reject_interrupted_publications(store: ProjectStore, project_id: str) -> No
 
 
 def _reject_unpublished_managed_media(
-    store: ProjectStore,
-    project_id: str,
     document: ProjectDocument,
+    redo_authority: _RedoMediaAuthority,
     project_dir: Path,
     files: list[Path],
 ) -> None:
-    """Fail closed when a self-identifying UV publication lacks durable ownership.
+    """Fail closed when a self-identifying UV publication lacks durable ownership."""
 
-    Historical source/artifact/audio names plus current WebVTT ``sub_<uuid>`` and
-    Generation ``generated_attempt_<uuid>`` names are unambiguous UV-owned
-    publications. Ordinary unregistered files remain portable. A path is also
-    durably owned while its ProjectReference is reachable through the current UOW
-    Redo suffix, because the binary bytes are required to make that Redo exact.
-    Arbitrary-path ``timeline.assemble`` is covered by its durable publication marker
-    instead of a filename guess.
-    """
-
-    owned = _registered_media_paths(document) | _redoable_media_paths(store, project_id)
+    owned = _registered_media_paths(document) | redo_authority.paths
     for path in files:
         relative = path.relative_to(project_dir).as_posix()
         if _looks_like_managed_publication(project_dir, path) and relative not in owned:
@@ -396,139 +383,45 @@ def _history_proves_undone_generation_take(
 def _generation_digest_authority(
     store: ProjectStore,
     project_id: str,
-    document: ProjectDocument,
+    artifacts: tuple[ProjectReference, ...],
     project_dir: Path,
 ) -> dict[str, tuple[int, str]]:
-    """Validate Generation authority and return expected digest for exact ZIP capture."""
+    """Validate live/redo Generation authority and return exact ZIP digest authority."""
 
     expected_digests: dict[str, tuple[int, str]] = {}
     production: ProductionSemanticsDocument | None = None
-    for artifact in document.artifacts:
-        generation = artifact.metadata.get("generation")
-        if not isinstance(generation, dict):
-            continue
-        job_id = generation.get("job_id")
-        attempt_id = generation.get("attempt_id")
-        if not isinstance(job_id, str) or not isinstance(attempt_id, str):
-            raise ProjectArchiveError(
-                f"Generation artifact has incomplete durable provenance: {artifact.id}"
-            )
-        job_path = project_dir / "tasks" / f"{job_id}.json"
-        if job_path.is_symlink() or not job_path.is_file():
-            raise ProjectArchiveError(
-                f"Generation artifact has no safe durable Job record: {artifact.id}"
-            )
+    for artifact in artifacts:
         try:
-            raw = json.loads(job_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ProjectArchiveError(
-                f"Generation Job record is unreadable for artifact: {artifact.id}"
-            ) from exc
-        if not isinstance(raw, dict) or raw.get("record_type") != "generation_job":
-            raise ProjectArchiveError(
-                f"Generation artifact points to a non-generation task record: {artifact.id}"
-            )
-        attempts = raw.get("attempts")
-        if not isinstance(attempts, list):
-            raise ProjectArchiveError(
-                f"Generation Job has invalid attempt history for artifact: {artifact.id}"
-            )
-        matching_attempts = [
-            attempt
-            for attempt in attempts
-            if isinstance(attempt, dict) and attempt.get("attempt_id") == attempt_id
-        ]
-        if len(matching_attempts) != 1:
-            raise ProjectArchiveError(
-                f"Generation artifact does not resolve to one durable attempt: {artifact.id}"
-            )
-        attempt = matching_attempts[0]
-        take_id = attempt.get("take_id")
-        if (
-            attempt.get("status") != "succeeded"
-            or attempt.get("output_reference_id") != artifact.id
-            or not isinstance(take_id, str)
-            or not take_id
-        ):
-            raise ProjectArchiveError(
-                "Generation materialization is not durably complete; restart UV Studio "
-                f"to reconcile before export: {artifact.id}"
-            )
-
-        request = raw.get("request")
-        mapping = request.get("execution_mapping") if isinstance(request, dict) else None
-        contract = request.get("generation_contract") if isinstance(request, dict) else None
-        shot_id = request.get("shot_id") if isinstance(request, dict) else None
-        if not isinstance(shot_id, str) or not shot_id:
-            raise ProjectArchiveError(
-                f"Generation Job lost shot authority for artifact: {artifact.id}"
-            )
-        authority = {
-            "job_id": raw.get("job_id"),
-            "attempt_id": attempt_id,
-            "model_id": request.get("model_id") if isinstance(request, dict) else None,
-            "capability_id": mapping.get("capability_id") if isinstance(mapping, dict) else None,
-            "offer_id": mapping.get("offer_id") if isinstance(mapping, dict) else None,
-            "adapter_id": mapping.get("adapter_id") if isinstance(mapping, dict) else None,
-            "request_digest": raw.get("request_digest"),
-        }
-        for field_name, expected_value in authority.items():
-            if not isinstance(expected_value, str) or not expected_value:
-                raise ProjectArchiveError(
-                    f"Generation Job lost {field_name} authority for artifact: {artifact.id}"
-                )
-            if generation.get(field_name) != expected_value:
-                raise ProjectArchiveError(
-                    f"Generation artifact {field_name} disagrees with durable Job: {artifact.id}"
-                )
-        if not isinstance(contract, dict) or generation.get("contract") != contract:
-            raise ProjectArchiveError(
-                f"Generation artifact contract disagrees with durable Job: {artifact.id}"
-            )
+            authority = generation_reference_authority(store, project_id, artifact)
+        except GenerationReferenceAuthorityError as exc:
+            raise ProjectArchiveError(str(exc)) from exc
+        if authority is None:
+            continue
 
         if production is None:
             production = _load_production_semantics(project_dir)
-        take = _matching_take(production, take_id)
+        take = _matching_take(production, authority.take_id)
         if take is not None:
-            if take.shot_id != shot_id or take.reference_id != artifact.id:
+            if take.shot_id != authority.shot_id or take.reference_id != artifact.id:
                 raise ProjectArchiveError(
                     f"Generation Take disagrees with current Production authority: {artifact.id}"
                 )
         elif not _history_proves_undone_generation_take(
             store,
             project_id,
-            take_id=take_id,
-            shot_id=shot_id,
+            take_id=authority.take_id,
+            shot_id=authority.shot_id,
             reference_id=artifact.id,
         ):
             raise ProjectArchiveError(
                 f"Generation Take is missing without durable Undo authority: {artifact.id}"
             )
 
-        expected_name = f"generated_{attempt_id}"
-        artifact_name = PurePosixPath(artifact.path).name
-        if not (artifact_name == expected_name or artifact_name.startswith(expected_name + ".")):
-            raise ProjectArchiveError(
-                f"Generation artifact path disagrees with durable attempt: {artifact.id}"
-            )
-        size_bytes = artifact.metadata.get("size_bytes")
-        sha256 = artifact.metadata.get("sha256")
-        if (
-            isinstance(size_bytes, bool)
-            or not isinstance(size_bytes, int)
-            or size_bytes <= 0
-            or not isinstance(sha256, str)
-            or len(sha256) != 64
-            or any(ch not in "0123456789abcdef" for ch in sha256)
-        ):
-            raise ProjectArchiveError(
-                f"Generation artifact has invalid size/digest authority: {artifact.id}"
-            )
         if artifact.path in expected_digests:
             raise ProjectArchiveError(
                 f"Multiple Generation artifacts claim one output path: {artifact.path}"
             )
-        expected_digests[artifact.path] = (size_bytes, sha256)
+        expected_digests[artifact.path] = (authority.size_bytes, authority.sha256)
     return expected_digests
 
 
@@ -572,10 +465,11 @@ def export_project(
 
     task_records = ProjectTaskRecordStore(store)
     with task_records.project_lock(project_id):
-        # history() is recovery-capable. Complete any crash-left prepared UOW
-        # rollback while the project fence is held and before sampling document,
-        # raw schema version, or filesystem membership for the archive snapshot.
-        ProjectUnitOfWork(store).history(project_id)
+        # Complete crash-left UOW recovery before any archive sampling, then derive
+        # the full historical reference authority reachable through the Redo suffix.
+        uow = ProjectUnitOfWork(store)
+        uow.history(project_id)
+        redo_authority = _redoable_media_authority(store, project_id)
         document = store.load_project(project_id)
         project_path = store.project_path(project_id)
         project_dir = project_path.parent
@@ -585,11 +479,15 @@ def export_project(
 
         directories, files = _iter_project_entries(project_dir)
         _reject_interrupted_publications(store, project_id)
-        _reject_unpublished_managed_media(store, project_id, document, project_dir, files)
+        _reject_unpublished_managed_media(document, redo_authority, project_dir, files)
+        authoritative_artifacts = _merge_reference_authority(
+            (*document.artifacts, *redo_authority.artifacts),
+            label="Generation artifact",
+        )
         generation_digests = _generation_digest_authority(
             store,
             project_id,
-            document,
+            authoritative_artifacts,
             project_dir,
         )
         created_at = utc_now_iso()
