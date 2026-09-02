@@ -572,6 +572,10 @@ def export_project(
 
     task_records = ProjectTaskRecordStore(store)
     with task_records.project_lock(project_id):
+        # history() is recovery-capable. Complete any crash-left prepared UOW
+        # rollback while the project fence is held and before sampling document,
+        # raw schema version, or filesystem membership for the archive snapshot.
+        ProjectUnitOfWork(store).history(project_id)
         document = store.load_project(project_id)
         project_path = store.project_path(project_id)
         project_dir = project_path.parent
