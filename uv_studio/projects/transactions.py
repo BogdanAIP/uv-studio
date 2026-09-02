@@ -286,12 +286,14 @@ class ProjectUnitOfWork:
             return self._load_history(project_id)
 
     def redo_project_documents(self, project_id: str) -> tuple[ProjectDocument, ...]:
-        """Return validated project.json states reachable through the current Redo suffix.
+        """Return project.json states reachable through the current exact Redo suffix.
 
-        The method is recovery-capable like ``history()`` and validates each committed
-        transaction against the durable history index.  Historical schema-v1 bytes
-        are migrated only in memory for validation; the recorded snapshot bytes are
-        never rewritten.
+        The method is recovery-capable like ``history()``. It validates each
+        committed transaction against the durable history index and simulates every
+        changed canonical document from the current cursor, requiring each recorded
+        ``before`` snapshot to match the simulated state before applying ``after``.
+        Historical schema-v1 Project bytes are migrated only in memory for validation;
+        recorded snapshot bytes are never rewritten.
         """
 
         with self.records.project_lock(project_id):
@@ -299,6 +301,7 @@ class ProjectUnitOfWork:
             self._recover_prepared_operations(project_id)
             previous_project = self.project_store.load_project(project_id)
             history = self._load_history(project_id)
+            simulated_snapshots: dict[str, dict[str, Any]] = {}
             documents: list[ProjectDocument] = []
             for entry in history.entries[history.cursor :]:
                 record = self._load_record(
@@ -319,8 +322,17 @@ class ProjectUnitOfWork:
                     raise ProjectTransactionError("redo transaction has invalid changes")
                 changed_paths: list[str] = []
                 for change in changes:
-                    relative_path, _before, after = self._validated_change(change)
+                    relative_path, before, after = self._validated_change(change)
                     changed_paths.append(relative_path)
+                    current_snapshot = simulated_snapshots.get(relative_path)
+                    if current_snapshot is None:
+                        current_snapshot = self._read_document_snapshot(
+                            relative_path,
+                            self._document_path(project_id, relative_path),
+                        )
+                    self._assert_snapshot_matches(current_snapshot, before, relative_path)
+                    simulated_snapshots[relative_path] = dict(after)
+
                     if relative_path != PROJECT_FILENAME:
                         continue
                     content = _snapshot_content(after)
@@ -479,21 +491,24 @@ class ProjectUnitOfWork:
             self._validate_documents(project_id, current_project, validation_documents)
             if operation == "redo":
                 project_bytes = validation_documents.get(PROJECT_FILENAME)
-                if project_bytes is not None:
-                    redo_project = _project_document_from_bytes(project_id, project_bytes)
-                    for artifact in redo_project.artifacts:
-                        if not isinstance(artifact.metadata.get("generation"), dict):
-                            continue
-                        try:
-                            validate_generation_reference_bytes(
-                                self.project_store,
-                                project_id,
-                                artifact,
-                            )
-                        except GenerationReferenceAuthorityError as exc:
-                            raise ProjectTransactionError(
-                                f"Redo Generation authority is invalid: {exc}"
-                            ) from exc
+                redo_project = (
+                    current_project
+                    if project_bytes is None
+                    else _project_document_from_bytes(project_id, project_bytes)
+                )
+                for artifact in redo_project.artifacts:
+                    if not isinstance(artifact.metadata.get("generation"), dict):
+                        continue
+                    try:
+                        validate_generation_reference_bytes(
+                            self.project_store,
+                            project_id,
+                            artifact,
+                        )
+                    except GenerationReferenceAuthorityError as exc:
+                        raise ProjectTransactionError(
+                            f"Redo Generation authority is invalid: {exc}"
+                        ) from exc
 
             history_after = ProjectHistoryState(
                 entries=history_before.entries,
