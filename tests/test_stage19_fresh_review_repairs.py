@@ -380,12 +380,14 @@ class Stage19FreshReviewRepairTests(unittest.TestCase):
         generation["request_digest"] = "0" * 64
         metadata["generation"] = generation
         bad_artifact = replace(artifact, metadata=metadata)
-        self.store.update_project(
-            self.project.project_id,
-            artifacts=tuple(
-                bad_artifact if item.id == artifact.id else item
-                for item in project.artifacts
-            ),
+        corrupted = project.to_dict()
+        corrupted["artifacts"] = [
+            bad_artifact.to_dict() if item["id"] == artifact.id else item
+            for item in corrupted["artifacts"]
+        ]
+        self.store._atomic_write_json(
+            self.store.project_path(self.project.project_id),
+            corrupted,
         )
 
         with self.assertRaisesRegex(GenerationJobError, "request_digest"):
