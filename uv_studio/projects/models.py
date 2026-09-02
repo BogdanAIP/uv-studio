@@ -150,6 +150,52 @@ def _json_object(value: Mapping[str, Any] | None, *, field_name: str) -> dict[st
     return validated
 
 
+def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any]) -> None:
+    """Fail closed on structurally impossible UV Generation ProjectReferences.
+
+    ``metadata.generation`` is already treated as reserved UV Generation authority by
+    archive/recovery code. Its canonical path and continuation lineage therefore
+    belong to the Project persistence boundary too, including crash-left attempts
+    that are not yet durably ``SUCCEEDED`` and cannot use the stronger Job authority
+    validator yet.
+    """
+
+    generation = metadata.get("generation")
+    if not isinstance(generation, Mapping):
+        return
+
+    attempt_id = generation.get("attempt_id")
+    if not isinstance(attempt_id, str) or not attempt_id:
+        raise ProjectValidationError("Generation reference requires a non-empty attempt_id")
+
+    parts = PurePosixPath(path).parts
+    if len(parts) != 2 or parts[0] != "artifacts":
+        raise ProjectValidationError(
+            "Generation artifact path must be a direct file under the canonical artifacts root"
+        )
+    expected_name = f"generated_{attempt_id}"
+    if not (parts[1] == expected_name or parts[1].startswith(expected_name + ".")):
+        raise ProjectValidationError("Generation artifact path must match its attempt_id")
+
+    contract = generation.get("contract")
+    if not isinstance(contract, Mapping):
+        raise ProjectValidationError("Generation reference requires generation.contract")
+    continuation = contract.get("continuation_source_reference_id")
+    if continuation is None:
+        expected_lineage = None
+    elif isinstance(continuation, str) and continuation:
+        expected_lineage = {
+            "kind": "continuation",
+            "source_reference_id": continuation,
+        }
+    else:
+        raise ProjectValidationError(
+            "Generation contract continuation_source_reference_id must be null or non-empty text"
+        )
+    if generation.get("lineage") != expected_lineage:
+        raise ProjectValidationError("Generation reference lineage disagrees with its contract")
+
+
 @dataclass(frozen=True)
 class ProjectReference:
     id: str
@@ -161,8 +207,11 @@ class ProjectReference:
         object.__setattr__(self, "id", validate_identifier(self.id, field_name="reference id"))
         if self.kind not in _ALLOWED_REFERENCE_KINDS:
             raise ProjectValidationError(f"unsupported reference kind: {self.kind!r}")
-        object.__setattr__(self, "path", validate_project_relative_path(self.path))
-        object.__setattr__(self, "metadata", _json_object(self.metadata, field_name="metadata"))
+        path = validate_project_relative_path(self.path)
+        metadata = _json_object(self.metadata, field_name="metadata")
+        _validate_generation_reference_shape(path, metadata)
+        object.__setattr__(self, "path", path)
+        object.__setattr__(self, "metadata", metadata)
 
     def to_dict(self) -> dict[str, Any]:
         return {
