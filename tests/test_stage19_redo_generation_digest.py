@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
@@ -24,7 +25,7 @@ from uv_studio.generation.service import GenerationService
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
-from uv_studio.projects.store import ProjectStore
+from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
 from uv_studio.projects.transactions import ProjectTransactionError, ProjectUnitOfWork
 
 
@@ -116,7 +117,7 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
             ),
         )
 
-    def _generate_and_undo(self):
+    def _generate(self):
         submitted = self.service.submit(
             project_id=self.project.project_id,
             shot_id="shot_redo_generation_digest",
@@ -149,8 +150,10 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
         )
         payload = output.read_bytes()
         self.assertGreater(len(payload), 1)
+        return completed, attempt, artifact, output, payload, ProjectUnitOfWork(self.store)
 
-        uow = ProjectUnitOfWork(self.store)
+    def _generate_and_undo(self):
+        completed, attempt, artifact, output, payload, uow = self._generate()
         uow.undo(self.project.project_id)  # production.register_take
         uow.undo(self.project.project_id)  # generation.register_output
 
@@ -201,6 +204,140 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
         project = self.store.load_project(self.project.project_id)
         self.assertFalse(any(item.id == artifact.id for item in project.artifacts))
         self.assertEqual(output.read_bytes(), corrupt)
+
+    def test_second_redo_rejects_bytes_corrupted_after_artifact_redo(self) -> None:
+        _job, attempt, artifact, output, payload, uow = self._generate_and_undo()
+
+        uow.redo(self.project.project_id)  # generation.register_output
+        live = self.store.load_project(self.project.project_id)
+        self.assertTrue(any(item.id == artifact.id for item in live.artifacts))
+        state = self.production.state(self.project.project_id)
+        self.assertFalse(any(take.take_id == attempt.take_id for take in state.takes))
+
+        corrupt = self._corrupt_same_size(output, payload)
+        with self.assertRaisesRegex(ProjectTransactionError, "Generation.*digest|digest does not match"):
+            uow.redo(self.project.project_id)  # production.register_take
+
+        self.assertTrue(uow.history(self.project.project_id).can_redo)
+        state = self.production.state(self.project.project_id)
+        self.assertFalse(any(take.take_id == attempt.take_id for take in state.takes))
+        self.assertEqual(output.read_bytes(), corrupt)
+
+    def test_accept_take_reference_metadata_evolution_remains_redo_reachable(self) -> None:
+        _job, attempt, artifact, output, payload, uow = self._generate()
+        self.production.accept_take(
+            self.project.project_id,
+            take_id=attempt.take_id,
+            timeline_start_us=0,
+            duration_us=1_000_000,
+            clip_id="clip_stage19_redo_metadata_evolution",
+        )
+        accepted = self.store.load_project(self.project.project_id)
+        accepted_artifact = next(item for item in accepted.artifacts if item.id == artifact.id)
+        self.assertNotEqual(accepted_artifact.metadata, artifact.metadata)
+        self.assertTrue(accepted_artifact.metadata.get("production_acceptances"))
+
+        uow.undo(self.project.project_id)  # production.accept_take
+        uow.undo(self.project.project_id)  # production.register_take
+        uow.undo(self.project.project_id)  # generation.register_output
+        undone = self.store.load_project(self.project.project_id)
+        self.assertFalse(any(item.id == artifact.id for item in undone.artifacts))
+        self.assertEqual(output.read_bytes(), payload)
+
+        self.assertEqual(
+            recover_interrupted_project_jobs(
+                GenerationJobManager(self.store),
+                self.project.project_id,
+            ),
+            (),
+        )
+        self.assertEqual(output.read_bytes(), payload)
+
+        archive_path = Path(self.tmp.name) / "redo-metadata-evolution.uvproj.zip"
+        export_project(self.store, self.project.project_id, archive_path)
+        imported_store = ProjectStore(Path(self.tmp.name) / "metadata-evolution-import")
+        imported = import_project(imported_store, archive_path)
+        imported_output = imported_store.resolve_project_file(
+            imported.project_id,
+            artifact.path,
+            must_exist=True,
+            allowed_roots=("artifacts",),
+        )
+        self.assertEqual(imported_output.read_bytes(), payload)
+
+        imported_uow = ProjectUnitOfWork(imported_store)
+        imported_uow.redo(imported.project_id)
+        imported_uow.redo(imported.project_id)
+        imported_uow.redo(imported.project_id)
+
+        restored = imported_store.load_project(imported.project_id)
+        restored_artifact = next(item for item in restored.artifacts if item.id == artifact.id)
+        self.assertEqual(restored_artifact.metadata, accepted_artifact.metadata)
+        restored_state = ProductionSemanticService(imported_store).state(imported.project_id)
+        restored_shot = restored_state.shot("shot_redo_generation_digest")
+        self.assertEqual(restored_shot.accepted_take_id, attempt.take_id)
+        self.assertEqual(imported_output.read_bytes(), payload)
+
+    def test_redo_media_authority_rejects_unreachable_snapshot_chain(self) -> None:
+        _job, _attempt, _artifact, _output, _payload, uow = self._generate_and_undo()
+        history = uow.history(self.project.project_id)
+        entry = history.entries[history.cursor]
+        self.assertEqual(entry.command, "generation.register_output")
+        record_path = uow._record_path(
+            self.project.project_id,
+            entry.transaction_id,
+            transaction=True,
+        )
+        record = uow._load_record(record_path)
+        changes = record.get("changes")
+        self.assertIsInstance(changes, list)
+        mutated_changes = []
+        changed_project = False
+        for raw_change in changes:
+            change = dict(raw_change)
+            if change.get("path") == PROJECT_FILENAME:
+                change["before"] = dict(change["after"])
+                changed_project = True
+            mutated_changes.append(change)
+        self.assertTrue(changed_project)
+        record["changes"] = mutated_changes
+        self.store._atomic_write_json(record_path, record)
+
+        archive_path = Path(self.tmp.name) / "unreachable-redo-authority.uvproj.zip"
+        with self.assertRaisesRegex(ProjectArchiveError, "redo history is invalid|changed outside"):
+            export_project(self.store, self.project.project_id, archive_path)
+        self.assertFalse(archive_path.exists())
+
+        with self.assertRaisesRegex(GenerationJobError, "invalid UOW redo history"):
+            recover_interrupted_project_jobs(
+                GenerationJobManager(self.store),
+                self.project.project_id,
+            )
+
+    def test_archive_rejects_generation_reference_outside_artifacts_root(self) -> None:
+        _job, _attempt, artifact, output, _payload, _uow = self._generate()
+        moved_relative = f"sources/{output.name}"
+        moved_output = self.store.resolve_project_file(
+            self.project.project_id,
+            moved_relative,
+            allowed_roots=("sources",),
+        )
+        output.replace(moved_output)
+
+        moved_artifact = replace(artifact, path=moved_relative)
+        project = self.store.load_project(self.project.project_id)
+        self.store.update_project(
+            self.project.project_id,
+            artifacts=tuple(
+                moved_artifact if item.id == artifact.id else item
+                for item in project.artifacts
+            ),
+        )
+
+        archive_path = Path(self.tmp.name) / "generation-wrong-root.uvproj.zip"
+        with self.assertRaisesRegex(ProjectArchiveError, "Generation artifact path|canonical.*artifacts"):
+            export_project(self.store, self.project.project_id, archive_path)
+        self.assertFalse(archive_path.exists())
 
     def test_exact_generation_bytes_survive_archive_import_and_two_redos(self) -> None:
         _job, attempt, artifact, _output, payload, _uow = self._generate_and_undo()
