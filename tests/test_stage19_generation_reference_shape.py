@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
@@ -126,6 +127,32 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
                     sources=(reference,),
                     artifacts=(),
                 )
+
+    def test_generic_update_cannot_strip_or_rebind_existing_generation_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = ProjectStore(Path(temp) / "projects")
+            project = store.create_project(
+                title="Stage 19 Generation transition authority",
+                recipe_id=STUDIO_COMPAT_RECIPE_ID,
+                extensions=studio_project_extensions("micro_drama"),
+                project_id="prj_stage19_generation_transition",
+            )
+            reference = ProjectReference(
+                id="artifact_transition",
+                kind="image",
+                path="artifacts/generated_attempt_shape.png",
+                metadata=self._metadata(),
+            )
+            current = store.update_project(project.project_id, artifacts=(reference,))
+            persisted = current.artifacts[0]
+
+            stripped = replace(persisted, metadata={"note": "ordinary artifact"})
+            with self.assertRaisesRegex(ProjectValidationError, "Generation.*authority|generic.*Generation"):
+                store.update_project(project.project_id, artifacts=(stripped,))
+
+            moved = replace(persisted, path="sources/generated_attempt_shape.png")
+            with self.assertRaisesRegex(ProjectValidationError, "Generation.*authority|path/kind"):
+                store.update_project(project.project_id, artifacts=(moved,))
 
     def test_store_rejects_durable_generation_shape_corruption_before_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
