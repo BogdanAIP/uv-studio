@@ -326,12 +326,14 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
 
         moved_artifact = replace(artifact, path=moved_relative)
         project = self.store.load_project(self.project.project_id)
-        self.store.update_project(
-            self.project.project_id,
-            artifacts=tuple(
-                moved_artifact if item.id == artifact.id else item
-                for item in project.artifacts
-            ),
+        corrupted = project.to_dict()
+        corrupted["artifacts"] = [
+            moved_artifact.to_dict() if item["id"] == artifact.id else item
+            for item in corrupted["artifacts"]
+        ]
+        self.store._atomic_write_json(
+            self.store.project_path(self.project.project_id),
+            corrupted,
         )
 
         archive_path = Path(self.tmp.name) / "generation-wrong-root.uvproj.zip"
