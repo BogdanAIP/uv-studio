@@ -28,6 +28,7 @@ from uv_studio.production.semantics import (
 )
 from uv_studio.projects.generation_authority import (
     GenerationReferenceAuthorityError,
+    merge_reference_variants,
     validate_generation_reference_bytes,
 )
 from uv_studio.projects.models import (
@@ -80,29 +81,22 @@ def _registered_output_paths(project: ProjectDocument) -> set[str]:
     return {item.path for item in (*project.sources, *project.artifacts)}
 
 
-def _merge_redo_references(references: tuple[ProjectReference, ...]) -> tuple[ProjectReference, ...]:
-    by_id: dict[str, ProjectReference] = {}
-    by_path: dict[str, ProjectReference] = {}
-    merged: list[ProjectReference] = []
-    for reference in references:
-        existing_id = by_id.get(reference.id)
-        if existing_id is not None:
-            if existing_id.to_dict() != reference.to_dict():
-                raise GenerationJobError(
-                    f"generation recovery found ambiguous redo reference identity: {reference.id}"
-                )
-            continue
-        existing_path = by_path.get(reference.path)
-        if existing_path is not None:
-            if existing_path.to_dict() != reference.to_dict():
-                raise GenerationJobError(
-                    f"generation recovery found ambiguous redo reference path: {reference.path}"
-                )
-            continue
-        by_id[reference.id] = reference
-        by_path[reference.path] = reference
-        merged.append(reference)
-    return tuple(merged)
+def _merge_redo_references(
+    store: ProjectStore,
+    project_id: str,
+    references: tuple[ProjectReference, ...],
+) -> tuple[ProjectReference, ...]:
+    try:
+        return merge_reference_variants(
+            store,
+            project_id,
+            references,
+            label="Generation recovery redo",
+        )
+    except GenerationReferenceAuthorityError as exc:
+        raise GenerationJobError(
+            f"generation recovery found ambiguous redo reference authority: {exc}"
+        ) from exc
 
 
 def _redoable_output_references(store: ProjectStore, project_id: str) -> tuple[ProjectReference, ...]:
@@ -113,11 +107,13 @@ def _redoable_output_references(store: ProjectStore, project_id: str) -> tuple[P
     except ProjectTransactionError as exc:
         raise GenerationJobError("generation recovery found invalid UOW redo history") from exc
     return _merge_redo_references(
+        store,
+        project_id,
         tuple(
             reference
             for document in documents
             for reference in (*document.sources, *document.artifacts)
-        )
+        ),
     )
 
 
