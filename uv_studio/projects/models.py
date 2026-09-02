@@ -169,11 +169,8 @@ def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any])
 
     job_id = generation.get("job_id")
     attempt_id = generation.get("attempt_id")
-    try:
-        validate_identifier(job_id, field_name="generation.job_id")
-        validate_identifier(attempt_id, field_name="generation.attempt_id")
-    except ProjectValidationError as exc:
-        raise ProjectValidationError(str(exc)) from exc
+    validate_identifier(job_id, field_name="generation.job_id")
+    validate_identifier(attempt_id, field_name="generation.attempt_id")
 
     parts = PurePosixPath(path).parts
     if parts and parts[0] == "artifacts":
@@ -342,6 +339,7 @@ class ProjectDocument:
         object.__setattr__(self, "sources", self._validated_references(self.sources))
         object.__setattr__(self, "artifacts", self._validated_references(self.artifacts))
         self._validate_unique_reference_ids()
+        self._validate_reference_roles()
 
     @staticmethod
     def _validated_references(
@@ -367,6 +365,13 @@ class ProjectDocument:
             if reference.id in seen:
                 raise ProjectValidationError(f"duplicate reference id: {reference.id}")
             seen.add(reference.id)
+
+    def _validate_reference_roles(self) -> None:
+        for reference in self.sources:
+            if "generation" in reference.metadata:
+                raise ProjectValidationError(
+                    "Generation ProjectReference must remain under Project artifact authority, not sources"
+                )
 
     def to_dict(self) -> dict[str, Any]:
         return {
