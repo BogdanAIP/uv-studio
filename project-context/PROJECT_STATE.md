@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: draft -->
+<!-- uv-context-state: review -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-02
@@ -9,36 +9,33 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` remains in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is refrozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-Fresh ordinary-ChatGPT review of frozen head `a8b9844ccc93a91512f96bf0edc0338070bb694e` returned `CURRENT FINDINGS` with one P2: archive export could call recovery-capable `ProjectUnitOfWork.history()` only after `document`, raw schema version and filesystem inventory had already been sampled. A crash-left prepared UOW operation could therefore roll canonical state back mid-export and leave stale sampled archive authority.
+The previous fresh ordinary-ChatGPT review of frozen head `a8b9844ccc93a91512f96bf0edc0338070bb694e` returned one `CURRENT` P2: archive export could trigger recovery of crash-left prepared UOW state only after sampling schema, Project ownership and filesystem membership. PR #89 returned to Draft before repair.
 
-## Eighth Draft repair completed
+## Eighth repair accepted in Draft
 
-Regression commit `1999185c0c7f01cca765345caa3e63cd01572dfd` adds deterministic hard-crash coverage in `tests/test_stage19_archive_prepared_recovery.py`. The test interrupts a real UOW commit after its after-snapshots/history have been written but before the transaction journal receives the committed marker, leaving the durable journal in `prepared` exactly as a process loss can do.
+Regression `1999185c0c7f01cca765345caa3e63cd01572dfd` deterministically interrupts a real UOW commit after after-snapshots/history are written but before the committed marker. It proves a prepared first schema-v1→v2 transaction is recovered to exact historical v1 bytes before archive sampling and remains importable, and proves prepared artifact registration cannot leave stale pre-recovery media ownership in the archive.
 
-The schema compatibility regression starts from exact schema-v1 `project.json` bytes, leaves the first v1→v2 UOW transaction prepared with schema-v2 after-bytes live, then exports. Export must recover the prepared operation first, restore the exact schema-v1 bytes/history, emit manifest `project_schema_version=1`, archive those exact v1 bytes, and remain importable without rewriting historical bytes. A second regression leaves a prepared artifact-registration transaction and a self-identifying `art_<uuid>` payload; after recovery removes the stale ProjectReference, export must see the remaining bytes as unpublished managed media and fail closed instead of trusting pre-recovery ownership.
+Runtime `80fe2b3076b64a94c8d6ebc7118f79c3af88688d` adds only four lines in `export_project()`: under the already-held shared project fence, call recovery-capable `ProjectUnitOfWork(store).history(project_id)` before loading Project state, reading raw schema version or enumerating filesystem membership. UOW semantics and binary-history authority are unchanged.
 
-Runtime commit `80fe2b3076b64a94c8d6ebc7118f79c3af88688d` changes only `uv_studio/projects/archive.py` with four added lines: while already holding the shared project fence, `export_project()` calls `ProjectUnitOfWork(store).history(project_id)` before loading the Project, sampling raw schema version, choosing archive membership, or deriving media ownership. This reuses the canonical prepared-operation recovery authority and does not change UOW transaction semantics.
+Material/test head `80fe2b3076b64a94c8d6ebc7118f79c3af88688d` passed CI #4418 (`33601095299`) **5/5**. Final synchronized Draft head `1f36c87a2f4cd1b0c9c2b4376ede7089b3f991c4` passed authoritative post-body-sync CI #4422 (`33601720381`) **5/5**: development-context, both full unit suites, and both app-baseline API/real-media/frontend/browser Product Truth jobs succeeded.
 
-`80fe2b3076b64a94c8d6ebc7118f79c3af88688d` passed exact-head Draft CI #4418 (`33601095299`) **5/5** on Ubuntu and Windows: development-context, both full unit suites including the new hard-crash regressions, and both app-baseline API/real-media/frontend/browser Product Truth jobs all succeeded.
+The prepared-UOW P2 thread `PRRT_kwDOT0Lyms6eXd2v` was replied to with concrete regression/runtime/CI evidence and resolved. Live recheck showed no unresolved inline review threads before this context-only refreeze.
 
-## Previous repair evidence retained
+## Frozen review boundary
 
-- archive redo-owned-media authority and `two Undo -> export/import -> two Redo`: `e70f4cf94005fd3a7618bc5c74eef7310a1c1b11` + `e782e1fdea7eaf0984418e08a763a12ba3834454`, material CI #4392 and synchronized Draft CI #4401 5/5;
-- redo-owned generated bytes survive startup/restart until Redo truncation: `dcb5f6158f1a92225501904ddad0fbe6309162e7` + `fad2134f02cddb9a6ac3f364d76543c2d068cb8d`, CI #4369 5/5;
-- prepared-audio `assets/aud_<uuid>` and `.upload/.promote` crash-left recovery: `44d7e036230f50e2a82cd908da13ec67508bd041` + `9b56d5f2fb071e212bf9fcf5900301d8f6ac1d28`, CI #4374 5/5;
-- all earlier Stage-19 schema-v1/v2, archive snapshot/digest, publication fencing, Generation reconciliation, Production Take Undo, source/WebVTT/legacy-art recovery, arbitrary-path marker and Product Truth repairs remain in force.
+Only `project-context/ACTIVE_SLICE.json` and this `PROJECT_STATE.md` change during the refreeze from the accepted Draft head. No runtime, test, schema or product behavior changes after CI #4422. The exact frozen review HEAD is resolved externally after these context commits and must remain unchanged through Ready state, post-Ready CI and the next fresh independent semantic review.
 
-## Required sequence
+All previous Stage-19 repairs remain in force: schema-v1/v2 compatibility and exact historical identity, archive locking/snapshot/digest authority, staged/fenced publication, Generation attempt/Job/artifact/Take recovery and corruption checks, explicit Take Undo preservation, source/WebVTT/legacy-art/prepared-audio recovery, redo-owned media preservation across startup/archive, publication-marker reference identity, and immediate-next-action Product Truth behavior.
 
-1. synchronize PR body with the eighth repair while PR #89 remains Draft;
-2. require a fresh exact-head post-sync Draft CI 5/5;
-3. reply to and resolve the prepared-UOW archive P2 with concrete repair and final CI evidence, then verify zero unresolved inline findings;
-4. refreeze repository context only to `review` without changing runtime/test behavior;
-5. mark PR #89 Ready without changing the frozen code head, require post-Ready exact-head CI 5/5, and re-resolve live base/head/thread identity;
-6. run another completely fresh ordinary-ChatGPT semantic review under governing BASE `.agents/skills/code-review/SKILL.md` v1.0;
-7. merge only on `CURRENT PASS` with zero findings and clean final live base/head/CI/thread identity.
+## Next required action
+
+1. synchronize the PR body with the exact frozen review HEAD;
+2. mark PR #89 Ready for review without changing Git HEAD;
+3. require authoritative post-Ready exact-head CI 5/5 and recheck live BASE/HEAD/thread identity;
+4. run a completely fresh ordinary-ChatGPT semantic review under governing BASE `.agents/skills/code-review/SKILL.md` v1.0 against exact BASE..HEAD;
+5. merge only on `CURRENT PASS` with zero findings and clean final live identity.
 
 After merge, D-038 lifecycle closure to `idle` remains mandatory before starting the declared handoff.
 
