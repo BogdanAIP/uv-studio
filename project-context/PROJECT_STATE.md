@@ -24,7 +24,7 @@ Four concrete gaps survived falsification and are being repaired together:
 
 Regression-first commit `f0ea9f54854895646776572edf0602dffc5c1309` extends the real Generation harness with four cases: corruption between first and second Redo; accepted-reference metadata evolution surviving restart/export/import/three Redos; a structurally valid but unreachable damaged redo transaction being rejected by archive and startup; and a Generation reference moved outside the canonical artifacts root being rejected.
 
-The current material head is `abed09f7780159e2a6e16905993ca6b2383033f9`. CI #4471 (`33639266506`) is running. Its first `development-context` attempt failed only because the PR body still lacked the required single `## Changes` heading while this Draft preflight was being synchronized; runtime/unit/app jobs continue and the PR body is being corrected without changing Git HEAD.
+The current material head is `abed09f7780159e2a6e16905993ca6b2383033f9`. CI #4471 (`33639266506`) is running. Its first `development-context` attempt failed only because the PR body still lacked the required single `## Changes` heading while this Draft preflight was being synchronized; runtime/unit/app jobs continue and the PR body is being corrected without changing material code.
 
 ## Accepted evidence before this preflight repair
 
