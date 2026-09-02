@@ -226,9 +226,42 @@ def _has_protected_studio_claim(project: ProjectDocument) -> bool:
     )
 
 
-def assert_project_identity_transition(current: ProjectDocument, proposed: ProjectDocument) -> None:
-    """Block generic writes from creating, repairing or changing Studio identity."""
+def _assert_generation_reference_authority_transition(
+    current: ProjectDocument,
+    proposed: ProjectDocument,
+) -> None:
+    """Keep an existing Generation reference bound to its original durable identity.
 
+    Canonical commands may add unrelated metadata such as Production acceptance
+    bindings, and Undo may remove a reference entirely. But while the same reference
+    ID remains present, a generic Project mutation must not strip/rebind its reserved
+    Generation namespace or change the path/kind later used to reconnect durable
+    Job/Attempt and exact-byte authority.
+    """
+
+    current_by_id = {reference.id: reference for reference in (*current.sources, *current.artifacts)}
+    proposed_by_id = {reference.id: reference for reference in (*proposed.sources, *proposed.artifacts)}
+    for reference_id, existing in current_by_id.items():
+        if "generation" not in existing.metadata:
+            continue
+        replacement = proposed_by_id.get(reference_id)
+        if replacement is None:
+            continue
+        if (
+            replacement.path != existing.path
+            or replacement.kind != existing.kind
+            or replacement.metadata.get("generation") != existing.metadata.get("generation")
+        ):
+            raise ProjectValidationError(
+                "generic project mutation cannot change existing Generation reference authority: "
+                f"{reference_id!r}"
+            )
+
+
+def assert_project_identity_transition(current: ProjectDocument, proposed: ProjectDocument) -> None:
+    """Block generic writes from changing protected Project/Generation identity."""
+
+    _assert_generation_reference_authority_transition(current, proposed)
     if not (_has_protected_studio_claim(current) or _has_protected_studio_claim(proposed)):
         return
     current_has_studio = STUDIO_EXTENSION_KEY in current.extensions
