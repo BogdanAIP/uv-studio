@@ -153,21 +153,27 @@ def _json_object(value: Mapping[str, Any] | None, *, field_name: str) -> dict[st
 def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any]) -> None:
     """Fail closed on structurally impossible UV Generation ProjectReferences.
 
-    ``metadata.generation`` is reserved UV Generation authority. Pending recovery
+    ``metadata.generation`` is a reserved UV authority namespace. Pending recovery
     already rejects references outside the ``artifacts`` root, while succeeded
     authority additionally requires the exact canonical root. This persistence
-    boundary closes the remaining shape gap: an artifacts-root Generation output
-    cannot hide in a nested directory, and continuation lineage must always agree
-    with the durable generation contract even before an attempt is succeeded.
+    boundary prevents malformed namespace downgrades, unsafe Job identity, nested
+    artifacts-root outputs, and continuation-lineage drift before any recovery code
+    can classify the reference as trusted Generation state.
     """
 
+    if "generation" not in metadata:
+        return
     generation = metadata.get("generation")
     if not isinstance(generation, Mapping):
-        return
+        raise ProjectValidationError("metadata.generation must be a Generation authority object")
 
+    job_id = generation.get("job_id")
     attempt_id = generation.get("attempt_id")
-    if not isinstance(attempt_id, str) or not attempt_id:
-        raise ProjectValidationError("Generation reference requires a non-empty attempt_id")
+    try:
+        validate_identifier(job_id, field_name="generation.job_id")
+        validate_identifier(attempt_id, field_name="generation.attempt_id")
+    except ProjectValidationError as exc:
+        raise ProjectValidationError(str(exc)) from exc
 
     parts = PurePosixPath(path).parts
     if parts and parts[0] == "artifacts":
