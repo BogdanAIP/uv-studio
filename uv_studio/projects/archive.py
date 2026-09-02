@@ -29,6 +29,7 @@ from uv_studio.production.semantics import (
 from .generation_authority import (
     GenerationReferenceAuthorityError,
     generation_reference_authority,
+    merge_reference_variants,
 )
 from .models import (
     PROJECT_SCHEMA_VERSION,
@@ -149,28 +150,21 @@ def _registered_media_paths(document: ProjectDocument) -> set[str]:
 
 
 def _merge_reference_authority(
+    store: ProjectStore,
+    project_id: str,
     references: tuple[ProjectReference, ...],
     *,
     label: str,
 ) -> tuple[ProjectReference, ...]:
-    by_id: dict[str, ProjectReference] = {}
-    by_path: dict[str, ProjectReference] = {}
-    merged: list[ProjectReference] = []
-    for reference in references:
-        existing_id = by_id.get(reference.id)
-        if existing_id is not None:
-            if existing_id.to_dict() != reference.to_dict():
-                raise ProjectArchiveError(f"{label} reference identity is ambiguous: {reference.id}")
-            continue
-        existing_path = by_path.get(reference.path)
-        if existing_path is not None:
-            if existing_path.to_dict() != reference.to_dict():
-                raise ProjectArchiveError(f"{label} reference path is ambiguous: {reference.path}")
-            continue
-        by_id[reference.id] = reference
-        by_path[reference.path] = reference
-        merged.append(reference)
-    return tuple(merged)
+    try:
+        return merge_reference_variants(
+            store,
+            project_id,
+            references,
+            label=label,
+        )
+    except GenerationReferenceAuthorityError as exc:
+        raise ProjectArchiveError(str(exc)) from exc
 
 
 def _redoable_media_authority(store: ProjectStore, project_id: str) -> _RedoMediaAuthority:
@@ -182,14 +176,23 @@ def _redoable_media_authority(store: ProjectStore, project_id: str) -> _RedoMedi
         raise ProjectArchiveError("Project redo history is invalid") from exc
 
     sources = _merge_reference_authority(
+        store,
+        project_id,
         tuple(reference for document in documents for reference in document.sources),
         label="Redo source",
     )
     artifacts = _merge_reference_authority(
+        store,
+        project_id,
         tuple(reference for document in documents for reference in document.artifacts),
         label="Redo artifact",
     )
-    combined = _merge_reference_authority((*sources, *artifacts), label="Redo media")
+    combined = _merge_reference_authority(
+        store,
+        project_id,
+        (*sources, *artifacts),
+        label="Redo media",
+    )
     source_ids = {reference.id for reference in sources}
     return _RedoMediaAuthority(
         sources=tuple(reference for reference in combined if reference.id in source_ids),
@@ -481,6 +484,8 @@ def export_project(
         _reject_interrupted_publications(store, project_id)
         _reject_unpublished_managed_media(document, redo_authority, project_dir, files)
         authoritative_artifacts = _merge_reference_authority(
+            store,
+            project_id,
             (*document.artifacts, *redo_authority.artifacts),
             label="Generation artifact",
         )
