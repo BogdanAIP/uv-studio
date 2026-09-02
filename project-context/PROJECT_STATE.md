@@ -9,41 +9,50 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is back in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` remains in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The ninth repair itself passed material CI #4445 and synchronized Draft CI #4452, and all inline review threads were resolved. Before marking Ready again, a development-context prefinal adversarial audit was deliberately run across the cumulative BASE..HEAD authority/recovery surface to avoid another Ready -> fresh-review -> Draft loop.
+The cumulative Stage-19 implementation and all prior fresh-review repairs remain in force. Before the next Ready transition, a final development-context adversarial preflight was run across Project schema-v1/v2 compatibility, ProjectUnitOfWork history, archive/recovery authority, Generation Job/Attempt/Take identity, binary digest authority, publication recovery and browser Product Truth.
 
-## Prefinal adversarial findings and repair
+## Final preflight findings and repairs
 
-Four concrete gaps survived falsification and are being repaired together:
+The preflight found and repaired these additional concrete gaps before Ready:
 
-1. **Partial Redo Generation byte gap.** `ProjectUnitOfWork.redo()` validated Generation bytes only when the specific Redo operation restored `project.json`. A valid sequence could Redo `generation.register_output` while bytes were intact, mutate the file, then Redo `production.register_take` (Production Semantics only) and restore the historical Take around corrupted media. Runtime `6e16b5bcd42d887b14b22c36173bb77f4b78dc14` now validates every Generation ProjectReference that remains live after any Redo, even when that Redo changes only Production/Timeline JSON.
-2. **Valid reference metadata evolution was misclassified as ambiguous.** `production.accept_take` legitimately annotates the same ProjectReference with `production_acceptances`. Shared authority `07253a6e8646b7caeb12bc92de5e89530f2b8847`, archive `553b240dc8c1f4f06d25ee0b9dfdacd3a8bc2a27`, and startup recovery `abed09f7780159e2a6e16905993ca6b2383033f9` now allow metadata evolution only while stable reference ID/path/kind and immutable Generation Job/Attempt/size/SHA authority remain identical; path reuse, identity drift, Generation classification drift or provenance drift still fail closed.
-3. **Redo authority did not prove the full snapshot chain was reachable.** `redo_project_documents()` previously validated transaction identity and after-snapshots but not every transaction's `before` snapshot against simulated current state. Runtime `6e16b5bcd42d887b14b22c36173bb77f4b78dc14` now simulates the entire redo suffix across all changed canonical documents and requires exact before -> after reachability before any historical ProjectReference can become archive/restart authority.
-4. **Archive Generation structural path authority was incomplete.** Shared Generation authority checked attempt-derived basename but not the canonical `artifacts/` root. `07253a6e8646b7caeb12bc92de5e89530f2b8847` now requires the exact direct `artifacts/generated_<attempt>...` publication shape and also reconnects persisted continuation lineage to the durable Generation contract.
+1. **Partial Redo Generation byte validation.** `ProjectUnitOfWork.redo()` now validates every Generation ProjectReference remaining live after any Redo, including a Production-only Redo after the artifact Redo. This prevents a Take from being restored around bytes changed between Redos.
+2. **Valid ProjectReference metadata evolution.** Shared redo authority now allows canonical metadata evolution such as `production.accept_take` only while stable reference ID/path/kind and immutable Generation Job/Attempt/size/SHA authority stay identical. Path reuse, classification drift and provenance drift fail closed.
+3. **Full Redo reachability.** Redo authority simulates the complete current redo suffix and requires each canonical `before -> after` snapshot transition to be reachable before historical ProjectReferences become archive/recovery authority.
+4. **Generation structural authority.** Generation authority requires the canonical attempt-derived publication shape, reconnects continuation lineage to the durable contract, and prevents nested `artifacts/.../...` Generation paths.
+5. **Reserved Generation namespace.** A ProjectReference carrying the `generation` key must carry a JSON-object authority payload. `job_id` and `attempt_id` are validated identifiers before task-record path use; malformed/downgraded Generation metadata fails closed at the Project boundary.
+6. **Generation container role.** A Generation ProjectReference is an artifact and cannot be placed in `Project.sources`, preventing archive ownership classification from bypassing Generation Job/digest validation.
+7. **Existing Generation authority immutability under generic writes.** While a reference ID remains present, generic canonical mutation cannot change its path/kind or strip/rebind `metadata.generation`. Full removal through Undo remains valid, and unrelated canonical metadata such as `production_acceptances` may still evolve.
+8. **Regression layering after stronger guards.** Two older negative tests previously used canonical `update_project()` to construct intentionally corrupt Generation state. The stronger transition guard now rejects those mutations earlier, so commits `61acf52bf15568dd76ff082509fb5c332e1383d5` and `ae95ad0d83d240dcbb29d51b0038f95eaa8b1fb1` preserve the original recovery/archive checks by simulating out-of-band durable `project.json` corruption directly instead of weakening production validation.
 
-Regression-first commit `f0ea9f54854895646776572edf0602dffc5c1309` extends the real Generation harness with four cases: corruption between first and second Redo; accepted-reference metadata evolution surviving restart/export/import/three Redos; a structurally valid but unreachable damaged redo transaction being rejected by archive and startup; and a Generation reference moved outside the canonical artifacts root being rejected.
+Key implementation/test commits in this final preflight include `f0ea9f54854895646776572edf0602dffc5c1309`, `07253a6e8646b7caeb12bc92de5e89530f2b8847`, `6e16b5bcd42d887b14b22c36173bb77f4b78dc14`, `553b240dc8c1f4f06d25ee0b9dfdacd3a8bc2a27`, `abed09f7780159e2a6e16905993ca6b2383033f9`, `7e31b75b1aee9ba92a7e4043a5359195ed12d07e`, `8a3bc170a43a8f766635e6b5b23399e9452d3f7d`, `2eacf0ba055baf5e716ac1222aa7cec34fd2b5a7`, and `808cf64f1c14484e6268e28412bbf937ac2e9d42`.
 
-The current material head is `abed09f7780159e2a6e16905993ca6b2383033f9`. CI #4471 (`33639266506`) is running. Its first `development-context` attempt failed only because the PR body still lacked the required single `## Changes` heading while this Draft preflight was being synchronized; runtime/unit/app jobs continue and the PR body is being corrected without changing material code.
+`docs/PROJECT_STORE.md` and `docs/PROJECT_ARCHIVES.md` are synchronized with the resulting Generation/Redo/archive authority contract.
 
-## Accepted evidence before this preflight repair
+## Verification
 
-- ninth material/test head `3eb78fc25a6fd65ce55cac837e4c1816c4eb67d9`: CI #4445 (`33630725870`) **5/5 SUCCESS**;
-- synchronized Draft head `892db28ca4abee56a64dfe211b28b02af8f2fde4`: CI #4452 (`33631575224`) **5/5 SUCCESS**;
-- P1 thread `PRRT_kwDOT0Lyms6edmby` resolved with exact evidence;
-- live review-thread recheck before this audit: zero unresolved inline threads;
-- previous review freeze head `056a35bab13adaa9cbd5b159f8bbbc8fbf00ea09` changed only project context after #4452 and was intentionally not marked Ready once this preflight audit was requested.
+Exact material/test head `ae95ad0d83d240dcbb29d51b0038f95eaa8b1fb1` passed CI #4507 (`33646746316`) **5/5 SUCCESS**:
 
-All earlier Stage-19 repairs remain intended to stay in force: schema-v1/v2 exact historical identity, prepared-UOW recovery before archive sampling, archive locking/snapshot authority, staged/fenced WebVTT and Generation publication, Generation Job/artifact/Take recovery, explicit Take Undo preservation, source/WebVTT/legacy-art/prepared-audio recovery, redo-owned media preservation, publication-marker reference identity and immediate-next-action Product Truth behavior.
+- `development-context` — SUCCESS;
+- `bootstrap (ubuntu-latest, 3.11)` — SUCCESS, full unit suite;
+- `bootstrap (windows-latest, 3.11)` — SUCCESS, full unit suite;
+- `app-baseline (ubuntu-latest)` — SUCCESS, API integration, real-media, frontend lint/audit/build and browser Product Truth;
+- `app-baseline (windows-latest)` — SUCCESS, API integration, pinned media toolchain, real-media, frontend lint/audit/build and browser Product Truth.
+
+A live PR-thread recheck after the material repair found zero unresolved inline review threads. The final read-only falsification pass found no additional supported defect across the repaired Generation classification, pending/succeeded recovery, redo variant aggregation, archive digest authority, schema-v1 compatibility and generic public Project-update boundaries.
+
+All earlier Stage-19 repairs remain intended to stay in force: exact historical schema-v1/v2 identity, prepared-UOW recovery before archive sampling, project-fenced archive snapshots, staged/fenced WebVTT and Generation publication, exact Generation Job/artifact/Take recovery, explicit Take Undo preservation, source/WebVTT/legacy-art/prepared-audio recovery, redo-owned media preservation, publication-marker reference identity, arbitrary-path publication fail-closed behavior and immediate-next-action Product Truth behavior.
 
 ## Next required action
 
-1. finish exact material-head CI and repair only concrete failures;
-2. synchronize archive/store docs with the repaired preflight authority contract;
-3. run a final synchronized Draft exact-head CI 5/5;
-4. perform one more read-only cumulative preflight for the repaired authority matrix;
-5. only then refreeze to `review`, mark Ready once, require post-Ready exact-head CI 5/5 and run the mandatory fresh ordinary-ChatGPT review;
-6. merge only on `CURRENT PASS` with zero findings and clean final live identity.
+1. synchronize the PR body with this final Draft evidence and current context head;
+2. require one synchronized exact-head Draft CI **5/5**;
+3. recheck exact BASE/HEAD and zero unresolved inline threads;
+4. if still clean, make only context lifecycle changes from `draft` to `review` and freeze the resulting HEAD;
+5. mark PR #89 Ready once and require post-Ready exact-head CI **5/5**;
+6. run the mandatory genuinely fresh ordinary-ChatGPT read-only semantic review under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0;
+7. merge only on `review_validity=CURRENT`, `status=PASS`, `reported_findings=0` with exact final BASE/HEAD/CI/thread identity still clean.
 
 After merge, D-038 lifecycle closure to `idle` remains mandatory before starting the declared handoff.
 
