@@ -12,7 +12,7 @@ from uv_studio.projects.store import ProjectStore, ProjectStoreError
 
 class Stage19GenerationReferenceShapeTests(unittest.TestCase):
     @staticmethod
-    def _metadata(*, continuation: str | None = None, lineage=...):
+    def _metadata(*, continuation: str | None = None, lineage=..., job_id: str = "genjob_shape"):
         contract = {
             "schema_version": 1,
             "fixed_constraints": [],
@@ -32,7 +32,7 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
             "size_bytes": 7,
             "sha256": "0" * 64,
             "generation": {
-                "job_id": "genjob_shape",
+                "job_id": job_id,
                 "attempt_id": "attempt_shape",
                 "model_id": "uv.image.shape",
                 "capability_id": "image.generate",
@@ -83,6 +83,26 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
                     continuation="artifact_source",
                     lineage={"kind": "continuation", "source_reference_id": "artifact_other"},
                 ),
+            )
+
+    def test_generation_namespace_rejects_non_object_authority(self) -> None:
+        for malformed in (None, [], "legacy", 7):
+            with self.subTest(malformed=malformed):
+                with self.assertRaisesRegex(ProjectValidationError, "generation.*object|Generation authority"):
+                    ProjectReference(
+                        id="artifact_bad_generation_namespace",
+                        kind="image",
+                        path="artifacts/generated_attempt_shape.png",
+                        metadata={"generation": malformed},
+                    )
+
+    def test_generation_reference_rejects_unsafe_job_identity(self) -> None:
+        with self.assertRaisesRegex(ProjectValidationError, "job_id"):
+            ProjectReference(
+                id="artifact_unsafe_job",
+                kind="image",
+                path="artifacts/generated_attempt_shape.png",
+                metadata=self._metadata(job_id="../other-project/tasks/job_escape"),
             )
 
     def test_store_rejects_durable_generation_shape_corruption_before_recovery(self) -> None:
