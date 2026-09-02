@@ -105,6 +105,28 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
                 metadata=self._metadata(job_id="../other-project/tasks/job_escape"),
             )
 
+    def test_generation_reference_cannot_move_into_sources_role(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            store = ProjectStore(Path(temp) / "projects")
+            project = store.create_project(
+                title="Stage 19 Generation source role",
+                recipe_id=STUDIO_COMPAT_RECIPE_ID,
+                extensions=studio_project_extensions("micro_drama"),
+                project_id="prj_stage19_generation_source_role",
+            )
+            reference = ProjectReference(
+                id="artifact_source_role",
+                kind="image",
+                path="artifacts/generated_attempt_shape.png",
+                metadata=self._metadata(),
+            )
+            with self.assertRaisesRegex(ProjectValidationError, "Generation.*sources|artifact authority"):
+                store.update_project(
+                    project.project_id,
+                    sources=(reference,),
+                    artifacts=(),
+                )
+
     def test_store_rejects_durable_generation_shape_corruption_before_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             store = ProjectStore(Path(temp) / "projects")
