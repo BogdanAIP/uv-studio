@@ -1,6 +1,6 @@
 """Shared durable Generation ProjectReference authority.
 
-Generation output bytes are not part of ProjectUnitOfWork JSON snapshots.  Any
+Generation output bytes are not part of ProjectUnitOfWork JSON snapshots. Any
 code that preserves or restores a Generation ProjectReference must therefore
 reconnect the historical reference to its durable Job/Attempt provenance and to
 the exact output size/SHA-256 before trusting the binary payload.
@@ -46,7 +46,7 @@ def generation_reference_authority(
 ) -> GenerationReferenceAuthority | None:
     """Validate durable Job/Attempt provenance for one Generation artifact.
 
-    ``None`` means the ProjectReference is not a Generation artifact.  Generation
+    ``None`` means the ProjectReference is not a Generation artifact. Generation
     references fail closed if any durable identity, request mapping, contract,
     output path, size or digest authority is missing or contradictory.
     """
@@ -141,8 +141,30 @@ def generation_reference_authority(
             f"Generation artifact contract disagrees with durable Job: {artifact.id}"
         )
 
+    continuation_reference = contract.get("continuation_source_reference_id")
+    if continuation_reference is None:
+        expected_lineage = None
+    elif isinstance(continuation_reference, str) and continuation_reference:
+        expected_lineage = {
+            "kind": "continuation",
+            "source_reference_id": continuation_reference,
+        }
+    else:
+        raise GenerationReferenceAuthorityError(
+            f"Generation Job has invalid continuation authority for artifact: {artifact.id}"
+        )
+    if generation.get("lineage") != expected_lineage:
+        raise GenerationReferenceAuthorityError(
+            f"Generation artifact lineage disagrees with durable Job: {artifact.id}"
+        )
+
+    path_parts = PurePosixPath(artifact.path).parts
+    if len(path_parts) != 2 or path_parts[0] != "artifacts":
+        raise GenerationReferenceAuthorityError(
+            f"Generation artifact path is outside the canonical artifacts root: {artifact.id}"
+        )
     expected_name = f"generated_{attempt_id}"
-    artifact_name = PurePosixPath(artifact.path).name
+    artifact_name = path_parts[1]
     if not (artifact_name == expected_name or artifact_name.startswith(expected_name + ".")):
         raise GenerationReferenceAuthorityError(
             f"Generation artifact path disagrees with durable attempt: {artifact.id}"
@@ -170,6 +192,58 @@ def generation_reference_authority(
         size_bytes=size_bytes,
         sha256=sha256,
     )
+
+
+def merge_reference_variants(
+    store: ProjectStore,
+    project_id: str,
+    references: tuple[ProjectReference, ...],
+    *,
+    label: str,
+) -> tuple[ProjectReference, ...]:
+    """Merge redo/live reference versions without confusing metadata evolution with ABA.
+
+    ProjectReference metadata is allowed to evolve through canonical commands (for
+    example ``production.accept_take`` appends ``production_acceptances``). Stable
+    ownership identity is the reference ID + path + kind. A Generation reference
+    additionally must resolve to the same immutable durable Generation authority in
+    every historical variant. ID/path/kind drift, path reuse by another reference, or
+    Generation/non-Generation classification drift fails closed.
+    """
+
+    by_id: dict[str, ProjectReference] = {}
+    by_path: dict[str, str] = {}
+    generation_by_id: dict[str, GenerationReferenceAuthority | None] = {}
+    merged: list[ProjectReference] = []
+    for reference in references:
+        try:
+            generation_authority = generation_reference_authority(store, project_id, reference)
+        except GenerationReferenceAuthorityError:
+            raise
+
+        path_owner = by_path.get(reference.path)
+        if path_owner is not None and path_owner != reference.id:
+            raise GenerationReferenceAuthorityError(
+                f"{label} reference path is ambiguous: {reference.path}"
+            )
+
+        existing = by_id.get(reference.id)
+        if existing is not None:
+            if existing.path != reference.path or existing.kind != reference.kind:
+                raise GenerationReferenceAuthorityError(
+                    f"{label} reference identity changed path/kind: {reference.id}"
+                )
+            if generation_by_id[reference.id] != generation_authority:
+                raise GenerationReferenceAuthorityError(
+                    f"{label} Generation authority changed across history: {reference.id}"
+                )
+            continue
+
+        by_id[reference.id] = reference
+        by_path[reference.path] = reference.id
+        generation_by_id[reference.id] = generation_authority
+        merged.append(reference)
+    return tuple(merged)
 
 
 def validate_generation_reference_bytes(
