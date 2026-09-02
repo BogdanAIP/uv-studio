@@ -153,11 +153,12 @@ def _json_object(value: Mapping[str, Any] | None, *, field_name: str) -> dict[st
 def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any]) -> None:
     """Fail closed on structurally impossible UV Generation ProjectReferences.
 
-    ``metadata.generation`` is already treated as reserved UV Generation authority by
-    archive/recovery code. Its canonical path and continuation lineage therefore
-    belong to the Project persistence boundary too, including crash-left attempts
-    that are not yet durably ``SUCCEEDED`` and cannot use the stronger Job authority
-    validator yet.
+    ``metadata.generation`` is reserved UV Generation authority. Pending recovery
+    already rejects references outside the ``artifacts`` root, while succeeded
+    authority additionally requires the exact canonical root. This persistence
+    boundary closes the remaining shape gap: an artifacts-root Generation output
+    cannot hide in a nested directory, and continuation lineage must always agree
+    with the durable generation contract even before an attempt is succeeded.
     """
 
     generation = metadata.get("generation")
@@ -169,13 +170,14 @@ def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any])
         raise ProjectValidationError("Generation reference requires a non-empty attempt_id")
 
     parts = PurePosixPath(path).parts
-    if len(parts) != 2 or parts[0] != "artifacts":
-        raise ProjectValidationError(
-            "Generation artifact path must be a direct file under the canonical artifacts root"
-        )
-    expected_name = f"generated_{attempt_id}"
-    if not (parts[1] == expected_name or parts[1].startswith(expected_name + ".")):
-        raise ProjectValidationError("Generation artifact path must match its attempt_id")
+    if parts and parts[0] == "artifacts":
+        if len(parts) != 2:
+            raise ProjectValidationError(
+                "Generation artifact path must be a direct file under the canonical artifacts root"
+            )
+        expected_name = f"generated_{attempt_id}"
+        if not (parts[1] == expected_name or parts[1].startswith(expected_name + ".")):
+            raise ProjectValidationError("Generation artifact path must match its attempt_id")
 
     contract = generation.get("contract")
     if not isinstance(contract, Mapping):
