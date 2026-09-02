@@ -46,11 +46,13 @@ This lets import verify the entire portable recovery snapshot before it becomes 
 
 ## Export contract
 
-Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence freezes canonical Project metadata and every participating publisher while export samples the raw schema and enumerates the project filesystem.
+Export creates one stable project snapshot under the same shared cross-runtime project mutation fence used by canonical Project transactions. The fence freezes canonical Project metadata and every participating publisher while export recovers any crash-left prepared ProjectUnitOfWork state, derives validated Redo authority, samples the raw schema and enumerates the project filesystem.
 
 The live fence is a concurrency boundary, not a crash transaction. Current publication recovery therefore adds fail-closed durable evidence for states that can survive process loss.
 
-Historical UV-owned media names remain a compatibility fallback. A regular file in a managed media root (`sources/`, `assets/`, `artifacts/` or `exports/`) whose UV-owned name starts with `src_`, `art_` or `aud_` must already be represented by the frozen Project `sources`/`artifacts` references. Current self-identifying WebVTT `sub_<uuid>` and Generation `generated_attempt_<uuid>` outputs follow the same fail-closed archive rule when they exist without a ProjectReference. Ordinary unregistered project files with unrelated names remain portable and are not reclassified as transient content.
+Historical UV-owned media names remain a compatibility fallback. A regular file in a managed media root (`sources/`, `assets/`, `artifacts/` or `exports/`) whose UV-owned name starts with `src_`, `art_` or `aud_` must already be represented by the frozen Project `sources`/`artifacts` references or by a full validated ProjectReference reachable through the current durable Redo suffix. Current self-identifying WebVTT `sub_<uuid>` and Generation `generated_attempt_<uuid>` outputs follow the same fail-closed archive rule. Ordinary unregistered project files with unrelated names remain portable and are not reclassified as transient content.
+
+Redo reachability is not pathname authority. `ProjectUnitOfWork` snapshots canonical JSON rather than binary media, so an undone `generation.register_output` intentionally leaves its already-published bytes in place while the transaction remains reachable through `history.entries[history.cursor:]`. Export reconstructs the full historical ProjectReference from validated committed redo snapshots. If that reference is a Generation artifact, its durable Job/Attempt/model/execution mapping/request/contract provenance plus persisted `size_bytes` and SHA-256 remain mandatory exactly as when the reference is live. Conflicting or malformed redo reference identity fails closed. A later canonical commit truncates the redo suffix and removes this protection automatically.
 
 `timeline.assemble` needs a separate mechanism because its public contract permits an arbitrary caller-selected output name. Rendering remains staged at the Project Store root. Inside the final shared project fence, immediately before the canonical `os.replace`, the publisher writes a durable `tasks/pub_<uuid>.json` managed-publication marker containing the exact canonical output path and expected reference identity. Normal completion removes the marker only after the matching ProjectReference is durable. If export acquires the project fence and any validated publication marker remains, export fails closed instead of snapshotting the project. Startup reconciliation clears a stale marker only when a registered ProjectReference matches both the marker path and its expected `reference_id`. A dangling or historical reference that merely reuses the same path cannot claim crash-left bytes for a different publication identity; those bytes are moved outside the canonical project tree before the marker is cleared.
 
@@ -67,19 +69,22 @@ Generation restart recovery explicitly handles durable intermediate and historic
 - durable Take registration history with no matching current Take and no authoritative latest Undo is inconsistent and fails closed rather than inventing a replacement Take;
 - a legacy `FAILED` or `CANCELLED` attempt that already has a durable artifact: recovery may repair that exact attempt to `SUCCEEDED` after strict byte/provenance validation;
 - a legacy older-attempt artifact followed by a newer retry: the artifact remains owned by its historical attempt. Recovery repairs the older attempt in place and does not rewrite identity to make the artifact belong to `attempts[-1]`; the newer attempt and the Job's current overall status remain authoritative for current execution state;
+- an artifact absent from current Project state only because `generation.register_output` is currently undone: startup derives its full historical ProjectReference from the validated Redo suffix and verifies its durable Generation provenance plus exact size/SHA-256 before preserving the bytes for future Redo; changed/truncated/replaced bytes fail closed before publication/quarantine recovery mutates the project;
 - already succeeded attempt: materialization is not replayed.
 
 Retry/fail/cancel is rejected while any attempt of that Job owns a durable artifact that has not yet been reconciled as that attempt's success. This prevents current code from creating new versions of the historical split state.
 
 Recovery does not treat a merely non-empty file as success evidence. It checks the ProjectReference's persisted `size_bytes` and SHA-256 against the canonical file and verifies durable generation identity/provenance against the Job: Job ID, the artifact's own Attempt ID, model, capability/offer/adapter execution mapping, request digest and generation contract must agree before a Take can be created/reused or that attempt can be recorded as successful. When Take registration history exists, the same durable ProjectUnitOfWork transaction/operation journals decide whether the historical Take should still exist or was intentionally undone.
 
-Generation Job records intentionally remain outside user Undo/Redo history. A successful attempt's `take_id` is therefore immutable historical provenance, not proof that the Take still exists in current Production Semantics. Archive export resolves the current Production document for each Generation artifact. If the named Take exists, it must belong to the Job's Shot and point to the exact artifact. If it does not exist, export accepts that absence only when durable ProjectUnitOfWork journals prove that a `production.register_take` transaction created the exact Take and a committed Undo later removed it. That proof survives stale redo-branch truncation by later user work. Out-of-band Take deletion, wrong Shot/reference, ambiguous history, or a later Redo fails closed.
+Generation Job records intentionally remain outside user Undo/Redo history. A successful attempt's `take_id` is therefore immutable historical provenance, not proof that the Take still exists in current Production Semantics. Archive export resolves the current Production document for each Generation artifact, including an artifact reconstructed only from the Redo suffix. If the named Take exists, it must belong to the Job's Shot and point to the exact artifact. If it does not exist, export accepts that absence only when durable ProjectUnitOfWork journals prove that a `production.register_take` transaction created the exact Take and a committed Undo later removed it. That proof survives stale redo-branch truncation by later user work. Out-of-band Take deletion, wrong Shot/reference, ambiguous history, or a later Redo fails closed.
 
 Archive export independently validates every Generation ProjectReference against the exact durable attempt named by its provenance rather than requiring all artifacts to match the Job's final attempt. The artifact-owning attempt must itself be `succeeded`, point back to that artifact and carry the historical Take identity. This allows a recoverable historical attempt artifact to remain portable even when a later retry is current or failed, without weakening current Job status semantics.
 
-Archive also validates the same Job/request provenance and compares each Generation artifact's persisted size/SHA-256 with the size/SHA-256 computed while streaming the exact bytes into the ZIP. A file changed after successful generation therefore causes export to fail; the archive's own manifest hash cannot silently replace the Generation artifact's original digest authority.
+Archive also validates the same Job/request provenance and compares each Generation artifact's persisted size/SHA-256 with the size/SHA-256 computed while streaming the exact bytes into the ZIP. A file changed after successful generation therefore causes export to fail; the archive's own manifest hash cannot silently replace the Generation artifact's original digest authority. This check applies equally to live and redo-only Generation references.
 
-Before publication reconciliation, application startup invokes ProjectUnitOfWork history recovery. A crash during an artifact/Take transaction is therefore resolved to its exact durable UOW state before Generation decides whether to complete locally or fail the abandoned Job.
+Direct `ProjectUnitOfWork.redo()` uses the same binary authority boundary. Before a Redo can restore a `project.json` snapshot containing a Generation ProjectReference, it validates that reference against its durable Job/Attempt/provenance and verifies the currently stored output size/SHA-256. Redo therefore cannot restore historical artifact/Take JSON around substituted media bytes.
+
+Before publication reconciliation, application startup invokes ProjectUnitOfWork history recovery. A crash during an artifact/Take transaction is therefore resolved to its exact durable UOW state before Generation decides whether to complete locally or fail the abandoned Job. Archive export performs the same recovery while already holding the project fence and before sampling Project state, raw schema or filesystem membership.
 
 Source-media upload keeps its existing proactive boundary. Request bytes stream first into an exclusive staging file at the Project Store root, outside every canonical project directory. Only after upload completion does source publication acquire the shared project fence; final move, FFprobe validation, portable metadata derivation, source registration and ordinary failure cleanup remain inside that fence. Hard process loss can bypass the ordinary exception handler after the final move, so startup reconciliation also scans `sources/` for unregistered self-identifying `src_<uuid>.*` outputs and moves them to quarantine outside the project tree. Registered source references are preserved. The `src_` archive fallback stays fail-closed before reconciliation.
 
@@ -89,19 +94,21 @@ Export:
 
 1. checks the lexical technical lock path and fails closed if it is a symlink;
 2. acquires the shared project mutation fence;
-3. loads and validates canonical `project.json` and samples its raw schema;
-4. enumerates project entries and rejects symlinks/special filesystem entries;
-5. rejects any validated pending `pub_<uuid>` managed-publication marker;
-6. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
-7. rejects an unregistered self-identifying UV publication (`src_`, `art_`, `aud_`, `sub_`, `generated_attempt_`);
-8. validates every Generation artifact against its own durable successful attempt, current Production Take authority or exact durable Undo evidence, and matching Job/request provenance;
-9. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes and, for Generation artifacts, requires the streamed size/hash to equal persisted Generation artifact authority;
-10. writes the manifest describing those captured bytes;
-11. atomically replaces the requested archive destination when complete.
+3. recovers any crash-left prepared ProjectUnitOfWork state and validates the current durable Redo suffix before sampling archive state;
+4. reconstructs full redo-owned source/artifact ProjectReferences, failing closed on malformed or conflicting historical identity;
+5. loads and validates canonical `project.json` and samples its raw schema;
+6. enumerates project entries and rejects symlinks/special filesystem entries;
+7. rejects any validated pending `pub_<uuid>` managed-publication marker;
+8. excludes only the ordinary technical `tasks/.uv-task-records.lock` coordination file from the portable snapshot;
+9. rejects an unregistered self-identifying UV publication (`src_`, `art_`, `aud_`, `sub_`, `generated_attempt_`) unless current or validated redo reference authority owns that exact path;
+10. validates every live or redo-only Generation artifact against its own durable successful attempt, current Production Take authority or exact durable Undo evidence, matching Job/request provenance and persisted size/SHA-256;
+11. streams every accepted portable regular file once into the ZIP while computing the manifest size and SHA-256 from those exact bytes and, for Generation artifacts, requires the streamed size/hash to equal persisted Generation artifact authority;
+12. writes the manifest describing those captured bytes;
+13. atomically replaces the requested archive destination when complete.
 
 The destination may not be inside the project being archived. That prevents a backup from recursively including itself.
 
-An export rejected because publication/recovery is incomplete is not a corrupt backup: no destination archive is committed. Restart/reconciliation resolves current source-upload, `timeline.assemble`, WebVTT and Generation crash states without replaying renderer/provider work; the caller can retry export after reconciliation completes. If Generation bytes or provenance disagree with durable authority, recovery/export fail closed rather than promoting or archiving altered media.
+An export rejected because publication/recovery is incomplete is not a corrupt backup: no destination archive is committed. Restart/reconciliation resolves current source-upload, `timeline.assemble`, WebVTT and Generation crash states without replaying renderer/provider work; the caller can retry export after reconciliation completes. If Generation bytes or provenance disagree with durable authority, recovery/export/Redo fail closed rather than promoting, archiving or restoring altered media.
 
 ## Import contract
 
@@ -179,6 +186,6 @@ Automatic/scheduled backups are intentionally a separate future policy. The arch
 
 ## Recovery rule
 
-A portable archive is a complete project-level recovery unit for canonical recoverable project state. Runtime coordination artifacts such as the ordinary technical lock file are recreated by the Project Store and are not part of the portable recovery payload. Pending publication markers are not valid archive state: export refuses them until restart reconciliation has produced either an exact matching registered canonical identity or quarantined non-canonical evidence.
+A portable archive is a complete project-level recovery unit for canonical recoverable project state. Runtime coordination artifacts such as the ordinary technical lock file are recreated by the Project Store and are not part of the portable recovery payload. Pending publication markers are not valid archive state: export refuses them until restart reconciliation has produced either an exact matching registered canonical identity or quarantined non-canonical evidence. Redo-owned binary payload is portable only while the validated durable Redo suffix still carries the full owning reference authority; Generation payload additionally must match the historical durable Job/Attempt size/SHA-256 and provenance.
 
 Conflict/clone/replace policies, if later added, must be explicit operations rather than weakening this fail-closed import contract.
