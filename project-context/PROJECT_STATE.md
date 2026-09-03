@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-03
@@ -9,62 +9,44 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is refrozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The prior frozen Ready head `4f8f1e55c9bfd3ef8289a3964fa94707ee4b1f1c` passed post-Ready CI #4583 **5/5 SUCCESS**, then the mandatory genuinely fresh ordinary-ChatGPT `code-review` v1.0 returned `review_validity=CURRENT`, `status=FINDINGS`, `reported_findings=1`, `rejected_candidates=17`. The single P2 was confirmed and is now materially repaired. That earlier review is stale.
+The prior frozen Ready head `16f597ff5a1bea7e0353c64e824712b69829b235` passed post-Ready CI #4609 (`33746380980`) **5/5 SUCCESS** and then the mandatory genuinely fresh ordinary-ChatGPT `code-review` v1.0 returned `review_validity=CURRENT`, `status=FINDINGS`, `reported_findings=1`, `rejected_candidates=21`. The single P1 was confirmed, so that review head is merge-blocked and the lifecycle was returned to Draft before material repair.
 
-The repaired documentation-synchronized Draft head `0c757c86eda9a489ea403f27c1f1cb0c6c2bead8` passed CI #4598 (`33740778124`) **5/5 SUCCESS**. The final synchronized Draft head `106b7396b9e8681550cb59b411b8cb0935f88066` then passed authoritative Draft gate CI #4602 (`33741327112`) **5/5 SUCCESS**. Live PR identity before refreeze remained open, Draft, mergeable, BASE `52be1939eca51d7147990288cfc6258b023c2cd2`, HEAD `106b7396b9e8681550cb59b411b8cb0935f88066`; live inline review-thread count was zero unresolved.
+Lifecycle commit `ca202726ecfb05472fcf0ab817f30c4f153fb5b3` changes `ACTIVE_SLICE.json` from `review` to `draft`. Regression-first commit `75aed8ea5326dd2891007632ef42dbf20fc60ba0` extends the existing terminal-split test with the direct `GenerationService.run()` retry path. Runtime repair commit `c53ce45b8f2ff4c5d50dae147e6e649c4af9ff09` makes the shared `GenerationJobManager.start_execution()` retry/terminal guard consult and validate the same current Redo-owned Generation authority used by explicit requeue before it may create another attempt.
 
-Lifecycle commit `c65e2451766c0375c3e4ea90d5be68e3df1db320` changes only `ACTIVE_SLICE.json` from `draft` to `review`. This synchronized context commit records the corresponding review freeze; no runtime, test, schema or product behavior changes after the successful Draft gate.
+## Confirmed fresh-review P1: direct retry bypassed redo-owned materialization
 
-## Confirmed fresh-review P2: redo-only legacy Generation terminal split
+The supported legacy terminal split can contain exact durable Generation bytes and ProjectReference provenance while the owning attempt/job remains `FAILED`. If the user Undo-es `generation.register_output`, the reference becomes reachable only through the durable ProjectUnitOfWork Redo suffix while its bytes remain present.
 
-A supported legacy terminal split can contain exact durable Generation bytes and ProjectReference provenance while the owning attempt/job remains `FAILED` after a local post-artifact failure. If the user Undo-es `generation.register_output`, the reference becomes reachable only through the durable Redo suffix while its bytes remain present.
+Startup correctly preserves that redo-only materialization and the explicit HTTP retry path already called `requeue_failed_generation_job()`, which validates Redo authority and rejects replay. However, `GenerationService.run()` also supports direct failed-job retry and calls `GenerationJobManager.start_execution()` directly. Before this repair, `start_execution()` used `_has_unreconciled_durable_artifact()` that inspected only live `Project.artifacts`; therefore a direct service/script retry could create a second RUNNING attempt and invoke the provider again even though the first attempt's exact materialization remained durably owned by Redo.
 
-On the old review head, redo-owned validation incorrectly required completed `SUCCEEDED + output_reference_id + take_id` authority before startup could reach the reconciler that establishes those fields. At the same time, retry scanned only live `Project.artifacts`, so it could miss the redo-only durable output and permit a duplicate provider attempt.
+The repair places the missing authority check at the shared Job-manager boundary before attempt creation. `_has_unreconciled_durable_artifact()` now loads the current Redo ProjectReferences through the existing recovery authority, validates redo-owned Generation bytes/provenance, and evaluates live plus Redo-owned references against every historical attempt. Direct `GenerationService.run()`, explicit requeue, failure and cancellation therefore converge on the same fail-closed durable-materialization rule.
 
-The repair preserves explicit user Undo and separates two authority levels:
-
-- incomplete immutable Generation materialization authority: exact Job/Attempt/request/provenance/path/size/SHA, including bounded RUNNING/FAILED/CANCELLED split states;
-- completed Generation authority: the stricter successful attempt/output-reference/Take authority still required by archive/success paths.
-
-Startup can therefore validate and preserve redo-only incomplete materialization bytes without resurrecting current Project/Take state or replaying the provider. Retry validates current Redo authority and remains blocked while that unreconciled materialization is reachable. Explicit user Redo restores the exact reference only after binary validation; ordinary local recovery can then complete the owning attempt without another provider execution. Archive remains strict and does not export incomplete materialization as successful Generation authority.
-
-Regression `tests/test_stage19_redo_terminal_split_recovery.py` covers the exact chain: post-artifact local failure -> legacy `FAILED` attempt -> Undo `generation.register_output` -> restart -> retry rejection -> explicit Redo -> local reconciliation, with executor invocation count remaining exactly one.
-
-Repair commits:
-
-- `6a2c1f67a9a805248fb132ee4ad1be4249fc91bb` — distinguish incomplete materialization authority from completed Generation authority;
-- `19cec67a23f107efdcb0429e40bd86428a14d98e` — include validated redo-owned materialization in the retry guard;
-- `8c8a1b2c27f4bc8198eeb832e92e20a9ad4c6210` — add the combined terminal-split/Undo/restart/retry/Redo regression;
-- `0c757c86eda9a489ea403f27c1f1cb0c6c2bead8` — synchronize portable archive documentation with incomplete-vs-completed Generation authority.
+Regression `tests/test_stage19_redo_terminal_split_recovery.py` now covers the exact chain: post-artifact local failure -> legacy `FAILED` attempt -> Undo `generation.register_output` -> restart -> **direct `GenerationService.run()` rejection** -> explicit requeue rejection -> explicit Redo -> local reconciliation. It asserts the Job remains FAILED after the direct retry attempt, the attempt count remains one, Redo remains available, and `executor.calls` remains exactly one.
 
 ## Verification
 
-Current repair evidence:
+Previous accepted evidence remains:
 
-- material/documentation repair head `0c757c86eda9a489ea403f27c1f1cb0c6c2bead8`, CI #4598 (`33740778124`): **5/5 SUCCESS**;
-- synchronized Draft head `106b7396b9e8681550cb59b411b8cb0935f88066`, CI #4602 (`33741327112`): **5/5 SUCCESS**;
-- development-context — SUCCESS;
-- Ubuntu full unit suite — SUCCESS, including the redo-only terminal-split regression;
-- Windows full unit suite — SUCCESS, including the same regression;
-- Ubuntu app-baseline — SUCCESS including API, real-media, frontend lint/audit/build and browser Product Truth;
-- Windows app-baseline — SUCCESS including API, pinned media toolchain, real-media, frontend lint/audit/build and browser Product Truth.
+- prior synchronized Draft head `106b7396b9e8681550cb59b411b8cb0935f88066`, CI #4602 (`33741327112`): **5/5 SUCCESS**;
+- prior frozen Ready head `16f597ff5a1bea7e0353c64e824712b69829b235`, post-Ready CI #4609 (`33746380980`): **5/5 SUCCESS**.
+
+Current P1 repair evidence is pending a clean exact-head Draft CI after this context synchronization. The earlier CI #4616 on runtime head `c53ce45b8f2ff4c5d50dae147e6e649c4af9ff09` is not authoritative because `development-context` correctly detected that `PROJECT_STATE.md` still carried the pre-repair `review` marker while `ACTIVE_SLICE.json` was already Draft.
 
 All earlier Stage-19 repairs remain in force: schema-v1/v2 exact historical identity, exact legacy recipe compatibility, ProjectUnitOfWork exact-byte v1/v2 Undo/Redo, prepared-UOW archive recovery, archive snapshot locking, source/WebVTT/Generation publication fences, Generation Job/artifact/Take recovery, explicit Take Undo preservation, source/WebVTT/legacy-art/prepared-audio recovery, redo-owned media preservation and byte validation, publication-marker reference identity, Generation digest/provenance/path/lineage authority, direct Redo binary validation, leased root staging with cross-runtime allocation/recovery serialization, and immediate-next-action Product Truth behavior.
 
-## Review freeze
+## Draft repair gate
 
-No material runtime/test/schema/product mutation is allowed while this freeze remains current. Any supported material finding requires returning PR #89 and lifecycle to Draft before repair.
+Material/runtime repair is allowed only while PR #89 and this lifecycle remain Draft. Before refreeze:
 
-## Next required action
+1. require exact-head Draft CI **5/5 SUCCESS** including both full unit suites and both app-baseline Product Truth jobs;
+2. keep the direct redo-only failed-job retry regression green on Ubuntu and Windows;
+3. synchronize PR body and context with the exact repair head/evidence;
+4. verify PR #89 remains open, Draft, mergeable, BASE `52be1939eca51d7147990288cfc6258b023c2cd2`, and has zero unresolved inline review threads;
+5. refreeze lifecycle `draft -> review` only after the authoritative Draft gate is green.
 
-1. synchronize the PR body with this repaired review freeze and exact frozen HEAD;
-2. mark PR #89 Ready without material changes;
-3. require a **new post-Ready exact-head CI 5/5** distinct from Draft CI #4602;
-4. re-resolve live BASE/HEAD/mergeability and zero unresolved inline threads;
-5. perform a **new** genuinely fresh ordinary-ChatGPT read-only semantic review under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0;
-6. merge only on `review_validity=CURRENT`, `status=PASS`, `reported_findings=0` with clean live identity and exact-head CI.
+After refreeze, mark PR Ready without material changes, require a new post-Ready exact-head CI 5/5, re-resolve live identity/threads, and perform another genuinely fresh ordinary-ChatGPT read-only semantic review under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0. Merge remains prohibited until that new review is `review_validity=CURRENT`, `status=PASS`, `reported_findings=0` and all exact-head gates remain clean.
 
 After merge, D-038 lifecycle closure to `idle` remains mandatory before starting the declared handoff.
 
