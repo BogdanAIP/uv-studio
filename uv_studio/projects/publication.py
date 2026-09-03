@@ -33,11 +33,29 @@ class ManagedPublicationError(ProjectStoreError):
     """A durable managed-output publication marker is invalid or unrecoverable."""
 
 
-def _canonical_output_path(value: str) -> str:
+def _canonical_relative_path(value: str) -> str:
     try:
-        canonical = validate_project_relative_path(value)
+        return validate_project_relative_path(value)
     except Exception as exc:
         raise ManagedPublicationError(f"invalid managed publication path: {value!r}") from exc
+
+
+def _filesystem_path_identity(value: str) -> str:
+    """Return the host-filesystem identity for one canonical project-relative path.
+
+    Persisted ProjectReference/marker paths remain portable POSIX-style lexical
+    strings. Coordination must additionally respect host filesystem aliasing: on
+    Windows ``os.path.normcase`` folds case and normalizes separators, so case-only
+    aliases cannot acquire independent durable publication ownership.
+    """
+
+    canonical = _canonical_relative_path(value)
+    native = os.path.join(*PurePosixPath(canonical).parts)
+    return os.path.normcase(native)
+
+
+def _canonical_output_path(value: str) -> str:
+    canonical = _canonical_relative_path(value)
     parts = PurePosixPath(canonical).parts
     if not parts or parts[0] not in _PUBLICATION_ROOTS:
         raise ManagedPublicationError(
@@ -80,7 +98,8 @@ def begin_managed_publication(
 ) -> str:
     """Persist one prepared publication marker and reserve its canonical path.
 
-    A canonical output path may have at most one unresolved publication marker.
+    A physical output path may have at most one unresolved publication marker,
+    including host-filesystem aliases such as Windows case-only variants.
     Reservation validation and marker creation are serialized under the same shared
     cross-runtime project lock so a process that crashes after marker creation but
     before ``os.replace`` cannot be bypassed by another publisher reusing the still
@@ -96,10 +115,11 @@ def begin_managed_publication(
         reference_id=reference_id,
     )
     canonical_path = record["relative_path"]
+    path_identity = _filesystem_path_identity(canonical_path)
     records = ProjectTaskRecordStore(store)
     with records.project_lock(project_id):
         for pending in pending_managed_publications(store, project_id):
-            if pending["relative_path"] == canonical_path:
+            if _filesystem_path_identity(pending["relative_path"]) == path_identity:
                 raise ManagedPublicationError(
                     f"managed publication path already reserved: {canonical_path!r}"
                 )
@@ -181,11 +201,11 @@ def recover_managed_publications(
     """Reconcile crash-left arbitrary-path publication markers without data loss.
 
     A publication is already canonical only when its registered ProjectReference
-    matches the marker's path and, when present, the marker's expected reference
-    identity. A path owned by a different reference must not claim crash-left bytes.
-    Unregistered/interrupted bytes are moved outside the project tree rather than
-    deleted. A marker with no materialized path is simply cleared. No provider or
-    renderer is replayed.
+    matches the marker's filesystem-equivalent path and, when present, the marker's
+    expected reference identity. A path owned by a different reference must not
+    claim crash-left bytes. Unregistered/interrupted bytes are moved outside the
+    project tree rather than deleted. A marker with no materialized path is simply
+    cleared. No provider or renderer is replayed.
     """
 
     records = ProjectTaskRecordStore(store)
@@ -194,13 +214,14 @@ def recover_managed_publications(
         project = store.load_project(project_id)
         registered_by_path: dict[str, set[str]] = {}
         for item in (*project.sources, *project.artifacts):
-            registered_by_path.setdefault(item.path, set()).add(item.id)
+            identity = _filesystem_path_identity(item.path)
+            registered_by_path.setdefault(identity, set()).add(item.id)
 
         for marker in pending_managed_publications(store, project_id):
             publication_id = marker["publication_id"]
             relative_path = marker["relative_path"]
             expected_reference_id = marker.get("reference_id")
-            registered_ids = registered_by_path.get(relative_path, set())
+            registered_ids = registered_by_path.get(_filesystem_path_identity(relative_path), set())
             publication_registered = bool(registered_ids) and (
                 expected_reference_id is None or expected_reference_id in registered_ids
             )
