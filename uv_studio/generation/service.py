@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import tempfile
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -19,6 +18,10 @@ from uv_studio.capabilities.models import CapabilityOffer, MediaKind, OfferAvail
 from uv_studio.capabilities.selection import SelectionPolicy
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.models import PROJECT_SCHEMA_VERSION, ProjectReference
+from uv_studio.projects.root_staging import (
+    acquire_generation_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
 from uv_studio.projects.transactions import ProjectUnitOfWork
 
@@ -199,10 +202,6 @@ class GenerationService:
         idempotency_key: str,
         authorization_token: str | None,
     ) -> GenerationSubmissionResult:
-        # One cross-runtime project critical section owns preparation, idempotency
-        # lookup, D-017 grant consumption and durable Job reservation. Agent, GUI,
-        # API and script callers therefore cannot reserve two Jobs for one key or
-        # consume a second grant after another runtime has already committed it.
         with self.jobs.records.project_lock(project_id):
             prepared = self.prepare(
                 project_id=project_id,
@@ -280,17 +279,11 @@ class GenerationService:
             if output_path.exists() or output_path.is_symlink():
                 raise GenerationOutputError("allocated generation output path already exists")
 
-            # Provider execution can be long-running. Keep its output outside every
-            # canonical project directory so archive recovery can continue to observe
-            # the old durable project state until final publication begins.
-            with tempfile.NamedTemporaryFile(
-                prefix=f".uv-generation-{attempt.attempt_id}-",
-                suffix=suffix,
-                dir=self.project_store.root,
-                delete=False,
-            ) as handle:
-                staged_output = Path(handle.name)
-            staged_output.unlink()
+            staged_output = acquire_generation_root_staging(
+                self.project_store.root,
+                attempt.attempt_id,
+                suffix,
+            )
 
             executor_metadata = self.executor.execute(
                 project_id=project_id,
@@ -306,9 +299,6 @@ class GenerationService:
                 raise GenerationOutputError("generation executor metadata must be a JSON object")
             self._validate_output(staged_output)
 
-            # Publication is the consequence-bearing transition. The shared
-            # cross-runtime project fence owns job revalidation, byte publication,
-            # Project artifact registration, Take registration and durable success.
             with self.jobs.records.project_lock(project_id):
                 current = self.jobs.get(project_id, job_id)
                 if current.status is GenerationStatus.CANCELLED:
@@ -365,8 +355,6 @@ class GenerationService:
                                 item.id == artifact_id for item in current_project.artifacts
                             )
                         except Exception:
-                            # A failed read after a possible transaction commit is
-                            # ambiguous. Preserve bytes that may already be durable.
                             registered = True
                         if not registered:
                             fenced_output.unlink(missing_ok=True)
@@ -386,7 +374,7 @@ class GenerationService:
             raise
         finally:
             if staged_output is not None:
-                staged_output.unlink(missing_ok=True)
+                release_root_staging(staged_output)
 
     def cancel(self, project_id: str, job_id: str) -> GenerationJob:
         return self.jobs.cancel(project_id, job_id)
