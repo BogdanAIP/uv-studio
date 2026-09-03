@@ -10,7 +10,6 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
 import uuid
 from collections.abc import Callable, Mapping
 from decimal import Decimal, InvalidOperation
@@ -19,6 +18,11 @@ from typing import Any
 
 from uv_studio.projects.media_ranges import MICROSECONDS_PER_SECOND, ProjectMediaRange
 from uv_studio.projects.models import ProjectReference, ProjectValidationError, validate_project_relative_path
+from uv_studio.projects.root_staging import (
+    acquire_ffconcat_root_staging,
+    acquire_timeline_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 
 from ..execution import (
@@ -72,8 +76,6 @@ def _canonical_project_path(value: str) -> str:
 
 
 def _ffconcat_quote(path: Path) -> str:
-    # FFmpeg concat files understand forward-slash absolute paths on Windows too.
-    # Single quotes are escaped using the concat demuxer's shell-like quoting form.
     value = path.resolve().as_posix().replace("'", "'\\''")
     return f"file '{value}'\n"
 
@@ -516,27 +518,16 @@ class LocalFFmpegAdapter:
         manifest_path: Path | None = None
         staged_output: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                prefix=".uv-ffconcat-",
-                suffix=".txt",
-                dir=self.store.root,
-                delete=False,
-            ) as handle:
-                manifest_path = Path(handle.name)
+            manifest_path = acquire_ffconcat_root_staging(self.store.root)
+            with manifest_path.open("x", encoding="utf-8", newline="\n") as handle:
                 for item in input_paths:
                     handle.write(_ffconcat_quote(item))
 
-            with tempfile.NamedTemporaryFile(
-                prefix=f".uv-timeline-assemble-{artifact_id}-",
-                suffix=output_path.suffix,
-                dir=self.store.root,
-                delete=False,
-            ) as handle:
-                staged_output = Path(handle.name)
-            staged_output.unlink()
+            staged_output = acquire_timeline_root_staging(
+                self.store.root,
+                artifact_id,
+                output_path.suffix,
+            )
 
             command = [
                 self._tool("ffmpeg"),
@@ -578,10 +569,6 @@ class LocalFFmpegAdapter:
                 },
             )
 
-            # Long-running FFmpeg work stays outside the canonical project tree.
-            # Only the final byte publication + Project reference transition takes
-            # the shared archive/project fence, so recovery can observe old or new
-            # state but never an unregistered arbitrary-path output in between.
             from uv_studio.projects.task_records import ProjectTaskRecordStore
 
             with ProjectTaskRecordStore(self.store).project_lock(project_id):
@@ -614,9 +601,6 @@ class LocalFFmpegAdapter:
                             current = self.store.load_project(project_id)
                             registered = any(item.id == artifact_id for item in current.artifacts)
                         except Exception:
-                            # If durable metadata cannot be read after a possible
-                            # commit, preserve bytes rather than deleting data that
-                            # may already be referenced.
                             registered = True
                         if not registered:
                             fenced_output.unlink(missing_ok=True)
@@ -634,9 +618,9 @@ class LocalFFmpegAdapter:
             )
         finally:
             if manifest_path is not None:
-                manifest_path.unlink(missing_ok=True)
+                release_root_staging(manifest_path)
             if staged_output is not None:
-                staged_output.unlink(missing_ok=True)
+                release_root_staging(staged_output)
 
     def _invoke(
         self,
