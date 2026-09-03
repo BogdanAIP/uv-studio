@@ -68,6 +68,7 @@
       "tests/test_stage19_archive_prepared_recovery.py",
       "tests/test_stage19_redo_generation_digest.py",
       "tests/test_stage19_generation_reference_shape.py",
+      "tests/test_stage19_root_staging_recovery.py",
       "tests_api/test_projects_api.py",
       "tests_api/test_project_media_api.py",
       "e2e/test_named_generation_outcome.py",
