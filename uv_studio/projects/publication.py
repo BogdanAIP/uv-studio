@@ -212,6 +212,7 @@ def recover_managed_publications(
     quarantined: list[Path] = []
     with records.project_lock(project_id):
         project = store.load_project(project_id)
+        project_dir = store.project_directory(project_id)
         registered_by_path: dict[str, set[str]] = {}
         for item in (*project.sources, *project.artifacts):
             identity = _filesystem_path_identity(item.path)
@@ -225,14 +226,23 @@ def recover_managed_publications(
             publication_registered = bool(registered_ids) and (
                 expected_reference_id is None or expected_reference_id in registered_ids
             )
-            root = PurePosixPath(relative_path).parts[0]
+            path_parts = PurePosixPath(relative_path).parts
+            root = path_parts[0]
+            lexical_output = project_dir.joinpath(*path_parts)
+            # Preserve the marker's lexical leaf identity before the general resolver
+            # follows an existing in-root leaf symlink. Recovery must never quarantine
+            # a symlink target as though those bytes belonged to the interrupted marker.
+            if lexical_output.is_symlink():
+                raise ManagedPublicationError(
+                    f"interrupted publication path is an unsafe symlink: {relative_path!r}"
+                )
             output = store.resolve_project_file(
                 project_id,
                 relative_path,
                 allowed_roots=(root,),
             )
-            if not publication_registered and (output.exists() or output.is_symlink()):
-                if output.is_symlink() or not output.is_file():
+            if not publication_registered and output.exists():
+                if not output.is_file():
                     raise ManagedPublicationError(
                         f"interrupted publication path is not a regular file: {relative_path!r}"
                     )
