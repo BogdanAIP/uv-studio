@@ -78,11 +78,13 @@ def begin_managed_publication(
     purpose: str,
     reference_id: str | None = None,
 ) -> str:
-    """Persist one prepared publication marker.
+    """Persist one prepared publication marker and reserve its canonical path.
 
-    Callers should invoke this while already holding the shared project lock and
-    immediately before the canonical byte move. ProjectTaskRecordStore's lock is
-    re-entrant, so the helper remains safe when used that way.
+    A canonical output path may have at most one unresolved publication marker.
+    Reservation validation and marker creation are serialized under the same shared
+    cross-runtime project lock so a process that crashes after marker creation but
+    before ``os.replace`` cannot be bypassed by another publisher reusing the still
+    absent path. Callers may already hold the project lock; it is re-entrant.
     """
 
     publication_id = f"{PUBLICATION_RECORD_PREFIX}{uuid.uuid4().hex}"
@@ -93,7 +95,15 @@ def begin_managed_publication(
         purpose=purpose,
         reference_id=reference_id,
     )
-    ProjectTaskRecordStore(store).create_if_absent(project_id, publication_id, record)
+    canonical_path = record["relative_path"]
+    records = ProjectTaskRecordStore(store)
+    with records.project_lock(project_id):
+        for pending in pending_managed_publications(store, project_id):
+            if pending["relative_path"] == canonical_path:
+                raise ManagedPublicationError(
+                    f"managed publication path already reserved: {canonical_path!r}"
+                )
+        records.create_if_absent(project_id, publication_id, record)
     return publication_id
 
 
