@@ -31,6 +31,26 @@ class GenerationReferenceAuthority:
     sha256: str
 
 
+@dataclass(frozen=True)
+class GenerationMaterializationAuthority:
+    """Immutable Generation output authority before/after local reconciliation.
+
+    A legacy or crash-split attempt may already own exact durable output bytes while
+    its Job record is still RUNNING/FAILED/CANCELLED and therefore has no completed
+    Take/output fields yet. That state is sufficient to preserve or explicitly Redo
+    the exact bytes, but it is not sufficient for archive/success authority.
+    """
+
+    job_id: str
+    attempt_id: str
+    attempt_status: str
+    output_reference_id: str | None
+    take_id: str | None
+    shot_id: str
+    size_bytes: int
+    sha256: str
+
+
 def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -39,16 +59,17 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
-def generation_reference_authority(
+def generation_materialization_authority(
     store: ProjectStore,
     project_id: str,
     artifact: ProjectReference,
-) -> GenerationReferenceAuthority | None:
-    """Validate durable Job/Attempt provenance for one Generation artifact.
+) -> GenerationMaterializationAuthority | None:
+    """Validate immutable Job/Attempt provenance for one Generation output.
 
-    ``None`` means the ProjectReference is not a Generation artifact. Generation
-    references fail closed if any durable identity, request mapping, contract,
-    output path, size or digest authority is missing or contradictory.
+    Unlike ``generation_reference_authority()``, this permits the bounded legacy
+    terminal-split states recovery already supports: exact artifact metadata/bytes
+    can be durable while the owning attempt has not yet been reconciled to success.
+    It never treats that incomplete state as successful Generation authority.
     """
 
     generation = artifact.metadata.get("generation")
@@ -98,15 +119,25 @@ def generation_reference_authority(
             f"Generation artifact does not resolve to one durable attempt: {artifact.id}"
         )
     attempt = matching_attempts[0]
-    take_id = attempt.get("take_id")
-    if (
-        attempt.get("status") != "succeeded"
-        or attempt.get("output_reference_id") != artifact.id
-        or not isinstance(take_id, str)
-        or not take_id
-    ):
+    attempt_status = attempt.get("status")
+    if attempt_status not in {"running", "succeeded", "failed", "cancelled"}:
         raise GenerationReferenceAuthorityError(
-            f"Generation materialization is not durably complete: {artifact.id}"
+            f"Generation artifact has invalid durable attempt status: {artifact.id}"
+        )
+    output_reference_id = attempt.get("output_reference_id")
+    if output_reference_id is not None:
+        if not isinstance(output_reference_id, str) or not output_reference_id:
+            raise GenerationReferenceAuthorityError(
+                f"Generation attempt has invalid output reference identity: {artifact.id}"
+            )
+        if output_reference_id != artifact.id:
+            raise GenerationReferenceAuthorityError(
+                f"Generation attempt output reference disagrees with artifact: {artifact.id}"
+            )
+    take_id = attempt.get("take_id")
+    if take_id is not None and (not isinstance(take_id, str) or not take_id):
+        raise GenerationReferenceAuthorityError(
+            f"Generation attempt has invalid Take identity: {artifact.id}"
         )
 
     request = raw.get("request")
@@ -184,13 +215,48 @@ def generation_reference_authority(
             f"Generation artifact has invalid size/digest authority: {artifact.id}"
         )
 
-    return GenerationReferenceAuthority(
+    return GenerationMaterializationAuthority(
         job_id=job_id,
         attempt_id=attempt_id,
+        attempt_status=attempt_status,
+        output_reference_id=output_reference_id,
         take_id=take_id,
         shot_id=shot_id,
         size_bytes=size_bytes,
         sha256=sha256,
+    )
+
+
+def generation_reference_authority(
+    store: ProjectStore,
+    project_id: str,
+    artifact: ProjectReference,
+) -> GenerationReferenceAuthority | None:
+    """Validate complete durable Job/Attempt provenance for one Generation artifact.
+
+    ``None`` means the ProjectReference is not a Generation artifact. Generation
+    references fail closed if any durable identity, request mapping, contract,
+    output path, size or digest authority is missing or contradictory.
+    """
+
+    materialization = generation_materialization_authority(store, project_id, artifact)
+    if materialization is None:
+        return None
+    if (
+        materialization.attempt_status != "succeeded"
+        or materialization.output_reference_id != artifact.id
+        or materialization.take_id is None
+    ):
+        raise GenerationReferenceAuthorityError(
+            f"Generation materialization is not durably complete: {artifact.id}"
+        )
+    return GenerationReferenceAuthority(
+        job_id=materialization.job_id,
+        attempt_id=materialization.attempt_id,
+        take_id=materialization.take_id,
+        shot_id=materialization.shot_id,
+        size_bytes=materialization.size_bytes,
+        sha256=materialization.sha256,
     )
 
 
@@ -206,18 +272,22 @@ def merge_reference_variants(
     ProjectReference metadata is allowed to evolve through canonical commands (for
     example ``production.accept_take`` appends ``production_acceptances``). Stable
     ownership identity is the reference ID + path + kind. A Generation reference
-    additionally must resolve to the same immutable durable Generation authority in
-    every historical variant. ID/path/kind drift, path reuse by another reference, or
-    Generation/non-Generation classification drift fails closed.
+    additionally must resolve to the same immutable durable Generation
+    materialization authority in every historical variant. Completion/Take authority
+    remains a stricter caller-level check where successful Generation is required.
     """
 
     by_id: dict[str, ProjectReference] = {}
     by_path: dict[str, str] = {}
-    generation_by_id: dict[str, GenerationReferenceAuthority | None] = {}
+    generation_by_id: dict[str, GenerationMaterializationAuthority | None] = {}
     merged: list[ProjectReference] = []
     for reference in references:
         try:
-            generation_authority = generation_reference_authority(store, project_id, reference)
+            generation_authority = generation_materialization_authority(
+                store,
+                project_id,
+                reference,
+            )
         except GenerationReferenceAuthorityError:
             raise
 
@@ -251,10 +321,17 @@ def validate_generation_reference_bytes(
     project_id: str,
     artifact: ProjectReference,
 ) -> GenerationReferenceAuthority | None:
-    """Validate Generation provenance and the exact currently stored output bytes."""
+    """Validate exact Generation bytes, including bounded incomplete materialization.
 
-    authority = generation_reference_authority(store, project_id, artifact)
-    if authority is None:
+    A non-Generation reference returns ``None``. A complete Generation reference
+    returns its strict success authority. A recovery-compatible incomplete
+    RUNNING/FAILED/CANCELLED materialization also returns ``None`` after its immutable
+    Job/Attempt provenance and exact bytes have been proven; callers that require a
+    successful Take must separately call ``generation_reference_authority()``.
+    """
+
+    materialization = generation_materialization_authority(store, project_id, artifact)
+    if materialization is None:
         return None
     try:
         output = store.resolve_project_file(
@@ -278,12 +355,14 @@ def validate_generation_reference_bytes(
         raise GenerationReferenceAuthorityError(
             f"Generation output bytes are unreadable: {artifact.id}"
         ) from exc
-    if size != authority.size_bytes:
+    if size != materialization.size_bytes:
         raise GenerationReferenceAuthorityError(
             f"Generation output size does not match persisted metadata: {artifact.id}"
         )
-    if digest != authority.sha256:
+    if digest != materialization.sha256:
         raise GenerationReferenceAuthorityError(
             f"Generation output digest does not match persisted metadata: {artifact.id}"
         )
-    return authority
+    if materialization.attempt_status != "succeeded":
+        return None
+    return generation_reference_authority(store, project_id, artifact)
