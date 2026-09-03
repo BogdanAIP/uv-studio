@@ -13,6 +13,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from uv_studio.generation.jobs import GenerationJob, GenerationJobError
+from uv_studio.generation.models import GenerationValidationError
+
 from .models import ProjectReference
 from .store import ProjectStore, ProjectStoreError
 
@@ -95,52 +98,32 @@ def generation_materialization_authority(
         raise GenerationReferenceAuthorityError(
             f"Generation Job record is unreadable for artifact: {artifact.id}"
         ) from exc
-    if not isinstance(raw, dict) or raw.get("record_type") != "generation_job":
+    try:
+        job = GenerationJob.from_dict(raw)
+    except (GenerationJobError, GenerationValidationError, TypeError, ValueError) as exc:
         raise GenerationReferenceAuthorityError(
-            f"Generation artifact points to a non-generation task record: {artifact.id}"
-        )
-    if raw.get("job_id") != job_id:
+            f"Generation artifact has invalid canonical Job authority: {artifact.id}"
+        ) from exc
+    if job.project_id != project_id or job.job_id != job_id:
         raise GenerationReferenceAuthorityError(
-            f"Generation artifact job_id disagrees with durable Job: {artifact.id}"
+            f"Generation artifact Job identity disagrees with physical project/task identity: {artifact.id}"
         )
 
-    attempts = raw.get("attempts")
-    if not isinstance(attempts, list):
-        raise GenerationReferenceAuthorityError(
-            f"Generation Job has invalid attempt history for artifact: {artifact.id}"
-        )
-    matching_attempts = [
-        attempt
-        for attempt in attempts
-        if isinstance(attempt, dict) and attempt.get("attempt_id") == attempt_id
-    ]
+    matching_attempts = [attempt for attempt in job.attempts if attempt.attempt_id == attempt_id]
     if len(matching_attempts) != 1:
         raise GenerationReferenceAuthorityError(
             f"Generation artifact does not resolve to one durable attempt: {artifact.id}"
         )
     attempt = matching_attempts[0]
-    attempt_status = attempt.get("status")
-    if attempt_status not in {"running", "succeeded", "failed", "cancelled"}:
+    attempt_status = attempt.status.value
+    output_reference_id = attempt.output_reference_id
+    if output_reference_id is not None and output_reference_id != artifact.id:
         raise GenerationReferenceAuthorityError(
-            f"Generation artifact has invalid durable attempt status: {artifact.id}"
+            f"Generation attempt output reference disagrees with artifact: {artifact.id}"
         )
-    output_reference_id = attempt.get("output_reference_id")
-    if output_reference_id is not None:
-        if not isinstance(output_reference_id, str) or not output_reference_id:
-            raise GenerationReferenceAuthorityError(
-                f"Generation attempt has invalid output reference identity: {artifact.id}"
-            )
-        if output_reference_id != artifact.id:
-            raise GenerationReferenceAuthorityError(
-                f"Generation attempt output reference disagrees with artifact: {artifact.id}"
-            )
-    take_id = attempt.get("take_id")
-    if take_id is not None and (not isinstance(take_id, str) or not take_id):
-        raise GenerationReferenceAuthorityError(
-            f"Generation attempt has invalid Take identity: {artifact.id}"
-        )
+    take_id = attempt.take_id
 
-    request = raw.get("request")
+    request = job.request
     mapping = request.get("execution_mapping") if isinstance(request, dict) else None
     contract = request.get("generation_contract") if isinstance(request, dict) else None
     shot_id = request.get("shot_id") if isinstance(request, dict) else None
@@ -156,7 +139,7 @@ def generation_materialization_authority(
         "capability_id": mapping.get("capability_id") if isinstance(mapping, dict) else None,
         "offer_id": mapping.get("offer_id") if isinstance(mapping, dict) else None,
         "adapter_id": mapping.get("adapter_id") if isinstance(mapping, dict) else None,
-        "request_digest": raw.get("request_digest"),
+        "request_digest": job.request_digest,
     }
     for field_name, expected_value in authority.items():
         if not isinstance(expected_value, str) or not expected_value:
