@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -13,6 +12,11 @@ from uv_studio.projects.models import ProjectReference, ProjectValidationError
 from uv_studio.projects.publication import (
     begin_managed_publication,
     finish_managed_publication,
+)
+from uv_studio.projects.root_staging import (
+    acquire_ffconcat_root_staging,
+    acquire_timeline_root_staging,
+    release_root_staging,
 )
 from uv_studio.projects.store import ProjectStoreError
 from uv_studio.projects.task_records import ProjectTaskRecordStore
@@ -104,27 +108,16 @@ class CrashSafeLocalFFmpegRangeAdapter(LocalFFmpegRangeAdapter):
         manifest_path: Path | None = None
         staged_output: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                prefix=".uv-ffconcat-",
-                suffix=".txt",
-                dir=self.store.root,
-                delete=False,
-            ) as handle:
-                manifest_path = Path(handle.name)
+            manifest_path = acquire_ffconcat_root_staging(self.store.root)
+            with manifest_path.open("x", encoding="utf-8", newline="\n") as handle:
                 for item in input_paths:
                     handle.write(_ffconcat_quote(item))
 
-            with tempfile.NamedTemporaryFile(
-                prefix=f".uv-timeline-assemble-{artifact_id}-",
-                suffix=output_path.suffix,
-                dir=self.store.root,
-                delete=False,
-            ) as handle:
-                staged_output = Path(handle.name)
-            staged_output.unlink()
+            staged_output = acquire_timeline_root_staging(
+                self.store.root,
+                artifact_id,
+                output_path.suffix,
+            )
 
             command = [
                 self._tool("ffmpeg"),
@@ -237,6 +230,6 @@ class CrashSafeLocalFFmpegRangeAdapter(LocalFFmpegRangeAdapter):
             )
         finally:
             if manifest_path is not None:
-                manifest_path.unlink(missing_ok=True)
+                release_root_staging(manifest_path)
             if staged_output is not None:
-                staged_output.unlink(missing_ok=True)
+                release_root_staging(staged_output)
