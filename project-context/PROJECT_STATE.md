@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-03
@@ -9,41 +9,38 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is refrozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-The production/runtime repair is unchanged. Regression-first commit `75aed8ea5326dd2891007632ef42dbf20fc60ba0` covers direct `GenerationService.run()` retry in the redo-only terminal split, and runtime repair `c53ce45b8f2ff4c5d50dae147e6e649c4af9ff09` places the Redo-aware durable-materialization guard at the shared `GenerationJobManager.start_execution()` boundary before another attempt/provider execution can begin.
+Fresh ordinary-ChatGPT review of frozen head `6603e46e932432e52e409a4a9656f5625bd9b540` returned `review_validity=CURRENT`, `status=FINDINGS`, `reported_findings=1`, `rejected_candidates=15`. Exact-head CI #4636 (`33771183215`) passed **5/5 SUCCESS**, but CI does not falsify the reported crash/concurrency interleaving.
 
-Process-context correction commit `90531357773ba1bc1360a66f7c3c143b56b121c8` returned the lifecycle to Draft only to align the active merge sequence with accepted BASE policy. It changed no runtime, test, schema, product, review-policy or merge-policy behavior. Authoritative Draft CI #4632 (`33770513959`) then passed **5/5 SUCCESS** across development-context, both Ubuntu/Windows full unit suites, and both Ubuntu/Windows app-baseline API/real-media/frontend/browser Product Truth jobs.
+The finding is independently **CONFIRMED**. `begin_managed_publication()` creates a new durable `pub_<uuid>` record without checking whether another unresolved marker already reserves the same canonical `relative_path`. `timeline.assemble` renders outside the project lock and only rechecks whether the target file exists before creating that marker. If an older runtime crashes after marker creation but before `os.replace`, a second already-running runtime can create a different marker for the same still-absent path, successfully publish/register its own reference, and clear only its marker. Later recovery of the older marker sees the path owned by a different reference and quarantines the newer valid bytes, leaving the newer ProjectReference dangling.
 
-## Repaired invariant
+Existing recovery semantics intentionally quarantine bytes when a marker's expected reference ID differs from the current registered reference for the path; therefore the defect is the missing same-path durable reservation rule, not recovery's mismatch handling.
 
-A validated Generation materialization reachable only through the current durable ProjectUnitOfWork Redo suffix blocks every failed-job execution entry point before new attempt/provider execution. Direct `GenerationService.run()`, explicit HTTP retry and Job terminal transitions converge on the same fail-closed authority. Explicit Redo may restore the exact validated reference, after which local recovery may complete the owning attempt without provider replay.
+The prior review of `6603e46...` is merge-stale as soon as the material repair lands. PR #89 and lifecycle were returned to Draft before repair.
+
+## Repair invariant
+
+For managed arbitrary-path publication, a canonical project-relative output path may have at most one unresolved durable publication reservation at a time. The reservation check and marker creation must be atomic under the shared cross-runtime project lock. A later publisher must fail closed while an older marker reserves the same path, even when the canonical target file is still absent. Recovery may then clear an interrupted marker with no materialized bytes without risking a newer publication at the same path.
+
+The existing Generation redo-only retry invariant remains unchanged: every failed-job execution entry point must remain blocked before new provider execution while validated redo-owned materialization is reachable.
 
 ## Verification already obtained
 
-Accepted evidence includes:
+Accepted pre-repair evidence includes:
 
-- prior frozen Ready head `16f597ff5a1bea7e0353c64e824712b69829b235`, CI #4609 (`33746380980`): **5/5 SUCCESS**, followed by a fresh review that returned one confirmed P1 and became stale after repair;
-- P1 repair/context head `9b3fd0ce5814ead7b36579b073c11f13f9f315de`, CI #4619 (`33761623377`): **5/5 SUCCESS**;
-- synchronized Draft head `5b59495e9b733f4af790c16bc8b4e869089214aa`, CI #4624 (`33762251065`): **5/5 SUCCESS**;
-- prior refrozen head `5bc3943f188c0c96958c2480b5a22d4f02b30b34`, Ready-triggered CI #4628 (`33763695643`): **5/5 SUCCESS**; this is preliminary evidence, not the post-review final merge gate;
-- corrected Draft head `90531357773ba1bc1360a66f7c3c143b56b121c8`, authoritative post-body-sync CI #4632 (`33770513959`): **5/5 SUCCESS**.
-
-No runtime, test, schema or product behavior has changed after `c53ce45b8f2ff4c5d50dae147e6e649c4af9ff09`.
+- corrected Draft head `90531357773ba1bc1360a66f7c3c143b56b121c8`, CI #4632 (`33770513959`): **5/5 SUCCESS**;
+- frozen review head `6603e46e932432e52e409a4a9656f5625bd9b540`, CI #4636 (`33771183215`): **5/5 SUCCESS**;
+- mandatory fresh review on `6603e46...`: `CURRENT / FINDINGS / 1 P1 / 15 rejected candidates`.
 
 ## Governed continuation
 
-The accepted sequence for this review-significant PR is now explicit and synchronized:
-
-1. this context-only refreeze establishes a new exact review HEAD and prohibits material runtime/test/schema/product changes;
-2. mark PR #89 Ready and verify live BASE/HEAD/lifecycle identity;
-3. launch the mandatory genuinely fresh ordinary-ChatGPT read-only semantic review using the BASE `AGENTS.md` and `.agents/skills/code-review/SKILL.md` v1.0;
-4. validate every reported finding; any confirmed material finding requires returning the PR/lifecycle to Draft before repair and makes that review stale;
-5. only after a `review_validity=CURRENT`, `status=PASS`, `reported_findings=0` result, require the final exact-head permanent CI/browser/real-media acceptance confirmation on that same reviewed HEAD;
-6. re-resolve live BASE/HEAD, mergeability and unresolved review threads, then merge with expected HEAD SHA;
-7. after merge, perform mandatory D-038 lifecycle closure to `idle` before starting the declared handoff.
-
-The review launcher contains immutable `REVIEW_REQUEST_V1` identity plus a neutral direct instruction to perform the repository `code-review` skill. It must not include developer reasoning, proposed findings or an argument that the change is correct.
+1. add a regression that reproduces the old-marker/no-bytes + second same-path publication reservation case;
+2. repair the shared `begin_managed_publication()` boundary so same-path pending markers conflict atomically under the project lock;
+3. run focused tests and full Draft CI;
+4. synchronize context and PR body, refreeze `draft -> review`, and obtain a new fresh ordinary-ChatGPT semantic review on the new exact HEAD;
+5. after a `CURRENT / PASS / 0 findings` review, obtain the final exact-head permanent CI/browser/real-media acceptance confirmation, re-resolve live identity/threads, and merge with expected HEAD SHA;
+6. after merge, perform mandatory D-038 lifecycle closure to `idle`.
 
 ## Out of scope
 

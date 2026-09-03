@@ -4,23 +4,26 @@
 
 ## Current slice
 
-`project-identity-v2-compat-reader` remains the only active Stage-19 slice in PR #89. The confirmed P1 from the previous fresh review is materially repaired by runtime commit `c53ce45b8f2ff4c5d50dae147e6e649c4af9ff09`; no runtime/test/schema/product behavior changed during the process-context correction.
+`project-identity-v2-compat-reader` remains the only active Stage-19 slice in PR #89. Fresh review of frozen head `6603e46e932432e52e409a4a9656f5625bd9b540` returned `CURRENT / FINDINGS / 1 P1 / 15 rejected candidates`; the P1 is independently confirmed and the PR/lifecycle are back in Draft before material repair.
 
-Process-context correction head `90531357773ba1bc1360a66f7c3c143b56b121c8` passed authoritative post-body-sync Draft CI #4632 (`33770513959`) **5/5 SUCCESS**. The lifecycle is now refrozen `draft -> review` with the accepted sequence restored: mandatory fresh semantic review precedes the final exact-head CI/acceptance confirmation used for merge.
+The defect is a same-path publication ABA/recovery race: an unresolved durable managed-publication marker can reserve path `P` while `P` is still absent, but a second runtime can currently create another marker for `P`, publish/register new bytes, and leave the older marker to quarantine those newer valid bytes during later recovery.
 
 ## Immediate continuation
 
-1. Mark PR #89 Ready without material changes and freeze exact live BASE/HEAD identity.
-2. Launch a genuinely fresh ordinary-ChatGPT read-only review using immutable BASE `.agents/skills/code-review/SKILL.md` v1.0. The launcher contains `REVIEW_REQUEST_V1` plus only a neutral direct instruction to perform the skill.
-3. If the review is `FINDINGS`, validate each finding; any confirmed material repair requires returning to Draft and a later fresh review.
-4. If the review is `review_validity=CURRENT`, `status=PASS`, `reported_findings=0`, require the final exact-head permanent CI/browser/real-media acceptance confirmation on that same reviewed HEAD.
-5. Re-resolve live BASE/HEAD/mergeability and unresolved GitHub review threads, then merge with expected HEAD SHA only if all final gates remain clean.
-6. After merge, perform mandatory D-038 lifecycle closure to `idle` before initializing the next declared handoff.
+1. Add a deterministic regression in the managed-publication recovery coverage: first marker reserves a path with no canonical bytes; a second same-path reservation must fail before a second marker can be created; recovery of the first marker must then clear it without quarantining unrelated/newer bytes.
+2. Repair `begin_managed_publication()` as the shared authority: under the same re-entrant cross-runtime project lock, validate pending markers and reject any unresolved marker whose canonical `relative_path` matches the requested path before creating the new marker.
+3. Keep the adapter's final in-lock file-existence check; the durable marker reservation closes the crash window where the target is absent.
+4. Run focused publication/recovery tests and full Draft CI, then synchronize context/PR body.
+5. Refreeze `draft -> review`, mark Ready, and launch another genuinely fresh ordinary-ChatGPT read-only review on the new exact BASE/HEAD.
+6. After `CURRENT / PASS / 0 findings`, obtain final exact-head CI/browser/real-media acceptance, verify live identity and unresolved threads, and merge with expected HEAD SHA.
+7. After merge, perform D-038 lifecycle closure to `idle` before the next slice.
 
-## Repair invariant to preserve
+## Invariants to preserve
 
-A Generation output reachable only through the current durable Redo suffix may be a recovery-compatible incomplete legacy materialization. Exact Job/Attempt/request/provenance/path/size/SHA authority can preserve those bytes without claiming success or recreating current Project/Take state. **Every failed-job execution entry point, including direct `GenerationService.run()` and explicit HTTP retry, must remain blocked before new attempt/provider execution while that validated redo-owned materialization is reachable.** Explicit Redo may restore the exact validated reference, after which ordinary local recovery may complete the owning attempt without provider replay. Portable archive authority remains stricter and requires completed successful attempt/output-reference/Take authority.
+A canonical arbitrary publication path has at most one unresolved durable reservation at a time. Reservation validation + marker creation is atomic under the project lock. Recovery of an interrupted marker without materialized bytes must not be able to invalidate a later successful publication.
+
+Generation redo-only retry/recovery, archive authority, source/WebVTT/Generation publication semantics and all previously repaired Stage-19 invariants remain unchanged.
 
 ## Out of scope
 
-Do not mix Recipe endpoint retirement, execution-plan retirement, Product Orchestrator redesign/retirement, Stage8 retirement, provider-selection redesign, Production Direction authority changes, Timeline identity redesign or later D-070 compression work into this review/merge cycle.
+Do not mix Recipe endpoint retirement, execution-plan retirement, Product Orchestrator redesign/retirement, Stage8 retirement, provider-selection redesign, Production Direction authority changes, Timeline identity redesign or later D-070 compression work into this repair cycle.
