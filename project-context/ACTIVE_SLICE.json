@@ -26,6 +26,7 @@
       "uv_studio/projects/transactions.py",
       "uv_studio/projects/publication.py",
       "uv_studio/projects/generation_authority.py",
+      "uv_studio/projects/root_staging.py",
       "uv_studio/projects/stage8_workspace.py",
       "uv_studio/projects/music_analysis_assist.py",
       "uv_studio/projects/music_video_review.py",
