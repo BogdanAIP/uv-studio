@@ -338,15 +338,15 @@ def _matching_generation_artifacts(
     return tuple(matches)
 
 
-def _unreconciled_generation_artifacts(
-    project: ProjectDocument,
+def _unreconciled_generation_references(
+    references: tuple[ProjectReference, ...],
     job: GenerationJob,
 ) -> tuple[ProjectReference, ...]:
-    """Return durable Job artifacts whose own attempt is not yet a proven success."""
+    """Return Job references whose own attempt has not yet been proven successful."""
 
     attempts = {attempt.attempt_id: attempt for attempt in job.attempts}
     pending: list[ProjectReference] = []
-    for artifact in project.artifacts:
+    for artifact in references:
         generation = artifact.metadata.get("generation")
         if not isinstance(generation, dict) or generation.get("job_id") != job.job_id:
             continue
@@ -355,6 +355,15 @@ def _unreconciled_generation_artifacts(
         if attempt is None or attempt.status is not GenerationStatus.SUCCEEDED:
             pending.append(artifact)
     return tuple(pending)
+
+
+def _unreconciled_generation_artifacts(
+    project: ProjectDocument,
+    job: GenerationJob,
+) -> tuple[ProjectReference, ...]:
+    """Return live durable Job artifacts whose attempt is not yet a proven success."""
+
+    return _unreconciled_generation_references(project.artifacts, job)
 
 
 def _validate_generation_artifact(
@@ -619,7 +628,19 @@ def requeue_failed_generation_job(
         if job.status is not GenerationStatus.FAILED:
             raise GenerationJobConflict("only a failed generation job can be requeued")
         project = manager.project_store.load_project(project_id)
-        if _unreconciled_generation_artifacts(project, job):
+        redoable_references = _redoable_output_references(
+            manager.project_store,
+            project_id,
+        )
+        _validate_redo_generation_references(
+            manager,
+            project_id,
+            redoable_references,
+        )
+        if (
+            _unreconciled_generation_artifacts(project, job)
+            or _unreconciled_generation_references(redoable_references, job)
+        ):
             raise GenerationJobConflict(
                 "generation job has a durable artifact pending recovery"
             )
