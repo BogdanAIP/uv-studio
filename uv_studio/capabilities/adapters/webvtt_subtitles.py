@@ -6,7 +6,6 @@ import hashlib
 import html
 import os
 import re
-import tempfile
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -15,6 +14,10 @@ from typing import Any
 from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.prepared_speech import canonical_revision_sha256
+from uv_studio.projects.root_staging import (
+    acquire_webvtt_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 from uv_studio.projects.task_records import ProjectTaskRecordStore
 
@@ -90,8 +93,6 @@ def _timestamp(value_us: int) -> str:
 
 def _cue_text(value: str) -> str:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
-    # A blank line terminates a WebVTT cue. Preserve meaningful multiline text while
-    # removing blank-only lines so transcript content cannot inject a second cue block.
     normalized = "\n".join(
         line for line in normalized.split("\n") if not _BLANK_LINE_RE.fullmatch(line)
     )
@@ -208,16 +209,8 @@ class WebVTTSubtitleAdapter:
             if output.exists() or output.is_symlink():
                 raise InvalidCapabilityInput("subtitle export refuses to overwrite an existing artifact")
 
-            # Prepare complete bytes outside every canonical project directory. Archive
-            # recovery can therefore observe the old state while rendering occurs.
-            with tempfile.NamedTemporaryFile(
-                mode="wb",
-                prefix=f".uv-webvtt-{artifact_id}-",
-                suffix=".vtt",
-                dir=self.store.root,
-                delete=False,
-            ) as handle:
-                staged_output = Path(handle.name)
+            staged_output = acquire_webvtt_root_staging(self.store.root, artifact_id)
+            with staged_output.open("xb") as handle:
                 handle.write(encoded)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -247,8 +240,6 @@ class WebVTTSubtitleAdapter:
                 },
             )
 
-            # Final bytes and their Project identity publish in one recovery-fenced
-            # critical section. A concurrent archive sees either neither or both.
             with ProjectTaskRecordStore(self.store).project_lock(project_id):
                 fenced_output = self.store.resolve_project_file(
                     project_id,
@@ -276,8 +267,6 @@ class WebVTTSubtitleAdapter:
                             current = self.store.load_project(project_id)
                             registered = any(item.id == artifact_id for item in current.artifacts)
                         except Exception:
-                            # If durable metadata cannot be read after a possible
-                            # commit, preserve bytes that may already be referenced.
                             registered = True
                         if not registered:
                             fenced_output.unlink(missing_ok=True)
@@ -285,7 +274,7 @@ class WebVTTSubtitleAdapter:
 
         finally:
             if staged_output is not None:
-                staged_output.unlink(missing_ok=True)
+                release_root_staging(staged_output)
 
         return CapabilityExecutionResult.from_offer(
             project_id=project_id,
