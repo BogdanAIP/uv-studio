@@ -214,6 +214,17 @@ class Stage19RedoTerminalSplitRecoveryTests(unittest.TestCase):
         self.assertEqual(self.executor.calls, 1)
 
         with self.assertRaisesRegex(GenerationJobConflict, "durable artifact pending recovery"):
+            self.service.run(self.project.project_id, legacy_failed.job_id)
+        after_direct_retry = self.service.jobs.get(
+            self.project.project_id,
+            legacy_failed.job_id,
+        )
+        self.assertEqual(after_direct_retry.status, GenerationStatus.FAILED)
+        self.assertEqual(len(after_direct_retry.attempts), 1)
+        self.assertEqual(self.executor.calls, 1)
+        self.assertTrue(uow.history(self.project.project_id).can_redo)
+
+        with self.assertRaisesRegex(GenerationJobConflict, "durable artifact pending recovery"):
             requeue_failed_generation_job(
                 self.service.jobs,
                 self.project.project_id,
