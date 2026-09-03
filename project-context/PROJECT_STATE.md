@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-03
@@ -9,23 +9,37 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is refrozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-Fresh ordinary-ChatGPT review of frozen head `6006c85e78af84643ae942d2db87f47ec9976280` returned `CURRENT / FINDINGS / 1 P2 / 10 rejected candidates`. The Windows case-alias managed-publication defect was independently confirmed, PR/lifecycle returned to Draft before material changes, regression-first evidence was added, and the runtime repair was completed without changing persisted lexical path values.
+Fresh ordinary-ChatGPT review of frozen head `71006f09aa0db73991b7014fa1d2242db163ea83` returned `CURRENT / FINDINGS / 2 P2 / 14 rejected candidates`. Both findings were independently confirmed before material repair, and PR #89 was converted back to Draft before runtime/test changes. Lifecycle `review -> draft` was persisted in `552367f7a95848af640f768b61f535c76a474c6a`.
 
-Regression-first commit `bfd85892037ad25e5389aa2c3c26faef99c64ec6` failed CI #4662 at the new case-alias reservation test on the unpatched runtime, proving the regression detects the defect. Runtime repair `969142b4adb92104a77041c02ae3f9081965999b` applies one shared host-filesystem identity to both unresolved reservation conflicts and recovery reference correlation. Material CI #4665 (`33782870284`) passed **5/5 SUCCESS**, including the Windows-only real-filesystem recovery regression and both browser Product Truth jobs.
+The first P2 was a managed-publication recovery leaf-symlink bug: `resolve_project_file()` followed an existing in-root leaf symlink before recovery checked `is_symlink()`, so a crash-left marker could cause recovery to quarantine the symlink target rather than fail closed on the marker's lexical entry. The second P2 was a Generation authority validation gap: `generation_materialization_authority()` cherry-picked raw durable Job JSON without first applying canonical `GenerationJob.from_dict()` validation or binding parsed Job identity to the physical project/task identity.
 
-The synchronized Draft head `ea9a7dcd559fabc96b04f08b478e70159a7bafa0` then passed authoritative post-body-sync CI #4678 (`33784319416`) **5/5 SUCCESS**: development-context, both Ubuntu/Windows full unit suites, and both Ubuntu/Windows app-baseline API/real-media/frontend/browser Product Truth jobs all succeeded. No runtime, test, schema, or product behavior changed after `969142b4adb92104a77041c02ae3f9081965999b`.
+## Regression-first evidence
 
-## Repaired invariant
+Regression commit `f3bf657480ebb7d0da0bb4d10e58df8f48a1d17e` adds a publication recovery test proving that a marker leaf symlink must be rejected without touching its legitimate registered target. Regression commit `ad16553a34482bdf0b2008e3dd5ae05ece0be998` adds a Generation archive-authority test that first proves `GenerationJobManager` rejects an unsupported durable Job schema and then requires archive authority to reject the same record.
 
-A physical managed arbitrary-publication path has at most one unresolved durable reservation, including case-only aliases on case-insensitive Windows filesystems. Reservation conflict detection and recovery reference correlation use the same host-filesystem identity, while exact expected `reference_id` ownership remains required. Persisted `ProjectReference.path` and marker `relative_path` values remain canonical portable lexical strings.
+Exact regression-only CI #4689 (`33791042300`) on `ad16553a34482bdf0b2008e3dd5ae05ece0be998` failed both Ubuntu and Windows full-unit jobs at the new regressions on the unpatched runtime. The existing Ubuntu/Windows app-baseline API/real-media/frontend/browser jobs still passed. `development-context` also failed only because lifecycle had already returned to Draft while this file and `NEXT_TASK.md` still described the superseded review state.
 
-All earlier Stage-19 Generation redo-only retry/recovery, archive authority, source/WebVTT/Generation publication, historical identity, Undo/Redo, leased root staging and Product Truth invariants remain unchanged.
+## Runtime repair
 
-## Review authority
+`efcf6dc6c7dd01def6bc7b77a309ac071ded068f` makes managed-publication recovery inspect and reject the marker's lexical leaf symlink before the general resolver can follow it. The existing containment/root validation, exact/case-alias reservation identity, reference-ID ownership and ordinary regular-file quarantine behavior remain unchanged.
 
-This refreeze changes only lifecycle/context state. The next mandatory step is to mark PR #89 Ready, freeze the resulting exact BASE/HEAD, obtain a distinct exact-head post-Ready permanent CI result, and launch a genuinely fresh ordinary-ChatGPT semantic review governed by immutable BASE `.agents/skills/code-review/SKILL.md` v1.0. Merge remains forbidden unless that review returns `CURRENT / PASS / 0 findings` and final live identity, CI and review threads remain clean.
+`8555303655a1acc6adaa4196cefecd3fa4489641` makes shared Generation materialization authority parse durable Job JSON through canonical `GenerationJob.from_dict()`, fail closed on parser/validation errors, and explicitly require parsed `project_id`/`job_id` to match the physical project and task-file identity before selecting the historical attempt. Historical successful-attempt semantics remain supported; overall Job success is not newly required for incomplete materialization authority.
+
+Preliminary material CI #4693 (`33791585364`) on `8555303655a1acc6adaa4196cefecd3fa4489641` has both Ubuntu and Windows full-unit suites green, including both new regressions. Its `development-context` result is intentionally obsolete because this synchronization had not yet been committed; the authoritative gate is the post-synchronization exact-head Draft CI.
+
+## Repaired invariants
+
+Managed publication recovery must preserve lexical leaf identity: a crash-left marker whose output entry is a symlink fails closed and can never quarantine the symlink target. Physical publication path reservation/recovery still uses the shared host-filesystem identity for case aliases while persisted lexical Project paths remain unchanged.
+
+Every Generation ProjectReference trusted by archive/Redo/recovery authority must resolve through one canonically parsed durable `GenerationJob`, whose parsed project/job identity matches the physical project/task identity, before historical attempt provenance or output bytes can be trusted.
+
+All earlier Stage-19 schema-v1/v2, historical identity, Undo/Redo, archive, Generation retry/recovery/idempotency, publication, leased root staging and Product Truth invariants remain unchanged.
+
+## Next gate
+
+Synchronize this Draft state, `NEXT_TASK.md` and the PR body without further runtime/test/schema/product changes. Then require one authoritative exact-head Draft CI **5/5 SUCCESS**. Only after that may lifecycle refreeze `draft -> review`, PR #89 return to Ready, and another genuinely fresh ordinary-ChatGPT semantic review be launched against the new frozen exact HEAD.
 
 ## Out of scope
 
