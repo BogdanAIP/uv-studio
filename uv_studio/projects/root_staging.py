@@ -6,7 +6,7 @@ must not leave those transient bytes forever, but another runtime must also neve
 mistake a live staging file for an orphan. Each staging path therefore owns a tiny
 sidecar lease file whose OS byte-range/file lock is held for the staging lifetime.
 Startup cleanup removes only exact UV-owned names whose lease can be acquired
-non-blockingly, proving that no cooperating runtime still owns the staging path.
+nonblockingly, proving that no cooperating runtime still owns the staging path.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -33,6 +34,8 @@ _ROOT_STAGING_NAMES = (
     re.compile(rf"^\.uv-timeline-assemble-art_{_HEX32}-{_HEX32}(?:\.[A-Za-z0-9][A-Za-z0-9._-]*)?$"),
 )
 _LEASE_SUFFIX = ".lease"
+_ROOT_COORDINATION_LOCK_NAME = ".uv-root-staging-allocation.lock"
+_ROOT_COORDINATION_PROCESS_LOCK = threading.RLock()
 _PROCESS_LEASES_GUARD = threading.RLock()
 _PROCESS_LEASES: dict[str, tuple[BinaryIO, Path]] = {}
 
@@ -66,6 +69,21 @@ def _try_acquire_os_lock(handle: BinaryIO) -> bool:
         if exc.errno in {errno.EACCES, errno.EAGAIN}:
             return False
         raise
+
+
+def _acquire_os_lock(handle: BinaryIO) -> None:
+    """Acquire one coordination lock, waiting only on another live runtime."""
+
+    handle.seek(0)
+    if os.name == "nt":
+        while True:
+            if _try_acquire_os_lock(handle):
+                return
+            time.sleep(0.1)
+
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
 
 
 def _release_os_lock(handle: BinaryIO) -> None:
@@ -114,48 +132,82 @@ def _remove_lease_file(lease_path: Path) -> None:
         logger.warning("could not remove UV root staging lease %s: %s", lease_path.name, exc)
 
 
+@contextmanager
+def _root_coordination_lock(root: Path) -> Iterator[None]:
+    """Serialize lease publication and recovery across processes.
+
+    The per-staging lease file must never become visible to startup recovery before
+    its owner lock is established. A tiny permanent root coordination file closes
+    that publication window without pre-creating producer output bytes. The lock is
+    held only while allocating a lease or scanning stale leases, never during render
+    or provider work, and OS ownership disappears automatically on process loss.
+    """
+
+    root = _validate_root(root)
+    lock_path = root / _ROOT_COORDINATION_LOCK_NAME
+    if lock_path.is_symlink():
+        raise OSError("root staging coordination lock must not be a symlink")
+
+    with _ROOT_COORDINATION_PROCESS_LOCK:
+        handle = lock_path.open("a+b")
+        try:
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+                os.fsync(handle.fileno())
+            _acquire_os_lock(handle)
+            try:
+                yield
+            finally:
+                _release_os_lock(handle)
+        finally:
+            handle.close()
+
+
 def _allocate_leased_path(root: Path, *, name_factory: Callable[[str], str]) -> Path:
     root = _validate_root(root)
-    for _ in range(16):
-        token = uuid.uuid4().hex
-        name = name_factory(token)
-        if not _is_owned_staging_name(name):  # pragma: no cover - factory invariant
-            raise ValueError(f"root staging factory produced an unowned name: {name!r}")
-        staging_path = root / name
-        lease_path = root / f"{name}{_LEASE_SUFFIX}"
-        try:
-            handle = lease_path.open("x+b")
-        except FileExistsError:
-            continue
-        try:
-            handle.write(b"\0")
-            handle.flush()
-            os.fsync(handle.fileno())
-            if not _try_acquire_os_lock(handle):  # pragma: no cover - unique lease invariant
-                raise OSError("new root staging lease was unexpectedly already locked")
-            if staging_path.exists() or staging_path.is_symlink():
-                _release_os_lock(handle)
-                handle.close()
-                _remove_lease_file(lease_path)
+    with _root_coordination_lock(root):
+        for _ in range(16):
+            token = uuid.uuid4().hex
+            name = name_factory(token)
+            if not _is_owned_staging_name(name):  # pragma: no cover - factory invariant
+                raise ValueError(f"root staging factory produced an unowned name: {name!r}")
+            staging_path = root / name
+            lease_path = root / f"{name}{_LEASE_SUFFIX}"
+            try:
+                handle = lease_path.open("x+b")
+            except FileExistsError:
                 continue
-            key = str(staging_path)
-            with _PROCESS_LEASES_GUARD:
-                if key in _PROCESS_LEASES:  # pragma: no cover - UUID/name invariant
+            try:
+                handle.write(b"\0")
+                handle.flush()
+                os.fsync(handle.fileno())
+                if not _try_acquire_os_lock(handle):  # pragma: no cover - unique lease invariant
+                    raise OSError("new root staging lease was unexpectedly already locked")
+                if staging_path.exists() or staging_path.is_symlink():
                     _release_os_lock(handle)
                     handle.close()
                     _remove_lease_file(lease_path)
                     continue
-                _PROCESS_LEASES[key] = (handle, lease_path)
-            return staging_path
-        except Exception:
-            if not handle.closed:
-                try:
-                    _release_os_lock(handle)
-                except Exception:
-                    pass
-                handle.close()
-            _remove_lease_file(lease_path)
-            raise
+                key = str(staging_path)
+                with _PROCESS_LEASES_GUARD:
+                    if key in _PROCESS_LEASES:  # pragma: no cover - UUID/name invariant
+                        _release_os_lock(handle)
+                        handle.close()
+                        _remove_lease_file(lease_path)
+                        continue
+                    _PROCESS_LEASES[key] = (handle, lease_path)
+                return staging_path
+            except Exception:
+                if not handle.closed:
+                    try:
+                        _release_os_lock(handle)
+                    except Exception:
+                        pass
+                    handle.close()
+                _remove_lease_file(lease_path)
+                raise
     raise FileExistsError("could not allocate a unique UV root staging path")
 
 
@@ -277,49 +329,50 @@ def recover_stale_root_staging(root: Path) -> tuple[Path, ...]:
 
     root = _validate_root(root)
     recovered: list[Path] = []
-    entries = tuple(root.iterdir())
-    for lease_path in sorted(entries, key=lambda item: item.name):
-        if not lease_path.name.endswith(_LEASE_SUFFIX):
-            continue
-        staging_name = lease_path.name[: -len(_LEASE_SUFFIX)]
-        if not _is_owned_staging_name(staging_name):
-            continue
-        if lease_path.is_symlink() or not lease_path.is_file():
-            logger.error("unsafe UV root staging lease preserved: %s", lease_path.name)
-            continue
-        try:
-            handle = lease_path.open("r+b")
-        except FileNotFoundError:
-            continue
-        acquired = False
-        remove_lease = False
-        try:
+    with _root_coordination_lock(root):
+        entries = tuple(root.iterdir())
+        for lease_path in sorted(entries, key=lambda item: item.name):
+            if not lease_path.name.endswith(_LEASE_SUFFIX):
+                continue
+            staging_name = lease_path.name[: -len(_LEASE_SUFFIX)]
+            if not _is_owned_staging_name(staging_name):
+                continue
+            if lease_path.is_symlink() or not lease_path.is_file():
+                logger.error("unsafe UV root staging lease preserved: %s", lease_path.name)
+                continue
             try:
-                acquired = _try_acquire_os_lock(handle)
-            except OSError as exc:
-                logger.error("could not inspect UV root staging lease %s: %s", lease_path.name, exc)
+                handle = lease_path.open("r+b")
+            except FileNotFoundError:
                 continue
-            if not acquired:
-                continue
-            staging_path = root / staging_name
-            if staging_path.is_symlink():
-                logger.error("unsafe UV root staging symlink preserved: %s", staging_path.name)
-                continue
-            if staging_path.exists() and not staging_path.is_file():
-                logger.error("unsafe UV root staging non-file preserved: %s", staging_path.name)
-                continue
-            if staging_path.exists():
-                staging_path.unlink()
-                recovered.append(staging_path)
-                logger.warning("recovered stale UV root staging file: %s", staging_path.name)
-            remove_lease = True
-        finally:
-            if acquired:
+            acquired = False
+            remove_lease = False
+            try:
                 try:
-                    _release_os_lock(handle)
+                    acquired = _try_acquire_os_lock(handle)
                 except OSError as exc:
-                    logger.warning("could not release UV root staging lease %s: %s", lease_path.name, exc)
-            handle.close()
-        if remove_lease:
-            _remove_lease_file(lease_path)
+                    logger.error("could not inspect UV root staging lease %s: %s", lease_path.name, exc)
+                    continue
+                if not acquired:
+                    continue
+                staging_path = root / staging_name
+                if staging_path.is_symlink():
+                    logger.error("unsafe UV root staging symlink preserved: %s", staging_path.name)
+                    continue
+                if staging_path.exists() and not staging_path.is_file():
+                    logger.error("unsafe UV root staging non-file preserved: %s", staging_path.name)
+                    continue
+                if staging_path.exists():
+                    staging_path.unlink()
+                    recovered.append(staging_path)
+                    logger.warning("recovered stale UV root staging file: %s", staging_path.name)
+                remove_lease = True
+            finally:
+                if acquired:
+                    try:
+                        _release_os_lock(handle)
+                    except OSError as exc:
+                        logger.warning("could not release UV root staging lease %s: %s", lease_path.name, exc)
+                handle.close()
+            if remove_lease:
+                _remove_lease_file(lease_path)
     return tuple(recovered)
