@@ -56,6 +56,7 @@ from uv_studio.api.stage8_workspace import router as stage8_workspace_router  # 
 from uv_studio.api.studio_timeline import router as studio_timeline_router  # noqa: E402
 from uv_studio.config import allowed_frontend_origins  # noqa: E402
 from uv_studio.generation.recovery import recover_interrupted_generation_jobs  # noqa: E402
+from uv_studio.projects.root_staging import recover_stale_root_staging  # noqa: E402
 from uv_studio.runtime_config import RuntimeConfigStore  # noqa: E402
 
 TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
@@ -63,10 +64,15 @@ TRUSTED_FRONTEND_ORIGINS = frozenset(allowed_frontend_origins())
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Root-level staging is outside every project directory and has its own
+    # cross-runtime lease. Reclaim only staging whose OS lock proves its publisher
+    # is no longer alive before project-scoped publication/job reconciliation.
+    store = get_project_store()
+    recover_stale_root_staging(store.root)
     # FastAPI BackgroundTasks are process-local rather than durable workers.
     # Reconcile abandoned queued/running generation records before accepting
     # requests, but never auto-replay provider work after a restart.
-    recover_interrupted_generation_jobs(get_project_store())
+    recover_interrupted_generation_jobs(store)
     yield
 
 
