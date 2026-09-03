@@ -58,7 +58,9 @@ Documentation synchronization:
 - `76e997340b5be75feefcfe5034779598d25d2379` — Project Store root-staging lease/recovery contract;
 - `796faffa2d71f5bcf35edbe9ef077cbb82198850` — archive boundary for root staging/leases.
 
-The P2 thread remains intentionally unresolved until the synchronized Draft head has exact 5/5 evidence.
+The first synchronized Draft head `c41da89addb469eac48b0a65220edf7856b44bd5` passed CI #4553 (`33720676160`) **5/5 SUCCESS**. A later metadata-only PR-body edit accidentally renamed the mandatory `## Changes` section, so CI #4554 (`33720709846`) failed only `development-context`; both bootstrap suites and both app-baseline jobs still succeeded. Re-running that job reused the original pull-request event payload and therefore repeated the same stale-body validation failure. The live PR body has been corrected back to exactly one `## Changes` section. This context-only commit exists solely to generate a fresh `synchronize` event against that corrected body; no runtime, test, schema or product behavior changes here.
+
+The P2 thread remains intentionally unresolved until this new synchronized Draft head has exact 5/5 evidence.
 
 ## Existing Stage-19 authority retained
 
@@ -68,7 +70,7 @@ The root-staging lease mechanism adds no canonical media, Project, Production, G
 
 ## Next required action
 
-1. obtain synchronized Draft-head CI **5/5** after documentation/context synchronization;
+1. obtain synchronized Draft-head CI **5/5** after this context-only event-refresh commit;
 2. reply to and resolve P2 `PRRT_kwDOT0Lyms6ex9SS` with exact material and synchronized-Draft evidence;
 3. confirm zero unresolved inline review threads and clean live BASE/HEAD identity;
 4. perform one context-only refreeze from `draft` to `review` with no runtime/test/schema/product mutation;
