@@ -15,10 +15,11 @@ import errno
 import logging
 import os
 import re
+import threading
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import BinaryIO, Iterator
+from typing import BinaryIO, Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ _ROOT_STAGING_NAMES = (
     re.compile(rf"^\.uv-timeline-assemble-art_{_HEX32}-{_HEX32}(?:\.[A-Za-z0-9][A-Za-z0-9._-]*)?$"),
 )
 _LEASE_SUFFIX = ".lease"
+_PROCESS_LEASES_GUARD = threading.RLock()
+_PROCESS_LEASES: dict[str, tuple[BinaryIO, Path]] = {}
 
 
 def _is_lock_contention(exc: OSError) -> bool:
@@ -104,22 +107,24 @@ def _is_owned_staging_name(name: str) -> bool:
     return any(pattern.fullmatch(name) is not None for pattern in _ROOT_STAGING_NAMES)
 
 
-@contextmanager
-def _leased_path(root: Path, *, name_factory) -> Iterator[Path]:
-    root = _validate_root(root)
-    lease_handle: BinaryIO | None = None
-    lease_path: Path | None = None
-    staging_path: Path | None = None
+def _remove_lease_file(lease_path: Path) -> None:
+    try:
+        lease_path.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("could not remove UV root staging lease %s: %s", lease_path.name, exc)
 
+
+def _allocate_leased_path(root: Path, *, name_factory: Callable[[str], str]) -> Path:
+    root = _validate_root(root)
     for _ in range(16):
         token = uuid.uuid4().hex
         name = name_factory(token)
         if not _is_owned_staging_name(name):  # pragma: no cover - factory invariant
             raise ValueError(f"root staging factory produced an unowned name: {name!r}")
-        candidate = root / name
-        candidate_lease = root / f"{name}{_LEASE_SUFFIX}"
+        staging_path = root / name
+        lease_path = root / f"{name}{_LEASE_SUFFIX}"
         try:
-            handle = candidate_lease.open("x+b")
+            handle = lease_path.open("x+b")
         except FileExistsError:
             continue
         try:
@@ -128,13 +133,20 @@ def _leased_path(root: Path, *, name_factory) -> Iterator[Path]:
             os.fsync(handle.fileno())
             if not _try_acquire_os_lock(handle):  # pragma: no cover - unique lease invariant
                 raise OSError("new root staging lease was unexpectedly already locked")
-            try:
-                candidate.open("xb").close()
-            except FileExistsError:
+            if staging_path.exists() or staging_path.is_symlink():
                 _release_os_lock(handle)
                 handle.close()
-                candidate_lease.unlink(missing_ok=True)
+                _remove_lease_file(lease_path)
                 continue
+            key = str(staging_path)
+            with _PROCESS_LEASES_GUARD:
+                if key in _PROCESS_LEASES:  # pragma: no cover - UUID/name invariant
+                    _release_os_lock(handle)
+                    handle.close()
+                    _remove_lease_file(lease_path)
+                    continue
+                _PROCESS_LEASES[key] = (handle, lease_path)
+            return staging_path
         except Exception:
             if not handle.closed:
                 try:
@@ -142,94 +154,130 @@ def _leased_path(root: Path, *, name_factory) -> Iterator[Path]:
                 except Exception:
                     pass
                 handle.close()
-            candidate_lease.unlink(missing_ok=True)
+            _remove_lease_file(lease_path)
             raise
-        lease_handle = handle
-        lease_path = candidate_lease
-        staging_path = candidate
-        break
+    raise FileExistsError("could not allocate a unique UV root staging path")
 
-    if lease_handle is None or lease_path is None or staging_path is None:
-        raise FileExistsError("could not allocate a unique UV root staging path")
 
+def release_root_staging(staging_path: Path) -> None:
+    """Release one path allocated by this process and remove any remaining bytes."""
+
+    staging_path = Path(staging_path)
+    key = str(staging_path)
+    with _PROCESS_LEASES_GUARD:
+        lease = _PROCESS_LEASES.pop(key, None)
+    if lease is None:
+        raise ValueError(f"root staging path is not leased by this process: {staging_path.name!r}")
+    handle, lease_path = lease
     try:
-        yield staging_path
+        staging_path.unlink(missing_ok=True)
     finally:
         try:
-            staging_path.unlink(missing_ok=True)
+            _release_os_lock(handle)
         finally:
-            try:
-                _release_os_lock(lease_handle)
-            finally:
-                lease_handle.close()
-                lease_path.unlink(missing_ok=True)
+            handle.close()
+            _remove_lease_file(lease_path)
+
+
+def acquire_generation_root_staging(root: Path, attempt_id: str, suffix: str) -> Path:
+    attempt_id = _validate_identity(attempt_id, prefix="attempt_", field_name="attempt_id")
+    suffix = _validate_suffix(suffix)
+    return _allocate_leased_path(
+        root,
+        name_factory=lambda token: f".uv-generation-{attempt_id}-{token}{suffix}",
+    )
+
+
+def acquire_source_upload_root_staging(root: Path, source_id: str) -> Path:
+    source_id = _validate_identity(source_id, prefix="src_", field_name="source_id")
+    return _allocate_leased_path(
+        root,
+        name_factory=lambda token: f".uv-source-upload-{source_id}.{token}.upload",
+    )
+
+
+def acquire_webvtt_root_staging(root: Path, artifact_id: str) -> Path:
+    artifact_id = _validate_identity(artifact_id, prefix="sub_", field_name="artifact_id")
+    return _allocate_leased_path(
+        root,
+        name_factory=lambda token: f".uv-webvtt-{artifact_id}-{token}.vtt",
+    )
+
+
+def acquire_ffconcat_root_staging(root: Path) -> Path:
+    return _allocate_leased_path(
+        root,
+        name_factory=lambda token: f".uv-ffconcat-{token}.txt",
+    )
+
+
+def acquire_timeline_root_staging(root: Path, artifact_id: str, suffix: str) -> Path:
+    artifact_id = _validate_identity(artifact_id, prefix="art_", field_name="artifact_id")
+    suffix = _validate_suffix(suffix)
+    return _allocate_leased_path(
+        root,
+        name_factory=lambda token: f".uv-timeline-assemble-{artifact_id}-{token}{suffix}",
+    )
 
 
 @contextmanager
 def generation_root_staging(root: Path, attempt_id: str, suffix: str) -> Iterator[Path]:
-    attempt_id = _validate_identity(attempt_id, prefix="attempt_", field_name="attempt_id")
-    suffix = _validate_suffix(suffix)
-    with _leased_path(
-        root,
-        name_factory=lambda token: f".uv-generation-{attempt_id}-{token}{suffix}",
-    ) as path:
+    path = acquire_generation_root_staging(root, attempt_id, suffix)
+    try:
         yield path
+    finally:
+        release_root_staging(path)
 
 
 @contextmanager
 def source_upload_root_staging(root: Path, source_id: str) -> Iterator[Path]:
-    source_id = _validate_identity(source_id, prefix="src_", field_name="source_id")
-    with _leased_path(
-        root,
-        name_factory=lambda token: f".uv-source-upload-{source_id}.{token}.upload",
-    ) as path:
+    path = acquire_source_upload_root_staging(root, source_id)
+    try:
         yield path
+    finally:
+        release_root_staging(path)
 
 
 @contextmanager
 def webvtt_root_staging(root: Path, artifact_id: str) -> Iterator[Path]:
-    artifact_id = _validate_identity(artifact_id, prefix="sub_", field_name="artifact_id")
-    with _leased_path(
-        root,
-        name_factory=lambda token: f".uv-webvtt-{artifact_id}-{token}.vtt",
-    ) as path:
+    path = acquire_webvtt_root_staging(root, artifact_id)
+    try:
         yield path
+    finally:
+        release_root_staging(path)
 
 
 @contextmanager
 def ffconcat_root_staging(root: Path) -> Iterator[Path]:
-    with _leased_path(
-        root,
-        name_factory=lambda token: f".uv-ffconcat-{token}.txt",
-    ) as path:
+    path = acquire_ffconcat_root_staging(root)
+    try:
         yield path
+    finally:
+        release_root_staging(path)
 
 
 @contextmanager
 def timeline_root_staging(root: Path, artifact_id: str, suffix: str) -> Iterator[Path]:
-    artifact_id = _validate_identity(artifact_id, prefix="art_", field_name="artifact_id")
-    suffix = _validate_suffix(suffix)
-    with _leased_path(
-        root,
-        name_factory=lambda token: f".uv-timeline-assemble-{artifact_id}-{token}{suffix}",
-    ) as path:
+    path = acquire_timeline_root_staging(root, artifact_id, suffix)
+    try:
         yield path
+    finally:
+        release_root_staging(path)
 
 
 def recover_stale_root_staging(root: Path) -> tuple[Path, ...]:
-    """Remove only exact UV staging files whose sidecar lease proves no live owner.
+    """Remove exact UV staging files only after their lease proves no live owner.
 
-    The scan is intentionally non-recursive. Unknown root files, project directories,
-    symlinks, malformed/legacy staging names and currently locked leases are preserved.
+    The scan is deliberately non-recursive. Unknown root files, project directories,
+    symlinks, malformed or legacy unleased staging names, and currently locked leases
+    are preserved. Legacy unleased names cannot be reclaimed safely while an older
+    runtime may still be writing them; all staging allocated by this authority is
+    lease-backed and therefore deterministically reclaimable after process loss.
     """
 
     root = _validate_root(root)
     recovered: list[Path] = []
-    try:
-        entries = tuple(root.iterdir())
-    except OSError:
-        raise
-
+    entries = tuple(root.iterdir())
     for lease_path in sorted(entries, key=lambda item: item.name):
         if not lease_path.name.endswith(_LEASE_SUFFIX):
             continue
@@ -239,11 +287,12 @@ def recover_stale_root_staging(root: Path) -> tuple[Path, ...]:
         if lease_path.is_symlink() or not lease_path.is_file():
             logger.error("unsafe UV root staging lease preserved: %s", lease_path.name)
             continue
-
         try:
             handle = lease_path.open("r+b")
         except FileNotFoundError:
             continue
+        acquired = False
+        remove_lease = False
         try:
             try:
                 acquired = _try_acquire_os_lock(handle)
@@ -252,29 +301,25 @@ def recover_stale_root_staging(root: Path) -> tuple[Path, ...]:
                 continue
             if not acquired:
                 continue
-
             staging_path = root / staging_name
-            remove_lease = False
-            try:
-                if staging_path.is_symlink():
-                    logger.error("unsafe UV root staging symlink preserved: %s", staging_path.name)
-                    continue
-                if staging_path.exists() and not staging_path.is_file():
-                    logger.error("unsafe UV root staging non-file preserved: %s", staging_path.name)
-                    continue
-                if staging_path.exists():
-                    staging_path.unlink()
-                    recovered.append(staging_path)
-                    logger.warning("recovered stale UV root staging file: %s", staging_path.name)
-                remove_lease = True
-            finally:
-                _release_os_lock(handle)
-            if remove_lease:
-                handle.close()
-                lease_path.unlink(missing_ok=True)
+            if staging_path.is_symlink():
+                logger.error("unsafe UV root staging symlink preserved: %s", staging_path.name)
                 continue
+            if staging_path.exists() and not staging_path.is_file():
+                logger.error("unsafe UV root staging non-file preserved: %s", staging_path.name)
+                continue
+            if staging_path.exists():
+                staging_path.unlink()
+                recovered.append(staging_path)
+                logger.warning("recovered stale UV root staging file: %s", staging_path.name)
+            remove_lease = True
         finally:
-            if not handle.closed:
-                handle.close()
-
+            if acquired:
+                try:
+                    _release_os_lock(handle)
+                except OSError as exc:
+                    logger.warning("could not release UV root staging lease %s: %s", lease_path.name, exc)
+            handle.close()
+        if remove_lease:
+            _remove_lease_file(lease_path)
     return tuple(recovered)
