@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from uv_studio.projects.archive import ProjectArchiveError, export_project
 from uv_studio.projects.models import ProjectReference
@@ -78,6 +80,65 @@ class ManagedPublicationRecoveryTests(unittest.TestCase):
             reference_id="art_publication_second_owner",
         )
         self.assertNotEqual(second_publication_id, first_publication_id)
+
+    def test_case_alias_reservation_uses_filesystem_equivalent_identity(self) -> None:
+        first_path = "artifacts/Clip.mp4"
+        alias_path = "artifacts/clip.mp4"
+        first_publication_id = self._begin(
+            first_path,
+            reference_id="art_publication_case_first",
+        )
+
+        with mock.patch(
+            "uv_studio.projects.publication.os.path.normcase",
+            side_effect=lambda value: str(value).lower(),
+        ):
+            with self.assertRaisesRegex(ManagedPublicationError, "already reserved"):
+                self._begin(
+                    alias_path,
+                    reference_id="art_publication_case_second",
+                )
+
+        pending = pending_managed_publications(self.store, self.project.project_id)
+        self.assertEqual(
+            [(item["publication_id"], item["relative_path"]) for item in pending],
+            [(first_publication_id, first_path)],
+        )
+
+    @unittest.skipUnless(os.name == "nt", "Windows case-insensitive filesystem regression")
+    def test_windows_recovery_matches_registered_case_alias_without_quarantine(self) -> None:
+        marker_path = "artifacts/Clip.mp4"
+        registered_path = "artifacts/clip.mp4"
+        artifact_id = "art_publication_windows_case_owner"
+        self._begin(marker_path, reference_id=artifact_id)
+
+        output = self.store.resolve_project_file(
+            self.project.project_id,
+            registered_path,
+            allowed_roots=("artifacts",),
+        )
+        output.write_bytes(b"registered-windows-case-alias")
+        project = self.store.load_project(self.project.project_id)
+        artifact = ProjectReference(
+            id=artifact_id,
+            kind="video",
+            path=registered_path,
+            metadata={"capability_id": "timeline.assemble"},
+        )
+        self.store.update_project(
+            self.project.project_id,
+            artifacts=(*project.artifacts, artifact),
+        )
+
+        quarantined = recover_managed_publications(self.store, self.project.project_id)
+        self.assertEqual(quarantined, ())
+        self.assertEqual(output.read_bytes(), b"registered-windows-case-alias")
+        self.assertEqual(pending_managed_publications(self.store, self.project.project_id), ())
+        durable = self.store.load_project(self.project.project_id)
+        self.assertEqual(
+            [(item.id, item.path) for item in durable.artifacts],
+            [(artifact_id, registered_path)],
+        )
 
     def test_archive_fails_closed_on_interrupted_arbitrary_path_publication(self) -> None:
         relative_path = "artifacts/custom-user-selected-output.mp4"
