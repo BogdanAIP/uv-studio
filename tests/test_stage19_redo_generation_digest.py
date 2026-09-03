@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from dataclasses import replace
@@ -170,6 +171,25 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
         corrupt = bytes([payload[0] ^ 1]) + payload[1:]
         output.write_bytes(corrupt)
         return corrupt
+
+    def test_archive_requires_canonical_generation_job_record_validation(self) -> None:
+        completed, _attempt, _artifact, _output, _payload, _uow = self._generate()
+        job_path = (
+            self.store.project_directory(self.project.project_id)
+            / "tasks"
+            / f"{completed.job_id}.json"
+        )
+        raw = json.loads(job_path.read_text(encoding="utf-8"))
+        raw["schema_version"] = 999
+        self.store._atomic_write_json(job_path, raw)
+
+        with self.assertRaisesRegex(GenerationJobError, "schema v1|invalid generation job record"):
+            GenerationJobManager(self.store).get(self.project.project_id, completed.job_id)
+
+        archive_path = Path(self.tmp.name) / "unsupported-generation-job-schema.uvproj.zip"
+        with self.assertRaisesRegex(ProjectArchiveError, "Generation|schema|authority"):
+            export_project(self.store, self.project.project_id, archive_path)
+        self.assertFalse(archive_path.exists())
 
     def test_archive_rejects_corrupt_redo_only_generation_bytes(self) -> None:
         _job, _attempt, _artifact, output, payload, _uow = self._generate_and_undo()
