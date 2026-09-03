@@ -8,17 +8,18 @@
 
 Both findings were independently confirmed and regression-first evidence was added before runtime repair. `f3bf657480ebb7d0da0bb4d10e58df8f48a1d17e` covers recovery of a crash-left managed-publication marker whose lexical output is an in-root symlink; `ad16553a34482bdf0b2008e3dd5ae05ece0be998` covers archive authority accepting durable Generation Job JSON that the canonical Job parser rejects. Regression-only CI #4689 (`33791042300`) failed both Ubuntu and Windows full-unit jobs on the new tests while both app-baseline Product Truth jobs remained green.
 
-Runtime repair `efcf6dc6c7dd01def6bc7b77a309ac071ded068f` rejects publication marker leaf symlinks before general path resolution can follow them. Runtime repair `8555303655a1acc6adaa4196cefecd3fa4489641` routes durable Generation Job records through canonical `GenerationJob.from_dict()` validation and binds parsed project/job identity to the physical project/task identity before historical attempt authority is trusted. Preliminary material CI #4693 has both Ubuntu and Windows full-unit suites green on these repairs; its development-context failure predates this synchronization and is not an acceptance result.
+Runtime repair `efcf6dc6c7dd01def6bc7b77a309ac071ded068f` rejects publication marker leaf symlinks before general path resolution can follow them. Runtime repair `8555303655a1acc6adaa4196cefecd3fa4489641` routes durable Generation Job records through canonical `GenerationJob.from_dict()` validation and binds parsed project/job identity to the physical project/task identity before historical attempt authority is trusted. Preliminary material CI #4693 has both Ubuntu and Windows full-unit suites green on these repairs; its development-context failure predates the current synchronization and is not an acceptance result.
 
 ## Immediate continuation
 
-1. Synchronize this repaired Draft state and PR body; make no further runtime/test/schema/product changes unless new evidence requires them.
-2. Require one authoritative exact-head Draft CI **5/5 SUCCESS** after synchronization.
-3. Re-resolve live PR identity/mergeability and unresolved inline review threads.
-4. Refreeze lifecycle `draft -> review`, mark PR #89 Ready, and freeze the new exact BASE/HEAD.
-5. Launch another genuinely fresh ordinary-ChatGPT read-only semantic review using immutable BASE `.agents/skills/code-review/SKILL.md` v1.0 and neutral `REVIEW_REQUEST_V1` launcher instructions.
-6. After a future `CURRENT / PASS / 0 findings` review, obtain/confirm the final exact-head permanent CI/browser/real-media acceptance required by the accepted protocol, verify live identity/threads, and merge with expected HEAD SHA.
-7. After merge, perform mandatory D-038 lifecycle closure to `idle` before the next slice.
+1. Keep PR #89 Draft and make no further runtime/test/schema/product changes unless new evidence requires them.
+2. Synchronize the PR body to the current repaired Draft head.
+3. Require one authoritative exact-head Draft CI **5/5 SUCCESS** created after that body synchronization.
+4. Re-resolve live PR identity/mergeability and unresolved inline review threads.
+5. Refreeze lifecycle `draft -> review`, mark PR #89 Ready, and freeze the new exact BASE/HEAD.
+6. Launch another genuinely fresh ordinary-ChatGPT read-only semantic review using immutable BASE `.agents/skills/code-review/SKILL.md` v1.0 and neutral `REVIEW_REQUEST_V1` launcher instructions.
+7. After a future `CURRENT / PASS / 0 findings` review, obtain/confirm the final exact-head permanent CI/browser/real-media acceptance required by the accepted protocol, verify live identity/threads, and merge with expected HEAD SHA.
+8. After merge, perform mandatory D-038 lifecycle closure to `idle` before the next slice.
 
 ## Invariants to preserve
 
