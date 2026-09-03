@@ -516,3 +516,74 @@ def _source_file_response(reference: ProjectReference, path: Path) -> FileRespon
         filename=original_name,
         content_disposition_type="inline",
     )
+
+
+@router.get("/{project_id}/sources/{source_id}/media", response_class=FileResponse)
+def stream_source_media(
+    project_id: str,
+    source_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    """Deliver only a registered project video source; Starlette handles byte ranges."""
+
+    try:
+        reference, path = ProjectSourceMediaStore(store).resolve(project_id, source_id)
+    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
+        raise _translate(exc) from exc
+    return _source_file_response(reference, path)
+
+
+@router.get("/{project_id}/artifacts/{artifact_id}/media", response_class=FileResponse)
+def stream_video_artifact(
+    project_id: str,
+    artifact_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    """Deliver only a registered project-owned video artifact for browser review."""
+
+    try:
+        project = store.load_project(project_id)
+        reference = next(
+            (
+                item
+                for item in project.artifacts
+                if item.id == artifact_id and item.kind == "video"
+            ),
+            None,
+        )
+        if reference is None:
+            raise HTTPException(status_code=404, detail="Video artifact not found")
+        path = store.resolve_project_file(
+            project_id,
+            reference.path,
+            must_exist=True,
+            allowed_roots=("artifacts",),
+        )
+    except HTTPException:
+        raise
+    except ProjectNotFound as exc:
+        raise _translate(exc) from exc
+    except (ProjectValidationError, ProjectStoreError) as exc:
+        raise HTTPException(status_code=422, detail="Video artifact is not safely resolvable") from exc
+
+    if not path.is_file() or path.is_symlink():
+        raise HTTPException(status_code=404, detail="Video artifact not found")
+
+    metadata = reference.metadata
+    media_type = metadata.get("content_type")
+    if not isinstance(media_type, str) or not media_type.startswith("video/"):
+        guessed, _encoding = mimetypes.guess_type(path.name)
+        media_type = (
+            guessed
+            if isinstance(guessed, str) and guessed.startswith("video/")
+            else "application/octet-stream"
+        )
+    original_name = metadata.get("original_name")
+    if not isinstance(original_name, str) or not original_name:
+        original_name = path.name
+    return FileResponse(
+        path=path,
+        media_type=media_type,
+        filename=original_name,
+        content_disposition_type="inline",
+    )
