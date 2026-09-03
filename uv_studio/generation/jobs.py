@@ -526,11 +526,25 @@ class GenerationJobManager:
         return False
 
     def _has_unreconciled_durable_artifact(self, job: GenerationJob) -> bool:
-        """Guard retries/terminal transitions across every historical attempt."""
+        """Guard retries/terminal transitions across live and Redo-owned attempts."""
+
+        from .recovery import (
+            _redoable_output_references,
+            _validate_redo_generation_references,
+        )
 
         attempts = {attempt.attempt_id: attempt for attempt in job.attempts}
         project = self.project_store.load_project(job.project_id)
-        for artifact in project.artifacts:
+        redoable_references = _redoable_output_references(
+            self.project_store,
+            job.project_id,
+        )
+        _validate_redo_generation_references(
+            self,
+            job.project_id,
+            redoable_references,
+        )
+        for artifact in (*project.artifacts, *redoable_references):
             generation = artifact.metadata.get("generation")
             if not isinstance(generation, Mapping) or generation.get("job_id") != job.job_id:
                 continue
