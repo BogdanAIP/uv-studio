@@ -27,7 +27,7 @@ Exact regression-only CI #4689 (`33791042300`) on `ad16553a34482bdf0b2008e3dd5ae
 
 `8555303655a1acc6adaa4196cefecd3fa4489641` makes shared Generation materialization authority parse durable Job JSON through canonical `GenerationJob.from_dict()`, fail closed on parser/validation errors, and explicitly require parsed `project_id`/`job_id` to match the physical project and task-file identity before selecting the historical attempt. Historical successful-attempt semantics remain supported; overall Job success is not newly required for incomplete materialization authority.
 
-Preliminary material CI #4693 (`33791585364`) on `8555303655a1acc6adaa4196cefecd3fa4489641` has both Ubuntu and Windows full-unit suites green, including both new regressions. Its `development-context` result is intentionally obsolete because this synchronization had not yet been committed; the authoritative gate is the post-synchronization exact-head Draft CI.
+Preliminary material CI #4693 (`33791585364`) on `8555303655a1acc6adaa4196cefecd3fa4489641` has both Ubuntu and Windows full-unit suites green, including both new regressions. Its `development-context` result is intentionally obsolete because the Draft context synchronization had not yet been committed; the authoritative gate is the post-synchronization exact-head Draft CI.
 
 ## Repaired invariants
 
@@ -39,7 +39,7 @@ All earlier Stage-19 schema-v1/v2, historical identity, Undo/Redo, archive, Gene
 
 ## Next gate
 
-This Draft state and `NEXT_TASK.md` are synchronized through `fd95983636a635fe9f557702142f664f5333aa00`. Synchronize the PR body without further runtime/test/schema/product changes, then require one authoritative exact-head Draft CI **5/5 SUCCESS** created after that synchronization. Only after that may lifecycle refreeze `draft -> review`, PR #89 return to Ready, and another genuinely fresh ordinary-ChatGPT semantic review be launched against the new frozen exact HEAD.
+Draft lifecycle and continuation context are synchronized through current head `a694099170dea9f438de2185112bafd161ab949e`. Synchronize the PR body without further runtime/test/schema/product changes, then require one authoritative exact-head Draft CI **5/5 SUCCESS** created after that body synchronization. Only after that may lifecycle refreeze `draft -> review`, PR #89 return to Ready, and another genuinely fresh ordinary-ChatGPT semantic review be launched against the new frozen exact HEAD.
 
 ## Out of scope
 
