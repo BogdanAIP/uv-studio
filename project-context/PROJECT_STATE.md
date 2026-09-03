@@ -39,7 +39,7 @@ All earlier Stage-19 schema-v1/v2, historical identity, Undo/Redo, archive, Gene
 
 ## Next gate
 
-Synchronize this Draft state, `NEXT_TASK.md` and the PR body without further runtime/test/schema/product changes. Then require one authoritative exact-head Draft CI **5/5 SUCCESS**. Only after that may lifecycle refreeze `draft -> review`, PR #89 return to Ready, and another genuinely fresh ordinary-ChatGPT semantic review be launched against the new frozen exact HEAD.
+This Draft state and `NEXT_TASK.md` are synchronized through `fd95983636a635fe9f557702142f664f5333aa00`. Synchronize the PR body without further runtime/test/schema/product changes, then require one authoritative exact-head Draft CI **5/5 SUCCESS** created after that synchronization. Only after that may lifecycle refreeze `draft -> review`, PR #89 return to Ready, and another genuinely fresh ordinary-ChatGPT semantic review be launched against the new frozen exact HEAD.
 
 ## Out of scope
 
