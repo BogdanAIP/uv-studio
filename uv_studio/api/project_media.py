@@ -24,6 +24,10 @@ from uv_studio.capabilities.execution import (
     UnsupportedCapabilityExecution,
 )
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.root_staging import (
+    acquire_source_upload_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.source_media import (
     AllocatedSourceMedia,
     ProjectSourceMediaStore,
@@ -210,9 +214,9 @@ def _portable_probe_metadata(
 
 
 def _source_upload_staging_path(store: ProjectStore, source_id: str) -> Path:
-    """Allocate an exclusive-upload path outside every canonical project tree."""
+    """Allocate an exclusive leased upload path outside every canonical project tree."""
 
-    return store.root / f".uv-source-upload-{source_id}.{uuid.uuid4().hex}.upload"
+    return acquire_source_upload_root_staging(store.root, source_id)
 
 
 def _publish_source_upload(
@@ -260,8 +264,6 @@ def _publish_source_upload(
                     project = store.load_project(project_id)
                     registered = any(item.id == allocation.source_id for item in project.sources)
                 except Exception:
-                    # If durable metadata cannot be read after a possible commit, keep
-                    # the bytes rather than deleting data that may already be referenced.
                     registered = True
                 if not registered:
                     allocation.absolute_path.unlink(missing_ok=True)
@@ -294,9 +296,6 @@ async def _upload_source(
     except (ProjectNotFound, SourceMediaError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
 
-    # Request streaming can be long and must not hold the canonical project fence.
-    # Stage the complete upload at the Project Store root so archive enumeration of
-    # this project can never observe partial `.upload` bytes.
     temporary = _source_upload_staging_path(store, allocation.source_id)
     written = 0
     digest = hashlib.sha256()
@@ -345,7 +344,7 @@ async def _upload_source(
     ) as exc:
         raise _translate(exc) from exc
     finally:
-        temporary.unlink(missing_ok=True)
+        release_root_staging(temporary)
 
 
 @router.post(
@@ -508,77 +507,6 @@ def _source_file_response(reference: ProjectReference, path: Path) -> FileRespon
     media_type = metadata.get("content_type")
     if not isinstance(media_type, str) or not media_type:
         media_type = "application/octet-stream"
-    original_name = metadata.get("original_name")
-    if not isinstance(original_name, str) or not original_name:
-        original_name = path.name
-    return FileResponse(
-        path=path,
-        media_type=media_type,
-        filename=original_name,
-        content_disposition_type="inline",
-    )
-
-
-@router.get("/{project_id}/sources/{source_id}/media", response_class=FileResponse)
-def stream_source_media(
-    project_id: str,
-    source_id: str,
-    store: ProjectStore = Depends(get_project_store),
-) -> FileResponse:
-    """Deliver only a registered project video source; Starlette handles byte ranges."""
-
-    try:
-        reference, path = ProjectSourceMediaStore(store).resolve(project_id, source_id)
-    except (ProjectNotFound, SourceMediaNotFound, SourceMediaError, ProjectStoreError) as exc:
-        raise _translate(exc) from exc
-    return _source_file_response(reference, path)
-
-
-@router.get("/{project_id}/artifacts/{artifact_id}/media", response_class=FileResponse)
-def stream_video_artifact(
-    project_id: str,
-    artifact_id: str,
-    store: ProjectStore = Depends(get_project_store),
-) -> FileResponse:
-    """Deliver only a registered project-owned video artifact for browser review."""
-
-    try:
-        project = store.load_project(project_id)
-        reference = next(
-            (
-                item
-                for item in project.artifacts
-                if item.id == artifact_id and item.kind == "video"
-            ),
-            None,
-        )
-        if reference is None:
-            raise HTTPException(status_code=404, detail="Video artifact not found")
-        path = store.resolve_project_file(
-            project_id,
-            reference.path,
-            must_exist=True,
-            allowed_roots=("artifacts",),
-        )
-    except HTTPException:
-        raise
-    except ProjectNotFound as exc:
-        raise _translate(exc) from exc
-    except (ProjectValidationError, ProjectStoreError) as exc:
-        raise HTTPException(status_code=422, detail="Video artifact is not safely resolvable") from exc
-
-    if not path.is_file() or path.is_symlink():
-        raise HTTPException(status_code=404, detail="Video artifact not found")
-
-    metadata = reference.metadata
-    media_type = metadata.get("content_type")
-    if not isinstance(media_type, str) or not media_type.startswith("video/"):
-        guessed, _encoding = mimetypes.guess_type(path.name)
-        media_type = (
-            guessed
-            if isinstance(guessed, str) and guessed.startswith("video/")
-            else "application/octet-stream"
-        )
     original_name = metadata.get("original_name")
     if not isinstance(original_name, str) or not original_name:
         original_name = path.name
