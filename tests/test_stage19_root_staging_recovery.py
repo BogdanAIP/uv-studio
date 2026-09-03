@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter
+from uv_studio.capabilities.models import (
+    CapabilityOffer,
+    CostClass,
+    LocalityClass,
+    OfferAvailability,
+)
+from uv_studio.projects import root_staging as root_staging_module
 from uv_studio.projects.identity import STUDIO_COMPAT_RECIPE_ID, studio_project_extensions
 from uv_studio.projects.root_staging import (
     acquire_generation_root_staging,
@@ -32,6 +42,20 @@ class Stage19RootStagingRecoveryTests(unittest.TestCase):
     @staticmethod
     def _lease_path(path: Path) -> Path:
         return path.with_name(f"{path.name}.lease")
+
+    @staticmethod
+    def _timeline_offer() -> CapabilityOffer:
+        return CapabilityOffer(
+            "local_ffmpeg.timeline_assemble",
+            "timeline.assemble",
+            "local_ffmpeg",
+            "local_ffmpeg.timeline_assemble",
+            OfferAvailability.AVAILABLE,
+            "test",
+            LocalityClass.LOCAL,
+            CostClass.FREE,
+            False,
+        )
 
     def _make_stale(self, name: str, payload: bytes) -> Path:
         path = self.store.root / name
@@ -134,6 +158,130 @@ class Stage19RootStagingRecoveryTests(unittest.TestCase):
 
         self.assertFalse(live.exists())
         self.assertFalse(live_lease.exists())
+
+    def test_mounted_timeline_assemble_holds_leases_for_manifest_and_output(self) -> None:
+        project_dir = self.store.project_directory("prj_root_staging_recovery")
+        for name in ("a.mp4", "b.mp4"):
+            (project_dir / "sources" / name).write_bytes(name.encode("utf-8"))
+
+        observed: dict[str, Path] = {}
+
+        def runner(command, **kwargs):
+            manifest = Path(command[command.index("-i") + 1])
+            output = Path(command[-1])
+            observed["manifest"] = manifest
+            observed["output"] = output
+
+            self.assertTrue(manifest.name.startswith(".uv-ffconcat-"), manifest.name)
+            self.assertTrue(manifest.name.endswith(".txt"), manifest.name)
+            self.assertTrue(self._lease_path(manifest).is_file(), manifest.name)
+            self.assertTrue(output.name.startswith(".uv-timeline-assemble-art_"), output.name)
+            self.assertTrue(self._lease_path(output).is_file(), output.name)
+            self.assertFalse(output.exists(), "producer output path must start nonexistent")
+
+            output.write_bytes(b"joined")
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        result = LocalFFmpegAdapter(
+            self.store,
+            runner=runner,
+            tool_paths={"ffmpeg": "fake-ffmpeg", "ffprobe": "fake-ffprobe"},
+        ).execute(
+            project_id="prj_root_staging_recovery",
+            offer=self._timeline_offer(),
+            payload={
+                "input_paths": ["sources/a.mp4", "sources/b.mp4"],
+                "output_path": "artifacts/joined.mp4",
+            },
+        )
+
+        self.assertEqual(result.output["path"], "artifacts/joined.mp4")
+        self.assertTrue((project_dir / "artifacts" / "joined.mp4").is_file())
+        for path in observed.values():
+            self.assertFalse(path.exists(), path.name)
+            self.assertFalse(self._lease_path(path).exists(), path.name)
+
+    def test_allocator_lock_is_established_before_recovery_can_observe_new_lease(self) -> None:
+        entered_per_lease_lock = threading.Event()
+        release_allocator = threading.Event()
+        recovery_started = threading.Event()
+        recovery_finished = threading.Event()
+        allocated: list[Path] = []
+        errors: list[BaseException] = []
+        original_try_lock = root_staging_module._try_acquire_os_lock
+        delayed_once = False
+        delayed_guard = threading.Lock()
+
+        def delayed_try_lock(handle) -> bool:
+            nonlocal delayed_once
+            is_per_lease = Path(handle.name).name.endswith(".lease")
+            if is_per_lease:
+                with delayed_guard:
+                    should_delay = not delayed_once
+                    if should_delay:
+                        delayed_once = True
+                if should_delay:
+                    entered_per_lease_lock.set()
+                    if not release_allocator.wait(timeout=5):
+                        raise AssertionError("allocator interleaving was not released")
+            return original_try_lock(handle)
+
+        def allocate() -> None:
+            try:
+                with patch.object(
+                    root_staging_module,
+                    "_try_acquire_os_lock",
+                    side_effect=delayed_try_lock,
+                ):
+                    allocated.append(
+                        acquire_generation_root_staging(
+                            self.store.root,
+                            f"attempt_{'9' * 32}",
+                            ".mp4",
+                        )
+                    )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                errors.append(exc)
+
+        def recover() -> None:
+            recovery_started.set()
+            try:
+                recover_stale_root_staging(self.store.root)
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                errors.append(exc)
+            finally:
+                recovery_finished.set()
+
+        allocator_thread = threading.Thread(target=allocate, name="root-staging-allocator")
+        recovery_thread = threading.Thread(target=recover, name="root-staging-recovery")
+        allocator_thread.start()
+        self.assertTrue(entered_per_lease_lock.wait(timeout=5))
+        recovery_thread.start()
+        self.assertTrue(recovery_started.wait(timeout=5))
+
+        # Recovery must be serialized behind allocation until the per-staging lease
+        # is already locked. On the broken implementation it finishes here, removes
+        # the visible-but-unlocked sidecar and leaves the allocator holding an
+        # undiscoverable unlinked inode.
+        recovered_too_early = recovery_finished.wait(timeout=1)
+        release_allocator.set()
+        allocator_thread.join(timeout=5)
+        recovery_thread.join(timeout=5)
+
+        self.assertFalse(recovered_too_early)
+        self.assertFalse(allocator_thread.is_alive())
+        self.assertFalse(recovery_thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(len(allocated), 1)
+        path = allocated[0]
+        lease_path = self._lease_path(path)
+        self.assertTrue(lease_path.is_file())
+        try:
+            self.assertEqual(recover_stale_root_staging(self.store.root), ())
+            self.assertTrue(lease_path.is_file())
+        finally:
+            release_root_staging(path)
+        self.assertFalse(lease_path.exists())
 
     def test_application_lifespan_reclaims_root_staging_before_project_recovery(self) -> None:
         from uv_studio import server as server_module
