@@ -140,6 +140,51 @@ class ManagedPublicationRecoveryTests(unittest.TestCase):
             [(artifact_id, registered_path)],
         )
 
+    def test_recovery_rejects_lexical_output_symlink_without_touching_target(self) -> None:
+        marker_path = "artifacts/pending-symlink.mp4"
+        owned_path = "artifacts/owned-target.mp4"
+        publication_id = self._begin(
+            marker_path,
+            reference_id="art_publication_pending_symlink",
+        )
+        owned = self.store.resolve_project_file(
+            self.project.project_id,
+            owned_path,
+            allowed_roots=("artifacts",),
+        )
+        payload = b"registered-owned-target"
+        owned.write_bytes(payload)
+        project = self.store.load_project(self.project.project_id)
+        artifact = ProjectReference(
+            id="art_publication_owned_target",
+            kind="video",
+            path=owned_path,
+            metadata={"capability_id": "timeline.assemble"},
+        )
+        self.store.update_project(
+            self.project.project_id,
+            artifacts=(*project.artifacts, artifact),
+        )
+
+        lexical = self.project_dir / "artifacts" / "pending-symlink.mp4"
+        try:
+            lexical.symlink_to(Path(owned_path).name)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation unavailable: {exc}")
+
+        with self.assertRaisesRegex(ManagedPublicationError, "regular file|unsafe|symlink"):
+            recover_managed_publications(self.store, self.project.project_id)
+
+        self.assertTrue(lexical.is_symlink())
+        self.assertEqual(owned.read_bytes(), payload)
+        pending = pending_managed_publications(self.store, self.project.project_id)
+        self.assertEqual([item["publication_id"] for item in pending], [publication_id])
+        durable = self.store.load_project(self.project.project_id)
+        self.assertEqual(
+            [(item.id, item.path) for item in durable.artifacts],
+            [(artifact.id, owned_path)],
+        )
+
     def test_archive_fails_closed_on_interrupted_arbitrary_path_publication(self) -> None:
         relative_path = "artifacts/custom-user-selected-output.mp4"
         publication_id = self._begin(relative_path)
