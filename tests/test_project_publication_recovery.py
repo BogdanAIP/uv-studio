@@ -8,6 +8,7 @@ from pathlib import Path
 from uv_studio.projects.archive import ProjectArchiveError, export_project
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.publication import (
+    ManagedPublicationError,
     begin_managed_publication,
     pending_managed_publications,
     recover_managed_publications,
@@ -40,6 +41,43 @@ class ManagedPublicationRecoveryTests(unittest.TestCase):
                 purpose="timeline.assemble",
                 reference_id=reference_id,
             )
+
+    def test_second_same_path_reservation_fails_while_old_marker_is_pending(self) -> None:
+        relative_path = "artifacts/shared-user-selected-output.mp4"
+        first_publication_id = self._begin(
+            relative_path,
+            reference_id="art_publication_first_owner",
+        )
+        output = self.store.resolve_project_file(
+            self.project.project_id,
+            relative_path,
+            allowed_roots=("artifacts",),
+        )
+        self.assertFalse(output.exists())
+
+        with self.assertRaisesRegex(ManagedPublicationError, "already reserved"):
+            self._begin(
+                relative_path,
+                reference_id="art_publication_second_owner",
+            )
+
+        pending = pending_managed_publications(self.store, self.project.project_id)
+        self.assertEqual(
+            [(item["publication_id"], item["relative_path"]) for item in pending],
+            [(first_publication_id, relative_path)],
+        )
+        self.assertFalse(output.exists())
+
+        quarantined = recover_managed_publications(self.store, self.project.project_id)
+        self.assertEqual(quarantined, ())
+        self.assertEqual(pending_managed_publications(self.store, self.project.project_id), ())
+        self.assertFalse(output.exists())
+
+        second_publication_id = self._begin(
+            relative_path,
+            reference_id="art_publication_second_owner",
+        )
+        self.assertNotEqual(second_publication_id, first_publication_id)
 
     def test_archive_fails_closed_on_interrupted_arbitrary_path_publication(self) -> None:
         relative_path = "artifacts/custom-user-selected-output.mp4"
