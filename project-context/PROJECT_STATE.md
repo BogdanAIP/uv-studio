@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: project-identity-v2-compat-reader -->
 
 **Updated:** 2026-09-04
@@ -9,31 +9,35 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` is refrozen in `review` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
+`project-identity-v2-compat-reader` is back in `draft` for PR #89 on branch `stage-19/project-identity-v2-compat-reader`, based on lifecycle-closed `main` at `52be1939eca51d7147990288cfc6258b023c2cd2`.
 
-Fresh ordinary-ChatGPT review of frozen head `71006f09aa0db73991b7014fa1d2242db163ea83` returned `CURRENT / FINDINGS / 2 P2 / 14 rejected candidates`. Both findings were independently confirmed, PR/lifecycle returned to Draft before material changes, regression-first evidence proved both defects on the unpatched runtime, and the two runtime repairs were completed.
+Fresh ordinary-ChatGPT review of frozen head `ed14b91b01892c6888406f836c1c9bc5a50e011e` returned `CURRENT / FINDINGS / 1 P2 / 9 rejected candidates`. The finding was independently confirmed before material repair: canonical Project persistence could accept a reserved `metadata.generation` ProjectReference outside the direct `artifacts/` root, while shared Generation materialization authority rejected the same durable state.
 
-## Repaired findings
+PR #89 and lifecycle were returned to Draft before runtime/test changes.
 
-Managed-publication recovery now rejects the marker's lexical leaf symlink before general project-file resolution can follow it. A crash-left marker can therefore never quarantine the target of an in-root symlink. Existing containment checks, host-filesystem case-alias identity, exact reference-ID ownership and regular-file quarantine semantics remain unchanged.
+## Current repair
 
-Shared Generation materialization authority now parses the complete durable Job through canonical `GenerationJob.from_dict()` validation and explicitly requires parsed `project_id`/`job_id` to match the physical project/task identity before historical attempt authority is trusted. Historical successful-attempt semantics remain supported even when a later attempt is failed.
+The persistence boundary now requires every ProjectReference carrying reserved `metadata.generation` authority to use a direct canonical `artifacts/generated_<attempt_id>[.<ext>]` path. This makes canonical Project acceptance agree with the archive/Redo/recovery Generation authority boundary instead of allowing a durable state that later fail-closes only downstream.
 
-Regression-only CI #4689 (`33791042300`) failed both Ubuntu and Windows unit jobs at the two new tests before the fixes. Material repair CI #4693 subsequently passed both Ubuntu and Windows full-unit suites with the new regressions green.
+Regression-first head `01401beb97d02032139ade287633441d1cf43ca5` added explicit `exports/...` and `assets/...` Generation-path cases. CI #4726 (`33855530439`) ran the unpatched Ubuntu unit suite and failed exactly those two new subcases with `ProjectValidationError not raised`; the remaining tests passed.
 
-## Draft gate
+Runtime repair `b7f50f751ebf301c11986f178fe6c0aa62031d60` removes the conditional root check and enforces the direct canonical `artifacts/` root for every reserved Generation reference. Test-only commits `1ef208087370e25f740293c4bad2b28f5b571721` and `df5fbe6b6e420c74bbe0b625db895ae0336eafa3` align two older tests with the stronger early fail-closed persistence contract; no runtime behavior changed in those follow-ups.
 
-After Draft context and PR-body synchronization, authoritative exact-head CI #4717 (`33792871334`) completed **5/5 SUCCESS** on repaired Draft head `7977834f0df204dd07ffbc8fd7e94a7dd145ea9f`: development-context, both Ubuntu/Windows bootstrap full-unit suites, and both Ubuntu/Windows app-baseline API/real-media/frontend/browser Product Truth jobs all succeeded. All inline PR review threads were re-resolved live and remain resolved.
+Material/test CI #4732 (`33856115358`) on `df5fbe6b6e420c74bbe0b625db895ae0336eafa3` has both Ubuntu and Windows full-unit suites green with the repaired contract. Its `development-context` failure is expected because this durable context still described the previous review cycle before this synchronization; the clean synchronized Draft 5/5 gate is the next authority.
 
-No runtime, test, schema or product behavior changed after runtime repair `8555303655a1acc6adaa4196cefecd3fa4489641`; subsequent changes only synchronized durable development context and PR metadata.
+## Invariants
 
-## Review authority
+Any ProjectReference with reserved `metadata.generation` authority must be a direct file under the canonical `artifacts/` root and its basename must match `generated_<attempt_id>` with an optional extension. Persistence, Generation archive authority, Redo authority and restart recovery must agree on this shape.
 
-The slice is now refrozen for a new independent semantic review. The next mandatory step is to mark PR #89 Ready and launch a genuinely fresh ordinary-ChatGPT read-only review against the resulting exact BASE/HEAD under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0.
+All earlier Stage-19 schema-v1/v2 compatibility, historical identity, Undo/Redo, archive, Generation retry/recovery/idempotency, exact byte-digest authority, source/WebVTT/arbitrary publication, managed-publication symlink/case/reference ownership, leased root staging and Product Truth repairs remain unchanged.
 
-A future `CURRENT / PASS / 0 findings` is necessary but not sufficient for merge. Only after that review may the final exact-head permanent CI/browser/real-media acceptance be obtained on the same reviewed HEAD. Then live BASE/HEAD/mergeability and unresolved threads must be rechecked before merge. Any material finding returns the PR to Draft and invalidates the previous review identity.
+## Next gate
 
-After merge, mandatory D-038 lifecycle closure to `idle` remains required before another slice starts.
+Synchronize the PR body to this Draft repair without changing runtime/test/schema/product behavior, then require one exact-head post-body-sync CI with all five permanent jobs successful: `development-context`, both Ubuntu/Windows full-unit suites, and both Ubuntu/Windows app-baseline API/real-media/frontend/browser Product Truth jobs.
+
+Only after that clean Draft gate may lifecycle move `draft -> review`, PR #89 return to Ready and a new exact frozen HEAD be sent to a genuinely fresh ordinary-ChatGPT semantic review under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0.
+
+A future `CURRENT / PASS / 0 findings` is necessary but not sufficient for merge. The final merge-authoritative exact-head CI must be obtained after that review on the same reviewed HEAD, followed by live BASE/HEAD/mergeability and unresolved-thread verification. After merge, mandatory D-038 lifecycle closure to `idle` remains required before another slice starts.
 
 ## Out of scope
 
