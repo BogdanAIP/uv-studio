@@ -4,31 +4,58 @@
 
 ## Target
 
-Execute the bounded D-070 `recipe-entrypoint-retirement` slice from lifecycle-closed `main` `1068694fac69eb02ff6e0651855c875c532e31a7`.
+Finish the bounded D-070 `recipe-entrypoint-retirement` acceptance cycle in Draft PR #91 from lifecycle-closed base `1068694fac69eb02ff6e0651855c875c532e31a7`.
 
-## Required scope
+## Current implementation result
 
-- exact-scan `frontend/lib/recipesApi.ts`, `frontend/lib/projectsApi.ts#createUVProject`, and all repository references to their recipe-backed clients;
-- prove the supported New Project UI continues to use Production Direction discovery plus `createStudioProject()` / `POST /api/uv/projects/studio`;
-- retire `/api/uv/recipes` and recipe-backed public project creation/recipe-switch metadata entrypoints only when caller evidence shows they are no longer required;
-- preserve Project list/get/archive/import and non-recipe project metadata updates;
-- preserve schema-v1/v2 read/import/export and exact historical `compatibility.recipe_id` behavior from PR #89;
-- retain internal Recipe Registry definitions required by `/execution-plan` and later Product-Orchestrator compatibility until their accepted later slices;
-- replace compatibility tests with explicit retirement/absence proof rather than deleting evidence without replacement.
+The candidate implementation now retires the public recipe creation/catalog/rebinding surfaces:
+
+- `/api/uv/recipes` is not mounted;
+- recipe-backed public `POST /api/uv/projects` is retired;
+- generic project PATCH cannot change `recipe_id`;
+- `frontend/lib/recipesApi.ts` is removed;
+- `projectsApi#createUVProject` / `CreateProjectInput` are removed.
+
+Modern New Project creation remains Production Direction discovery plus `POST /api/uv/projects/studio`. Project list/get/archive/import, schema-v1/v2 compatibility, `/execution-plan`, Product Orchestrator, Stage8 and internal Recipe Registry compatibility remain intentionally present for later slices.
+
+API/real-media/browser fixtures that need historical recipe identity now seed canonical ProjectStore compatibility state directly instead of calling the retired public create route. Browser catalog reconciliation uses Production Directions instead of `/api/uv/recipes`.
+
+## Immediate gate
+
+Run/observe a fresh exact-head permanent CI after the synchronized code/tests/docs/context changes. Require all five jobs:
+
+- `development-context`;
+- `bootstrap (ubuntu-latest, 3.11)`;
+- `bootstrap (windows-latest, 3.11)`;
+- `app-baseline (ubuntu-latest)`;
+- `app-baseline (windows-latest)`.
+
+The app-baseline jobs must pass API integration, Stage4A real-media, frontend lint/audit/build and browser Product Truth. Do not classify a browser failure as the historical Windows timing race without exact log evidence.
+
+## Review transition
+
+Only after the synchronized Draft head is fully green:
+
+1. make a context-only refreeze commit that changes lifecycle `draft -> review` without altering runtime/tests/product behavior;
+2. mark PR #91 Ready for review;
+3. reconstruct exact BASE/HEAD and governing immutable-BASE review authority;
+4. obtain a genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0;
+5. address any actionable finding by returning the PR to Draft before material changes.
 
 ## Completion evidence
 
-- repository-recursive regression proof prevents supported frontend/runtime callers from reintroducing the retired recipe creation/catalog entrypoints;
-- API tests prove retired routes reject/404 while modern Studio creation succeeds;
-- legacy schema-v1/v2 project read/import/archive behavior remains green;
-- frontend lint/build and browser Projects/New Project outcome remain green;
-- all five permanent CI checks pass on the exact review head;
-- because this changes mounted runtime/API authority, a fresh ordinary-ChatGPT semantic review is required before merge.
+- public recipe creation/catalog/rebinding entrypoints remain absent;
+- Production Direction -> Studio Project remains the modern creation authority;
+- old/imported projects remain readable/importable with exact compatibility identity;
+- test fixtures do not resurrect retired public entrypoints;
+- all five permanent CI jobs pass on the exact review head;
+- fresh semantic review returns PASS with no actionable findings;
+- final exact reviewed HEAD receives permanent CI before merge.
 
 ## Out of scope
 
-Do not mix `/execution-plan` retirement, broad legacy `/projects/{id}` workflow migration, Product Orchestrator retirement, Stage8 runtime dependency migration/compatibility retirement, Production Direction redesign, Agent autonomy or Timeline identity work into this slice.
+Do not mix `/execution-plan` retirement, broad legacy `/projects/{id}` migration, Product Orchestrator retirement, Stage8 runtime/compatibility retirement, Production Direction redesign, Agent autonomy or Timeline identity work into PR #91.
 
 ## After this slice
 
-After merge and D-038 lifecycle closure, continue the accepted D-070 order with `execution-plan-retirement`.
+After PR #91 merges, perform mandatory D-038 lifecycle closure to `idle`. Only after that closure merges may the accepted D-070 sequence continue with `execution-plan-retirement`.
