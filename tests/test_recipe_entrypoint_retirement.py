@@ -5,8 +5,8 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from uv_studio.api.execution import get_recipe_registry
 from uv_studio.api.projects import UpdateProjectRequest
+from uv_studio.api.recipes import get_recipe_registry
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,11 +19,12 @@ class RecipeEntrypointRetirementTests(unittest.TestCase):
         self.assertNotIn("Create" + "ProjectInput", projects_api)
 
     def test_retired_backend_recipe_entrypoints_are_absent(self) -> None:
-        self.assertFalse((ROOT / "uv_studio/api/recipes.py").exists())
+        recipes_api = (ROOT / "uv_studio/api/recipes.py").read_text(encoding="utf-8")
+        self.assertNotIn("APIRouter", recipes_api)
+        self.assertNotIn("@router.get", recipes_api)
 
         server = (ROOT / "uv_studio/server.py").read_text(encoding="utf-8")
         self.assertNotIn("recipes_router", server)
-        self.assertNotIn("uv_studio.api.recipes", server)
 
         projects_api = (ROOT / "uv_studio/api/projects.py").read_text(encoding="utf-8")
         self.assertNotIn("class Create" + "ProjectRequest", projects_api)
@@ -34,7 +35,7 @@ class RecipeEntrypointRetirementTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             UpdateProjectRequest.model_validate({"recipe_id": "general_video"})
 
-    def test_execution_plan_retains_internal_recipe_registry_until_later_slice(self) -> None:
+    def test_internal_recipe_registry_remains_for_later_compatibility_slices(self) -> None:
         registry = get_recipe_registry()
         self.assertEqual(registry.get("general_video").recipe_id, "general_video")
 

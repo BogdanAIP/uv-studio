@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.projects import get_project_store
+from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.capabilities import CapabilityRegistry, UnknownCapability
 from uv_studio.projects.models import ProjectValidationError, compatibility_recipe_id
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
-from uv_studio.recipes import RecipeRegistry, build_builtin_registry, resolve_project_execution
+from uv_studio.recipes import resolve_project_execution
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Execution Plans"])
 
@@ -33,13 +33,6 @@ _STAGE8_CAPABILITY_RECIPES = {
         "Performance/lip-sync is capability-gated because video.digital_human has no verified executable supplied portrait + speech offer. Configure and verify the optional local MuseTalk pack before execution; no incompatible legacy fallback is used.",
     ),
 }
-
-
-@lru_cache(maxsize=1)
-def get_recipe_registry() -> RecipeRegistry:
-    """Keep Recipe Registry private to the still-live execution-plan compatibility slice."""
-
-    return build_builtin_registry()
 
 
 def _capability_summary(registry: CapabilityRegistry, capability_id: str) -> dict[str, Any]:
