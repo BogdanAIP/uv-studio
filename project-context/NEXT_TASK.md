@@ -4,7 +4,7 @@
 
 ## Target
 
-Execute the first bounded D-070 legacy direction/tool migration slice from lifecycle-closed `main` `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`: retire the duplicate Product Orchestrator mutation/action envelope for legacy `music_video` projects without removing the Music workflow read projection or direct Music domain authorities.
+Execute Draft PR #95, the first bounded D-070 legacy direction/tool migration slice from lifecycle-closed `main` `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`: retire the duplicate Product Orchestrator mutation/action envelope for legacy `music_video` projects without removing the Music workflow read projection or direct Music domain authorities.
 
 ## Caller proof
 
@@ -34,4 +34,4 @@ GitHub Code Search is not absence proof in this repository. Use exact-head file 
 
 ## Gate
 
-Record the actual Draft PR number in `ACTIVE_SLICE.json`, obtain a successful `development-context` run on that exact head, then make product changes only within the declared write scope. Before Ready, require exact-head 5/5 permanent CI and fresh semantic review on the frozen review head.
+PR #95 is Draft and bound into `ACTIVE_SLICE.json`. Obtain a successful `development-context` run on the exact current head before any material product change. Before Ready, require exact-head 5/5 permanent CI and fresh semantic review on the frozen review head.

@@ -9,9 +9,9 @@
 
 ## Current lifecycle
 
-Lifecycle-closed `main` is `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` after accepted `execution-plan-retirement` PR #93 and D-038 closure PR #94. The next bounded D-070 slice is `legacy-music-action-envelope-retirement` on branch `chore/legacy-music-action-envelope-retirement`.
+Lifecycle-closed `main` is `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` after accepted `execution-plan-retirement` PR #93 and D-038 closure PR #94. Draft PR #95 is the bounded D-070 slice `legacy-music-action-envelope-retirement` on branch `chore/legacy-music-action-envelope-retirement`.
 
-The slice is in Draft. Its exact caller reconstruction is complete enough to establish the initial write scope before product changes; the Draft PR number will be recorded immediately after GitHub allocates it.
+The initial write scope was recorded before any product change. Product implementation remains blocked until `development-context` succeeds on an exact Draft head that is bound to PR #95.
 
 ## Fresh caller evidence
 
@@ -42,4 +42,4 @@ Do not change Photo Composer or Visualizer Product Workflow actions. Do not reti
 
 ## Verification plan
 
-First require `development-context` success on the Draft PR exact head after the allocated PR number is recorded. Only then change product/test/docs paths inside the declared write scope. Before review, require all five permanent CI checks and a fresh ordinary-ChatGPT semantic review on the frozen exact BASE/HEAD.
+Require `development-context` success on PR #95 exact Draft head before changing product/test/docs paths inside the declared write scope. Before review, require all five permanent CI checks and a fresh ordinary-ChatGPT semantic review on the frozen exact BASE/HEAD.
