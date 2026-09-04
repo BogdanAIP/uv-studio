@@ -1,7 +1,7 @@
 # UV Studio — Current Architecture
 
 **Status:** CURRENT AUTHORITY  
-**Date:** 2026-08-30  
+**Date:** 2026-09-04  
 **Product composition:** D-064  
 **Shared production semantics:** D-065  
 **Agent Harness factoring:** D-066  
@@ -287,9 +287,9 @@ Stage 18 remains internal infrastructure. It does not claim a visible autonomous
 
 ## D-070 product-first handoff before further D-066 autonomy
 
-Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` was accepted and merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`; the D-070 architecture-compression gate is satisfied. `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; donor-only UI/client residue and supported donor-restoration authority are retired. `actions-hardening` merged through PR #86 as `975a64855a739398139c90a094bdde9435542299`; after the current lifecycle closure returns `main` to `idle`, `project-identity-v2-compat-reader` is the next bounded migration slice.
+Layer 4 is merged through PR #75 and is the accepted background-execution baseline. `architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524`; `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; `actions-hardening` merged through PR #86 as `975a64855a739398139c90a094bdde9435542299`; `project-identity-v2-compat-reader` merged through PR #89 and was lifecycle-closed through PR #90; `recipe-entrypoint-retirement` merged through PR #91 as `050780d013276c3d3de9672244ad54da759f1ed3` and was lifecycle-closed through PR #92 as `af9ff888145661381caaacdec78244637058bce2`. The current bounded Draft PR #93 executes `execution-plan-retirement`; its removal is not accepted until exact-head CI, fresh independent semantic review, merge and D-038 closure complete.
 
-The accepted behavior-preserving inventory establishes exact callers, canonical replacements, durable compatibility requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, `api/recipes.py`, `api/execution.py` / `/execution-plan`, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and their runtime dependencies.
+The accepted behavior-preserving inventory establishes exact callers, canonical replacements, durable compatibility requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, legacy Product Orchestrator, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and their runtime dependencies. On the current PR #93 candidate head, the recipe-derived `api/execution.py` / `/execution-plan` projection and its stale frontend client have been removed while the internal Recipe Registry and Product Orchestrator remain for later bounded migration slices.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
@@ -342,7 +342,7 @@ Contextual operations such as targeted edit, dubbing/translation, slideshow, vis
 12. Canonical Production/Timeline read-modify-commit and Generation reservation must reuse the shared cross-runtime project fence for every caller.
 13. Current docs must distinguish merged/as-built state from active/future state.
 14. Do not claim autonomous product readiness from internal Agent infrastructure alone.
-15. Do not add new modern callers to Recipe Registry, Product Orchestrator, `/execution-plan`, Stage 6/8 product composition or another path classified as superseded by D-070 without an accepted decision reversing that status.
+15. Do not add new modern callers to Recipe Registry, Product Orchestrator, retired `/execution-plan`, Stage 6/8 product composition or another path classified as superseded by D-070 without an accepted decision reversing that status.
 
 ## Compatibility layer
 
@@ -350,11 +350,11 @@ Still present as compatibility/migration code unless separately promoted:
 
 - schema-v1 `recipe_id`;
 - Recipe Registry;
-- Product Orchestrator and legacy `/execution-plan`;
+- Product Orchestrator;
 - Stage 6/8 workspace UI;
 - legacy `/projects/[projectId]` domain panels and VideoClaw backend compatibility still needed by supported callers;
 - targeted-edit/dubbing/music/continuity logic awaiting extraction into modern direction/tool surfaces.
 
-The D-070 `architecture-compression-inventory` is accepted and merged through PR #77. Its architecture-compression gate is satisfied. `donor-ui-retirement` merged through PR #82 as `c1eb609ec1e4c9db082eaa8338ac7f1e4938da11`; the donor frontend/client/restoration subset is retired. `actions-hardening` merged through PR #86 as `975a64855a739398139c90a094bdde9435542299`; migration resumes with `project-identity-v2-compat-reader` after this lifecycle closure returns `main` to `idle`. The separate `micro_drama` golden-vertical gate remains open until proven.
+The recipe-derived `/execution-plan` projection is removed on the active PR #93 candidate head and therefore is not a remaining runtime compatibility authority there; final retirement acceptance still requires PR #93 review/CI/merge/closure. The D-070 `architecture-compression-inventory` is accepted and merged through PR #77. Its architecture-compression gate is satisfied. `donor-ui-retirement`, `project-identity-v2-compat-reader` and `recipe-entrypoint-retirement` are complete through their closure PRs. After `execution-plan-retirement` is accepted and lifecycle-closed, D-070 proceeds with bounded legacy direction/tool migration and later Product Orchestrator/Stage8 retirement work. The separate `micro_drama` golden-vertical gate remains open until proven.
 
 Compatibility code may remain readable/editable while new architecture continues on the authorities defined above, but superseded product-composition paths must not gain new modern callers while the accepted D-070 retirement map is being executed.
