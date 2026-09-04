@@ -19,9 +19,10 @@ class SequenceReviewAssistApiTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        response = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Review assist API"})
-        self.assertEqual(response.status_code, 201, response.text)
-        self.project_id = response.json()["project_id"]
+        self.project_id = self.store.create_project(
+            recipe_id="general_video",
+            title="Review assist API",
+        ).project_id
         self.project_dir = self.store.project_directory(self.project_id)
         self._register_video("src", "candidate.mp4", b"candidate-assist", 3_000_000)
 

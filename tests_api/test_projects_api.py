@@ -50,7 +50,6 @@ class ProjectsApiTests(unittest.TestCase):
             json={
                 "title": "Updated API Project",
                 "settings": {"aspect_ratio": "16:9"},
-                "extensions": {"demo": {"enabled": True}},
             },
         )
         self.assertEqual(updated.status_code, 200, updated.text)
@@ -67,7 +66,8 @@ class ProjectsApiTests(unittest.TestCase):
         fresh_store = ProjectStore(self.project_root)
         persisted = fresh_store.load_project(project_id)
         self.assertEqual(persisted.title, "Updated API Project")
-        self.assertTrue(persisted.extensions["demo"]["enabled"])
+        self.assertEqual(persisted.settings["aspect_ratio"], "16:9")
+        self.assertEqual(persisted.extensions["studio"]["direction_id"], "free_project")
 
     def test_update_rejects_nonfinite_nested_project_state(self) -> None:
         created = self._create_studio_project("Bad JSON Guard")
