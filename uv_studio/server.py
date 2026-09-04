@@ -46,7 +46,6 @@ from uv_studio.api.project_transactions import router as project_transactions_ro
 from uv_studio.api.project_workflow import router as project_workflow_router  # noqa: E402
 from uv_studio.api.projects import router as projects_router  # noqa: E402
 from uv_studio.api.qwen_mm import router as qwen_mm_router  # noqa: E402
-from uv_studio.api.recipes import router as recipes_router  # noqa: E402
 from uv_studio.api.replacement_plan import router as replacement_plan_router  # noqa: E402
 from uv_studio.api.replacement_preparation import router as replacement_preparation_router  # noqa: E402
 from uv_studio.api.replacement_review import router as replacement_review_router  # noqa: E402
@@ -103,7 +102,6 @@ app.include_router(capability_execution_router)
 app.include_router(generation_router)
 app.include_router(mcp_router)
 app.include_router(qwen_mm_router)
-app.include_router(recipes_router)
 app.include_router(execution_router)
 app.include_router(projects_router)
 app.include_router(project_workflow_router)

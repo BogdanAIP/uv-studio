@@ -85,14 +85,6 @@ export interface ProjectExecutionPlan {
   } | null;
 }
 
-/** Compatibility-only recipe project creation. New Studio callers use createStudioProject(). */
-export interface CreateProjectInput {
-  title: string;
-  recipe_id: string;
-  settings?: Record<string, unknown>;
-  extensions?: Record<string, unknown>;
-}
-
 async function apiError(response: Response, fallback: string): Promise<Error> {
   const body = await response.json().catch(() => null);
   const detail = body && typeof body.detail === 'string' ? body.detail : fallback;
@@ -118,16 +110,6 @@ export async function getProjectExecutionPlan(projectId: string): Promise<Projec
     cache: 'no-store',
   });
   if (!response.ok) throw await apiError(response, 'Failed to load execution plan');
-  return response.json();
-}
-
-export async function createUVProject(input: CreateProjectInput): Promise<UVProject> {
-  const response = await fetch('/api/uv/projects', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) throw await apiError(response, 'Failed to create project');
   return response.json();
 }
 
