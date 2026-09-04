@@ -334,31 +334,17 @@ class Stage19RedoGenerationDigestTests(unittest.TestCase):
                 self.project.project_id,
             )
 
-    def test_archive_rejects_generation_reference_outside_artifacts_root(self) -> None:
-        _job, _attempt, artifact, output, _payload, _uow = self._generate()
-        moved_relative = f"sources/{output.name}"
-        moved_output = self.store.resolve_project_file(
-            self.project.project_id,
-            moved_relative,
-            allowed_roots=("sources",),
-        )
-        output.replace(moved_output)
+    def test_generation_reference_rejects_outside_artifacts_root_before_archive(self) -> None:
+        _job, _attempt, artifact, _output, _payload, _uow = self._generate()
+        moved_relative = f"sources/{Path(artifact.path).name}"
 
-        moved_artifact = replace(artifact, path=moved_relative)
-        project = self.store.load_project(self.project.project_id)
-        corrupted = project.to_dict()
-        corrupted["artifacts"] = [
-            moved_artifact.to_dict() if item["id"] == artifact.id else item
-            for item in corrupted["artifacts"]
-        ]
-        self.store._atomic_write_json(
-            self.store.project_path(self.project.project_id),
-            corrupted,
-        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Generation artifact path|canonical artifacts",
+        ):
+            replace(artifact, path=moved_relative)
 
         archive_path = Path(self.tmp.name) / "generation-wrong-root.uvproj.zip"
-        with self.assertRaisesRegex(ProjectArchiveError, "Generation artifact path|canonical.*artifacts"):
-            export_project(self.store, self.project.project_id, archive_path)
         self.assertFalse(archive_path.exists())
 
     def test_exact_generation_bytes_survive_archive_import_and_two_redos(self) -> None:
