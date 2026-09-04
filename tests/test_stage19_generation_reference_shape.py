@@ -74,6 +74,23 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
                 metadata=self._metadata(),
             )
 
+    def test_generation_reference_rejects_non_artifacts_root(self) -> None:
+        for path in (
+            "exports/generated_attempt_shape.png",
+            "assets/generated_attempt_shape.png",
+        ):
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(
+                    ProjectValidationError,
+                    "canonical artifacts|Generation artifact path",
+                ):
+                    ProjectReference(
+                        id="artifact_wrong_root",
+                        kind="image",
+                        path=path,
+                        metadata=self._metadata(),
+                    )
+
     def test_generation_reference_rejects_lineage_drift(self) -> None:
         with self.assertRaisesRegex(ProjectValidationError, "lineage"):
             ProjectReference(
