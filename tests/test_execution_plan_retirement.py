@@ -10,6 +10,14 @@ from uv_studio.server import app
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _mounted_paths() -> set[str]:
+    return {
+        path
+        for route in app.routes
+        if isinstance((path := getattr(route, "path", None)), str)
+    }
+
+
 class ExecutionPlanRetirementTests(unittest.TestCase):
     def test_recipe_execution_projection_files_are_retired(self) -> None:
         self.assertFalse((ROOT / "uv_studio" / "api" / "execution.py").exists())
@@ -24,13 +32,12 @@ class ExecutionPlanRetirementTests(unittest.TestCase):
         self.assertNotIn("/execution-plan", source)
 
     def test_execution_plan_route_is_not_mounted(self) -> None:
-        paths = {route.path for route in app.routes}
-        self.assertNotIn("/api/uv/projects/{project_id}/execution-plan", paths)
+        self.assertNotIn("/api/uv/projects/{project_id}/execution-plan", _mounted_paths())
 
     def test_remaining_recipe_registry_and_product_workflow_are_preserved(self) -> None:
         registry = get_recipe_registry()
         self.assertEqual(registry.get("general_video").recipe_id, "general_video")
-        paths = {route.path for route in app.routes}
+        paths = _mounted_paths()
         self.assertIn("/api/uv/projects/{project_id}/workflow", paths)
         self.assertIn("/api/uv/projects/studio/directions", paths)
         self.assertIn("/api/uv/projects/studio", paths)
