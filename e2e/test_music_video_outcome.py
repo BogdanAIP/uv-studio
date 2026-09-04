@@ -16,6 +16,7 @@ from typing import Any
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -189,12 +190,11 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         return page
 
     def test_song_to_music_map_to_assembly_to_master_render(self) -> None:
-        created = _api_json(
-            "POST",
-            "/api/uv/projects",
-            {"title": "E2E Stage 7 Music Video", "recipe_id": "music_video"},
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title="E2E Stage 7 Music Video",
+            recipe_id="music_video",
         )
-        project_id = created["project_id"]
         encoded_id = urllib.parse.quote(project_id, safe="")
 
         page = self._new_page()
