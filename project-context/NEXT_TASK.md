@@ -4,49 +4,29 @@
 
 ## Target
 
-Continue Draft PR #95 from lifecycle-closed `main` `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`: retire the duplicate Product Orchestrator mutation/action envelope for legacy `music_video` projects while keeping its temporary read projection and all direct Music authorities.
+Complete review and merge of PR #95 for `legacy-music-action-envelope-retirement` from lifecycle-closed BASE `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`.
 
-## Confirmed implementation state
+## Frozen material result
 
-The backend no longer projects or dispatches the five duplicate Music Product Workflow mutation actions. The specialized Music client facades now use established direct authorities:
+Final material Draft head `bf11b97f9a6ef4c3d57e15831cf3b855cabf4dd2` has the bounded retirement complete:
 
-- Music Map → `/music-map/commands`;
-- Music Director → `/music-direction/commands`;
-- Music Assembly → `/music-assembly/commands`;
-- render → `/capabilities/video.render_music_video/execute` with `local_free_first`;
-- final Review → `/music-video-review`.
+- the five duplicate Music Product Workflow mutation actions are retired;
+- specialized Music client facades use the existing direct Map, Direction, Assembly, capability-render and Review authorities;
+- Product Workflow remains read-only compatibility state for the legacy Music page;
+- browser acceptance proves zero Music `/workflow/actions/` POSTs and positively observes all five direct mutation paths;
+- the visible Music journey still reaches the current rendered master, approved Review and `workflow.readiness == ready`.
 
-No Music UI component changed.
+CI #4872 on that exact material head completed SUCCESS for all five permanent jobs, including browser outcomes on Ubuntu and Windows. Duplicate exact-head CI #4871 also completed SUCCESS.
 
-## Latest acceptance finding
+## Current review refreeze
 
-CI #4862 on frontend-repair head `698b9e5c5350c735dc687044c455b8a08b58949c` passed all 213 API tests, all 22 real-media tests, frontend lint/build and 14 of 15 browser outcomes. The Music browser journey itself completed through render, approved Review and ready Product Workflow state. It failed only because `e2e/test_music_video_outcome.py` still asserted that the UI must emit all five retired `/workflow/actions/...` POSTs; the actual observed old-action set was correctly empty.
-
-The browser acceptance is therefore stale and must be migrated rather than removed.
-
-## Planned bounded repair
-
-1. Add only `e2e/test_music_video_outcome.py` to write scope and require exact-head `development-context` success before editing it.
-2. Preserve the complete visible Music journey and artifact/Review/readiness assertions.
-3. Replace the obsolete Product Orchestrator requirement with positive request evidence that:
-   - no Music mutation POST uses `/workflow/actions/`;
-   - Map posts `/music-map/commands`;
-   - Direction posts `/music-direction/commands`;
-   - Assembly posts `/music-assembly/commands`;
-   - render posts `/capabilities/video.render_music_video/execute`;
-   - final Review posts `/music-video-review`.
-4. Do not broaden runtime scope or change Music UI components.
-5. Require all five permanent CI jobs on the exact frozen Draft head after the acceptance repair.
-
-## Required preservation
-
-- all project-owned Music state, revisions, validation and fail-closed behavior;
-- legacy Music Product Workflow read projection;
-- direct Music domain/capability/review endpoints;
-- Photo Composer and Visualizer Product Workflow actions;
-- modern `Production Direction -> Studio Project` and canonical Project/Production/Timeline/Generation/Capability authorities;
-- internal Recipe Registry, Stage8 and broader Product Orchestrator retirement for later bounded slices.
+This transition is context-only: no product/runtime/frontend/test bytes change from the green material head. The next exact HEAD is the review identity.
 
 ## Gate
 
-The write scope will contain exactly 12 paths after adding the focused browser acceptance file. Require a successful `development-context` run on that exact scope-expanded Draft head before changing the E2E assertion. Then require exact-head permanent CI 5/5 before the normal review refreeze and fresh semantic review.
+1. Mark PR #95 Ready for review.
+2. Require all five permanent CI jobs SUCCESS on the exact context-only review head.
+3. Run a genuinely fresh ordinary-ChatGPT semantic review using BASE `.agents/skills/code-review/SKILL.md` v1.0 and the exact BASE/HEAD pair.
+4. Validate any reported finding against that exact head; material fixes require returning to Draft before changes.
+5. Merge only if the fresh result is `PASS`, `review_validity=CURRENT`, `reported_findings=0`, exact-head CI remains green and no unresolved review thread blocks acceptance.
+6. Immediately create and merge the separate D-038 lifecycle closure, restoring `idle` and selecting the next D-070 slice from accepted repository authority rather than guessing it.
