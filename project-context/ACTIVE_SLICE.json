@@ -24,7 +24,10 @@
       "tests_api/test_projects_api.py",
       "tests_api/test_recipes_api.py",
       "tests_api/test_recipe_creation_catalog_api.py",
-      "tests_api/test_project_recipe_validation.py"
+      "tests_api/test_project_recipe_validation.py",
+      "tests_real_media/test_dubbing_render_real_media.py",
+      "tests_real_media/test_music_video_render_real_media.py",
+      "tests_real_media/test_stage8_local_media_real_media.py"
     ]
   },
   "last_completed": {
