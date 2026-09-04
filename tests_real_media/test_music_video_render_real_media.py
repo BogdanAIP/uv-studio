@@ -132,7 +132,12 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         )
         return next(item for item in project.sources if item.id == allocation.source_id)
 
-    def _prepare_assembly(self, *, boundary_us: int = 3_000_000):
+    def _prepare_assembly(
+        self,
+        *,
+        boundary_us: int = 3_000_000,
+        sync_marker_ids: tuple[str, ...] = ("cut",),
+    ):
         music_map = MusicMapStore(self.store).set_map(
             self.project_id,
             song_reference_id=self.song.id,
@@ -144,7 +149,7 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
             self.project_id,
             music_map_revision_sha256=music_map.revision_sha256,
             shots=(
-                MusicShotPlan("red", 0, 1_000_000, boundary_us, "Red visual", ("cut",)),
+                MusicShotPlan("red", 0, 1_000_000, boundary_us, "Red visual", sync_marker_ids),
                 MusicShotPlan("blue", 1, boundary_us, 5_000_000, "Blue visual"),
             ),
         )
@@ -283,7 +288,7 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         self.assertNotEqual(assembly.revision_sha256, "0" * 64)
 
     def test_render_rejects_unaligned_direction_before_ffmpeg(self) -> None:
-        assembly = self._prepare_assembly(boundary_us=2_500_000)
+        assembly = self._prepare_assembly(boundary_us=2_500_000, sync_marker_ids=())
         audit = MusicDirectionStore(self.store).rhythm_audit(self.project_id)
         self.assertFalse(audit["summary"]["all_aligned"])
         self.assertEqual(audit["summary"]["unaligned_count"], 1)
