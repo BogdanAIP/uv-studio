@@ -18,7 +18,9 @@
       "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
       "uv_studio/orchestration/music.py",
       "uv_studio/api/project_workflow.py",
-      "tests_api/test_music_workflow_api.py"
+      "tests_api/test_music_workflow_api.py",
+      "frontend/lib/musicVideoApi.ts",
+      "frontend/lib/musicVideoReviewApi.ts"
     ]
   },
   "last_completed": {
