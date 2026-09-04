@@ -173,14 +173,13 @@ def _validate_generation_reference_shape(path: str, metadata: Mapping[str, Any])
     validate_identifier(attempt_id, field_name="generation.attempt_id")
 
     parts = PurePosixPath(path).parts
-    if parts and parts[0] == "artifacts":
-        if len(parts) != 2:
-            raise ProjectValidationError(
-                "Generation artifact path must be a direct file under the canonical artifacts root"
-            )
-        expected_name = f"generated_{attempt_id}"
-        if not (parts[1] == expected_name or parts[1].startswith(expected_name + ".")):
-            raise ProjectValidationError("Generation artifact path must match its attempt_id")
+    if len(parts) != 2 or parts[0] != "artifacts":
+        raise ProjectValidationError(
+            "Generation artifact path must be a direct file under the canonical artifacts root"
+        )
+    expected_name = f"generated_{attempt_id}"
+    if not (parts[1] == expected_name or parts[1].startswith(expected_name + ".")):
+        raise ProjectValidationError("Generation artifact path must match its attempt_id")
 
     contract = generation.get("contract")
     if not isinstance(contract, Mapping):
