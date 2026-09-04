@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from uv_studio.api.execution import get_recipe_registry
 from uv_studio.api.projects import UpdateProjectRequest
-from uv_studio.server import app
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,16 +18,17 @@ class RecipeEntrypointRetirementTests(unittest.TestCase):
         self.assertNotIn("createUV" + "Project", projects_api)
         self.assertNotIn("Create" + "ProjectInput", projects_api)
 
-    def test_recipe_catalog_and_recipe_creation_are_not_mounted(self) -> None:
-        methods_by_path: dict[str, set[str]] = {}
-        for route in app.routes:
-            path = getattr(route, "path", None)
-            methods = getattr(route, "methods", None)
-            if isinstance(path, str) and methods:
-                methods_by_path.setdefault(path, set()).update(methods)
+    def test_retired_backend_recipe_entrypoints_are_absent(self) -> None:
+        self.assertFalse((ROOT / "uv_studio/api/recipes.py").exists())
 
-        self.assertFalse(any(path.startswith("/api/uv/recipes") for path in methods_by_path))
-        self.assertNotIn("POST", methods_by_path.get("/api/uv/projects", set()))
+        server = (ROOT / "uv_studio/server.py").read_text(encoding="utf-8")
+        self.assertNotIn("recipes_router", server)
+        self.assertNotIn("uv_studio.api.recipes", server)
+
+        projects_api = (ROOT / "uv_studio/api/projects.py").read_text(encoding="utf-8")
+        self.assertNotIn("class Create" + "ProjectRequest", projects_api)
+        self.assertNotIn('@router.post("",', projects_api)
+        self.assertNotIn("uv_studio.api.recipes", projects_api)
 
     def test_recipe_identity_is_not_a_generic_project_patch_field(self) -> None:
         with self.assertRaises(ValidationError):
