@@ -10,7 +10,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from uv_studio.api.capability_execution import get_local_ffmpeg_adapter
 from uv_studio.api.projects import get_project_store
+from uv_studio.capabilities.adapters import LocalFFmpegAdapter
 from uv_studio.projects.music_assembly import MusicAssemblyStore, MusicVisualAssignment
 from uv_studio.projects.music_direction import MusicDirectionStore, MusicShotPlan
 from uv_studio.projects.music_map import MusicExcerpt, MusicMapStore, MusicSection, MusicTimingMarker
@@ -130,7 +132,7 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         )
         return next(item for item in project.sources if item.id == allocation.source_id)
 
-    def _prepare_assembly(self):
+    def _prepare_assembly(self, *, boundary_us: int = 3_000_000):
         music_map = MusicMapStore(self.store).set_map(
             self.project_id,
             song_reference_id=self.song.id,
@@ -142,8 +144,8 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
             self.project_id,
             music_map_revision_sha256=music_map.revision_sha256,
             shots=(
-                MusicShotPlan("red", 0, 1_000_000, 3_000_000, "Red visual", ("cut",)),
-                MusicShotPlan("blue", 1, 3_000_000, 5_000_000, "Blue visual"),
+                MusicShotPlan("red", 0, 1_000_000, boundary_us, "Red visual", ("cut",)),
+                MusicShotPlan("blue", 1, boundary_us, 5_000_000, "Blue visual"),
             ),
         )
         return MusicAssemblyStore(self.store).set_assembly(
@@ -279,6 +281,35 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         self.assertEqual(rendered.status_code, 422, rendered.text)
         self.assertIn("stale Music Assembly revision", rendered.text)
         self.assertNotEqual(assembly.revision_sha256, "0" * 64)
+
+    def test_render_rejects_unaligned_direction_before_ffmpeg(self) -> None:
+        assembly = self._prepare_assembly(boundary_us=2_500_000)
+        audit = MusicDirectionStore(self.store).rhythm_audit(self.project_id)
+        self.assertFalse(audit["summary"]["all_aligned"])
+        self.assertEqual(audit["summary"]["unaligned_count"], 1)
+
+        def unexpected_runner(*_args, **_kwargs):
+            raise AssertionError("FFmpeg/FFprobe must not run before the rhythm gate")
+
+        app.dependency_overrides[get_local_ffmpeg_adapter] = lambda: LocalFFmpegAdapter(
+            self.store,
+            runner=unexpected_runner,
+        )
+        rendered = self.client.post(
+            f"/api/uv/projects/{self.project_id}/capabilities/video.render_music_video/execute",
+            json={
+                "selection_policy": "local_free_first",
+                "input": {"assembly_revision_sha256": assembly.revision_sha256},
+            },
+        )
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("rhythm audit to be fully aligned", rendered.text)
+        self.assertFalse(
+            any(
+                item.metadata.get("lifecycle") == "music_video_render"
+                for item in self.store.load_project(self.project_id).artifacts
+            )
+        )
 
 
 if __name__ == "__main__":
