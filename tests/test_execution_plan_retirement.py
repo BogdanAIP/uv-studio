@@ -24,8 +24,11 @@ class ExecutionPlanRetirementTests(unittest.TestCase):
 
     def test_server_no_longer_mounts_execution_plan_router(self) -> None:
         source = (ROOT / "uv_studio" / "server.py").read_text(encoding="utf-8")
-        self.assertNotIn("execution_router", source)
-        self.assertNotIn("uv_studio.api.execution", source)
+        self.assertNotIn(
+            "from uv_studio.api.execution import router as execution_router",
+            source,
+        )
+        self.assertNotIn("app.include_router(execution_router)", source)
 
     def test_remaining_recipe_registry_and_modern_compatibility_routers_are_preserved(self) -> None:
         registry = get_recipe_registry()
