@@ -4,31 +4,30 @@
 
 ## Current slice
 
-`project-identity-v2-compat-reader` remains the only active Stage-19 slice in PR #89 and is back in `draft` after fresh review of frozen head `71006f09aa0db73991b7014fa1d2242db163ea83` returned `CURRENT / FINDINGS / 2 P2 / 14 rejected candidates`.
+`project-identity-v2-compat-reader` remains the only active Stage-19 slice in PR #89 and is refrozen in `review` after repair of the two P2 findings from the prior fresh review.
 
-Both findings were independently confirmed and regression-first evidence was added before runtime repair. `f3bf657480ebb7d0da0bb4d10e58df8f48a1d17e` covers recovery of a crash-left managed-publication marker whose lexical output is an in-root symlink; `ad16553a34482bdf0b2008e3dd5ae05ece0be998` covers archive authority accepting durable Generation Job JSON that the canonical Job parser rejects. Regression-only CI #4689 (`33791042300`) failed both Ubuntu and Windows full-unit jobs on the new tests while both app-baseline Product Truth jobs remained green.
+Regression-first CI #4689 proved both defects on the unpatched runtime. Runtime repairs reject lexical managed-publication leaf symlinks before resolution and require canonical `GenerationJob.from_dict()` plus physical project/job identity binding before Generation materialization authority is trusted.
 
-Runtime repair `efcf6dc6c7dd01def6bc7b77a309ac071ded068f` rejects publication marker leaf symlinks before general path resolution can follow them. Runtime repair `8555303655a1acc6adaa4196cefecd3fa4489641` routes durable Generation Job records through canonical `GenerationJob.from_dict()` validation and binds parsed project/job identity to the physical project/task identity before historical attempt authority is trusted. Preliminary material CI #4693 has both Ubuntu and Windows full-unit suites green on these repairs; its development-context failure predates the synchronized Draft context and is not an acceptance result.
+Authoritative synchronized Draft CI #4717 (`33792871334`) on repaired Draft head `7977834f0df204dd07ffbc8fd7e94a7dd145ea9f` completed **5/5 SUCCESS**, including both full Ubuntu/Windows unit suites and both app-baseline API/real-media/frontend/browser Product Truth jobs. All inline PR review threads were rechecked live and are resolved.
 
 ## Immediate continuation
 
-1. Keep PR #89 Draft and make no further runtime/test/schema/product changes unless new evidence requires them.
-2. Synchronize the PR body to the repaired Draft state.
-3. Require one authoritative exact-head Draft CI **5/5 SUCCESS** created after that body synchronization.
-4. Re-resolve live PR identity/mergeability and unresolved inline review threads.
-5. Refreeze lifecycle `draft -> review`, mark PR #89 Ready, and freeze the new exact BASE/HEAD.
-6. Launch another genuinely fresh ordinary-ChatGPT read-only semantic review using immutable BASE `.agents/skills/code-review/SKILL.md` v1.0 and neutral `REVIEW_REQUEST_V1` launcher instructions.
-7. After a future `CURRENT / PASS / 0 findings` review, obtain/confirm the final exact-head permanent CI/browser/real-media acceptance required by the accepted protocol, verify live identity/threads, and merge with expected HEAD SHA.
-8. After merge, perform mandatory D-038 lifecycle closure to `idle` before the next slice.
+1. Mark PR #89 Ready without runtime/test/schema/product changes.
+2. Freeze the resulting exact BASE/HEAD identity.
+3. Launch a genuinely fresh ordinary-ChatGPT read-only semantic review using immutable BASE `.agents/skills/code-review/SKILL.md` v1.0 and a neutral `REVIEW_REQUEST_V1` launcher.
+4. If the review returns `CURRENT / FINDINGS`, validate the findings, return PR/lifecycle to Draft before material repair, add regression-first evidence where applicable, repair, re-gate and obtain another fresh review on the new HEAD.
+5. If the review returns `CURRENT / PASS / 0 findings`, obtain the final exact-head permanent CI/browser/real-media acceptance **after the review** on that same reviewed HEAD.
+6. Re-resolve live PR state, exact BASE/HEAD, mergeability and unresolved inline review threads; merge only with the reviewed expected HEAD.
+7. After merge, perform mandatory D-038 lifecycle closure to `idle` before the next slice.
 
 ## Invariants to preserve
 
-Managed-publication recovery must treat the marker's lexical leaf as authority for filesystem type: a symlink leaf fails closed and must never cause its target to be quarantined. Existing filesystem-equivalent path reservation/correlation, exact reference-ID ownership and portable persisted lexical paths remain unchanged.
+Managed-publication recovery treats the marker's lexical leaf as authority for filesystem type: a symlink leaf fails closed and must never cause its target to be quarantined. Existing filesystem-equivalent reservation/correlation, exact reference-ID ownership and portable persisted lexical paths remain unchanged.
 
-Generation archive/Redo/recovery authority must first accept the complete durable Job through canonical `GenerationJob.from_dict()` validation and require parsed `project_id`/`job_id` to match the physical project/task identity before trusting any historical attempt. Historical successful-attempt semantics remain valid even when a later attempt is failed.
+Generation archive/Redo/recovery authority first accepts the complete durable Job through canonical `GenerationJob.from_dict()` validation and requires parsed `project_id`/`job_id` to match physical project/task identity before trusting historical attempt provenance. Historical successful-attempt semantics remain valid when a later attempt is failed.
 
-All previous Stage-19 Generation redo-only retry/recovery, archive authority, source/WebVTT/Generation publication, schema-v1/v2 compatibility, Undo/Redo, root-staging and Product Truth invariants remain unchanged.
+All previous Stage-19 Generation retry/recovery, archive authority, source/WebVTT/Generation publication, schema-v1/v2 compatibility, Undo/Redo, root-staging and Product Truth invariants remain unchanged.
 
 ## Out of scope
 
-Do not mix Recipe endpoint retirement, execution-plan retirement, Product Orchestrator redesign/retirement, Stage8 retirement, provider-selection redesign, Production Direction authority changes, Timeline identity redesign or later D-070 compression work into this repair cycle.
+Do not mix Recipe endpoint retirement, execution-plan retirement, Product Orchestrator redesign/retirement, Stage8 retirement, provider-selection redesign, Production Direction authority changes, Timeline identity redesign or later D-070 compression work into this review cycle.
