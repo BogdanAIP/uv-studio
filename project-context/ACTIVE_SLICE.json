@@ -1,7 +1,32 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "execution-plan-retirement",
+    "kind": "chore",
+    "roadmap_stage": "product-first-architecture-compression",
+    "goal": "Retire the legacy recipe-derived project execution-plan endpoint/client after proving and migrating every supported caller to direct canonical Production, Generation and Capability readiness, while preserving remaining Product Orchestrator and persisted-project compatibility until their own accepted slices.",
+    "base_branch": "main",
+    "branch": "chore/execution-plan-retirement",
+    "pull_request": 93,
+    "write_scope": [
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md",
+      "project-context/NEXT_TASK.md",
+      "docs/architecture/CURRENT_ARCHITECTURE.md",
+      "docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md",
+      "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
+      "frontend/lib/projectsApi.ts",
+      "uv_studio/api/execution.py",
+      "uv_studio/recipes/__init__.py",
+      "uv_studio/recipes/execution.py",
+      "uv_studio/server.py",
+      "tests/test_execution_plan_retirement.py",
+      "tests/test_recipe_execution.py",
+      "tests_api/test_project_execution_api.py",
+      "tests_api/test_recipe_target_mounting.py"
+    ]
+  },
   "last_completed": {
     "id": "recipe-entrypoint-retirement",
     "pull_request": 91,
