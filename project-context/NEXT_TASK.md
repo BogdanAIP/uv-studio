@@ -4,21 +4,21 @@
 
 ## Target
 
-Finish bounded D-070 `execution-plan-retirement` in Draft PR #93 from lifecycle-closed base `af9ff888145661381caaacdec78244637058bce2`.
+Complete review and merge of bounded D-070 `execution-plan-retirement` in PR #93 from lifecycle-closed base `af9ff888145661381caaacdec78244637058bce2`.
 
-## Immediate gate
+## Review gate
 
-The caller classification and bounded implementation are complete. The next step is acceptance of one frozen exact Draft head:
+The caller classification, bounded implementation, tests and architecture synchronization are complete. Final material Draft head `f7e0c1929de2da3f4cdd300b62cb232c669a38c9` passed exact-head CI #4839 with all five permanent checks SUCCESS.
 
-1. require all five permanent CI jobs to pass on the exact final Draft head;
-2. if any job fails, classify the exact failure and make only a bounded Draft repair;
-3. after 5/5 green, perform a context-only lifecycle refreeze from `draft` to `review`;
-4. mark PR #93 Ready for review;
-5. require all five permanent checks on the exact review head;
-6. obtain a genuinely fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0 for exact BASE/HEAD;
-7. any material finding returns the PR to Draft before repair;
-8. after review PASS/CURRENT and final exact-head 5/5 CI, merge exact reviewed HEAD;
-9. immediately perform mandatory D-038 closure to `idle` before another product slice begins.
+The current review refreeze is context-only. Next:
+
+1. mark PR #93 Ready for review;
+2. require all five permanent CI jobs to pass on the exact review head;
+3. obtain a genuinely fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0 bound to exact BASE/HEAD;
+4. validate every reported finding against live code/tests rather than accepting it automatically;
+5. any confirmed material finding returns PR #93 to Draft before repair;
+6. after review PASS/CURRENT and final exact-head 5/5 CI, merge exact reviewed HEAD;
+7. immediately perform mandatory D-038 closure to `idle` before another product slice begins.
 
 ## As-built retirement boundary
 
