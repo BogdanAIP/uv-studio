@@ -9,7 +9,7 @@
 
 ## Current lifecycle
 
-The lifecycle-closed `main` is `1068694fac69eb02ff6e0651855c875c532e31a7` after PR #89 (`project-identity-v2-compat-reader`) and its D-038 closure PR #90. The repository has now entered the bounded `recipe-entrypoint-retirement` draft slice from that exact `main` on `chore/recipe-entrypoint-retirement`; the initial context commit may temporarily carry a null PR number until the Draft PR is opened and synchronized immediately afterward.
+The lifecycle-closed `main` is `1068694fac69eb02ff6e0651855c875c532e31a7` after PR #89 (`project-identity-v2-compat-reader`) and its D-038 closure PR #90. The repository is now in the bounded `recipe-entrypoint-retirement` draft slice on `chore/recipe-entrypoint-retirement`, tracked by Draft PR #91 from that exact `main`.
 
 ## Accepted baseline
 
@@ -29,8 +29,8 @@ This slice does **not** retire `/execution-plan`, Product Orchestrator, the lega
 
 Fresh bootstrap resolved exact `main=1068694fac69eb02ff6e0651855c875c532e31a7`, re-read `AGENTS.md`, lifecycle/context, D-064, D-067, D-070, current architecture, the active legacy-surface inventory, architecture principles, roadmap/upstream, recent `main` commits, and enumerated the current `.agents/skills` set. The only repository skill is `code-review` v1.0; its trigger applies later at the independent-review phase, not to implementation planning.
 
-Before product implementation, the Draft PR must run the repository `development-context` validator successfully on the initialized branch.
+Draft PR #91 is now the canonical active PR. Before product implementation, its synchronized exact head must pass the repository `development-context` validator.
 
 ## Handoff
 
-Complete this bounded retirement with exact caller proof, focused tests, permanent CI and fresh semantic review if the final runtime/API deletion is review-significant. After merge and lifecycle closure, the accepted next D-070 slice is `execution-plan-retirement`.
+Complete this bounded retirement with exact caller proof, focused tests, permanent CI and fresh semantic review because the final runtime/API deletion is review-significant. After merge and lifecycle closure, the accepted next D-070 slice is `execution-plan-retirement`.
