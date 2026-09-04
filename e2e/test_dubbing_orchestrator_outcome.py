@@ -1,7 +1,7 @@
 """Browser evidence for the dedicated Product Orchestrator Dubbing workspace.
 
 This is Class B informed regression evidence, not Class C cold-start acceptance: the
-Dubbing recipe itself is selected through a UV-owned setup API, while optional
+Dubbing legacy identity is seeded directly as compatibility state, while optional
 whisper.cpp remains outside CI prerequisites. From the empty project onward the
 canonical Dubbing journey is driven through visible production UI controls: source
 import, manual verified transcript, translation, prepared speech, Review, Accept and
@@ -20,6 +20,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -122,12 +123,11 @@ class DubbingOrchestratorBrowserOutcome(unittest.TestCase):
     def test_dedicated_dubbing_workspace_starts_and_reaches_rendered_outcome(self) -> None:
         page = self._new_page()
         title = "Dedicated Dubbing E2E"
-        project = _api_json(
-            "POST",
-            "/api/uv/projects",
-            {"title": title, "recipe_id": "dubbing"},
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id="dubbing",
         )
-        project_id = project["project_id"]
         encoded = urllib.parse.quote(project_id, safe="")
         page.goto(f"/projects/{encoded}")
 
