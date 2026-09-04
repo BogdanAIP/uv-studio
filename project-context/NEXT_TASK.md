@@ -4,29 +4,24 @@
 
 ## Target
 
-Complete review and merge of PR #95 for `legacy-music-action-envelope-retirement` from lifecycle-closed BASE `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`.
+Repair the confirmed P2 in Draft PR #95 without restoring the retired Product Orchestrator Music mutation envelope.
 
-## Frozen material result
+## Confirmed review finding
 
-Final material Draft head `bf11b97f9a6ef4c3d57e15831cf3b855cabf4dd2` has the bounded retirement complete:
+The review head `cd5bea656ef2e7612bda46f9c324d933103860ae` had clean exact-head CI, but a live review thread identified a semantic regression in render prerequisites. Independent validation confirmed it:
 
-- the five duplicate Music Product Workflow mutation actions are retired;
-- specialized Music client facades use the existing direct Map, Direction, Assembly, capability-render and Review authorities;
-- Product Workflow remains read-only compatibility state for the legacy Music page;
-- browser acceptance proves zero Music `/workflow/actions/` POSTs and positively observes all five direct mutation paths;
-- the visible Music journey still reaches the current rendered master, approved Review and `workflow.readiness == ready`.
+- BASE `render_music_master` was enabled only when `assembly is not None`, `rhythm_aligned` and render capability availability were all true;
+- the new direct `video.render_music_video` handler validates current Map/Direction/Assembly revisions and source bytes but does not run `MusicDirectionStore.rhythm_audit()`;
+- therefore a caller can render an unaligned current Music Director state that the retired action path previously blocked.
 
-CI #4872 on that exact material head completed SUCCESS for all five permanent jobs, including browser outcomes on Ubuntu and Windows. Duplicate exact-head CI #4871 also completed SUCCESS.
+## Bounded repair plan
 
-## Current review refreeze
+1. Keep PR #95 in Draft.
+2. Expand write scope only to `uv_studio/capabilities/adapters/music_video_render.py` and `tests_real_media/test_music_video_render_real_media.py`.
+3. Require exact-head `development-context` success before editing those paths.
+4. At the canonical direct render boundary, compute the current direction rhythm audit and fail closed unless `summary.all_aligned is true`, before FFmpeg materialization.
+5. Add focused acceptance proving an unaligned current direction/assembly is rejected while the existing aligned render path remains green.
+6. Do not change Music UI components, add a new endpoint, restore Product Workflow Music actions, or widen into broader Product Orchestrator/Stage8 retirement.
+7. After repair require exact Draft-head permanent CI 5/5, context-only review refreeze, Ready, exact review-head 5/5 and a new fresh ordinary-ChatGPT semantic review on the new HEAD.
 
-This transition is context-only: no product/runtime/frontend/test bytes change from the green material head. The next exact HEAD is the review identity.
-
-## Gate
-
-1. Mark PR #95 Ready for review.
-2. Require all five permanent CI jobs SUCCESS on the exact context-only review head.
-3. Run a genuinely fresh ordinary-ChatGPT semantic review using BASE `.agents/skills/code-review/SKILL.md` v1.0 and the exact BASE/HEAD pair.
-4. Validate any reported finding against that exact head; material fixes require returning to Draft before changes.
-5. Merge only if the fresh result is `PASS`, `review_validity=CURRENT`, `reported_findings=0`, exact-head CI remains green and no unresolved review thread blocks acceptance.
-6. Immediately create and merge the separate D-038 lifecycle closure, restoring `idle` and selecting the next D-070 slice from accepted repository authority rather than guessing it.
+The unresolved review thread remains blocking until this repair is proven and the exact finding is answered/resolved.

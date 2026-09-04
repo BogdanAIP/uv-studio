@@ -1,6 +1,6 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: legacy-music-action-envelope-retirement -->
 
 **Updated:** 2026-09-04
@@ -9,32 +9,23 @@
 
 ## Current lifecycle
 
-Lifecycle-closed `main` is `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` after accepted `execution-plan-retirement` PR #93 and D-038 closure PR #94. PR #95 is now frozen for review as bounded D-070 slice `legacy-music-action-envelope-retirement` on branch `chore/legacy-music-action-envelope-retirement`.
+Lifecycle-closed `main` remains `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`. PR #95 has returned from review to Draft after validation of an unresolved P2 review finding on review head `cd5bea656ef2e7612bda46f9c324d933103860ae`.
 
-The final material Draft head is `bf11b97f9a6ef4c3d57e15831cf3b855cabf4dd2`. CI #4872 completed SUCCESS with all five permanent jobs green, including the Stage 4C + Stage 5 browser user-outcome suite on Ubuntu and Windows. Duplicate exact-head CI #4871 also completed SUCCESS.
+The previously frozen implementation passed exact review-head CI 5/5, but review identified a semantic regression in the direct Music render boundary. BASE Product Workflow enabled `render_music_master` only when `assembly is not None and rhythm_aligned and render_ready`. After the action-envelope migration, `frontend/lib/musicVideoApi.ts` calls `video.render_music_video` directly, while `uv_studio/capabilities/adapters/music_video_render.py::render_music_video_state()` validates current Map/Direction/Assembly revisions and media bytes but does not execute `MusicDirectionStore.rhythm_audit()` or reject an unaligned current direction.
 
-## Accepted implementation boundary for review
+This finding is confirmed and material: a direct render can now create a master for an unaligned Music Director state that the retired Product Workflow action previously blocked.
 
-The slice retires only the duplicate Music mutation/action envelope:
+## Bounded repair
 
-- Product Workflow no longer projects or dispatches the five Music mutation actions;
-- `GET /api/uv/projects/{id}/workflow` remains as temporary read compatibility for Music readiness/prerequisites/workspace/current-outcome state;
-- specialized Music clients preserve their public UI-facing functions but now call the established direct Music Map, Direction, Assembly, capability-render and Review endpoints;
-- browser acceptance requires zero Music POSTs to `/workflow/actions/` and positively observes all five direct mutation paths while preserving the same rendered artifact, approved Review and ready workflow state;
-- Photo Composer and Visualizer Product Workflow actions remain unchanged.
+The canonical fix belongs at the direct execution boundary, not in the UI or a replacement workflow layer:
 
-## Evidence chain
+- require the current `MusicDirectionStore.rhythm_audit(project_id)` result to report `summary.all_aligned == true` before any FFmpeg render is started;
+- reject an unaligned current direction as invalid capability input, preserving fail-closed semantics for all direct callers;
+- extend the existing focused real-media render acceptance to prove an unaligned assembly is rejected before render and the aligned path still succeeds;
+- keep the five Product Workflow Music mutation actions retired and keep the specialized clients on direct domain/capability endpoints.
 
-CI #4858 exposed the hidden live frontend caller seam after backend retirement. After scope expansion and a successful `development-context`, the specialized clients were migrated to direct authorities. CI #4862 then showed the Music user journey itself was healthy but the final browser assertion still required retired workflow-action POSTs. After a second scoped `development-context`, the E2E network assertion was migrated to the post-retirement direct-transport contract. Exact final material head `bf11b97f9a6ef4c3d57e15831cf3b855cabf4dd2` then passed permanent CI 5/5.
+The write scope is expanded only by `uv_studio/capabilities/adapters/music_video_render.py` and `tests_real_media/test_music_video_render_real_media.py`. No Music UI component, Product Workflow action, Stage8 surface or new endpoint is added.
 
-## Review freeze
+## Gate
 
-The transition from Draft to review changes project context only. Product/runtime/frontend/E2E implementation remains frozen at the exact bytes already proven on `bf11b97f9a6ef4c3d57e15831cf3b855cabf4dd2`.
-
-## Guardrails
-
-Do not change Music UI components, Photo Composer or Visualizer Product Workflow actions. Do not retire Product Orchestrator GET/read projection, internal Recipe Registry, the legacy project route, Stage8, other directions, or Music domain services. Do not introduce another recipe-like action planner or new mutation endpoint.
-
-## Review gate
-
-Mark PR #95 Ready, require all five permanent CI jobs on the exact context-only review head, then obtain a genuinely fresh ordinary-ChatGPT semantic review governed by BASE `.agents/skills/code-review/SKILL.md`. Merge only an exact reviewed head with `PASS`, `review_validity=CURRENT`, zero findings and clean exact-head CI, then perform the mandatory separate D-038 lifecycle closure.
+PR #95 is Draft before any material repair. Require `development-context` success on the exact scope-expanded Draft head before editing the two newly added paths. Then require exact-head permanent CI 5/5, re-freeze context to review, mark Ready, require exact review-head 5/5, and obtain a new genuinely fresh ordinary-ChatGPT semantic review. The old review identity is superseded once material bytes change.

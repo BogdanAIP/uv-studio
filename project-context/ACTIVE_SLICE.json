@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "review",
+  "lifecycle_state": "draft",
   "active_slice": {
     "id": "legacy-music-action-envelope-retirement",
     "kind": "chore",
@@ -21,7 +21,9 @@
       "tests_api/test_music_workflow_api.py",
       "frontend/lib/musicVideoApi.ts",
       "frontend/lib/musicVideoReviewApi.ts",
-      "e2e/test_music_video_outcome.py"
+      "e2e/test_music_video_outcome.py",
+      "uv_studio/capabilities/adapters/music_video_render.py",
+      "tests_real_media/test_music_video_render_real_media.py"
     ]
   },
   "last_completed": {
