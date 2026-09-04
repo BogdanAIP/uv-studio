@@ -18,8 +18,11 @@
       "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
       "frontend/lib/projectsApi.ts",
       "uv_studio/api/execution.py",
+      "uv_studio/recipes/__init__.py",
+      "uv_studio/recipes/execution.py",
       "uv_studio/server.py",
       "tests/test_execution_plan_retirement.py",
+      "tests/test_recipe_execution.py",
       "tests_api/test_project_execution_api.py"
     ]
   },
