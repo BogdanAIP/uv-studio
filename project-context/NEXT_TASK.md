@@ -4,11 +4,11 @@
 
 ## Target
 
-Finish the bounded D-070 `recipe-entrypoint-retirement` acceptance cycle in Draft PR #91 from lifecycle-closed base `1068694fac69eb02ff6e0651855c875c532e31a7`.
+Complete the bounded D-070 `recipe-entrypoint-retirement` review and merge cycle for PR #91 from lifecycle-closed base `1068694fac69eb02ff6e0651855c875c532e31a7`.
 
-## Current implementation result
+## Frozen implementation result
 
-The candidate implementation now retires the public recipe creation/catalog/rebinding surfaces:
+The candidate implementation retires the public recipe creation/catalog/rebinding surfaces:
 
 - `/api/uv/recipes` is not mounted;
 - recipe-backed public `POST /api/uv/projects` is retired;
@@ -18,29 +18,17 @@ The candidate implementation now retires the public recipe creation/catalog/rebi
 
 Modern New Project creation remains Production Direction discovery plus `POST /api/uv/projects/studio`. Project list/get/archive/import, schema-v1/v2 compatibility, `/execution-plan`, Product Orchestrator, Stage8 and internal Recipe Registry compatibility remain intentionally present for later slices.
 
-API/real-media/browser fixtures that need historical recipe identity now seed canonical ProjectStore compatibility state directly instead of calling the retired public create route. Browser catalog reconciliation uses Production Directions instead of `/api/uv/recipes`.
+API/real-media/browser fixtures that need historical recipe identity seed canonical ProjectStore compatibility state directly instead of calling the retired public create route. Browser catalog reconciliation uses Production Directions instead of `/api/uv/recipes`.
+
+Implementation head `2344667deada22983e362d468db084ed5cede797` passed CI #4804 with all five permanent jobs, including API integration, Stage4A real-media and browser Product Truth on Ubuntu and Windows.
 
 ## Immediate gate
 
-Run/observe a fresh exact-head permanent CI after the synchronized code/tests/docs/context changes. Require all five jobs:
-
-- `development-context`;
-- `bootstrap (ubuntu-latest, 3.11)`;
-- `bootstrap (windows-latest, 3.11)`;
-- `app-baseline (ubuntu-latest)`;
-- `app-baseline (windows-latest)`.
-
-The app-baseline jobs must pass API integration, Stage4A real-media, frontend lint/audit/build and browser Product Truth. Do not classify a browser failure as the historical Windows timing race without exact log evidence.
-
-## Review transition
-
-Only after the synchronized Draft head is fully green:
-
-1. make a context-only refreeze commit that changes lifecycle `draft -> review` without altering runtime/tests/product behavior;
-2. mark PR #91 Ready for review;
-3. reconstruct exact BASE/HEAD and governing immutable-BASE review authority;
-4. obtain a genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0;
-5. address any actionable finding by returning the PR to Draft before material changes.
+1. Mark PR #91 Ready for review after this context-only lifecycle refreeze.
+2. Resolve the exact live BASE/HEAD.
+3. Obtain a genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0 and an immutable `REVIEW_REQUEST_V1`.
+4. Validate every reported finding as `CONFIRMED`, `REJECTED` or `SUPERSEDED`. A confirmed material finding requires returning PR #91 to Draft before changes and repeating exact-head review.
+5. Require the exact final review head to pass all five permanent CI jobs and verify the reviewed BASE/HEAD still match before merge.
 
 ## Completion evidence
 
@@ -48,9 +36,9 @@ Only after the synchronized Draft head is fully green:
 - Production Direction -> Studio Project remains the modern creation authority;
 - old/imported projects remain readable/importable with exact compatibility identity;
 - test fixtures do not resurrect retired public entrypoints;
-- all five permanent CI jobs pass on the exact review head;
+- all five permanent CI jobs pass on the exact final review head;
 - fresh semantic review returns PASS with no actionable findings;
-- final exact reviewed HEAD receives permanent CI before merge.
+- final live PR BASE/HEAD exactly match the reviewed identity immediately before merge.
 
 ## Out of scope
 
