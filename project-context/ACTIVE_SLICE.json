@@ -20,7 +20,8 @@
       "uv_studio/api/project_workflow.py",
       "tests_api/test_music_workflow_api.py",
       "frontend/lib/musicVideoApi.ts",
-      "frontend/lib/musicVideoReviewApi.ts"
+      "frontend/lib/musicVideoReviewApi.ts",
+      "e2e/test_music_video_outcome.py"
     ]
   },
   "last_completed": {

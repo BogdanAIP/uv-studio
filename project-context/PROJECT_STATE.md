@@ -11,39 +11,41 @@
 
 Lifecycle-closed `main` is `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` after accepted `execution-plan-retirement` PR #93 and D-038 closure PR #94. Draft PR #95 is the bounded D-070 slice `legacy-music-action-envelope-retirement` on branch `chore/legacy-music-action-envelope-retirement`.
 
-The initial PR-bound Draft context passed `development-context` on exact head `71de50b5dfbe31b43e22455c1f2df3897f690bda`. Material head `cfee9e04109cd91ee21daf83e21d24ab133e913d` then removed the five Product Workflow Music actions and Music-specific backend dispatch glue while preserving the read projection.
+The initial PR-bound Draft context passed `development-context` on exact head `71de50b5dfbe31b43e22455c1f2df3897f690bda`. Material head `cfee9e04109cd91ee21daf83e21d24ab133e913d` removed the five Product Workflow Music actions and Music-specific backend dispatch glue while preserving the read projection.
 
-## Fresh caller evidence and scope correction
+## Fresh caller and acceptance evidence
 
-Initial file inspection correctly found that the rendered Music panels import specialized Music clients rather than calling Product Workflow directly. However, exact-head browser acceptance CI #4858 exposed a hidden client seam: `frontend/lib/musicVideoApi.ts` still routed Music Map, Direction, Assembly and render mutations through `executeProjectWorkflowAction()`, and `frontend/lib/musicVideoReviewApi.ts` still routed final Review through the same Product Orchestrator action endpoint.
+Browser CI #4858 exposed a hidden live client seam: the Music panels use specialized facades, but `frontend/lib/musicVideoApi.ts` and `frontend/lib/musicVideoReviewApi.ts` still tunneled supported mutations through `executeProjectWorkflowAction()`. After expanding scope and passing `development-context`, head `698b9e5c5350c735dc687044c455b8a08b58949c` migrated those facades onto the already-existing direct Music Map, Direction, Assembly, capability-render and Review APIs without changing Music components.
 
-This is a real supported caller, not a flaky browser failure. Ubuntu and Windows API integration, server probe and frontend build progressed successfully; the Stage 4C/5 Music browser outcome failed when `save_music_map` reached the retired `/workflow/actions/...` contract.
+CI #4862 then supplied the next exact finding: all 213 API tests, all 22 real-media tests, frontend lint/build and 14 of 15 browser outcomes passed. The Music browser scenario itself reached the final rendered artifact, approved Review and ready Product Workflow state, but its final assertion still required observing the five retired `/workflow/actions/...` POSTs and failed because `observed=[]`.
 
-Direct domain/execution authorities already exist and remain the canonical destination:
+That failure is stale acceptance instrumentation, not a product regression. The desired post-retirement browser contract is now stronger and explicit:
 
-- Music Map: `POST /api/uv/projects/{id}/music-map/commands`;
-- Music Director: `POST /api/uv/projects/{id}/music-direction/commands`;
-- Music Assembly: `POST /api/uv/projects/{id}/music-assembly/commands`;
-- Music render: `POST /api/uv/projects/{id}/capabilities/video.render_music_video/execute` with `local_free_first`;
-- final Review: `POST /api/uv/projects/{id}/music-video-review`.
+- no Music POST may use `/workflow/actions/`;
+- Music Map must POST `/music-map/commands`;
+- Music Director must POST `/music-direction/commands`;
+- Music Assembly must POST `/music-assembly/commands`;
+- render must POST `/capabilities/video.render_music_video/execute`;
+- final Review must POST `/music-video-review`;
+- the same visible journey must still produce the current rendered artifact, approved Review and `workflow.readiness == ready`.
 
-The write scope is therefore expanded only by `frontend/lib/musicVideoApi.ts` and `frontend/lib/musicVideoReviewApi.ts`. Music UI components themselves do not require changes.
+The write scope is therefore expanded only by `e2e/test_music_video_outcome.py`. This acceptance file may be updated only after `development-context` succeeds on the exact scope-expanded Draft head.
 
 ## Bounded retirement target
 
-Retire only the duplicate Music mutation/action envelope end to end:
+Retire only the duplicate Music mutation/action envelope end to end while preserving read compatibility and user-visible behavior:
 
-- preserve `GET /api/uv/projects/{id}/workflow` for Music goal/readiness/prerequisites/workspaces while the legacy page still needs it;
-- stop projecting Music `next_actions` through Product Workflow;
-- remove Music mutation request/dispatch glue from `uv_studio/api/project_workflow.py`;
-- move the two specialized Music client facades from Product Workflow action calls onto the already-established direct Music/capability/review APIs;
-- preserve all project-owned Music state and existing browser-visible behavior;
-- keep the focused Product Workflow test as retirement/read-compatibility proof and rely on direct Music API suites plus browser acceptance for mutation semantics.
+- keep `GET /api/uv/projects/{id}/workflow` for Music readiness/prerequisites/workspace/current-outcome compatibility;
+- keep Music `next_actions` retired;
+- keep Music-specific Product Orchestrator mutation request/dispatch glue removed;
+- keep specialized Music clients on the established direct domain/capability/review endpoints;
+- update the browser acceptance to positively prove that direct transport and the absence of Product Orchestrator Music mutation calls;
+- preserve all project-owned Music state, revisions, validation and fail-closed behavior.
 
 ## Guardrails
 
-Do not change Music UI components, Photo Composer or Visualizer Product Workflow actions. Do not retire Product Orchestrator GET/read projection, internal Recipe Registry, the legacy project route, Stage8, other directions, or the Music domain services themselves. Do not introduce another recipe-like action planner or new mutation endpoint.
+Do not change Music UI components, Photo Composer or Visualizer Product Workflow actions. Do not retire Product Orchestrator GET/read projection, internal Recipe Registry, the legacy project route, Stage8, other directions, or Music domain services. Do not introduce another recipe-like action planner or new mutation endpoint.
 
 ## Verification plan
 
-Before modifying the newly added frontend paths, require `development-context` success on this exact scope-expanded Draft head. Then require exact-head permanent CI 5/5. Before merge, perform the normal context-only `draft -> review` refreeze, exact review-head 5/5 and fresh ordinary-ChatGPT semantic review on the frozen BASE/HEAD.
+Require `development-context` success on the exact 12-path scope-expanded Draft head before editing the E2E file. Then require all five permanent CI jobs on the exact frozen Draft head. Before merge, perform the normal context-only `draft -> review` refreeze, exact review-head 5/5 and fresh ordinary-ChatGPT semantic review on the frozen BASE/HEAD.
