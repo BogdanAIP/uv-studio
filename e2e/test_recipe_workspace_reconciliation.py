@@ -1,4 +1,4 @@
-"""Browser evidence for truthful recipe creation and unsupported workspace routing."""
+"""Browser evidence for modern creation truth and preserved legacy workspace routing."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -21,15 +22,6 @@ from test_user_outcomes import (
     _start_process,
     _wait_http,
 )
-
-# `python e2e/run_browser_e2e.py` puts the e2e directory, rather than the
-# repository root, first on sys.path on Windows. The reconciliation fixture
-# intentionally uses the canonical Project Store directly for preserved-only
-# recipes, so make that repository import explicit and cross-platform.
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from uv_studio.projects.store import ProjectStore
 
 
 class RecipeWorkspaceReconciliationBrowserOutcome(unittest.TestCase):
@@ -108,17 +100,21 @@ class RecipeWorkspaceReconciliationBrowserOutcome(unittest.TestCase):
         for title in ("Перенос движения", "Говорящий персонаж", "Performance / lip-sync"):
             expect(page.get_by_role("button", name=title, exact=False)).to_have_count(0)
 
-        response = _api_json("GET", "/api/uv/recipes")
-        ids = {item["recipe_id"] for item in response}
-        self.assertFalse({"action_transfer", "digital_human", "performance_lip_sync"} & ids)
+        directions = _api_json("GET", "/api/uv/projects/studio/directions")
+        direction_ids = {item["direction_id"] for item in directions}
+        self.assertTrue(direction_ids)
+        self.assertFalse({"action_transfer", "digital_human", "performance_lip_sync"} & direction_ids)
 
     def test_preserved_unsupported_project_has_no_foreign_workspace_leakage(self) -> None:
-        # Import/recovery must continue to support preserved recipe IDs, so create
-        # the fixture directly in Project Store instead of going through the
-        # deliberately fail-closed new-project HTTP endpoint.
-        store = ProjectStore(self.projects_root)
-        project = store.create_project(title="Preserved Action Transfer", recipe_id="action_transfer")
-        encoded = urllib.parse.quote(project.project_id, safe="")
+        # Import/recovery must continue to support preserved recipe IDs, so seed
+        # canonical Project Store compatibility state directly instead of using
+        # the deliberately retired recipe-backed new-project HTTP endpoint.
+        project_id = seed_legacy_project(
+            self.projects_root,
+            title="Preserved Action Transfer",
+            recipe_id="action_transfer",
+        )
+        encoded = urllib.parse.quote(project_id, safe="")
 
         page = self._new_page()
         page.goto(f"/projects/{encoded}")
@@ -132,7 +128,7 @@ class RecipeWorkspaceReconciliationBrowserOutcome(unittest.TestCase):
         expect(page.get_by_text("Stage 8 · Performance / lip-sync", exact=True)).to_have_count(0)
         expect(page.get_by_role("heading", name="Проект и восстановление", exact=True)).to_be_visible()
 
-        workflow = _api_json("GET", f"/api/uv/projects/{urllib.parse.quote(project.project_id, safe='')}/workflow")
+        workflow = _api_json("GET", f"/api/uv/projects/{encoded}/workflow")
         self.assertEqual(workflow["readiness"], "partial")
         self.assertEqual(workflow["relevant_workspaces"], [])
         self.assertEqual(workflow["next_actions"], [])
