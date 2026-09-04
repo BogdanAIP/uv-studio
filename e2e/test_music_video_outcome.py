@@ -198,13 +198,13 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         encoded_id = urllib.parse.quote(project_id, safe="")
 
         page = self._new_page()
-        workflow_posts: list[str] = []
+        mutation_posts: list[str] = []
 
-        def capture_workflow_request(request: Any) -> None:
-            if request.method == "POST" and "/workflow/actions/" in request.url:
-                workflow_posts.append(request.url)
+        def capture_mutation_request(request: Any) -> None:
+            if request.method == "POST" and f"/api/uv/projects/{encoded_id}/" in request.url:
+                mutation_posts.append(request.url)
 
-        page.on("request", capture_workflow_request)
+        page.on("request", capture_mutation_request)
         page.goto(f"/projects/{encoded_id}")
         expect(page.get_by_role("heading", name="E2E Stage 7 Music Video", exact=True)).to_be_visible()
         expect(page.get_by_role("heading", name="Песня → Music Map → музыкальная режиссура → проверка ритма", exact=True)).to_be_visible()
@@ -298,21 +298,27 @@ class MusicVideoBrowserOutcome(unittest.TestCase):
         )
         self.assertTrue(review_prerequisite["satisfied"])
 
-        expected_actions = {
-            "save_music_map",
-            "save_music_direction",
-            "save_music_assembly",
-            "render_music_master",
-            "review_music_master",
+        mutation_paths = [urllib.parse.urlparse(url).path for url in mutation_posts]
+        workflow_action_paths = [path for path in mutation_paths if "/workflow/actions/" in path]
+        self.assertEqual(
+            workflow_action_paths,
+            [],
+            f"Music UI still used retired Product Orchestrator actions: observed={workflow_action_paths}",
+        )
+        expected_direct_paths = {
+            f"/api/uv/projects/{encoded_id}/music-map/commands",
+            f"/api/uv/projects/{encoded_id}/music-direction/commands",
+            f"/api/uv/projects/{encoded_id}/music-assembly/commands",
+            f"/api/uv/projects/{encoded_id}/capabilities/video.render_music_video/execute",
+            f"/api/uv/projects/{encoded_id}/music-video-review",
         }
-        observed_actions = {
-            url.rsplit("/", 1)[-1]
-            for url in workflow_posts
-            if "/workflow/actions/" in url
-        }
-        self.assertTrue(
-            expected_actions.issubset(observed_actions),
-            f"Music UI bypassed Product Orchestrator actions: observed={sorted(observed_actions)}",
+        observed_direct_paths = expected_direct_paths.intersection(mutation_paths)
+        self.assertEqual(
+            observed_direct_paths,
+            expected_direct_paths,
+            "Music UI did not exercise every established direct mutation authority: "
+            f"missing={sorted(expected_direct_paths - observed_direct_paths)}; "
+            f"observed={sorted(set(mutation_paths))}",
         )
 
         page.screenshot(path=str(self.artifact_dir / "stage7-music-video-final.png"), full_page=True)
