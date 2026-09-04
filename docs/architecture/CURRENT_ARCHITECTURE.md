@@ -170,7 +170,7 @@ Dependencies unlock only after success. A failure keeps dependants blocked and d
 
 Skills remain bounded procedures over approved Agent actions and inherit their effects/authority envelope. They do not gain shell, Python, arbitrary filesystem/provider or D-017 bypass rights.
 
-Stage 16 recovery binds execution-time context/policy/correlation evidence, links durable task state to existing trace and canonical result identities, and reconciles committed work on reopen without silent replay.
+Stage 16 recovery binds execution-time context/policy/correlation before canonical or cost-bearing dispatch. Production/Timeline recovery reuses correlated ProjectUnitOfWork evidence; generation recovery requires exact Job/idempotency/request/mapping evidence and never silently resubmits.
 
 ## Agent Harness layer 3 — Stage 17 merged
 
