@@ -27,7 +27,17 @@
       "tests_api/test_project_recipe_validation.py",
       "tests_real_media/test_dubbing_render_real_media.py",
       "tests_real_media/test_music_video_render_real_media.py",
-      "tests_real_media/test_stage8_local_media_real_media.py"
+      "tests_real_media/test_stage8_local_media_real_media.py",
+      "e2e/test_user_outcomes.py",
+      "e2e/test_commercial_product_outcome.py",
+      "e2e/test_dubbing_orchestrator_outcome.py",
+      "e2e/test_general_video_outcome.py",
+      "e2e/test_music_video_outcome.py",
+      "e2e/test_narrated_video_outcome.py",
+      "e2e/test_recipe_workspace_reconciliation.py",
+      "e2e/test_stage8_composition_outcomes.py",
+      "e2e/test_stage8_outcomes.py",
+      "e2e/test_story_outcome.py"
     ]
   },
   "last_completed": {
