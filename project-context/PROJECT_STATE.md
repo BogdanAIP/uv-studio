@@ -1,7 +1,7 @@
 # Project State
 
-<!-- uv-context-state: idle -->
-<!-- uv-last-completed: project-identity-v2-compat-reader -->
+<!-- uv-context-state: draft -->
+<!-- uv-active-slice: recipe-entrypoint-retirement -->
 
 **Updated:** 2026-09-04
 
@@ -9,24 +9,28 @@
 
 ## Current lifecycle
 
-`project-identity-v2-compat-reader` merged through PR #89 as `a0150e1543b8b4c8f5d3ae8d1b701118fcb112d2`. The repository lifecycle is now `idle`; no subsequent product-development slice has started from this merge.
+The lifecycle-closed `main` is `1068694fac69eb02ff6e0651855c875c532e31a7` after PR #89 (`project-identity-v2-compat-reader`) and its D-038 closure PR #90. The repository has now entered the bounded `recipe-entrypoint-retirement` draft slice from that exact `main` on `chore/recipe-entrypoint-retirement`; the initial context commit may temporarily carry a null PR number until the Draft PR is opened and synchronized immediately afterward.
 
-The accepted next handoff is `recipe-entrypoint-retirement` from the D-070 migration sequence. It may start only after this protected-main D-038 closure merges and a fresh bootstrap is run from the resulting lifecycle-closed `main`.
+## Accepted baseline
 
-## Accepted Stage-19 result
+Canonical Project persistence is schema v2 with exact historical recipe identity under `compatibility.recipe_id`; schema-v1 projects/archives remain readable without read-time rewrite, unknown historical recipe IDs remain exact, and modern Studio identity is typed through `extensions.studio` / Production Direction metadata.
 
-Canonical Project persistence is schema v2 with exact legacy recipe identity under `compatibility.recipe_id`, while historical schema-v1 project/archive bytes remain readable without read-time rewrite and preserve unknown/uncreatable historical recipe IDs exactly.
+The current Projects UI already discovers Production Directions with `listProductionDirections()` and creates new projects only through `createStudioProject()` -> `POST /api/uv/projects/studio`. The retained `frontend/lib/recipesApi.ts`, `frontend/lib/projectsApi.ts#createUVProject`, `/api/uv/recipes`, and legacy recipe-backed create/update entrypoints are therefore migration surfaces, not canonical modern creation authority.
 
-Every ProjectReference carrying reserved `metadata.generation` authority must be a direct canonical `artifacts/generated_<attempt_id>[.<ext>]` path. Canonical persistence, Generation archive authority, Redo authority and restart recovery therefore agree on the same root/name shape. The earlier Stage-19 publication, crash recovery, exact-byte Generation authority, Undo/Redo, root-staging and cross-runtime fencing repairs remain part of the merged baseline.
+The internal Recipe Registry itself is not retired by this slice because `/execution-plan` and later Product-Orchestrator compatibility still depend on recipe definitions. Old/imported projects must remain readable/importable through the explicit compatibility boundary established by PR #89.
 
-## Final review and verification
+## Active slice
 
-The final fresh ordinary-ChatGPT semantic review of exact `52be1939eca51d7147990288cfc6258b023c2cd2..a237be2ff32a7fca280cd4f6b414ba19cd5870e6` returned `CURRENT / PASS / 0 findings / 12 rejected candidates` under immutable BASE `.agents/skills/code-review/SKILL.md` v1.0.
+`recipe-entrypoint-retirement` follows item 3 of the accepted D-070 retirement sequence. It will exact-scan repository callers, migrate any genuine supported caller if one exists, remove recipe-backed frontend/API creation and catalog entrypoints only after proof, and add regression evidence that modern Production Direction creation plus legacy read/import remain intact.
 
-Ready CI #4739 (`33862150686`) passed all five permanent jobs on the frozen reviewed HEAD. After the semantic PASS, final merge-authoritative CI #4740 (`33871108872`) again passed all five permanent jobs on that same exact HEAD, including both Ubuntu/Windows full-unit suites, API integration, real-media verification, frontend lint/audit/build and browser Product Truth. The final live PR check found exact BASE/HEAD, `mergeable=true` and zero unresolved inline review threads before merge with `expected_head_sha=a237be2ff32a7fca280cd4f6b414ba19cd5870e6`.
+This slice does **not** retire `/execution-plan`, Product Orchestrator, the legacy `/projects/{id}` workflow, Stage8 runtime/state, or the Recipe Registry definitions still needed by those later slices.
+
+## Verification state
+
+Fresh bootstrap resolved exact `main=1068694fac69eb02ff6e0651855c875c532e31a7`, re-read `AGENTS.md`, lifecycle/context, D-064, D-067, D-070, current architecture, the active legacy-surface inventory, architecture principles, roadmap/upstream, recent `main` commits, and enumerated the current `.agents/skills` set. The only repository skill is `code-review` v1.0; its trigger applies later at the independent-review phase, not to implementation planning.
+
+Before product implementation, the Draft PR must run the repository `development-context` validator successfully on the initialized branch.
 
 ## Handoff
 
-The next bounded slice is `recipe-entrypoint-retirement`: exact-scan remaining modern/creation callers of Recipe Registry and `/api/uv/recipes`, including `frontend/lib/recipesApi.ts` and `projectsApi.createUVProject()`, migrate any real supported caller, and retire recipe-backed creation/metadata entrypoints only where old-project read/import compatibility no longer requires them.
-
-Keep `/execution-plan` retirement, legacy direction/tool migration, Product Orchestrator retirement and Stage8 runtime/compatibility retirement as separate later slices in the accepted D-070 order.
+Complete this bounded retirement with exact caller proof, focused tests, permanent CI and fresh semantic review if the final runtime/API deletion is review-significant. After merge and lifecycle closure, the accepted next D-070 slice is `execution-plan-retirement`.
