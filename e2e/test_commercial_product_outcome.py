@@ -12,6 +12,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -107,8 +108,11 @@ class CommercialProductBrowserOutcome(unittest.TestCase):
     def test_commercial_workspace_reaches_truthful_preparation_state_from_visible_inputs(self) -> None:
         page = self._new_page()
         title = "Commercial E2E"
-        project = _api_json("POST", "/api/uv/projects", {"title": title, "recipe_id": "commercial_product"})
-        project_id = project["project_id"]
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id="commercial_product",
+        )
         encoded = urllib.parse.quote(project_id, safe="")
 
         page.goto(f"/projects/{encoded}")

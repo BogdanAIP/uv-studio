@@ -4,26 +4,46 @@
 
 ## Target
 
-Continue the accepted D-070 migration sequence with the bounded `recipe-entrypoint-retirement` slice after PR #89 is lifecycle-closed on protected `main`.
+Complete the bounded D-070 `recipe-entrypoint-retirement` review and merge cycle for PR #91 from lifecycle-closed base `1068694fac69eb02ff6e0651855c875c532e31a7`.
 
-## Required scope
+## Frozen implementation result
 
-- exact-scan `frontend/lib/recipesApi.ts` and all imports/callers of its `/api/uv/recipes` clients;
-- exact-scan `frontend/lib/projectsApi.ts#createUVProject` and any remaining modern or compatibility creation callers that still require `recipe_id`;
-- move any genuine modern creation/metadata caller to Production Direction / Studio project creation authority;
-- remove recipe-backed frontend/API creation or metadata entrypoints only when exact caller evidence proves they are no longer required;
-- retain bounded compatibility metadata where old/imported projects still need exact historical recipe identity;
-- preserve schema-v1/v2 read/import/export and Undo/Redo compatibility established by PR #89.
+The candidate implementation retires the public recipe creation/catalog/rebinding surfaces:
 
-## Entry gate
+- `/api/uv/recipes` is not mounted;
+- recipe-backed public `POST /api/uv/projects` is retired;
+- generic project PATCH cannot change `recipe_id`;
+- `frontend/lib/recipesApi.ts` is removed;
+- `projectsApi#createUVProject` / `CreateProjectInput` are removed.
 
-Do not start this product slice until:
+Modern New Project creation remains Production Direction discovery plus `POST /api/uv/projects/studio`. Project list/get/archive/import, schema-v1/v2 compatibility, `/execution-plan`, Product Orchestrator, Stage8 and internal Recipe Registry compatibility remain intentionally present for later slices.
 
-1. PR #89 is merged as `a0150e1543b8b4c8f5d3ae8d1b701118fcb112d2`;
-2. its D-038 lifecycle closure has merged and `main` is verified `idle`;
-3. the mandatory fresh bootstrap is rerun against that exact lifecycle-closed `main`;
-4. a new bounded slice is opened from that exact `main` using the normal `idle -> draft -> review` lifecycle.
+API/real-media/browser fixtures that need historical recipe identity seed canonical ProjectStore compatibility state directly instead of calling the retired public create route. Browser catalog reconciliation uses Production Directions instead of `/api/uv/recipes`.
+
+Implementation head `2344667deada22983e362d468db084ed5cede797` passed CI #4804 with all five permanent jobs, including API integration, Stage4A real-media and browser Product Truth on Ubuntu and Windows.
+
+## Immediate gate
+
+1. Mark PR #91 Ready for review after this context-only lifecycle refreeze.
+2. Resolve the exact live BASE/HEAD.
+3. Obtain a genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0 and an immutable `REVIEW_REQUEST_V1`.
+4. Validate every reported finding as `CONFIRMED`, `REJECTED` or `SUPERSEDED`. A confirmed material finding requires returning PR #91 to Draft before changes and repeating exact-head review.
+5. Require the exact final review head to pass all five permanent CI jobs and verify the reviewed BASE/HEAD still match before merge.
+
+## Completion evidence
+
+- public recipe creation/catalog/rebinding entrypoints remain absent;
+- Production Direction -> Studio Project remains the modern creation authority;
+- old/imported projects remain readable/importable with exact compatibility identity;
+- test fixtures do not resurrect retired public entrypoints;
+- all five permanent CI jobs pass on the exact final review head;
+- fresh semantic review returns PASS with no actionable findings;
+- final live PR BASE/HEAD exactly match the reviewed identity immediately before merge.
 
 ## Out of scope
 
-Do not mix `/execution-plan` retirement, broad legacy `/projects/{id}` workflow migration, Product Orchestrator retirement, Stage8 runtime dependency migration/compatibility retirement, further Agent autonomy, provider-selection redesign, Production Direction redesign or Timeline identity work into this slice.
+Do not mix `/execution-plan` retirement, broad legacy `/projects/{id}` migration, Product Orchestrator retirement, Stage8 runtime/compatibility retirement, Production Direction redesign, Agent autonomy or Timeline identity work into PR #91.
+
+## After this slice
+
+After PR #91 merges, perform mandatory D-038 lifecycle closure to `idle`. Only after that closure merges may the accepted D-070 sequence continue with `execution-plan-retirement`.

@@ -23,9 +23,10 @@ class PreparedAudioApiTests(unittest.TestCase):
         app.dependency_overrides[get_project_store] = lambda: self.store
         app.dependency_overrides[get_prepared_audio_probe] = lambda: self._probe
         self.client = TestClient(app)
-        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Prepared speech"})
-        self.assertEqual(created.status_code, 201, created.text)
-        self.project_id = created.json()["project_id"]
+        self.project_id = self.store.create_project(
+            recipe_id="general_video",
+            title="Prepared speech",
+        ).project_id
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()

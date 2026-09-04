@@ -1,7 +1,7 @@
 """Browser evidence for the Product Orchestrator Narrated Video workspace.
 
 This is Class B informed regression evidence, not Class C cold-start acceptance: the
-Narrated recipe itself is selected through a UV-owned setup API. From the empty
+Narrated legacy identity is seeded directly as compatibility state. From the empty
 project onward, brief/script entry, image import, PreparedAudio import and final
 render are driven only through visible production UI controls.
 """
@@ -18,6 +18,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -140,12 +141,11 @@ class NarratedVideoBrowserOutcome(unittest.TestCase):
     def test_narrated_workspace_reaches_current_master_from_visible_inputs(self) -> None:
         page = self._new_page()
         title = "Narrated Video E2E"
-        project = _api_json(
-            "POST",
-            "/api/uv/projects",
-            {"title": title, "recipe_id": "narrated_video"},
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id="narrated_video",
         )
-        project_id = project["project_id"]
         encoded = urllib.parse.quote(project_id, safe="")
         page.goto(f"/projects/{encoded}")
 

@@ -1,8 +1,9 @@
 """Browser evidence for the preparation-only Product Orchestrator Story journey.
 
-This is Class B informed regression evidence: Story is selected through a UV-owned setup
-API, then brief entry, image import and workspace save are driven through visible UI.
-The proof intentionally asserts that no final Story render action is advertised.
+This is Class B informed regression evidence: Story legacy identity is seeded directly
+as compatibility state, then brief entry, image import and workspace save are driven
+through visible UI. The proof intentionally asserts that no final Story render action
+is advertised.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -112,8 +114,11 @@ class StoryBrowserOutcome(unittest.TestCase):
     def test_story_workspace_reaches_truthful_preparation_state_from_visible_inputs(self) -> None:
         page = self._new_page()
         title = "Story E2E"
-        project = _api_json("POST", "/api/uv/projects", {"title": title, "recipe_id": "story_video"})
-        project_id = project["project_id"]
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id="story_video",
+        )
         encoded = urllib.parse.quote(project_id, safe="")
 
         page.goto(f"/projects/{encoded}")

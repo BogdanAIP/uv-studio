@@ -16,6 +16,7 @@ from typing import Any
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -171,8 +172,11 @@ class Stage8CompositionBrowserOutcomes(unittest.TestCase):
         return page
 
     def _create_project(self, title: str, recipe_id: str) -> tuple[str, str]:
-        created = _api_json("POST", "/api/uv/projects", {"title": title, "recipe_id": recipe_id})
-        project_id = created["project_id"]
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id=recipe_id,
+        )
         return project_id, urllib.parse.quote(project_id, safe="")
 
     def _assert_workspace(self, encoded_id: str, recipe_id: str, kind: str, role: str) -> None:

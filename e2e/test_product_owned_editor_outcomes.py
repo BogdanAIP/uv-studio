@@ -10,10 +10,23 @@ Product Orchestrator-owned workspace.
 from __future__ import annotations
 
 import json
+import urllib.parse
 
 from playwright.sync_api import expect
 
+from legacy_project_fixture import seed_legacy_project
 import test_user_outcomes as legacy
+
+
+def _seed_legacy_workspace(test_case: legacy.BrowserUserOutcomes, page, *, title: str, recipe_id: str) -> str:
+    project_id = seed_legacy_project(
+        test_case.temp_root / "projects",
+        title=title,
+        recipe_id=recipe_id,
+    )
+    page.goto(f"/projects/{urllib.parse.quote(project_id, safe='')}")
+    expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()
+    return project_id
 
 
 class ProductOwnedTargetedEditBrowserOutcome(legacy.BrowserUserOutcomes):
@@ -24,7 +37,8 @@ class ProductOwnedTargetedEditBrowserOutcome(legacy.BrowserUserOutcomes):
     def test_targeted_edit_reaches_accepted_render_without_foreign_panels(self) -> None:
         page = self._new_page()
         try:
-            project_id = self._create_project_via_api(
+            project_id = _seed_legacy_workspace(
+                self,
                 page,
                 title="E2E Product-owned Targeted Edit",
                 recipe_id="free_project",
@@ -69,7 +83,8 @@ class ProductOwnedSequenceContinuityBrowserOutcome(legacy.BrowserUserOutcomes):
     def test_story_owns_two_shot_sequence_review_accept_and_reanchor(self) -> None:
         page = self._new_page()
         try:
-            project_id = self._create_project_via_api(
+            project_id = _seed_legacy_workspace(
+                self,
                 page,
                 title="E2E Product-owned Story Continuity",
                 recipe_id="story_video",

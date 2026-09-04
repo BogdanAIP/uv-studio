@@ -24,12 +24,9 @@ class ProjectExecutionApiTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _create(self, recipe_id: str) -> str:
-        response = self.client.post(
-            "/api/uv/projects",
-            json={"title": recipe_id, "recipe_id": recipe_id},
-        )
-        self.assertEqual(response.status_code, 201, response.text)
-        return response.json()["project_id"]
+        """Create a legacy compatibility fixture without reopening public creation."""
+
+        return self.store.create_project(title=recipe_id, recipe_id=recipe_id).project_id
 
     def _create_preserved(self, recipe_id: str) -> str:
         """Create a recovered-project fixture without reopening public creation."""

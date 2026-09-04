@@ -19,12 +19,10 @@ class MusicWorkflowApiTests(unittest.TestCase):
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        created = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Music Product Orchestrator", "recipe_id": "music_video"},
-        )
-        self.assertEqual(created.status_code, 201, created.text)
-        self.project_id = created.json()["project_id"]
+        self.project_id = self.store.create_project(
+            title="Music Product Orchestrator",
+            recipe_id="music_video",
+        ).project_id
         self._source("song", "audio", b"music-workflow-song", 10_000_000, ".wav")
         self._source("clip_a", "video", b"music-workflow-video-a", 12_000_000, ".mp4")
         self._source("clip_b", "video", b"music-workflow-video-b", 12_000_000, ".mp4")

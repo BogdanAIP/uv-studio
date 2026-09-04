@@ -25,9 +25,10 @@ class DubbingRenderRealMediaTests(unittest.TestCase):
         self.store = ProjectStore(self.root / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Real dubbing render"})
-        self.assertEqual(created.status_code, 201, created.text)
-        self.project_id = created.json()["project_id"]
+        self.project_id = self.store.create_project(
+            title="Real dubbing render",
+            recipe_id="general_video",
+        ).project_id
         self.source = self._create_source()
         self.audio = self._create_prepared_speech()
 

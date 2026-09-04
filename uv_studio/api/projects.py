@@ -23,8 +23,6 @@ from uv_studio.api.project_common import (
     get_project_store,
     project_payload,
 )
-from uv_studio.api.recipes import get_recipe_registry
-from uv_studio.orchestration.catalog import is_recipe_creatable
 from uv_studio.projects.archive import ProjectArchiveError, export_project, import_project
 from uv_studio.projects.models import ProjectValidationError
 from uv_studio.projects.store import (
@@ -33,32 +31,15 @@ from uv_studio.projects.store import (
     ProjectStore,
     ProjectStoreError,
 )
-from uv_studio.recipes import UnknownRecipe
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Projects"])
 MAX_ARCHIVE_UPLOAD_BYTES = 100 * 1024**3
-
-
-class CreateProjectRequest(BaseModel):
-    """Legacy/compatibility recipe project creation.
-
-    Modern Studio creation uses ``POST /api/uv/projects/studio``. Recipe identity
-    is explicit here so new callers cannot accidentally inherit ``general_video``.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    title: str = Field(min_length=1, max_length=500)
-    recipe_id: str = Field(min_length=1, max_length=128)
-    settings: dict[str, Any] = Field(default_factory=dict)
-    extensions: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdateProjectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=500)
-    recipe_id: str | None = None
     settings: dict[str, Any] | None = None
     extensions: dict[str, Any] | None = None
 
@@ -68,28 +49,6 @@ class UpdateProjectRequest(BaseModel):
             if getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null")
         return self
-
-
-def _require_known_recipe(recipe_id: str) -> None:
-    try:
-        get_recipe_registry().get(recipe_id)
-    except UnknownRecipe as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unknown recipe_id: {recipe_id}",
-        ) from exc
-
-
-def _require_creatable_recipe(recipe_id: str) -> None:
-    _require_known_recipe(recipe_id)
-    if not is_recipe_creatable(recipe_id):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Recipe {recipe_id!r} is preserved for compatibility but is not currently "
-                "available for new project creation"
-            ),
-        )
 
 
 def _translate_store_error(exc: Exception) -> HTTPException:
@@ -121,26 +80,6 @@ def list_projects(store: ProjectStore = Depends(get_project_store)) -> list[Proj
     try:
         return [project_payload(item) for item in store.list_projects()]
     except (ProjectValidationError, ProjectStoreError) as exc:
-        raise _translate_store_error(exc) from exc
-
-
-@router.post("", response_model=ProjectPayload, status_code=status.HTTP_201_CREATED)
-def create_project(
-    request: CreateProjectRequest,
-    store: ProjectStore = Depends(get_project_store),
-) -> ProjectPayload:
-    """Create an explicit legacy/recipe compatibility project."""
-
-    _require_creatable_recipe(request.recipe_id)
-    try:
-        document = store.create_project(
-            title=request.title,
-            recipe_id=request.recipe_id,
-            settings=request.settings,
-            extensions=request.extensions,
-        )
-        return project_payload(document)
-    except (ProjectValidationError, ProjectAlreadyExists, ProjectStoreError) as exc:
         raise _translate_store_error(exc) from exc
 
 
@@ -240,13 +179,10 @@ def update_project(
     store: ProjectStore = Depends(get_project_store),
 ) -> ProjectPayload:
     changes = request.model_fields_set
-    if "recipe_id" in changes and request.recipe_id is not None:
-        _require_creatable_recipe(request.recipe_id)
     try:
         document = store.update_project(
             project_id,
             title=request.title if "title" in changes else None,
-            recipe_id=request.recipe_id if "recipe_id" in changes else None,
             settings=request.settings if "settings" in changes else None,
             extensions=request.extensions if "extensions" in changes else None,
         )

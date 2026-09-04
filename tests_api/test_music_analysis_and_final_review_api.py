@@ -29,9 +29,7 @@ class MusicAnalysisAndFinalReviewApiTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _project(self, title: str = "Music HTTP") -> str:
-        response = self.client.post("/api/uv/projects", json={"title": title, "recipe_id": "music_video"})
-        self.assertEqual(response.status_code, 201, response.text)
-        return response.json()["project_id"]
+        return self.store.create_project(title=title, recipe_id="music_video").project_id
 
     def _reference(self, project_id: str, *, ref_id: str, kind: str, path: str, payload: bytes, duration_us: int, artifact: bool = False, metadata: dict[str, object] | None = None) -> ProjectReference:
         target = self.store.project_directory(project_id) / path

@@ -1,7 +1,7 @@
 """Browser evidence for the Product Orchestrator General Video workspace.
 
 This is Class B informed regression evidence, not Class C cold-start acceptance: the
-General Video recipe itself is selected through a UV-owned setup API. From the empty
+General Video recipe itself is seeded as legacy compatibility state. From the empty
 project onward, brief entry, image/video import, workspace save and final render are
 driven only through visible production UI controls.
 """
@@ -18,6 +18,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, expect, sync_playwright
 
+from legacy_project_fixture import seed_legacy_project
 from test_user_outcomes import (
     BACKEND_ORIGIN,
     FRONTEND,
@@ -120,8 +121,11 @@ class GeneralVideoBrowserOutcome(unittest.TestCase):
     def test_general_workspace_reaches_current_master_from_visible_inputs(self) -> None:
         page = self._new_page()
         title = "General Video E2E"
-        project = _api_json("POST", "/api/uv/projects", {"title": title, "recipe_id": "general_video"})
-        project_id = project["project_id"]
+        project_id = seed_legacy_project(
+            self.temp_root / "projects",
+            title=title,
+            recipe_id="general_video",
+        )
         encoded = urllib.parse.quote(project_id, safe="")
         page.goto(f"/projects/{encoded}")
         expect(page.get_by_role("heading", name=title, exact=True)).to_be_visible()

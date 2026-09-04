@@ -27,12 +27,10 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         self.store = ProjectStore(self.root / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
-        created = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Real Music Video render", "recipe_id": "music_video"},
-        )
-        self.assertEqual(created.status_code, 201, created.text)
-        self.project_id = created.json()["project_id"]
+        self.project_id = self.store.create_project(
+            title="Real Music Video render",
+            recipe_id="music_video",
+        ).project_id
         self.clip_a = self._create_video("red-clip.mkv", "red", 440)
         self.clip_b = self._create_video("blue-clip.mkv", "blue", 660)
         self.song = self._create_song("master-song.wav", 880)

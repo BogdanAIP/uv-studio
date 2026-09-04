@@ -24,26 +24,36 @@ class ProjectsApiTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
+    def _create_studio_project(self, title: str = "API Project") -> dict[str, object]:
+        response = self.client.post(
+            "/api/uv/projects/studio",
+            json={"title": title, "direction_id": "free_project"},
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        return response.json()
+
     def test_upstream_health_route_remains_available(self) -> None:
         response = self.client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
     def test_create_list_get_and_update_project(self) -> None:
-        create = self.client.post(
-            "/api/uv/projects",
+        created = self._create_studio_project()
+        project_id = created["project_id"]
+        self.assertEqual(created["schema_version"], 2)
+        self.assertEqual(created["title"], "API Project")
+        self.assertEqual(created["product_identity"]["kind"], "modern_direction")
+        self.assertEqual(created["product_identity"]["direction_id"], "free_project")
+
+        updated = self.client.patch(
+            f"/api/uv/projects/{project_id}",
             json={
-                "title": "API Project",
-                "recipe_id": "general_video",
+                "title": "Updated API Project",
                 "settings": {"aspect_ratio": "16:9"},
             },
         )
-        self.assertEqual(create.status_code, 201, create.text)
-        created = create.json()
-        project_id = created["project_id"]
-        self.assertEqual(created["schema_version"], 2)
-        self.assertEqual(created["recipe_id"], "general_video")
-        self.assertEqual(created["title"], "API Project")
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["title"], "Updated API Project")
 
         listed = self.client.get("/api/uv/projects")
         self.assertEqual(listed.status_code, 200)
@@ -53,26 +63,22 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertEqual(fetched.status_code, 200)
         self.assertEqual(fetched.json()["settings"]["aspect_ratio"], "16:9")
 
-        updated = self.client.patch(
-            f"/api/uv/projects/{project_id}",
-            json={"title": "Updated API Project", "extensions": {"demo": {"enabled": True}}},
-        )
-        self.assertEqual(updated.status_code, 200, updated.text)
-        self.assertEqual(updated.json()["title"], "Updated API Project")
-
         fresh_store = ProjectStore(self.project_root)
         persisted = fresh_store.load_project(project_id)
         self.assertEqual(persisted.title, "Updated API Project")
-        self.assertTrue(persisted.extensions["demo"]["enabled"])
+        self.assertEqual(persisted.settings["aspect_ratio"], "16:9")
+        self.assertEqual(persisted.extensions["studio"]["direction_id"], "free_project")
 
-    def test_create_rejects_nonfinite_nested_project_state(self) -> None:
-        response = self.client.post(
-            "/api/uv/projects",
-            content='{"title":"Bad JSON","recipe_id":"general_video","settings":{"nested":{"value":NaN}}}',
+    def test_update_rejects_nonfinite_nested_project_state(self) -> None:
+        created = self._create_studio_project("Bad JSON Guard")
+        project_id = created["project_id"]
+        response = self.client.patch(
+            f"/api/uv/projects/{project_id}",
+            content='{"settings":{"nested":{"value":NaN}}}',
             headers={"Content-Type": "application/json"},
         )
         self.assertEqual(response.status_code, 422, response.text)
-        self.assertEqual(list(self.project_root.iterdir()), [])
+        self.assertEqual(self.store.load_project(project_id).settings, {})
 
     def test_list_projects_skips_corrupt_project_without_changing_response_shape(self) -> None:
         self.store.create_project(recipe_id="general_video", title="Healthy A", project_id="prj_api_healthy_a")
@@ -96,11 +102,13 @@ class ProjectsApiTests(unittest.TestCase):
         self.assertEqual([item.project_id for item in diagnostics], ["prj_api_corrupt"])
 
     def test_archive_export_and_import_round_trip(self) -> None:
-        created = self.client.post(
-            "/api/uv/projects",
-            json={"recipe_id": "general_video", "title": "Archive API", "settings": {"quality": "preview"}},
-        ).json()
+        created = self._create_studio_project("Archive API")
         project_id = created["project_id"]
+        patch = self.client.patch(
+            f"/api/uv/projects/{project_id}",
+            json={"settings": {"quality": "preview"}},
+        )
+        self.assertEqual(patch.status_code, 200, patch.text)
         source_file = self.store.project_path(project_id).parent / "sources" / "input.txt"
         source_file.write_text("portable source", encoding="utf-8")
 
@@ -158,15 +166,16 @@ class ProjectsApiTests(unittest.TestCase):
         response = self.client.get("/api/uv/projects/bad$id")
         self.assertEqual(response.status_code, 422)
 
-    def test_invalid_recipe_is_422(self) -> None:
+    def test_recipe_backed_project_creation_is_retired(self) -> None:
         response = self.client.post(
             "/api/uv/projects",
-            json={"title": "Bad Recipe", "recipe_id": "../escape"},
+            json={"title": "Legacy Create", "recipe_id": "general_video"},
         )
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 405, response.text)
+        self.assertEqual(self.store.list_projects(), [])
 
     def test_update_rejects_explicit_null(self) -> None:
-        created = self.client.post("/api/uv/projects", json={"recipe_id": "general_video", "title": "Null Test"}).json()
+        created = self._create_studio_project("Null Test")
         response = self.client.patch(
             f"/api/uv/projects/{created['project_id']}",
             json={"title": None},
