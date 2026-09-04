@@ -5,7 +5,7 @@ from __future__ import annotations
 from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailability
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.capabilities.selection import NoEligibleOffer, SelectionPolicy, select_offer
-from uv_studio.projects.models import ProjectDocument, ProjectReference
+from uv_studio.projects.models import ProjectDocument, ProjectReference, compatibility_recipe_id
 from uv_studio.projects.source_media import (
     ProjectSourceMediaStore,
     SourceMediaError,
@@ -46,9 +46,10 @@ def _unsupported_recipe(
     project: ProjectDocument,
     recipe: RecipeDefinition,
 ) -> ProjectWorkflowState:
+    recipe_id = compatibility_recipe_id(project)
     return ProjectWorkflowState(
         project_id=project.project_id,
-        recipe_id=project.recipe_id,
+        recipe_id=recipe_id,
         recipe_title=recipe.title,
         readiness=WorkflowReadiness.PARTIAL,
         summary="Этот сценарий ещё не перенесён в Product Orchestrator.",
@@ -64,7 +65,7 @@ def _unsupported_recipe(
                 code="workflow_not_migrated",
                 severity="info",
                 message=(
-                    f"Recipe {project.recipe_id!r} сохраняет канонический проект, "
+                    f"Recipe {recipe_id!r} сохраняет канонический проект, "
                     "но пока не имеет продуктовой workflow-проекции."
                 ),
             ),
@@ -252,7 +253,7 @@ def _photo_workflow(
 
     return ProjectWorkflowState(
         project_id=project.project_id,
-        recipe_id=project.recipe_id,
+        recipe_id=compatibility_recipe_id(project),
         recipe_title=recipe.title,
         readiness=readiness,
         summary=summary,
@@ -488,7 +489,7 @@ def _visualizer_workflow(
 
     return ProjectWorkflowState(
         project_id=project.project_id,
-        recipe_id=project.recipe_id,
+        recipe_id=compatibility_recipe_id(project),
         recipe_title=recipe.title,
         readiness=readiness,
         summary=summary,
@@ -517,11 +518,12 @@ def project_workflow_state(
 ) -> ProjectWorkflowState:
     """Project user intent into truthful readiness and semantic next actions."""
 
+    recipe_id = compatibility_recipe_id(project)
     if recipe is None:
         return ProjectWorkflowState(
             project_id=project.project_id,
-            recipe_id=project.recipe_id,
-            recipe_title=project.recipe_id,
+            recipe_id=recipe_id,
+            recipe_title=recipe_id,
             readiness=WorkflowReadiness.UNAVAILABLE,
             summary="Сценарий проекта отсутствует в текущей версии UV Studio.",
             current_outcome=None,
@@ -535,17 +537,17 @@ def project_workflow_state(
                 WorkflowDiagnostic(
                     code="recipe_unknown",
                     severity="error",
-                    message=f"Recipe {project.recipe_id!r} не зарегистрирован в текущем runtime.",
+                    message=f"Recipe {recipe_id!r} не зарегистрирован в текущем runtime.",
                 ),
             ),
         )
-    if project.recipe_id != recipe.recipe_id:
+    if recipe_id != recipe.recipe_id:
         raise ValueError("project and recipe identifiers do not match")
-    if project.recipe_id == _PHOTO_RECIPE_ID:
+    if recipe_id == _PHOTO_RECIPE_ID:
         return _photo_workflow(project, recipe, registry, source_media)
-    if project.recipe_id == _VISUALIZER_RECIPE_ID:
+    if recipe_id == _VISUALIZER_RECIPE_ID:
         return _visualizer_workflow(project, recipe, registry, source_media)
-    if project.recipe_id == "music_video":
+    if recipe_id == "music_video":
         from .music import music_workflow_state
 
         return music_workflow_state(project, recipe, registry, source_media)

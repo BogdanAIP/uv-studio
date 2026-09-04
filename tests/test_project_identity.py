@@ -15,6 +15,7 @@ from uv_studio.projects.identity import (
     require_modern_studio_identity,
     studio_project_extensions,
 )
+from uv_studio.projects.models import PROJECT_SCHEMA_VERSION, compatibility_recipe_id
 from uv_studio.projects.store import ProjectStore
 
 
@@ -38,6 +39,29 @@ class ProjectIdentityTests(unittest.TestCase):
         self.assertEqual(identity.product_model, "production_directions")
         self.assertEqual(identity.direction_id, "micro_drama")
         self.assertEqual(classify_project_identity(project).kind, "modern_direction")
+        self.assertEqual(compatibility_recipe_id(project), STUDIO_COMPAT_RECIPE_ID)
+
+    def test_schema_v1_unknown_recipe_remains_exact_legacy_compatibility(self) -> None:
+        project = self.store.create_project(
+            title="Historical",
+            recipe_id="general_video",
+            project_id="prj_historical_recipe",
+        )
+        path = self.store.project_path(project.project_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw.pop("compatibility")
+        raw["schema_version"] = 1
+        raw["recipe_id"] = "unknown_recipe_1999"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        loaded = self.store.load_project(project.project_id)
+        projection = classify_project_identity(loaded)
+
+        self.assertEqual(loaded.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(compatibility_recipe_id(loaded), "unknown_recipe_1999")
+        self.assertEqual(projection.kind, "legacy_compatibility")
+        self.assertEqual(projection.compatibility_kind, "recipe")
+        self.assertIn("unknown_recipe_1999", projection.reason or "")
 
     def test_pr63_schema_version_two_remains_a_modern_direction(self) -> None:
         project = self.store.create_project(
@@ -69,7 +93,7 @@ class ProjectIdentityTests(unittest.TestCase):
         )
         path = self.store.project_path(project.project_id)
         raw = json.loads(path.read_text(encoding="utf-8"))
-        raw["recipe_id"] = STUDIO_COMPAT_RECIPE_ID
+        raw["compatibility"]["recipe_id"] = STUDIO_COMPAT_RECIPE_ID
         raw["extensions"] = {
             "studio": {
                 "schema_version": 1,
@@ -138,6 +162,7 @@ class ProjectIdentityTests(unittest.TestCase):
         identity = require_modern_studio_identity(imported)
         self.assertEqual(identity.direction_id, "commercial")
         self.assertEqual(classify_project_identity(imported).kind, "modern_direction")
+        self.assertEqual(compatibility_recipe_id(imported), STUDIO_COMPAT_RECIPE_ID)
 
     def test_tampered_archive_identity_is_rejected_before_canonical_commit(self) -> None:
         project = self.store.create_project(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -17,6 +18,10 @@ from uv_studio.capabilities.models import CapabilityOffer, MediaKind, OfferAvail
 from uv_studio.capabilities.selection import SelectionPolicy
 from uv_studio.production.commands import ProductionSemanticService
 from uv_studio.projects.models import PROJECT_SCHEMA_VERSION, ProjectReference
+from uv_studio.projects.root_staging import (
+    acquire_generation_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import PROJECT_FILENAME, ProjectStore
 from uv_studio.projects.transactions import ProjectUnitOfWork
 
@@ -197,10 +202,6 @@ class GenerationService:
         idempotency_key: str,
         authorization_token: str | None,
     ) -> GenerationSubmissionResult:
-        # One cross-runtime project critical section owns preparation, idempotency
-        # lookup, D-017 grant consumption and durable Job reservation. Agent, GUI,
-        # API and script callers therefore cannot reserve two Jobs for one key or
-        # consume a second grant after another runtime has already committed it.
         with self.jobs.records.project_lock(project_id):
             prepared = self.prepare(
                 project_id=project_id,
@@ -245,6 +246,7 @@ class GenerationService:
         if not isinstance(inputs, Mapping) or not isinstance(contract_raw, Mapping):
             return self._fail_running(running, attempt, "generation request lost inputs/contract")
 
+        staged_output: Path | None = None
         try:
             model = self.model_registry.get(model_id)
             offer = self.model_registry.capability_registry.get_offer(model.offer_id)
@@ -274,8 +276,14 @@ class GenerationService:
                 relative_path,
                 allowed_roots=("artifacts",),
             )
-            if output_path.exists():
+            if output_path.exists() or output_path.is_symlink():
                 raise GenerationOutputError("allocated generation output path already exists")
+
+            staged_output = acquire_generation_root_staging(
+                self.project_store.root,
+                attempt.attempt_id,
+                suffix,
+            )
 
             executor_metadata = self.executor.execute(
                 project_id=project_id,
@@ -285,65 +293,73 @@ class GenerationService:
                 offer=offer,
                 inputs=dict(inputs),
                 contract=contract,
-                output_path=output_path,
+                output_path=staged_output,
             )
             if not isinstance(executor_metadata, Mapping):
                 raise GenerationOutputError("generation executor metadata must be a JSON object")
-            self._validate_output(output_path)
+            self._validate_output(staged_output)
 
-            with self.project_store._lock:
+            with self.jobs.records.project_lock(project_id):
                 current = self.jobs.get(project_id, job_id)
                 if current.status is GenerationStatus.CANCELLED:
-                    output_path.unlink(missing_ok=True)
                     return current
                 if current.status is not GenerationStatus.RUNNING:
-                    output_path.unlink(missing_ok=True)
                     raise GenerationJobConflict(
                         f"generation job changed to {current.status.value!r} before materialization"
                     )
 
-                reference = self._register_artifact(
-                    project_id=project_id,
-                    artifact_id=artifact_id,
-                    relative_path=relative_path,
-                    output_path=output_path,
-                    model=model,
-                    offer=offer,
-                    job=current,
-                    attempt=attempt,
-                    contract=contract,
-                    executor_metadata=executor_metadata,
-                )
-                self.production.register_take(
+                fenced_output = self.project_store.resolve_project_file(
                     project_id,
-                    take_id=take_id,
-                    shot_id=shot_id,
-                    reference_id=reference.id,
-                    label=f"Generated · {model.title}",
-                    notes=f"Generation job {current.job_id}; attempt {attempt.attempt_id}",
+                    relative_path,
+                    allowed_roots=("artifacts",),
                 )
-                return self.jobs.succeed(
-                    project_id,
-                    job_id,
-                    attempt_id=attempt.attempt_id,
-                    output_reference_id=reference.id,
-                    take_id=take_id,
-                )
-        except Exception as exc:
-            output_path = locals().get("output_path")
-            if isinstance(output_path, Path):
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise GenerationOutputError("allocated generation output path already exists")
+
+                final_written = False
                 try:
-                    project = self.project_store.load_project(project_id)
-                    registered = any(
-                        item.path == output_path.relative_to(
-                            self.project_store.project_directory(project_id)
-                        ).as_posix()
-                        for item in project.artifacts
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    reference = self._register_artifact(
+                        project_id=project_id,
+                        artifact_id=artifact_id,
+                        relative_path=relative_path,
+                        output_path=fenced_output,
+                        model=model,
+                        offer=offer,
+                        job=current,
+                        attempt=attempt,
+                        contract=contract,
+                        executor_metadata=executor_metadata,
+                    )
+                    self.production.register_take(
+                        project_id,
+                        take_id=take_id,
+                        shot_id=shot_id,
+                        reference_id=reference.id,
+                        label=f"Generated · {model.title}",
+                        notes=f"Generation job {current.job_id}; attempt {attempt.attempt_id}",
+                    )
+                    return self.jobs.succeed(
+                        project_id,
+                        job_id,
+                        attempt_id=attempt.attempt_id,
+                        output_reference_id=reference.id,
+                        take_id=take_id,
                     )
                 except Exception:
-                    registered = True
-                if not registered:
-                    output_path.unlink(missing_ok=True)
+                    if final_written:
+                        try:
+                            current_project = self.project_store.load_project(project_id)
+                            registered = any(
+                                item.id == artifact_id for item in current_project.artifacts
+                            )
+                        except Exception:
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
+        except Exception as exc:
             try:
                 current = self.jobs.get(project_id, job_id)
                 if current.status is GenerationStatus.RUNNING:
@@ -356,6 +372,9 @@ class GenerationService:
             except Exception:
                 pass
             raise
+        finally:
+            if staged_output is not None:
+                release_root_staging(staged_output)
 
     def cancel(self, project_id: str, job_id: str) -> GenerationJob:
         return self.jobs.cancel(project_id, job_id)

@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GenerationWorkspacePanel } from '@/components/editor/GenerationWorkspacePanel';
 import { ProductionSemanticsPanel } from '@/components/editor/ProductionSemanticsPanel';
 import { getUVProject, type UVProject } from '@/lib/projectsApi';
@@ -37,19 +37,32 @@ export function ProductionWorkspacePanel({
   const [project, setProject] = useState<UVProject | null>(null);
   const [timeline, setTimeline] = useState<StudioTimeline | null>(null);
   const [history, setHistory] = useState<ProjectHistoryState | null>(null);
+  const [semanticsRefreshRevision, setSemanticsRefreshRevision] = useState(0);
+  const observedHistoryCursor = useRef<number | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (notifySemantics = true) => {
     const [projectValue, timelineValue, historyValue] = await Promise.all([
       getUVProject(projectId),
       getStudioTimeline(projectId),
       getProjectHistory(projectId),
     ]);
+    const historyChanged = observedHistoryCursor.current !== historyValue.cursor;
+    observedHistoryCursor.current = historyValue.cursor;
     setProject(projectValue);
     setTimeline(timelineValue);
     setHistory(historyValue);
+    if (notifySemantics && historyChanged) {
+      // This is deliberately monotonic rather than the history cursor itself.
+      // Internal production commands refresh their child while busy and then
+      // update observedHistoryCursor without signalling another load. Undo can
+      // therefore return to an older numeric cursor that the child has already
+      // seen. A revision token still changes for that genuine external history
+      // transition and reliably reloads the canonical production semantics.
+      setSemanticsRefreshRevision(current => current + 1);
+    }
     const visualSources = projectValue.sources.filter(
       source => source.kind === 'video' || source.kind === 'image',
     );
@@ -87,7 +100,14 @@ export function ProductionWorkspacePanel({
   );
 
   const handleProjectChanged = useCallback(async () => {
-    await refresh();
+    // ProductionSemanticsPanel already reloads its own command result while the
+    // form is busy. Refresh the parent-owned Project/Timeline/History snapshot,
+    // but remember that cursor without re-signalling the child. If the outer
+    // refreshRevision subsequently observes the same cursor, refresh() sees it
+    // as already observed and avoids a late duplicate child load that could
+    // overwrite newly entered local form text. A genuinely different external
+    // cursor (for example undo/redo) increments semanticsRefreshRevision.
+    await refresh(false);
     onProjectChanged();
   }, [onProjectChanged, refresh]);
 
@@ -144,12 +164,12 @@ export function ProductionWorkspacePanel({
         </div>
 
         <ProductionSemanticsPanel
-          key={`${projectId}:${history.cursor}`}
+          key={projectId}
           projectId={projectId}
           project={project}
           selectedSource={selectedSource}
           timelineDurationUs={timelineEnd(timeline)}
-          historyCursor={history.cursor}
+          historyCursor={semanticsRefreshRevision}
           onProjectChanged={handleProjectChanged}
         />
 

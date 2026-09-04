@@ -11,7 +11,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.models import (
+    ProjectReference,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 from uv_studio.projects.prepared_audio import PreparedAudioError, ProjectPreparedAudioStore
 from uv_studio.projects.source_media import ProjectSourceMediaStore, SourceMediaError
 from uv_studio.projects.stage8_workspace import Stage8WorkspaceError, get_stage8_workspace
@@ -136,7 +140,7 @@ def render_narrated_workspace(
     audio_id = audio_id.strip()
 
     project = adapter.store.load_project(project_id)
-    if project.recipe_id != _RECIPE_ID:
+    if compatibility_recipe_id(project) != _RECIPE_ID:
         raise InvalidCapabilityInput("video.render_narrated is available only for narrated_video")
     try:
         workspace = get_stage8_workspace(adapter.store, project_id)

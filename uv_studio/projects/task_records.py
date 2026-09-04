@@ -109,6 +109,10 @@ class ProjectTaskRecordStore:
         )
 
     def _project_lock_path(self, project_id: str) -> Path:
+        project_dir = self.project_store.project_directory(project_id)
+        lexical_lock_path = project_dir / "tasks" / self.LOCK_FILE_NAME
+        if lexical_lock_path.is_symlink():
+            raise ProjectTaskRecordConflict("project lock path must not be a symlink")
         return self.project_store.resolve_project_file(
             project_id,
             f"tasks/{self.LOCK_FILE_NAME}",

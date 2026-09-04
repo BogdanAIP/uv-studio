@@ -1,20 +1,48 @@
-"""Restart recovery for durable generation Jobs.
+"""Restart recovery for durable generation Jobs and interrupted media publication.
 
 In-process FastAPI background tasks are deliberately not treated as durable workers.
-If the process exits, persisted queued/running Jobs are converted to explicit failed
-attempts on the next application startup. The user can then retry through the normal
-Job API, which re-runs D-017 authorization instead of silently spending/contacting a
-provider after restart.
+If the process exits, persisted queued/running Jobs are reconciled on the next
+application startup. Provider work is never replayed automatically. Canonical
+managed output bytes that were published without owning metadata are moved out of
+the project tree before abandoned Jobs are failed; Generation attempts whose
+artifact metadata is already durable are completed from canonical evidence instead.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
+import re
 import uuid
 from dataclasses import replace
+from pathlib import Path
+from typing import Any
 
-from uv_studio.projects.models import utc_now_iso
+from uv_studio.production.commands import ProductionSemanticService
+from uv_studio.production.semantics import (
+    PRODUCTION_SEMANTICS_PATH,
+    ProductionSemanticError,
+    ProductionSemanticsDocument,
+)
+from uv_studio.projects.generation_authority import (
+    GenerationReferenceAuthorityError,
+    merge_reference_variants,
+    validate_generation_reference_bytes,
+)
+from uv_studio.projects.models import (
+    ProjectDocument,
+    ProjectReference,
+    utc_now_iso,
+)
+from uv_studio.projects.publication import recover_managed_publications
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
+from uv_studio.projects.transactions import (
+    ProjectTransactionError,
+    ProjectUnitOfWork,
+    _snapshot_content,
+)
 
 from .jobs import (
     GenerationExecutionAttempt,
@@ -36,12 +64,556 @@ INTERRUPTED_RUNNING_ERROR = (
     "and no automatic rerun was attempted; explicit retry is required"
 )
 
+_MANAGED_OUTPUT_ROOTS = ("sources", "assets", "artifacts", "exports")
+_CRASH_IDENTIFIABLE_OUTPUT_NAME = re.compile(
+    r"^\.?(?:src_[0-9a-f]{32}|art_[0-9a-f]{32}|aud_[0-9a-f]{32}|sub_[0-9a-f]{32}|generated_attempt_[0-9a-f]{32})(?:[._-]|$)"
+)
+
 
 def _persist(manager: GenerationJobManager, job: GenerationJob) -> GenerationJob:
     """Persist one recovery transition through the existing project task store."""
 
     manager.records.write(job.project_id, job.job_id, job.to_dict())
     return job
+
+
+def _registered_output_paths(project: ProjectDocument) -> set[str]:
+    return {item.path for item in (*project.sources, *project.artifacts)}
+
+
+def _merge_redo_references(
+    store: ProjectStore,
+    project_id: str,
+    references: tuple[ProjectReference, ...],
+) -> tuple[ProjectReference, ...]:
+    try:
+        return merge_reference_variants(
+            store,
+            project_id,
+            references,
+            label="Generation recovery redo",
+        )
+    except GenerationReferenceAuthorityError as exc:
+        raise GenerationJobError(
+            f"generation recovery found ambiguous redo reference authority: {exc}"
+        ) from exc
+
+
+def _redoable_output_references(store: ProjectStore, project_id: str) -> tuple[ProjectReference, ...]:
+    """Return full managed reference authority reachable through the current Redo branch."""
+
+    try:
+        documents = ProjectUnitOfWork(store).redo_project_documents(project_id)
+    except ProjectTransactionError as exc:
+        raise GenerationJobError("generation recovery found invalid UOW redo history") from exc
+    return _merge_redo_references(
+        store,
+        project_id,
+        tuple(
+            reference
+            for document in documents
+            for reference in (*document.sources, *document.artifacts)
+        ),
+    )
+
+
+def _validate_redo_generation_references(
+    manager: GenerationJobManager,
+    project_id: str,
+    references: tuple[ProjectReference, ...],
+) -> None:
+    """Prove exact bytes/provenance before any redo-owned Generation path is preserved."""
+
+    for reference in references:
+        if not isinstance(reference.metadata.get("generation"), dict):
+            continue
+        try:
+            validate_generation_reference_bytes(
+                manager.project_store,
+                project_id,
+                reference,
+            )
+        except GenerationReferenceAuthorityError as exc:
+            raise GenerationJobError(
+                f"generation recovery redo-owned Generation authority is invalid: {exc}"
+            ) from exc
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _snapshot_production(snapshot: Any) -> ProductionSemanticsDocument | None:
+    try:
+        content = _snapshot_content(snapshot)
+        if content is None:
+            return None
+        raw = json.loads(content.decode("utf-8"))
+        return ProductionSemanticsDocument.from_dict(raw)
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        ProductionSemanticError,
+        ProjectTransactionError,
+    ) as exc:
+        raise GenerationJobError(
+            "generation recovery found invalid Production Take history"
+        ) from exc
+
+
+def _generation_take_history(
+    store: ProjectStore,
+    project_id: str,
+    *,
+    shot_id: str,
+    reference_id: str,
+) -> tuple[str, str | None] | None:
+    """Resolve one historical Take registration and its latest Undo/Redo operation.
+
+    If no committed ``production.register_take`` transaction ever created a Take for
+    this exact Shot/artifact pair, recovery may still be completing the pre-Take
+    crash boundary and is allowed to create the missing Take. If such a transaction
+    exists, its durable operation history decides whether absence is an explicit user
+    Undo or inconsistent state. Multiple matching creations are ambiguous and fail
+    closed rather than inventing another Take identity.
+    """
+
+    uow = ProjectUnitOfWork(store)
+    try:
+        uow.history(project_id)
+    except ProjectTransactionError as exc:
+        raise GenerationJobError("generation recovery found invalid UOW history") from exc
+
+    project_dir = store.project_directory(project_id)
+    transactions_dir = project_dir / "history" / "transactions"
+    operations_dir = project_dir / "history" / "operations"
+    if transactions_dir.is_symlink() or not transactions_dir.is_dir():
+        raise GenerationJobError("generation recovery Take transaction history is unsafe")
+    if operations_dir.is_symlink() or not operations_dir.is_dir():
+        raise GenerationJobError("generation recovery Take operation history is unsafe")
+
+    candidates: list[tuple[str, str]] = []
+    for path in sorted(transactions_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise GenerationJobError("generation recovery Take transaction history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise GenerationJobError("generation recovery Take transaction history is invalid") from exc
+        if (
+            record.get("phase") != "committed"
+            or record.get("operation") != "commit"
+            or record.get("command") != "production.register_take"
+        ):
+            continue
+        transaction_id = record.get("transaction_id")
+        changes = record.get("changes")
+        if not isinstance(transaction_id, str) or not transaction_id:
+            raise GenerationJobError("generation recovery Take transaction lost identity")
+        if not isinstance(changes, list):
+            raise GenerationJobError("generation recovery Take transaction has invalid changes")
+        for change in changes:
+            try:
+                relative, before, after = uow._validated_change(change)
+            except ProjectTransactionError as exc:
+                raise GenerationJobError(
+                    "generation recovery Take transaction change is invalid"
+                ) from exc
+            if relative != PRODUCTION_SEMANTICS_PATH:
+                continue
+            before_doc = _snapshot_production(before)
+            after_doc = _snapshot_production(after)
+            before_ids = set() if before_doc is None else {take.take_id for take in before_doc.takes}
+            if after_doc is None:
+                continue
+            for take in after_doc.takes:
+                if take.take_id in before_ids:
+                    continue
+                if take.shot_id == shot_id and take.reference_id == reference_id:
+                    candidates.append((take.take_id, transaction_id))
+
+    candidates = sorted(set(candidates))
+    if not candidates:
+        return None
+    if len(candidates) != 1:
+        raise GenerationJobError("generation recovery Take history is ambiguous")
+    take_id, transaction_id = candidates[0]
+
+    operations: list[tuple[str, str, str]] = []
+    for path in sorted(operations_dir.glob("*.json"), key=lambda item: item.name):
+        if path.is_symlink() or not path.is_file():
+            raise GenerationJobError("generation recovery Take operation history is unsafe")
+        try:
+            record = uow._load_record(path)
+        except ProjectTransactionError as exc:
+            raise GenerationJobError("generation recovery Take operation history is invalid") from exc
+        if record.get("phase") != "committed" or record.get("transaction_id") != transaction_id:
+            continue
+        operation = record.get("operation")
+        created_at = record.get("created_at")
+        record_id = record.get("record_id")
+        if operation not in {"undo", "redo"}:
+            continue
+        if not isinstance(created_at, str) or not created_at:
+            raise GenerationJobError("generation recovery Take operation lost created_at")
+        if not isinstance(record_id, str) or not record_id:
+            raise GenerationJobError("generation recovery Take operation lost identity")
+        operations.append((created_at, record_id, operation))
+
+    if not operations:
+        return take_id, None
+    operations.sort()
+    if len(operations) >= 2 and operations[-1][0] == operations[-2][0]:
+        raise GenerationJobError("generation recovery Take operation ordering is ambiguous")
+    return take_id, operations[-1][2]
+
+
+def _quarantine_unregistered_managed_outputs(
+    store: ProjectStore,
+    project_id: str,
+    redoable_references: tuple[ProjectReference, ...],
+) -> tuple[Path, ...]:
+    """Move crash-identifiable unregistered publisher bytes out of the project tree."""
+
+    project = store.load_project(project_id)
+    registered = _registered_output_paths(project)
+    redoable = {reference.path for reference in redoable_references}
+    project_dir = store.project_directory(project_id)
+    quarantined: list[Path] = []
+    for root_name in _MANAGED_OUTPUT_ROOTS:
+        root = project_dir / root_name
+        if root.is_symlink():
+            raise ProjectStoreError(f"managed output root must not be a symlink: {root_name!r}")
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+            if path.is_symlink():
+                raise ProjectStoreError(f"managed output entry must not be a symlink: {path}")
+            if not path.is_file():
+                continue
+            relative = path.relative_to(project_dir).as_posix()
+            if (
+                relative in registered
+                or relative in redoable
+                or _CRASH_IDENTIFIABLE_OUTPUT_NAME.match(path.name) is None
+            ):
+                continue
+            destination = store.root / (
+                f".uv-recovered-orphan-{project_id}-{uuid.uuid4().hex}-{path.name}"
+            )
+            if destination.exists() or destination.is_symlink():
+                raise ProjectStoreError(
+                    f"managed output quarantine path unexpectedly exists: {destination.name!r}"
+                )
+            os.replace(path, destination)
+            quarantined.append(destination)
+            logger.warning(
+                "moved unregistered managed output out of project %s: %s -> %s",
+                project_id,
+                relative,
+                destination.name,
+            )
+    return tuple(quarantined)
+
+
+def _matching_generation_artifacts(
+    project: ProjectDocument,
+    job: GenerationJob,
+    attempt: GenerationExecutionAttempt,
+) -> tuple[ProjectReference, ...]:
+    matches: list[ProjectReference] = []
+    for artifact in project.artifacts:
+        generation = artifact.metadata.get("generation")
+        if not isinstance(generation, dict):
+            continue
+        if (
+            generation.get("job_id") == job.job_id
+            and generation.get("attempt_id") == attempt.attempt_id
+        ):
+            matches.append(artifact)
+    return tuple(matches)
+
+
+def _unreconciled_generation_references(
+    references: tuple[ProjectReference, ...],
+    job: GenerationJob,
+) -> tuple[ProjectReference, ...]:
+    """Return Job references whose own attempt has not yet been proven successful."""
+
+    attempts = {attempt.attempt_id: attempt for attempt in job.attempts}
+    pending: list[ProjectReference] = []
+    for artifact in references:
+        generation = artifact.metadata.get("generation")
+        if not isinstance(generation, dict) or generation.get("job_id") != job.job_id:
+            continue
+        attempt_id = generation.get("attempt_id")
+        attempt = attempts.get(attempt_id) if isinstance(attempt_id, str) else None
+        if attempt is None or attempt.status is not GenerationStatus.SUCCEEDED:
+            pending.append(artifact)
+    return tuple(pending)
+
+
+def _unreconciled_generation_artifacts(
+    project: ProjectDocument,
+    job: GenerationJob,
+) -> tuple[ProjectReference, ...]:
+    """Return live durable Job artifacts whose attempt is not yet a proven success."""
+
+    return _unreconciled_generation_references(project.artifacts, job)
+
+
+def _validate_generation_artifact(
+    manager: GenerationJobManager,
+    job: GenerationJob,
+    attempt: GenerationExecutionAttempt,
+    artifact: ProjectReference,
+) -> Path:
+    """Prove that durable metadata still describes the exact attempt output bytes."""
+
+    generation = artifact.metadata.get("generation")
+    if not isinstance(generation, dict):
+        raise GenerationJobError("durable generation artifact lost provenance metadata")
+
+    mapping = job.request.get("execution_mapping")
+    contract = job.request.get("generation_contract")
+    if not isinstance(mapping, dict) or not isinstance(contract, dict):
+        raise GenerationJobError("generation recovery lost execution mapping or contract")
+    expected = {
+        "job_id": job.job_id,
+        "attempt_id": attempt.attempt_id,
+        "model_id": job.request.get("model_id"),
+        "capability_id": mapping.get("capability_id"),
+        "offer_id": mapping.get("offer_id"),
+        "adapter_id": mapping.get("adapter_id"),
+        "request_digest": job.request_digest,
+    }
+    for field_name, expected_value in expected.items():
+        if not isinstance(expected_value, str) or not expected_value:
+            raise GenerationJobError(
+                f"generation recovery request lost {field_name} authority"
+            )
+        if generation.get(field_name) != expected_value:
+            raise GenerationJobError(
+                f"durable generation artifact {field_name} does not match Job authority"
+            )
+    if generation.get("contract") != contract:
+        raise GenerationJobError("durable generation artifact contract does not match Job authority")
+
+    expected_name = f"generated_{attempt.attempt_id}"
+    if not (
+        Path(artifact.path).name == expected_name
+        or Path(artifact.path).name.startswith(expected_name + ".")
+    ):
+        raise GenerationJobError("durable generation artifact path does not match attempt identity")
+
+    size_bytes = artifact.metadata.get("size_bytes")
+    sha256 = artifact.metadata.get("sha256")
+    if (
+        isinstance(size_bytes, bool)
+        or not isinstance(size_bytes, int)
+        or size_bytes <= 0
+        or not isinstance(sha256, str)
+        or len(sha256) != 64
+        or any(ch not in "0123456789abcdef" for ch in sha256)
+    ):
+        raise GenerationJobError("durable generation artifact lost size/digest authority")
+
+    output = manager.project_store.resolve_project_file(
+        job.project_id,
+        artifact.path,
+        must_exist=True,
+        allowed_roots=("artifacts",),
+    )
+    if output.is_symlink() or not output.is_file():
+        raise GenerationJobError("durable generation reference does not resolve to regular output bytes")
+    stat_result = output.stat()
+    if stat_result.st_size != size_bytes:
+        raise GenerationJobError("durable generation output size does not match persisted metadata")
+    if _sha256_file(output) != sha256:
+        raise GenerationJobError("durable generation output digest does not match persisted metadata")
+    return output
+
+
+def _mark_reconciled_success(
+    manager: GenerationJobManager,
+    job: GenerationJob,
+    *,
+    attempt_index: int,
+    artifact_id: str,
+    take_id: str,
+) -> GenerationJob:
+    """Finish one attempt from proven durable local materialization evidence.
+
+    Legacy runtimes could append a newer retry after an older attempt had already
+    crossed the durable ProjectReference boundary. Recovery therefore repairs the
+    artifact-owning attempt in place instead of rewriting history to pretend that the
+    artifact belongs to ``attempts[-1]``. Only repair of the final/current attempt
+    changes the Job's overall status to ``SUCCEEDED``.
+    """
+
+    if not 0 <= attempt_index < len(job.attempts):
+        raise GenerationJobError("generation recovery attempt index is out of bounds")
+    attempt = job.attempts[attempt_index]
+    if attempt.status is GenerationStatus.SUCCEEDED:
+        if attempt.output_reference_id != artifact_id or attempt.take_id != take_id:
+            raise GenerationJobError("succeeded generation attempt disagrees with durable materialization")
+        return job
+    if attempt.status not in {
+        GenerationStatus.RUNNING,
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+    }:
+        raise GenerationJobError(
+            f"generation materialization cannot be reconciled from status {attempt.status.value!r}"
+        )
+
+    ended_at = utc_now_iso()
+    completed = replace(
+        attempt,
+        status=GenerationStatus.SUCCEEDED,
+        ended_at=ended_at,
+        output_reference_id=artifact_id,
+        take_id=take_id,
+        error=None,
+    )
+    attempts = list(job.attempts)
+    attempts[attempt_index] = completed
+    is_current = attempt_index == len(attempts) - 1
+    return _persist(
+        manager,
+        replace(
+            job,
+            status=(GenerationStatus.SUCCEEDED if is_current else job.status),
+            updated_at=ended_at,
+            attempts=tuple(attempts),
+        ),
+    )
+
+
+def _reconcile_attempt_materialization(
+    manager: GenerationJobManager,
+    production: ProductionSemanticService,
+    job: GenerationJob,
+    *,
+    attempt_index: int,
+    artifact: ProjectReference,
+) -> GenerationJob:
+    attempt = job.attempts[attempt_index]
+    _validate_generation_artifact(manager, job, attempt, artifact)
+
+    shot_id = job.request.get("shot_id")
+    if not isinstance(shot_id, str) or not shot_id:
+        raise GenerationJobError("generation recovery lost shot identity")
+    state = production.state(job.project_id)
+    artifact_takes = tuple(take for take in state.takes if take.reference_id == artifact.id)
+    if any(take.shot_id != shot_id for take in artifact_takes):
+        raise GenerationJobError("generation recovery found Take bound to the wrong Shot")
+    if len(artifact_takes) > 1:
+        raise GenerationJobError("generation recovery found multiple Takes for one attempt output")
+    if artifact_takes:
+        take_id = artifact_takes[0].take_id
+        if attempt.take_id is not None and attempt.take_id != take_id:
+            raise GenerationJobError(
+                "generation recovery live Take disagrees with persisted attempt provenance"
+            )
+    else:
+        history = _generation_take_history(
+            manager.project_store,
+            job.project_id,
+            shot_id=shot_id,
+            reference_id=artifact.id,
+        )
+        if history is not None:
+            historical_take_id, latest_operation = history
+            if attempt.take_id is not None and attempt.take_id != historical_take_id:
+                raise GenerationJobError(
+                    "generation recovery Take history disagrees with persisted attempt provenance"
+                )
+            if latest_operation != "undo":
+                raise GenerationJobError(
+                    "generation recovery found a missing Take despite durable registration history"
+                )
+            take_id = historical_take_id
+        else:
+            generation = artifact.metadata.get("generation")
+            model_id = generation.get("model_id") if isinstance(generation, dict) else None
+            label = f"Recovered generated output · {model_id}" if model_id else "Recovered generated output"
+            take_id = f"take_{uuid.uuid4().hex}"
+            production.register_take(
+                job.project_id,
+                take_id=take_id,
+                shot_id=shot_id,
+                reference_id=artifact.id,
+                label=label,
+                notes=(
+                    f"Recovered generation job {job.job_id}; "
+                    f"attempt {attempt.attempt_id} after interrupted local publication"
+                ),
+            )
+
+    completed = _mark_reconciled_success(
+        manager,
+        job,
+        attempt_index=attempt_index,
+        artifact_id=artifact.id,
+        take_id=take_id,
+    )
+    logger.warning(
+        "generation job %s attempt %s recovered as succeeded from verified durable artifact %s without provider replay",
+        job.job_id,
+        attempt.attempt_id,
+        artifact.id,
+    )
+    return completed
+
+
+def _reconcile_materializations(
+    manager: GenerationJobManager,
+    production: ProductionSemanticService,
+    job: GenerationJob,
+) -> GenerationJob:
+    """Repair every non-succeeded attempt that already owns a durable artifact."""
+
+    project = manager.project_store.load_project(job.project_id)
+    attempt_indexes = {attempt.attempt_id: index for index, attempt in enumerate(job.attempts)}
+    grouped: dict[str, list[ProjectReference]] = {}
+    for artifact in project.artifacts:
+        generation = artifact.metadata.get("generation")
+        if not isinstance(generation, dict) or generation.get("job_id") != job.job_id:
+            continue
+        attempt_id = generation.get("attempt_id")
+        if not isinstance(attempt_id, str) or attempt_id not in attempt_indexes:
+            raise GenerationJobError(
+                "durable generation artifact references an unknown Job attempt"
+            )
+        grouped.setdefault(attempt_id, []).append(artifact)
+
+    current_job = job
+    for attempt_id, attempt_index in sorted(
+        attempt_indexes.items(), key=lambda item: item[1]
+    ):
+        artifacts = grouped.get(attempt_id, [])
+        if not artifacts:
+            continue
+        if len(artifacts) != 1:
+            raise GenerationJobError(
+                f"generation attempt has {len(artifacts)} durable output references"
+            )
+        attempt = current_job.attempts[attempt_index]
+        if attempt.status is GenerationStatus.SUCCEEDED:
+            continue
+        current_job = _reconcile_attempt_materialization(
+            manager,
+            production,
+            current_job,
+            attempt_index=attempt_index,
+            artifact=artifacts[0],
+        )
+    return current_job
 
 
 def requeue_failed_generation_job(
@@ -51,10 +623,27 @@ def requeue_failed_generation_job(
 ) -> GenerationJob:
     """Move one failed Job back to queued after retry authorization succeeds."""
 
-    with manager.project_store._lock:
+    with manager.records.project_lock(project_id):
         job = manager.get(project_id, job_id)
         if job.status is not GenerationStatus.FAILED:
             raise GenerationJobConflict("only a failed generation job can be requeued")
+        project = manager.project_store.load_project(project_id)
+        redoable_references = _redoable_output_references(
+            manager.project_store,
+            project_id,
+        )
+        _validate_redo_generation_references(
+            manager,
+            project_id,
+            redoable_references,
+        )
+        if (
+            _unreconciled_generation_artifacts(project, job)
+            or _unreconciled_generation_references(redoable_references, job)
+        ):
+            raise GenerationJobConflict(
+                "generation job has a durable artifact pending recovery"
+            )
         return _persist(
             manager,
             replace(
@@ -69,16 +658,44 @@ def recover_interrupted_project_jobs(
     manager: GenerationJobManager,
     project_id: str,
 ) -> tuple[GenerationJob, ...]:
-    """Fail abandoned queued/running Jobs so they become explicitly retryable.
+    """Reconcile crash publication, then fail only truly abandoned queued/running Jobs.
 
-    Recovery never launches a provider call. This is important for D-017: a remote
-    or non-free retry after restart must be a new explicit action with fresh one-shot
-    authorization rather than an automatic replay of a pre-crash grant.
+    Recovery never launches a provider call. A running Job with no durable generated
+    artifact is failed so explicit retry can obtain fresh D-017 authorization. Any
+    attempt whose exact artifact ProjectReference is already durable can be completed
+    locally from verified bytes/provenance, including historical older-attempt split
+    states left by a runtime that retried after publishing an earlier artifact.
     """
 
     recovered: list[GenerationJob] = []
-    with manager.project_store._lock:
+    production = ProductionSemanticService(manager.project_store)
+    with manager.records.project_lock(project_id):
+        # Recover crash-left UOW state before deriving the current Redo suffix.
+        ProjectUnitOfWork(manager.project_store).history(project_id)
         manager.project_store.load_project(project_id)
+        redoable_references = _redoable_output_references(
+            manager.project_store,
+            project_id,
+        )
+        # Redo-owned Generation paths are not trusted by pathname alone. Validate
+        # their historical ProjectReference against durable Job/Attempt/provenance
+        # and exact bytes before any startup recovery mutation can preserve them.
+        _validate_redo_generation_references(
+            manager,
+            project_id,
+            redoable_references,
+        )
+
+        recover_managed_publications(manager.project_store, project_id)
+        _quarantine_unregistered_managed_outputs(
+            manager.project_store,
+            project_id,
+            redoable_references,
+        )
+
+        for job in manager.list(project_id):
+            _reconcile_materializations(manager, production, job)
+
         for job in manager.list(project_id):
             if job.status is GenerationStatus.QUEUED:
                 now = utc_now_iso()
@@ -124,7 +741,8 @@ def recover_interrupted_generation_jobs(store: ProjectStore) -> tuple[str, ...]:
 
     Damaged projects/job records are never rewritten to make startup appear healthy.
     They are logged and isolated so one damaged project does not prevent UV Studio
-    from opening other projects.
+    from opening other projects. Publication reconciliation runs under the same
+    cross-runtime project fence before abandoned Jobs are classified.
     """
 
     recovered_ids: list[str] = []
@@ -147,7 +765,7 @@ def recover_interrupted_generation_jobs(store: ProjectStore) -> tuple[str, ...]:
             recovered = recover_interrupted_project_jobs(manager, project.project_id)
         except (GenerationJobError, ProjectStoreError, OSError, ValueError) as exc:
             logger.error(
-                "generation recovery skipped project %s: %s",
+                "generation/publication recovery skipped project %s: %s",
                 project.project_id,
                 exc,
             )

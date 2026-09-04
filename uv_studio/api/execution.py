@@ -10,7 +10,7 @@ from uv_studio.api.capabilities import get_capability_registry
 from uv_studio.api.projects import get_project_store
 from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.capabilities import CapabilityRegistry, UnknownCapability
-from uv_studio.projects.models import ProjectValidationError
+from uv_studio.projects.models import ProjectValidationError, compatibility_recipe_id
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 from uv_studio.recipes import resolve_project_execution
 
@@ -96,7 +96,7 @@ def get_project_execution_plan(
     except ProjectStoreError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
-    plan = resolve_project_execution(get_recipe_registry(), project.recipe_id)
+    plan = resolve_project_execution(get_recipe_registry(), compatibility_recipe_id(project))
     payload = plan.to_dict()
     payload["project_id"] = project.project_id
     payload["runtime_config_slots"] = [

@@ -16,8 +16,14 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
+from uv_studio.projects.generation_authority import (
+    GenerationReferenceAuthorityError,
+    validate_generation_reference_bytes,
+)
 from uv_studio.projects.identity import assert_project_identity_transition
+from uv_studio.projects.migrations import migrate_project_data
 from uv_studio.projects.models import (
+    PROJECT_SCHEMA_VERSION,
     ProjectDocument,
     ProjectValidationError,
     utc_now_iso,
@@ -171,9 +177,18 @@ def _canonical_document_path(value: Any) -> str:
     return canonical
 
 
-def _strict_json_bytes(data: Mapping[str, Any]) -> bytes:
+def _strict_json_bytes(
+    data: Mapping[str, Any],
+    *,
+    relative_path: str | None = None,
+) -> bytes:
     if not isinstance(data, Mapping):
         raise ProjectTransactionError("transaction document must be a JSON object")
+    if relative_path == PROJECT_FILENAME and data.get("schema_version") != PROJECT_SCHEMA_VERSION:
+        raise ProjectTransactionError(
+            f"new transaction project.json must use schema v{PROJECT_SCHEMA_VERSION}; "
+            "legacy schema bytes are valid only as historical undo/redo snapshots"
+        )
     try:
         text = json.dumps(
             dict(data),
@@ -245,6 +260,17 @@ def _snapshot_content(snapshot: Mapping[str, Any]) -> bytes | None:
     return content
 
 
+def _project_document_from_bytes(project_id: str, content: bytes) -> ProjectDocument:
+    try:
+        raw = json.loads(content.decode("utf-8"))
+        project = ProjectDocument.from_dict(migrate_project_data(raw))
+    except (UnicodeDecodeError, json.JSONDecodeError, ProjectValidationError) as exc:
+        raise ProjectTransactionError(f"invalid historical project.json: {exc}") from exc
+    if project.project_id != project_id:
+        raise ProjectTransactionError("historical project.json project_id does not match project")
+    return project
+
+
 class ProjectUnitOfWork:
     """One project-scoped transaction and undo/redo authority."""
 
@@ -258,6 +284,71 @@ class ProjectUnitOfWork:
             self._recover_prepared_operations(project_id)
             self.project_store.load_project(project_id)
             return self._load_history(project_id)
+
+    def redo_project_documents(self, project_id: str) -> tuple[ProjectDocument, ...]:
+        """Return project.json states reachable through the current exact Redo suffix.
+
+        The method is recovery-capable like ``history()``. It validates each
+        committed transaction against the durable history index and simulates every
+        changed canonical document from the current cursor, requiring each recorded
+        ``before`` snapshot to match the simulated state before applying ``after``.
+        Historical schema-v1 Project bytes are migrated only in memory for validation;
+        recorded snapshot bytes are never rewritten.
+        """
+
+        with self.records.project_lock(project_id):
+            self._ensure_history_layout(project_id)
+            self._recover_prepared_operations(project_id)
+            previous_project = self.project_store.load_project(project_id)
+            history = self._load_history(project_id)
+            simulated_snapshots: dict[str, dict[str, Any]] = {}
+            documents: list[ProjectDocument] = []
+            for entry in history.entries[history.cursor :]:
+                record = self._load_record(
+                    self._record_path(project_id, entry.transaction_id, transaction=True)
+                )
+                if (
+                    record.get("phase") != "committed"
+                    or record.get("operation") != "commit"
+                    or record.get("transaction_id") != entry.transaction_id
+                    or record.get("command") != entry.command
+                    or record.get("created_at") != entry.created_at
+                ):
+                    raise ProjectTransactionError(
+                        "redo transaction disagrees with durable history index"
+                    )
+                changes = record.get("changes")
+                if not isinstance(changes, list) or not changes:
+                    raise ProjectTransactionError("redo transaction has invalid changes")
+                changed_paths: list[str] = []
+                for change in changes:
+                    relative_path, before, after = self._validated_change(change)
+                    changed_paths.append(relative_path)
+                    current_snapshot = simulated_snapshots.get(relative_path)
+                    if current_snapshot is None:
+                        current_snapshot = self._read_document_snapshot(
+                            relative_path,
+                            self._document_path(project_id, relative_path),
+                        )
+                    self._assert_snapshot_matches(current_snapshot, before, relative_path)
+                    simulated_snapshots[relative_path] = dict(after)
+
+                    if relative_path != PROJECT_FILENAME:
+                        continue
+                    content = _snapshot_content(after)
+                    if content is None:
+                        raise ProjectTransactionError(
+                            "redo transaction cannot remove project.json"
+                        )
+                    project = _project_document_from_bytes(project_id, content)
+                    assert_project_identity_transition(previous_project, project)
+                    documents.append(project)
+                    previous_project = project
+                if tuple(changed_paths) != entry.changed_paths:
+                    raise ProjectTransactionError(
+                        "redo transaction changed paths disagree with history index"
+                    )
+            return tuple(documents)
 
     def commit(
         self,
@@ -281,7 +372,10 @@ class ProjectUnitOfWork:
                 relative_path = _canonical_document_path(raw_path)
                 if relative_path in encoded:
                     raise ProjectTransactionError(f"duplicate transaction path: {relative_path!r}")
-                encoded[relative_path] = _strict_json_bytes(data)
+                encoded[relative_path] = _strict_json_bytes(
+                    data,
+                    relative_path=relative_path,
+                )
             self._validate_documents(project_id, current_project, encoded)
 
             changes: list[dict[str, Any]] = []
@@ -395,6 +489,26 @@ class ProjectUnitOfWork:
                         raise ProjectTransactionError("project.json cannot be removed by undo/redo")
                 validation_documents[change["path"]] = content
             self._validate_documents(project_id, current_project, validation_documents)
+            if operation == "redo":
+                project_bytes = validation_documents.get(PROJECT_FILENAME)
+                redo_project = (
+                    current_project
+                    if project_bytes is None
+                    else _project_document_from_bytes(project_id, project_bytes)
+                )
+                for artifact in redo_project.artifacts:
+                    if not isinstance(artifact.metadata.get("generation"), dict):
+                        continue
+                    try:
+                        validate_generation_reference_bytes(
+                            self.project_store,
+                            project_id,
+                            artifact,
+                        )
+                    except GenerationReferenceAuthorityError as exc:
+                        raise ProjectTransactionError(
+                            f"Redo Generation authority is invalid: {exc}"
+                        ) from exc
 
             history_after = ProjectHistoryState(
                 entries=history_before.entries,
@@ -440,13 +554,7 @@ class ProjectUnitOfWork:
         if PROJECT_FILENAME in documents and project_bytes is None:
             raise ProjectTransactionError("project.json cannot be removed by a transaction")
         if project_bytes is not None:
-            try:
-                raw = json.loads(project_bytes.decode("utf-8"))
-                proposed_project = ProjectDocument.from_dict(raw)
-            except (UnicodeDecodeError, json.JSONDecodeError, ProjectValidationError) as exc:
-                raise ProjectTransactionError(f"invalid staged project.json: {exc}") from exc
-            if proposed_project.project_id != project_id:
-                raise ProjectTransactionError("staged project.json project_id does not match project")
+            proposed_project = _project_document_from_bytes(project_id, project_bytes)
             assert_project_identity_transition(current_project, proposed_project)
 
         timeline_is_staged = MAIN_TIMELINE_PATH in documents

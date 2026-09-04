@@ -376,11 +376,15 @@ class GenerationJobManager:
     def start_execution(self, project_id: str, job_id: str) -> GenerationJob:
         """Start initial execution or an explicit infrastructure retry after failure."""
 
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             job = self._read_unlocked(project_id, job_id)
             if job.status not in {GenerationStatus.QUEUED, GenerationStatus.FAILED}:
                 raise GenerationJobConflict(
                     f"job {job.job_id!r} cannot start from status {job.status.value!r}"
+                )
+            if job.status is GenerationStatus.FAILED and self._has_unreconciled_durable_artifact(job):
+                raise GenerationJobConflict(
+                    "generation job has a durable artifact pending recovery"
                 )
             attempt = GenerationExecutionAttempt(
                 attempt_id=f"attempt_{uuid.uuid4().hex}",
@@ -406,7 +410,7 @@ class GenerationJobManager:
         output_reference_id: str,
         take_id: str,
     ) -> GenerationJob:
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             job = self._read_unlocked(project_id, job_id)
             attempt = self._require_running_attempt(job, attempt_id)
             completed = replace(
@@ -434,9 +438,13 @@ class GenerationJobManager:
         attempt_id: str,
         error: str,
     ) -> GenerationJob:
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             job = self._read_unlocked(project_id, job_id)
             attempt = self._require_running_attempt(job, attempt_id)
+            if self._has_unreconciled_durable_artifact(job):
+                raise GenerationJobConflict(
+                    "generation job has a durable artifact and must be reconciled before failure"
+                )
             completed = replace(
                 attempt,
                 status=GenerationStatus.FAILED,
@@ -453,7 +461,7 @@ class GenerationJobManager:
             return updated
 
     def cancel(self, project_id: str, job_id: str) -> GenerationJob:
-        with self.project_store._lock:
+        with self.records.project_lock(project_id):
             job = self._read_unlocked(project_id, job_id)
             if job.status is GenerationStatus.QUEUED:
                 updated = replace(
@@ -465,6 +473,10 @@ class GenerationJobManager:
                 attempt = job.current_attempt
                 if attempt is None:  # pragma: no cover - dataclass invariant
                     raise GenerationJobError("running job lost its current attempt")
+                if self._has_unreconciled_durable_artifact(job):
+                    raise GenerationJobConflict(
+                        "generation job has a durable artifact and must be reconciled before cancellation"
+                    )
                 ended_at = utc_now_iso()
                 cancelled = replace(
                     attempt,
@@ -499,6 +511,48 @@ class GenerationJobManager:
         ):
             raise GenerationJobConflict("job does not have the requested running attempt")
         return attempt
+
+    def _attempt_has_durable_artifact(self, job: GenerationJob, attempt_id: str) -> bool:
+        project = self.project_store.load_project(job.project_id)
+        for artifact in project.artifacts:
+            generation = artifact.metadata.get("generation")
+            if not isinstance(generation, Mapping):
+                continue
+            if (
+                generation.get("job_id") == job.job_id
+                and generation.get("attempt_id") == attempt_id
+            ):
+                return True
+        return False
+
+    def _has_unreconciled_durable_artifact(self, job: GenerationJob) -> bool:
+        """Guard retries/terminal transitions across live and Redo-owned attempts."""
+
+        from .recovery import (
+            _redoable_output_references,
+            _validate_redo_generation_references,
+        )
+
+        attempts = {attempt.attempt_id: attempt for attempt in job.attempts}
+        project = self.project_store.load_project(job.project_id)
+        redoable_references = _redoable_output_references(
+            self.project_store,
+            job.project_id,
+        )
+        _validate_redo_generation_references(
+            self,
+            job.project_id,
+            redoable_references,
+        )
+        for artifact in (*project.artifacts, *redoable_references):
+            generation = artifact.metadata.get("generation")
+            if not isinstance(generation, Mapping) or generation.get("job_id") != job.job_id:
+                continue
+            attempt_id = generation.get("attempt_id")
+            attempt = attempts.get(attempt_id) if isinstance(attempt_id, str) else None
+            if attempt is None or attempt.status is not GenerationStatus.SUCCEEDED:
+                return True
+        return False
 
     def _record_path(self, project_id: str, job_id: str) -> Path:
         return self.records.path(project_id, job_id)

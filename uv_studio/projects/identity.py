@@ -1,4 +1,4 @@
-"""Typed UV Studio product identity over schema-v1 compatibility metadata."""
+"""Typed UV Studio product identity over Project compatibility metadata."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping
 
 from uv_studio.production.directions import ProductionDirectionNotFound, get_production_direction
-from uv_studio.projects.models import ProjectDocument, ProjectValidationError
+from uv_studio.projects.models import (
+    ProjectDocument,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 
 STUDIO_COMPAT_RECIPE_ID = "studio_v2"
 STUDIO_EXTENSION_KEY = "studio"
@@ -135,11 +139,12 @@ def _pr63_direction_v2(value: object) -> str | None:
 
 
 def classify_project_identity(project: ProjectDocument) -> ProjectIdentityProjection:
+    recipe_id = compatibility_recipe_id(project)
     has_studio = STUDIO_EXTENSION_KEY in project.extensions
     raw_studio = project.extensions.get(STUDIO_EXTENSION_KEY)
 
     if not has_studio:
-        if project.recipe_id == STUDIO_COMPAT_RECIPE_ID:
+        if recipe_id == STUDIO_COMPAT_RECIPE_ID:
             return ProjectIdentityProjection(
                 kind="legacy_compatibility",
                 compatibility_kind="studio_unversioned",
@@ -151,14 +156,14 @@ def classify_project_identity(project: ProjectDocument) -> ProjectIdentityProjec
         return ProjectIdentityProjection(
             kind="legacy_compatibility",
             compatibility_kind="recipe",
-            reason=f"legacy recipe project: {project.recipe_id}",
+            reason=f"legacy recipe project: {recipe_id}",
         )
 
-    if project.recipe_id != STUDIO_COMPAT_RECIPE_ID:
+    if recipe_id != STUDIO_COMPAT_RECIPE_ID:
         return ProjectIdentityProjection(
             kind="invalid_recovery",
             reason=(
-                "extensions.studio is present but recipe_id is not the neutral "
+                "extensions.studio is present but compatibility.recipe_id is not the neutral "
                 f"{STUDIO_COMPAT_RECIPE_ID!r} compatibility value"
             ),
         )
@@ -215,18 +220,54 @@ def require_modern_studio_identity(project: ProjectDocument) -> StudioProjectIde
 
 
 def _has_protected_studio_claim(project: ProjectDocument) -> bool:
-    return project.recipe_id == STUDIO_COMPAT_RECIPE_ID or STUDIO_EXTENSION_KEY in project.extensions
+    return (
+        compatibility_recipe_id(project) == STUDIO_COMPAT_RECIPE_ID
+        or STUDIO_EXTENSION_KEY in project.extensions
+    )
+
+
+def _assert_generation_reference_authority_transition(
+    current: ProjectDocument,
+    proposed: ProjectDocument,
+) -> None:
+    """Keep an existing Generation reference bound to its original durable identity.
+
+    Canonical commands may add unrelated metadata such as Production acceptance
+    bindings, and Undo may remove a reference entirely. But while the same reference
+    ID remains present, a generic Project mutation must not strip/rebind its reserved
+    Generation namespace or change the path/kind later used to reconnect durable
+    Job/Attempt and exact-byte authority.
+    """
+
+    current_by_id = {reference.id: reference for reference in (*current.sources, *current.artifacts)}
+    proposed_by_id = {reference.id: reference for reference in (*proposed.sources, *proposed.artifacts)}
+    for reference_id, existing in current_by_id.items():
+        if "generation" not in existing.metadata:
+            continue
+        replacement = proposed_by_id.get(reference_id)
+        if replacement is None:
+            continue
+        if (
+            replacement.path != existing.path
+            or replacement.kind != existing.kind
+            or replacement.metadata.get("generation") != existing.metadata.get("generation")
+        ):
+            raise ProjectValidationError(
+                "generic project mutation cannot change existing Generation reference authority: "
+                f"{reference_id!r}"
+            )
 
 
 def assert_project_identity_transition(current: ProjectDocument, proposed: ProjectDocument) -> None:
-    """Block generic writes from creating, repairing or changing Studio identity."""
+    """Block generic writes from changing protected Project/Generation identity."""
 
+    _assert_generation_reference_authority_transition(current, proposed)
     if not (_has_protected_studio_claim(current) or _has_protected_studio_claim(proposed)):
         return
     current_has_studio = STUDIO_EXTENSION_KEY in current.extensions
     proposed_has_studio = STUDIO_EXTENSION_KEY in proposed.extensions
     if (
-        current.recipe_id != proposed.recipe_id
+        compatibility_recipe_id(current) != compatibility_recipe_id(proposed)
         or current_has_studio != proposed_has_studio
         or current.extensions.get(STUDIO_EXTENSION_KEY) != proposed.extensions.get(STUDIO_EXTENSION_KEY)
     ):

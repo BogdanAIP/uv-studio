@@ -8,7 +8,12 @@ from pathlib import Path
 from unittest import mock
 
 from uv_studio.projects.migrations import UnsupportedProjectSchema
-from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.models import (
+    PROJECT_SCHEMA_VERSION,
+    ProjectReference,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 from uv_studio.projects.store import (
     PROJECT_DIRECTORIES,
     ProjectAlreadyExists,
@@ -37,10 +42,93 @@ class ProjectStoreTests(unittest.TestCase):
         path = self.root / "prj_test" / "project.json"
         self.assertTrue(path.is_file())
         data = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(data["schema_version"], 1)
-        self.assertEqual(data["recipe_id"], "general_video")
+        self.assertEqual(data["schema_version"], PROJECT_SCHEMA_VERSION)
+        self.assertNotIn("recipe_id", data)
+        self.assertEqual(
+            data["compatibility"],
+            {"schema_version": 1, "recipe_id": "general_video"},
+        )
+        self.assertEqual(compatibility_recipe_id(project), "general_video")
         for name in PROJECT_DIRECTORIES:
             self.assertTrue((self.root / "prj_test" / name).is_dir())
+
+    def test_schema_v1_load_preserves_legacy_identity_and_references_until_write(self) -> None:
+        project = self.store.create_project(
+            recipe_id="general_video",
+            title="Legacy fixture",
+            project_id="prj_legacy_v1",
+        )
+        source = ProjectReference(
+            id="src_legacy",
+            kind="source",
+            path="sources/input.mp4",
+            metadata={"role": "primary"},
+        )
+        artifact = ProjectReference(
+            id="art_legacy",
+            kind="artifact",
+            path="artifacts/output.mp4",
+            metadata={"origin": "historic"},
+        )
+        self.store.update_project(
+            project.project_id,
+            settings={"aspect_ratio": "9:16"},
+            sources=[source],
+            artifacts=[artifact],
+        )
+        path = self.store.project_path(project.project_id)
+        raw_v2 = json.loads(path.read_text(encoding="utf-8"))
+        compatibility = raw_v2.pop("compatibility")
+        raw_v2["schema_version"] = 1
+        raw_v2["recipe_id"] = "historic_recipe_unknown"
+        path.write_text(json.dumps(raw_v2, ensure_ascii=False, indent=2), encoding="utf-8")
+        legacy_bytes = path.read_bytes()
+
+        loaded = ProjectStore(self.root).load_project(project.project_id)
+
+        self.assertEqual(loaded.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(compatibility_recipe_id(loaded), "historic_recipe_unknown")
+        self.assertEqual(loaded.sources[0].id, "src_legacy")
+        self.assertEqual(loaded.sources[0].path, "sources/input.mp4")
+        self.assertEqual(loaded.artifacts[0].id, "art_legacy")
+        self.assertEqual(loaded.artifacts[0].path, "artifacts/output.mp4")
+        self.assertEqual(loaded.settings, {"aspect_ratio": "9:16"})
+        self.assertEqual(path.read_bytes(), legacy_bytes)
+        self.assertNotIn("recipe_id", loaded.to_dict())
+        self.assertEqual(
+            loaded.to_dict()["compatibility"],
+            {"schema_version": compatibility["schema_version"], "recipe_id": "historic_recipe_unknown"},
+        )
+
+        saved = self.store.save_project(loaded)
+        persisted_v2 = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(saved.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(persisted_v2["schema_version"], PROJECT_SCHEMA_VERSION)
+        self.assertNotIn("recipe_id", persisted_v2)
+        self.assertEqual(
+            persisted_v2["compatibility"]["recipe_id"],
+            "historic_recipe_unknown",
+        )
+        self.assertEqual(persisted_v2["sources"][0]["id"], "src_legacy")
+        self.assertEqual(persisted_v2["sources"][0]["path"], "sources/input.mp4")
+        self.assertEqual(persisted_v2["artifacts"][0]["id"], "art_legacy")
+        self.assertEqual(persisted_v2["artifacts"][0]["path"], "artifacts/output.mp4")
+
+    def test_schema_v1_reserved_compatibility_state_is_rejected(self) -> None:
+        self.store.create_project(
+            recipe_id="general_video",
+            title="Ambiguous legacy",
+            project_id="prj_legacy_ambiguous",
+        )
+        path = self.store.project_path("prj_legacy_ambiguous")
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["schema_version"] = 1
+        raw["recipe_id"] = "general_video"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        with self.assertRaises(ProjectStoreError) as caught:
+            self.store.load_project("prj_legacy_ambiguous")
+        self.assertIn("reserved compatibility", str(caught.exception))
 
     def test_restart_can_load_existing_project(self) -> None:
         created = self.store.create_project(recipe_id="general_video", title="Persistent", project_id="prj_restart")

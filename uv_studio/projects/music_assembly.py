@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 from .models import (
     ProjectValidationError,
+    compatibility_recipe_id,
     validate_identifier,
     validate_project_relative_path,
 )
@@ -272,7 +273,7 @@ class MusicAssemblyStore:
     ) -> MusicAssemblyState:
         with self.project_store._lock:
             project = self.project_store.load_project(project_id)
-            if project.recipe_id != "music_video":
+            if compatibility_recipe_id(project) != "music_video":
                 raise MusicAssemblyError("music assembly is only valid for the music_video recipe")
             direction = self.directions.load(project_id, validate_current=True)
             if direction is None:
@@ -346,7 +347,7 @@ class MusicAssemblyStore:
         if state is None:
             return
         project = self.project_store.load_project(project_id)
-        if project.recipe_id != "music_video":
+        if compatibility_recipe_id(project) != "music_video":
             raise MusicAssemblyError("music assembly is only valid for the music_video recipe")
         try:
             direction = self.directions.load(project_id, validate_current=True)

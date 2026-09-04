@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
+import threading
 import unittest
+import zipfile
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from uv_studio.api.project_media import get_source_media_probe
+import uv_studio.projects.archive as project_archive
+from uv_studio.api.project_media import _publish_source_upload, get_source_media_probe
 from uv_studio.api.projects import get_project_store
+from uv_studio.projects.archive import export_project
+from uv_studio.projects.source_media import ProjectSourceMediaStore
 from uv_studio.projects.store import ProjectStore
 from uv_studio.server import app
 
@@ -137,6 +144,7 @@ class ProjectMediaApiTests(unittest.TestCase):
             allowed_roots=("sources",),
         )
         self.assertEqual(stored_path.read_bytes(), body)
+        self.assertEqual(list(self.store.root.glob(".uv-source-upload-*.upload")), [])
 
         detail = self.client.get(
             f"/api/uv/projects/{self.project_id}/sources/{source['id']}"
@@ -159,6 +167,99 @@ class ProjectMediaApiTests(unittest.TestCase):
         self.assertEqual(ranged.status_code, 206, ranged.text)
         self.assertEqual(ranged.content, body[2:6])
         self.assertEqual(ranged.headers.get("content-range"), f"bytes 2-5/{len(body)}")
+
+    def test_source_publication_waits_for_archive_snapshot_fence(self) -> None:
+        body = b"source-published-after-snapshot"
+        media_store = ProjectSourceMediaStore(self.store)
+        allocation = media_store.allocate(self.project_id, "concurrent.mp4")
+        temporary = self.store.root / f".uv-source-upload-{allocation.source_id}.test.upload"
+        temporary.write_bytes(body)
+        self.assertNotIn(self.store.project_directory(self.project_id), temporary.parents)
+
+        archive_path = Path(self.tmp.name) / "before-source-publication.uvproj.zip"
+        schema_sampled = threading.Event()
+        release_export = threading.Event()
+        publication_started = threading.Event()
+        publication_completed = threading.Event()
+        export_errors: list[BaseException] = []
+        publication_errors: list[BaseException] = []
+        published = []
+        original_raw_schema = project_archive._raw_project_schema_version
+
+        def sampled_schema(project_path: Path) -> int:
+            version = original_raw_schema(project_path)
+            schema_sampled.set()
+            if not release_export.wait(timeout=5):
+                raise RuntimeError("test did not release archive snapshot")
+            return version
+
+        def run_export() -> None:
+            try:
+                export_project(self.store, self.project_id, archive_path)
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                export_errors.append(exc)
+
+        def run_publication() -> None:
+            publication_started.set()
+            try:
+                published.append(
+                    _publish_source_upload(
+                        project_id=self.project_id,
+                        temporary=temporary,
+                        allocation=allocation,
+                        media_kind="video",
+                        request_content_type="video/mp4",
+                        size_bytes=len(body),
+                        sha256=hashlib.sha256(body).hexdigest(),
+                        store=self.store,
+                        media_store=media_store,
+                        probe_media=self._probe_video,
+                    )
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                publication_errors.append(exc)
+            finally:
+                publication_completed.set()
+
+        export_thread = threading.Thread(target=run_export, daemon=True)
+        publication_thread = threading.Thread(target=run_publication, daemon=True)
+        with mock.patch(
+            "uv_studio.projects.archive._raw_project_schema_version",
+            side_effect=sampled_schema,
+        ):
+            export_thread.start()
+            try:
+                self.assertTrue(schema_sampled.wait(timeout=5))
+                publication_thread.start()
+                self.assertTrue(publication_started.wait(timeout=5))
+                self.assertFalse(
+                    publication_completed.wait(timeout=0.2),
+                    "source publication must wait for the archive snapshot fence",
+                )
+                self.assertFalse(allocation.absolute_path.exists())
+                self.assertEqual(self.store.load_project(self.project_id).sources, ())
+            finally:
+                release_export.set()
+                export_thread.join(timeout=5)
+                publication_thread.join(timeout=5)
+
+        self.assertFalse(export_thread.is_alive())
+        self.assertFalse(publication_thread.is_alive())
+        self.assertEqual(export_errors, [])
+        self.assertEqual(publication_errors, [])
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0].id, allocation.source_id)
+        self.assertEqual(allocation.absolute_path.read_bytes(), body)
+        self.assertFalse(temporary.exists())
+
+        live_project = self.store.load_project(self.project_id)
+        self.assertEqual([item.id for item in live_project.sources], [allocation.source_id])
+
+        with zipfile.ZipFile(archive_path, "r") as zipped:
+            names = set(zipped.namelist())
+            archived_project = json.loads(zipped.read("project/project.json").decode("utf-8"))
+        self.assertNotIn(f"project/{allocation.relative_path}", names)
+        self.assertEqual(archived_project["sources"], [])
 
     def test_audio_source_upload_is_first_class_project_media(self) -> None:
         app.dependency_overrides[get_source_media_probe] = lambda: self._probe_audio
@@ -278,6 +379,7 @@ class ProjectMediaApiTests(unittest.TestCase):
                 list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()),
                 [],
             )
+            self.assertEqual(list(self.store.root.glob(".uv-source-upload-*.upload")), [])
 
     def test_audio_source_rejects_video_stream_and_rolls_back(self) -> None:
         app.dependency_overrides[get_source_media_probe] = lambda: self._probe_video
@@ -294,6 +396,7 @@ class ProjectMediaApiTests(unittest.TestCase):
             list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()),
             [],
         )
+        self.assertEqual(list(self.store.root.glob(".uv-source-upload-*.upload")), [])
 
     def test_empty_or_non_video_upload_is_not_registered(self) -> None:
         empty = self.client.post(
@@ -305,6 +408,7 @@ class ProjectMediaApiTests(unittest.TestCase):
         self.assertEqual(empty.status_code, 400, empty.text)
         self.assertEqual(self.store.load_project(self.project_id).sources, ())
         self.assertEqual(list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()), [])
+        self.assertEqual(list(self.store.root.glob(".uv-source-upload-*.upload")), [])
 
         def non_video_probe(store: ProjectStore, project_id: str, relative_path: str) -> dict[str, object]:
             return {
@@ -325,6 +429,7 @@ class ProjectMediaApiTests(unittest.TestCase):
         self.assertEqual(rejected.status_code, 422, rejected.text)
         self.assertEqual(self.store.load_project(self.project_id).sources, ())
         self.assertEqual(list(self.store.project_directory(self.project_id).joinpath("sources").iterdir()), [])
+        self.assertEqual(list(self.store.root.glob(".uv-source-upload-*.upload")), [])
 
     def test_unknown_project_and_source_are_404(self) -> None:
         missing_project = self.client.post(

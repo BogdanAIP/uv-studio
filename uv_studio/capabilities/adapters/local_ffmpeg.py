@@ -7,9 +7,9 @@ the canonical Project Store and subprocesses are invoked with argv + shell=False
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
-import tempfile
 import uuid
 from collections.abc import Callable, Mapping
 from decimal import Decimal, InvalidOperation
@@ -18,6 +18,11 @@ from typing import Any
 
 from uv_studio.projects.media_ranges import MICROSECONDS_PER_SECOND, ProjectMediaRange
 from uv_studio.projects.models import ProjectReference, ProjectValidationError, validate_project_relative_path
+from uv_studio.projects.root_staging import (
+    acquire_ffconcat_root_staging,
+    acquire_timeline_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
 
 from ..execution import (
@@ -71,8 +76,6 @@ def _canonical_project_path(value: str) -> str:
 
 
 def _ffconcat_quote(path: Path) -> str:
-    # FFmpeg concat files understand forward-slash absolute paths on Windows too.
-    # Single quotes are escaped using the concat demuxer's shell-like quoting form.
     value = path.resolve().as_posix().replace("'", "'\\''")
     return f"file '{value}'\n"
 
@@ -511,22 +514,20 @@ class LocalFFmpegAdapter:
                 f"timeline.assemble refuses to overwrite existing output: {canonical_output!r}"
             )
 
-        project_dir = self.store.project_directory(project_id)
-        tasks_dir = project_dir / "tasks"
+        artifact_id = f"art_{uuid.uuid4().hex}"
         manifest_path: Path | None = None
+        staged_output: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                encoding="utf-8",
-                newline="\n",
-                prefix="ffconcat-",
-                suffix=".txt",
-                dir=tasks_dir,
-                delete=False,
-            ) as handle:
-                manifest_path = Path(handle.name)
+            manifest_path = acquire_ffconcat_root_staging(self.store.root)
+            with manifest_path.open("x", encoding="utf-8", newline="\n") as handle:
                 for item in input_paths:
                     handle.write(_ffconcat_quote(item))
+
+            staged_output = acquire_timeline_root_staging(
+                self.store.root,
+                artifact_id,
+                output_path.suffix,
+            )
 
             command = [
                 self._tool("ffmpeg"),
@@ -544,14 +545,20 @@ class LocalFFmpegAdapter:
                 "copy",
                 "-movflags",
                 "+faststart",
-                str(output_path),
+                str(staged_output),
             ]
             self._invoke(command, timeout=self.assemble_timeout_sec, tool="ffmpeg")
-            if not output_path.is_file():
+            if staged_output.is_symlink() or not staged_output.is_file():
                 raise CapabilityToolFailed("ffmpeg reported success but output file was not created")
+            try:
+                output_size = staged_output.stat().st_size
+            except OSError as exc:
+                raise CapabilityToolFailed("ffmpeg output could not be validated") from exc
+            if output_size <= 0:
+                raise CapabilityToolFailed("ffmpeg reported success but output file is empty")
 
             artifact = ProjectReference(
-                id=f"art_{uuid.uuid4().hex}",
+                id=artifact_id,
                 kind="video",
                 path=canonical_output,
                 metadata={
@@ -561,15 +568,43 @@ class LocalFFmpegAdapter:
                     "assembly_mode": "concat_copy",
                 },
             )
-            try:
-                project = self.store.load_project(project_id)
-                self.store.update_project(
-                    project_id,
-                    artifacts=(*project.artifacts, artifact),
-                )
-            except Exception:
-                output_path.unlink(missing_ok=True)
-                raise
+
+            from uv_studio.projects.task_records import ProjectTaskRecordStore
+
+            with ProjectTaskRecordStore(self.store).project_lock(project_id):
+                try:
+                    fenced_output = self.store.resolve_project_file(
+                        project_id,
+                        canonical_output,
+                        must_exist=False,
+                        allowed_roots=_OUTPUT_ROOTS,
+                    )
+                except (ProjectValidationError, ProjectStoreError) as exc:
+                    raise InvalidCapabilityInput(str(exc)) from exc
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise InvalidCapabilityInput(
+                        f"timeline.assemble refuses to overwrite existing output: {canonical_output!r}"
+                    )
+
+                final_written = False
+                try:
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    project = self.store.load_project(project_id)
+                    self.store.update_project(
+                        project_id,
+                        artifacts=(*project.artifacts, artifact),
+                    )
+                except Exception:
+                    if final_written:
+                        try:
+                            current = self.store.load_project(project_id)
+                            registered = any(item.id == artifact_id for item in current.artifacts)
+                        except Exception:
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
 
             return CapabilityExecutionResult.from_offer(
                 project_id=project_id,
@@ -583,7 +618,9 @@ class LocalFFmpegAdapter:
             )
         finally:
             if manifest_path is not None:
-                manifest_path.unlink(missing_ok=True)
+                release_root_staging(manifest_path)
+            if staged_output is not None:
+                release_root_staging(staged_output)
 
     def _invoke(
         self,

@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 import unittest
 import zipfile
 from pathlib import Path
 from unittest import mock
 
+import uv_studio.projects.archive as project_archive
 from uv_studio.projects.archive import (
     ARCHIVE_MANIFEST,
     ArchiveLimits,
@@ -17,7 +19,9 @@ from uv_studio.projects.archive import (
     export_project,
     import_project,
 )
+from uv_studio.projects.models import PROJECT_SCHEMA_VERSION, compatibility_recipe_id
 from uv_studio.projects.store import ProjectAlreadyExists, ProjectStore, ProjectStoreError
+from uv_studio.projects.transactions import ProjectUnitOfWork
 
 
 class ProjectArchiveTests(unittest.TestCase):
@@ -112,6 +116,146 @@ class ProjectArchiveTests(unittest.TestCase):
             (target_dir / "artifacts" / "preview" / "frame.txt").read_text(encoding="utf-8"),
             "frame-data",
         )
+
+    def test_schema_v1_archive_keeps_raw_version_and_loads_as_current_schema(self) -> None:
+        path = self.source_store.project_path(self.project.project_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw.pop("compatibility")
+        raw["schema_version"] = 1
+        raw["recipe_id"] = "historic_recipe_unknown"
+        path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        legacy_bytes = path.read_bytes()
+
+        archive = self._export("legacy-v1.uvproj.zip")
+        with zipfile.ZipFile(archive, "r") as zipped:
+            manifest = json.loads(zipped.read(ARCHIVE_MANIFEST).decode("utf-8"))
+            archived_project = json.loads(zipped.read("project/project.json").decode("utf-8"))
+        self.assertEqual(manifest["project_schema_version"], 1)
+        self.assertEqual(archived_project["schema_version"], 1)
+        self.assertEqual(archived_project["recipe_id"], "historic_recipe_unknown")
+
+        imported = import_project(self.target_store, archive)
+        self.assertEqual(imported.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(compatibility_recipe_id(imported), "historic_recipe_unknown")
+        imported_path = self.target_store.project_path(imported.project_id)
+        self.assertEqual(imported_path.read_bytes(), legacy_bytes)
+        self.assertEqual((imported_path.parent / "sources" / "clip.bin").read_bytes(), b"source-bytes")
+        self.assertEqual(
+            (imported_path.parent / "artifacts" / "preview" / "frame.txt").read_text(encoding="utf-8"),
+            "frame-data",
+        )
+
+        reexported = export_project(
+            self.target_store,
+            imported.project_id,
+            self.base / "legacy-v1-reexport.uvproj.zip",
+        )
+        with zipfile.ZipFile(reexported, "r") as zipped:
+            reexport_manifest = json.loads(zipped.read(ARCHIVE_MANIFEST).decode("utf-8"))
+        self.assertEqual(reexport_manifest["project_schema_version"], 1)
+
+    def test_export_fences_v1_snapshot_against_concurrent_v2_transaction(self) -> None:
+        path = self.source_store.project_path(self.project.project_id)
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw.pop("compatibility")
+        raw["schema_version"] = 1
+        raw["recipe_id"] = "historic_recipe_unknown"
+        path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        legacy_bytes = path.read_bytes()
+        migrated = self.source_store.load_project(self.project.project_id)
+        self.assertEqual(migrated.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(path.read_bytes(), legacy_bytes)
+
+        archive_path = self.base / "legacy-v1-concurrent.uvproj.zip"
+        schema_sampled = threading.Event()
+        release_export = threading.Event()
+        mutation_started = threading.Event()
+        mutation_completed = threading.Event()
+        export_errors: list[BaseException] = []
+        mutation_errors: list[BaseException] = []
+        original_raw_schema = project_archive._raw_project_schema_version
+
+        def sampled_schema(project_path: Path) -> int:
+            version = original_raw_schema(project_path)
+            schema_sampled.set()
+            if not release_export.wait(timeout=5):
+                raise RuntimeError("test did not release archive snapshot")
+            return version
+
+        def run_export() -> None:
+            try:
+                export_project(self.source_store, self.project.project_id, archive_path)
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                export_errors.append(exc)
+
+        def run_mutation() -> None:
+            mutation_started.set()
+            try:
+                ProjectUnitOfWork(self.source_store).commit(
+                    self.project.project_id,
+                    command="test.persist_schema_v2",
+                    documents={"project.json": migrated.to_dict()},
+                )
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                mutation_errors.append(exc)
+            finally:
+                mutation_completed.set()
+
+        export_thread = threading.Thread(target=run_export, daemon=True)
+        mutation_thread = threading.Thread(target=run_mutation, daemon=True)
+        with mock.patch(
+            "uv_studio.projects.archive._raw_project_schema_version",
+            side_effect=sampled_schema,
+        ):
+            export_thread.start()
+            try:
+                self.assertTrue(schema_sampled.wait(timeout=5))
+                mutation_thread.start()
+                self.assertTrue(mutation_started.wait(timeout=5))
+                self.assertFalse(
+                    mutation_completed.wait(timeout=0.2),
+                    "canonical mutation must wait for the archive snapshot fence",
+                )
+            finally:
+                release_export.set()
+                export_thread.join(timeout=5)
+                mutation_thread.join(timeout=5)
+
+        self.assertFalse(export_thread.is_alive())
+        self.assertFalse(mutation_thread.is_alive())
+        self.assertEqual(export_errors, [])
+        self.assertEqual(mutation_errors, [])
+
+        with zipfile.ZipFile(archive_path, "r") as zipped:
+            manifest = json.loads(zipped.read(ARCHIVE_MANIFEST).decode("utf-8"))
+            archived_project_bytes = zipped.read("project/project.json")
+            names = set(zipped.namelist())
+        self.assertEqual(manifest["project_schema_version"], 1)
+        self.assertEqual(archived_project_bytes, legacy_bytes)
+        self.assertNotIn("project/tasks/.uv-task-records.lock", names)
+
+        persisted = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(persisted["schema_version"], PROJECT_SCHEMA_VERSION)
+        imported = import_project(self.target_store, archive_path)
+        self.assertEqual(imported.schema_version, PROJECT_SCHEMA_VERSION)
+        self.assertEqual(compatibility_recipe_id(imported), "historic_recipe_unknown")
+
+    def test_manifest_project_schema_must_match_archived_project_bytes(self) -> None:
+        archive = self._export()
+        mismatched = self.base / "schema-mismatch.uvproj.zip"
+
+        def mutate(name: str, data: bytes) -> bytes | None:
+            if name == ARCHIVE_MANIFEST:
+                manifest = json.loads(data.decode("utf-8"))
+                manifest["project_schema_version"] = 1
+                return json.dumps(manifest).encode("utf-8")
+            return data
+
+        self._rewrite_archive(archive, mismatched, mutate)
+        with self.assertRaises(ProjectArchiveError) as caught:
+            import_project(self.target_store, mismatched)
+        self.assertIn("project_schema_version", str(caught.exception))
+        self.assertFalse((self.target_store.root / self.project.project_id).exists())
 
     def test_backup_creates_portable_archive(self) -> None:
         backup = create_backup(

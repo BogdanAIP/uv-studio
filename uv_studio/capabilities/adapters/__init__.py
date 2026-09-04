@@ -10,6 +10,7 @@ from ..models import CapabilityOffer
 from .artifact_preview import create_artifact_preview
 from .audio_loudness import measure_prepared_audio_loudness
 from .audio_visualizer import render_audio_visualizer
+from .crash_safe_ffmpeg import CrashSafeLocalFFmpegRangeAdapter
 from .dubbing_render import render_dubbing_state
 from .edit_render import render_edit_state
 from .general_video_render import render_general_workspace
@@ -19,7 +20,6 @@ from .music_video_render import render_music_video_state
 from .narrated_render import render_narrated_workspace
 from .native_videoclaw import NativeVideoClawAdapter
 from .photo_slideshow import compose_photo_slideshow
-from .range_reinsertion import LocalFFmpegRangeAdapter
 from .whisper_cpp import WhisperCppAdapter
 
 
@@ -28,13 +28,14 @@ class LocalFFmpegAdapter:
 
     The historical range adapter remains the delegate for probe/extract/assemble and
     exact single-range reinsertion. New project render/preview/analysis operations are
-    explicit handlers, not another inheritance layer.
+    explicit handlers, not another inheritance layer. The delegate adds a durable
+    final-publication marker for arbitrary-path ``timeline.assemble`` output.
     """
 
-    adapter_id = LocalFFmpegRangeAdapter.adapter_id
+    adapter_id = CrashSafeLocalFFmpegRangeAdapter.adapter_id
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self._delegate = LocalFFmpegRangeAdapter(*args, **kwargs)
+        self._delegate = CrashSafeLocalFFmpegRangeAdapter(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._delegate, name)

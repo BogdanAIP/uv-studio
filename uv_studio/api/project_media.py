@@ -24,12 +24,18 @@ from uv_studio.capabilities.execution import (
     UnsupportedCapabilityExecution,
 )
 from uv_studio.projects.models import ProjectReference, ProjectValidationError
+from uv_studio.projects.root_staging import (
+    acquire_source_upload_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.source_media import (
+    AllocatedSourceMedia,
     ProjectSourceMediaStore,
     SourceMediaError,
     SourceMediaNotFound,
 )
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
+from uv_studio.projects.task_records import ProjectTaskRecordStore
 
 router = APIRouter(prefix="/api/uv/projects", tags=["UV Studio Project Media"])
 MAX_SOURCE_UPLOAD_BYTES = 100 * 1024**3
@@ -207,6 +213,63 @@ def _portable_probe_metadata(
     return metadata
 
 
+def _source_upload_staging_path(store: ProjectStore, source_id: str) -> Path:
+    """Allocate an exclusive leased upload path outside every canonical project tree."""
+
+    return acquire_source_upload_root_staging(store.root, source_id)
+
+
+def _publish_source_upload(
+    *,
+    project_id: str,
+    temporary: Path,
+    allocation: AllocatedSourceMedia,
+    media_kind: str,
+    request_content_type: str | None,
+    size_bytes: int,
+    sha256: str,
+    store: ProjectStore,
+    media_store: ProjectSourceMediaStore,
+    probe_media: SourceMediaProbe,
+) -> ProjectReference:
+    """Publish bytes and their canonical reference as one fenced project transition."""
+
+    with ProjectTaskRecordStore(store).project_lock(project_id):
+        if allocation.absolute_path.exists() or allocation.absolute_path.is_symlink():
+            raise SourceMediaError("allocated source path already exists")
+
+        final_written = False
+        try:
+            os.replace(temporary, allocation.absolute_path)
+            final_written = True
+            probe = probe_media(store, project_id, allocation.relative_path)
+            metadata = _portable_probe_metadata(
+                media_kind=media_kind,
+                original_name=allocation.original_name,
+                request_content_type=request_content_type,
+                size_bytes=size_bytes,
+                sha256=sha256,
+                probe=probe,
+            )
+            project = media_store.register(
+                project_id,
+                allocation,
+                metadata=metadata,
+                media_kind=media_kind,
+            )
+            return next(item for item in project.sources if item.id == allocation.source_id)
+        except Exception:
+            if final_written:
+                try:
+                    project = store.load_project(project_id)
+                    registered = any(item.id == allocation.source_id for item in project.sources)
+                except Exception:
+                    registered = True
+                if not registered:
+                    allocation.absolute_path.unlink(missing_ok=True)
+            raise
+
+
 async def _upload_source(
     *,
     project_id: str,
@@ -233,12 +296,9 @@ async def _upload_source(
     except (ProjectNotFound, SourceMediaError, ProjectStoreError) as exc:
         raise _translate(exc) from exc
 
-    temporary = allocation.absolute_path.with_name(
-        f".{allocation.absolute_path.name}.{uuid.uuid4().hex}.upload"
-    )
+    temporary = _source_upload_staging_path(store, allocation.source_id)
     written = 0
     digest = hashlib.sha256()
-    final_written = False
     try:
         with temporary.open("xb") as output:
             async for chunk in request.stream():
@@ -260,24 +320,18 @@ async def _upload_source(
                 detail="Source media body is empty",
             )
 
-        os.replace(temporary, allocation.absolute_path)
-        final_written = True
-        probe = probe_media(store, project_id, allocation.relative_path)
-        metadata = _portable_probe_metadata(
+        registered = _publish_source_upload(
+            project_id=project_id,
+            temporary=temporary,
+            allocation=allocation,
             media_kind=media_kind,
-            original_name=allocation.original_name,
             request_content_type=request.headers.get("content-type"),
             size_bytes=written,
             sha256=digest.hexdigest(),
-            probe=probe,
+            store=store,
+            media_store=media_store,
+            probe_media=probe_media,
         )
-        project = media_store.register(
-            project_id,
-            allocation,
-            metadata=metadata,
-            media_kind=media_kind,
-        )
-        registered = next(item for item in project.sources if item.id == allocation.source_id)
         return _reference_payload(registered)
     except HTTPException:
         raise
@@ -290,15 +344,7 @@ async def _upload_source(
     ) as exc:
         raise _translate(exc) from exc
     finally:
-        temporary.unlink(missing_ok=True)
-        if final_written:
-            try:
-                project = store.load_project(project_id)
-                registered = any(item.id == allocation.source_id for item in project.sources)
-            except Exception:
-                registered = False
-            if not registered:
-                allocation.absolute_path.unlink(missing_ok=True)
+        release_root_staging(temporary)
 
 
 @router.post(

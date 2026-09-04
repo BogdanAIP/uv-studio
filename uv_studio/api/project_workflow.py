@@ -41,7 +41,11 @@ from uv_studio.editor.targeted_edit_workflow import (
     TargetedEditWorkflowService,
 )
 from uv_studio.orchestration import WORKFLOW_SCHEMA_VERSION, project_workflow_state
-from uv_studio.projects.models import ProjectDocument, ProjectValidationError
+from uv_studio.projects.models import (
+    ProjectDocument,
+    ProjectValidationError,
+    compatibility_recipe_id,
+)
 from uv_studio.projects.source_media import ProjectSourceMediaStore
 from uv_studio.projects.store import ProjectNotFound, ProjectStore, ProjectStoreError
 from uv_studio.recipes import RecipeRegistry, UnknownRecipe
@@ -270,8 +274,9 @@ def _state(
     recipe_registry: RecipeRegistry,
 ) -> dict[str, Any]:
     project = _load_project(store, project_id)
+    recipe_id = compatibility_recipe_id(project)
     try:
-        recipe = recipe_registry.get(project.recipe_id)
+        recipe = recipe_registry.get(recipe_id)
     except UnknownRecipe:
         recipe = None
     return project_workflow_state(

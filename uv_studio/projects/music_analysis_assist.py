@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .models import compatibility_recipe_id
 from .music_map import (
     MAX_LYRIC_PHRASES,
     MAX_MUSIC_MARKERS,
@@ -77,7 +78,7 @@ class MusicAnalysisAssistPackage:
 
 def _binding(store: ProjectStore, project_id: str, song_reference_id: str) -> MusicAnalysisBinding:
     project = store.load_project(project_id)
-    if project.recipe_id != "music_video":
+    if compatibility_recipe_id(project) != "music_video":
         raise MusicAnalysisAssistError("music analysis assist is only valid for music_video")
     try:
         reference, _path = ProjectSourceMediaStore(store).resolve_verified(

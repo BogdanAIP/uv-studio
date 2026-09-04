@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import os
 import re
 import uuid
 from collections.abc import Mapping
@@ -13,7 +14,12 @@ from typing import Any
 from uv_studio.projects.dubbing import DubbingError, DubbingStore
 from uv_studio.projects.models import ProjectReference
 from uv_studio.projects.prepared_speech import canonical_revision_sha256
+from uv_studio.projects.root_staging import (
+    acquire_webvtt_root_staging,
+    release_root_staging,
+)
 from uv_studio.projects.store import ProjectStore, ProjectStoreError
+from uv_studio.projects.task_records import ProjectTaskRecordStore
 
 from ..execution import (
     CapabilityExecutionResult,
@@ -87,8 +93,6 @@ def _timestamp(value_us: int) -> str:
 
 def _cue_text(value: str) -> str:
     normalized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
-    # A blank line terminates a WebVTT cue. Preserve meaningful multiline text while
-    # removing blank-only lines so transcript content cannot inject a second cue block.
     normalized = "\n".join(
         line for line in normalized.split("\n") if not _BLANK_LINE_RE.fullmatch(line)
     )
@@ -194,6 +198,7 @@ class WebVTTSubtitleAdapter:
         artifact_id = f"sub_{uuid.uuid4().hex}"
         relative_path = f"artifacts/{artifact_id}.vtt"
         output: Path | None = None
+        staged_output: Path | None = None
         try:
             output = self.store.resolve_project_file(
                 project_id,
@@ -203,7 +208,13 @@ class WebVTTSubtitleAdapter:
             )
             if output.exists() or output.is_symlink():
                 raise InvalidCapabilityInput("subtitle export refuses to overwrite an existing artifact")
-            output.write_bytes(encoded)
+
+            staged_output = acquire_webvtt_root_staging(self.store.root, artifact_id)
+            with staged_output.open("xb") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+
             artifact = ProjectReference(
                 id=artifact_id,
                 kind="subtitle",
@@ -228,12 +239,42 @@ class WebVTTSubtitleAdapter:
                     "lifecycle": "subtitle_export",
                 },
             )
-            project = self.store.load_project(project_id)
-            self.store.update_project(project_id, artifacts=(*project.artifacts, artifact))
-        except Exception:
-            if output is not None:
-                output.unlink(missing_ok=True)
-            raise
+
+            with ProjectTaskRecordStore(self.store).project_lock(project_id):
+                fenced_output = self.store.resolve_project_file(
+                    project_id,
+                    relative_path,
+                    must_exist=False,
+                    allowed_roots=("artifacts",),
+                )
+                if fenced_output.exists() or fenced_output.is_symlink():
+                    raise InvalidCapabilityInput(
+                        "subtitle export refuses to overwrite an existing artifact"
+                    )
+
+                final_written = False
+                try:
+                    os.replace(staged_output, fenced_output)
+                    final_written = True
+                    project = self.store.load_project(project_id)
+                    self.store.update_project(
+                        project_id,
+                        artifacts=(*project.artifacts, artifact),
+                    )
+                except Exception:
+                    if final_written:
+                        try:
+                            current = self.store.load_project(project_id)
+                            registered = any(item.id == artifact_id for item in current.artifacts)
+                        except Exception:
+                            registered = True
+                        if not registered:
+                            fenced_output.unlink(missing_ok=True)
+                    raise
+
+        finally:
+            if staged_output is not None:
+                release_root_staging(staged_output)
 
         return CapabilityExecutionResult.from_offer(
             project_id=project_id,
