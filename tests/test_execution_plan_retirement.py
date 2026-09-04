@@ -5,17 +5,8 @@ from pathlib import Path
 
 import uv_studio.recipes as recipes
 from uv_studio.api.recipes import get_recipe_registry
-from uv_studio.server import app
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _mounted_paths() -> set[str]:
-    return {
-        path
-        for route in app.routes
-        if isinstance((path := getattr(route, "path", None)), str)
-    }
 
 
 class ExecutionPlanRetirementTests(unittest.TestCase):
@@ -31,16 +22,19 @@ class ExecutionPlanRetirementTests(unittest.TestCase):
         self.assertNotIn("ProjectExecutionPlan", source)
         self.assertNotIn("/execution-plan", source)
 
-    def test_execution_plan_route_is_not_mounted(self) -> None:
-        self.assertNotIn("/api/uv/projects/{project_id}/execution-plan", _mounted_paths())
+    def test_server_no_longer_mounts_execution_plan_router(self) -> None:
+        source = (ROOT / "uv_studio" / "server.py").read_text(encoding="utf-8")
+        self.assertNotIn("execution_router", source)
+        self.assertNotIn("uv_studio.api.execution", source)
 
-    def test_remaining_recipe_registry_and_product_workflow_are_preserved(self) -> None:
+    def test_remaining_recipe_registry_and_modern_compatibility_routers_are_preserved(self) -> None:
         registry = get_recipe_registry()
         self.assertEqual(registry.get("general_video").recipe_id, "general_video")
-        paths = _mounted_paths()
-        self.assertIn("/api/uv/projects/{project_id}/workflow", paths)
-        self.assertIn("/api/uv/projects/studio/directions", paths)
-        self.assertIn("/api/uv/projects/studio", paths)
+        source = (ROOT / "uv_studio" / "server.py").read_text(encoding="utf-8")
+        self.assertIn("project_workflow_router", source)
+        self.assertIn("app.include_router(project_workflow_router)", source)
+        self.assertIn("studio_timeline_router", source)
+        self.assertIn("app.include_router(studio_timeline_router)", source)
 
 
 if __name__ == "__main__":
