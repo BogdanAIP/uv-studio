@@ -167,9 +167,11 @@ class Stage19GenerationReferenceShapeTests(unittest.TestCase):
             with self.assertRaisesRegex(ProjectValidationError, "Generation.*authority|generic.*Generation"):
                 store.update_project(project.project_id, artifacts=(stripped,))
 
-            moved = replace(persisted, path="sources/generated_attempt_shape.png")
-            with self.assertRaisesRegex(ProjectValidationError, "Generation.*authority|path/kind"):
-                store.update_project(project.project_id, artifacts=(moved,))
+            with self.assertRaisesRegex(
+                ProjectValidationError,
+                "canonical artifacts|Generation artifact path",
+            ):
+                replace(persisted, path="sources/generated_attempt_shape.png")
 
     def test_store_rejects_durable_generation_shape_corruption_before_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
