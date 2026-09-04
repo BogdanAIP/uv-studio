@@ -23,56 +23,34 @@ class ProjectRecipeValidationTests(unittest.TestCase):
         self.client.close()
         self.tmp.cleanup()
 
-    def test_known_preserved_recipe_is_not_publicly_creatable(self) -> None:
-        metadata = self.client.get("/api/uv/recipes/action_transfer")
-        self.assertEqual(metadata.status_code, 200, metadata.text)
-        self.assertEqual(metadata.json()["recipe_id"], "action_transfer")
-
+    def _create_modern_project(self) -> str:
         response = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Motion Transfer", "recipe_id": "action_transfer"},
+            "/api/uv/projects/studio",
+            json={"title": "Known", "direction_id": "free_project"},
         )
-        self.assertEqual(response.status_code, 422, response.text)
-        self.assertIn("not currently available for new project creation", response.json()["detail"])
+        self.assertEqual(response.status_code, 201, response.text)
+        return response.json()["project_id"]
+
+    def test_recipe_specific_creation_validation_is_replaced_by_retired_route(self) -> None:
+        for recipe_id in ("general_video", "action_transfer", "unknown_recipe"):
+            response = self.client.post(
+                "/api/uv/projects",
+                json={"title": "Recipe Create", "recipe_id": recipe_id},
+            )
+            self.assertEqual(response.status_code, 405, response.text)
         self.assertEqual(self.store.list_projects(), [])
 
-    def test_unknown_recipe_is_rejected_on_create(self) -> None:
-        response = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Unknown", "recipe_id": "unknown_recipe"},
-        )
-        self.assertEqual(response.status_code, 422, response.text)
-        self.assertIn("Unknown recipe_id", response.json()["detail"])
-        self.assertEqual(self.store.list_projects(), [])
+    def test_recipe_identity_cannot_be_rebound_through_generic_update(self) -> None:
+        project_id = self._create_modern_project()
+        original = self.store.load_project(project_id).recipe_id
 
-    def test_unknown_recipe_is_rejected_on_update_without_mutating_project(self) -> None:
-        created = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Known", "recipe_id": "general_video"},
-        ).json()
-        project_id = created["project_id"]
-
-        response = self.client.patch(
-            f"/api/uv/projects/{project_id}",
-            json={"recipe_id": "unknown_recipe"},
-        )
-        self.assertEqual(response.status_code, 422, response.text)
-        self.assertEqual(self.store.load_project(project_id).recipe_id, "general_video")
-
-    def test_known_recipe_change_is_persisted(self) -> None:
-        created = self.client.post(
-            "/api/uv/projects",
-            json={"title": "Known", "recipe_id": "general_video"},
-        ).json()
-        project_id = created["project_id"]
-
-        response = self.client.patch(
-            f"/api/uv/projects/{project_id}",
-            json={"recipe_id": "narrated_video"},
-        )
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["recipe_id"], "narrated_video")
-        self.assertEqual(self.store.load_project(project_id).recipe_id, "narrated_video")
+        for recipe_id in ("general_video", "narrated_video", "unknown_recipe"):
+            response = self.client.patch(
+                f"/api/uv/projects/{project_id}",
+                json={"recipe_id": recipe_id},
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+            self.assertEqual(self.store.load_project(project_id).recipe_id, original)
 
 
 if __name__ == "__main__":
