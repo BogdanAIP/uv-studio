@@ -4,25 +4,26 @@
 
 ## Target
 
-Repair the confirmed revision-consistency P2 in Draft PR #95 without restoring the retired Product Orchestrator Music mutation envelope.
+Complete frozen review acceptance for PR #95 after both confirmed Music render P2 findings were repaired.
 
-## Confirmed review finding
+## Frozen material evidence
 
-The superseded review head `9c55b852175dd882ccde85c3e39e2395d9af04f1` repaired the original missing rhythm prerequisite, but its guard is not bound to the loaded Assembly/Direction snapshot:
+Material head `1ccf2e4cf07231064c0ab10c16dd3e0eeafd4116` passed CI #4897 with all five permanent jobs SUCCESS. PR-event CI #4899 on the same bytes and current PR metadata also passed all five permanent jobs SUCCESS, including both Stage 4A real-media suites and both browser user-outcome suites.
 
-- `render_music_video_state()` loads current Assembly A1 and Direction D1 and verifies `assembly.music_direction_revision_sha256 == direction.revision_sha256`;
-- `MusicDirectionStore.rhythm_audit(project_id)` then reloads the latest Direction and Music Map independently;
-- the audit returns exact `music_direction_revision_sha256` and `music_map_revision_sha256`, but the adapter checks only `summary.all_aligned`;
-- a concurrent aligned D2 can therefore authorize rendering older A1/D1 bytes even when D1 itself is unaligned.
+The direct `video.render_music_video` boundary now enforces both parts of the retired Product Workflow render prerequisite:
 
-## Bounded repair plan
+1. current rhythm audit must be fully aligned;
+2. the audit Direction/Map revisions must match the loaded Direction/Assembly/Map revisions being rendered.
 
-1. Keep PR #95 in Draft.
-2. Keep the existing 14-path write scope unchanged; the canonical adapter and its focused real-media test are already authorized paths.
-3. Require exact-head `development-context` SUCCESS before material edits.
-4. At the direct render boundary, fail closed unless the rhythm audit Direction revision equals both the loaded Direction revision and the Assembly-bound Direction revision, and the audit Map revision equals the loaded current Music Map revision.
-5. Add a focused race regression where an apparently aligned audit reports a different Direction revision; require rejection before FFmpeg/FFprobe execution and no render artifact.
-6. Preserve the existing valid misalignment rejection, aligned real-media render success, direct Music clients and read-only Product Workflow projection.
-7. After repair require exact Draft-head permanent CI 5/5, context-only review refreeze, Ready, exact new review-head 5/5, resolved review threads and a new genuinely fresh ordinary-ChatGPT semantic review.
+Focused acceptance proves both fail closed before FFmpeg/FFprobe and create no render artifact.
 
-The old review identity is superseded and must not be reused.
+## Review sequence
+
+1. Mark PR #95 Ready against this context-only review freeze.
+2. Require one exact review-head Ready CI run with all five permanent jobs SUCCESS. Ignore any event-race run created while context says `review` but the PR event still says Draft; only a later Ready run is authoritative.
+3. Reply to both confirmed P2 review threads with exact repair and CI evidence, then resolve them and verify zero unresolved threads.
+4. Perform a new genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0 with immutable BASE `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` and the exact frozen live review HEAD.
+5. Merge only if the fresh result is CURRENT/PASS with zero findings, live HEAD is unchanged, exact-head CI remains green and no unresolved review thread exists.
+6. After merge create the mandatory separate D-038 lifecycle closure to `idle` before selecting the next migration slice.
+
+Any material repair supersedes the review freeze and requires returning PR #95 to Draft first.
