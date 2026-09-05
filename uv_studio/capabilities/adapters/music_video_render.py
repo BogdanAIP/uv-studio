@@ -182,6 +182,15 @@ def render_music_video_state(
                 "Music Assembly Plan no longer matches current Music Director revision"
             )
         rhythm_audit = direction_store.rhythm_audit(project_id)
+        audit_direction_revision = rhythm_audit.get("music_direction_revision_sha256")
+        if (
+            audit_direction_revision != direction.revision_sha256
+            or audit_direction_revision != assembly.music_direction_revision_sha256
+            or rhythm_audit.get("music_map_revision_sha256") != music_map.revision_sha256
+        ):
+            raise InvalidCapabilityInput(
+                "video.render_music_video requires rhythm audit revisions to match the loaded Music Assembly state"
+            )
         if rhythm_audit.get("summary", {}).get("all_aligned") is not True:
             raise InvalidCapabilityInput(
                 "video.render_music_video requires current Music Director rhythm audit to be fully aligned"
