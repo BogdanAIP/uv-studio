@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -309,6 +310,49 @@ class MusicVideoRenderRealMediaTests(unittest.TestCase):
         )
         self.assertEqual(rendered.status_code, 422, rendered.text)
         self.assertIn("rhythm audit to be fully aligned", rendered.text)
+        self.assertFalse(
+            any(
+                item.metadata.get("lifecycle") == "music_video_render"
+                for item in self.store.load_project(self.project_id).artifacts
+            )
+        )
+
+    def test_render_rejects_aligned_audit_from_different_direction_revision_before_ffmpeg(self) -> None:
+        assembly = self._prepare_assembly()
+        direction = MusicDirectionStore(self.store).load(self.project_id, validate_current=True)
+        music_map = MusicMapStore(self.store).load(self.project_id, validate_current=True)
+        self.assertIsNotNone(direction)
+        self.assertIsNotNone(music_map)
+        assert direction is not None
+        assert music_map is not None
+
+        audit = MusicDirectionStore(self.store).rhythm_audit(self.project_id)
+        self.assertTrue(audit["summary"]["all_aligned"])
+        other_direction_revision = "0" * 64
+        self.assertNotEqual(other_direction_revision, direction.revision_sha256)
+        raced_audit = {
+            **audit,
+            "music_map_revision_sha256": music_map.revision_sha256,
+            "music_direction_revision_sha256": other_direction_revision,
+        }
+
+        def unexpected_runner(*_args, **_kwargs):
+            raise AssertionError("FFmpeg/FFprobe must not run before revision-bound rhythm audit")
+
+        app.dependency_overrides[get_local_ffmpeg_adapter] = lambda: LocalFFmpegAdapter(
+            self.store,
+            runner=unexpected_runner,
+        )
+        with patch.object(MusicDirectionStore, "rhythm_audit", return_value=raced_audit):
+            rendered = self.client.post(
+                f"/api/uv/projects/{self.project_id}/capabilities/video.render_music_video/execute",
+                json={
+                    "selection_policy": "local_free_first",
+                    "input": {"assembly_revision_sha256": assembly.revision_sha256},
+                },
+            )
+        self.assertEqual(rendered.status_code, 422, rendered.text)
+        self.assertIn("rhythm audit revisions to match", rendered.text)
         self.assertFalse(
             any(
                 item.metadata.get("lifecycle") == "music_video_render"
