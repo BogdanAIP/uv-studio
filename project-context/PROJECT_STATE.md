@@ -1,28 +1,33 @@
 # Project State
 
-<!-- uv-context-state: review -->
+<!-- uv-context-state: draft -->
 <!-- uv-active-slice: legacy-music-action-envelope-retirement -->
 
-**Updated:** 2026-09-04
+**Updated:** 2026-09-05
 
 **Repository:** `BogdanAIP/uv-studio`
 
 ## Current lifecycle
 
-Lifecycle-closed `main` remains `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`. PR #95 is refrozen for review after repairing the confirmed P2 found on superseded review head `cd5bea656ef2e7612bda46f9c324d933103860ae`.
+Lifecycle-closed `main` remains `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`. PR #95 has returned to Draft after a new review finding on superseded review head `9c55b852175dd882ccde85c3e39e2395d9af04f1`.
 
-The final material Draft head is `cb9852c6ee8b59020d00c0adc8c1b309705cced2`. Exact-head CI #4888 completed with all five permanent jobs SUCCESS, including Stage 4A real-media and Stage 4C/5 browser outcomes on Ubuntu and Windows.
+The previous confirmed P2 is repaired: direct `video.render_music_video` now requires `MusicDirectionStore.rhythm_audit(project_id)` to report `summary.all_aligned == true` before media execution. Material Draft head `cb9852c6ee8b59020d00c0adc8c1b309705cced2` passed exact-head CI #4888 with all five permanent jobs SUCCESS, and the context-only review refreeze `9c55b852175dd882ccde85c3e39e2395d9af04f1` had a successful push CI #4889.
 
-## Confirmed P2 and repair evidence
+## New confirmed P2
 
-The old Product Workflow `render_music_master` action required `rhythm_aligned`; the first direct `video.render_music_video` capability migration omitted that prerequisite. PR #95 returned to Draft before material repair.
+The review on `9c55b852175dd882ccde85c3e39e2395d9af04f1` identified a revision-consistency race in the repaired rhythm gate. `render_music_video_state()` first loads and validates Assembly A1 and Direction D1, then calls `MusicDirectionStore.rhythm_audit(project_id)`. That audit independently reloads the latest Direction and Music Map and returns their revision hashes. The adapter currently checks only `summary.all_aligned` and ignores those revision hashes.
 
-The canonical direct execution boundary now calls `MusicDirectionStore.rhythm_audit(project_id)` and rejects the render unless `summary.all_aligned == true`, before source probing or FFmpeg execution. The focused real-media regression uses a valid current Music Director/Assembly state with an unbound 2.5 s cut and nearest global marker at 3.0 s, proving a 500,000 µs misalignment is rejected with HTTP 422 before an injected media runner can execute and without creating a render artifact. The existing aligned render path remains green.
+Therefore a concurrent Direction update between the first reads and the audit can make an aligned D2 audit authorize rendering an older A1/D1 assembly. The finding is material and blocking.
 
-The five Product Workflow Music mutation actions remain retired. Music Map, Direction, Assembly, render and Review remain on the established direct domain/capability endpoints; Product Workflow remains read-only compatibility state for the legacy Music page.
+## Bounded repair
 
-## Review boundary
+Keep the repair at the existing canonical direct execution boundary and inside the already-authorized 14-path write scope:
 
-This refreeze changes context only. Runtime, frontend and acceptance bytes are exactly those proven on material head `cb9852c6ee8b59020d00c0adc8c1b309705cced2`.
+- require the rhythm audit's `music_direction_revision_sha256` to equal both the loaded Direction revision and `assembly.music_direction_revision_sha256`;
+- require the audit's `music_map_revision_sha256` to equal the loaded current Music Map revision;
+- reject any revision mismatch before source probing or FFmpeg/FFprobe execution;
+- add focused regression coverage proving an aligned audit from a different Direction revision cannot authorize the loaded Assembly;
+- preserve the existing unaligned rejection and aligned real-media success cases;
+- do not add locks around long-running FFmpeg execution, restore Product Workflow mutation actions, or add a new UI gate or endpoint.
 
-Before merge require all five permanent jobs SUCCESS on the exact new review head, resolve the confirmed P2 review thread with the repair evidence, and obtain a genuinely fresh ordinary-ChatGPT semantic review under `.agents/skills/code-review/SKILL.md` v1.0. Any material change supersedes that review identity and requires Draft again.
+The old review identity is superseded. Before material edits, require `development-context` SUCCESS on this exact Draft context head. After repair, require exact Draft-head permanent CI 5/5, then a context-only review refreeze, Ready state, exact review-head 5/5, no unresolved findings, and a new genuinely fresh ordinary-ChatGPT semantic review.
