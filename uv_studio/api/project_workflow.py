@@ -21,10 +21,6 @@ from uv_studio.api.capability_execution import (
     get_whisper_cpp_adapter,
     get_whisperx_alignment_adapter,
 )
-from uv_studio.api.music_assembly import SetMusicAssemblyPayload, execute_music_assembly_command
-from uv_studio.api.music_direction import SetMusicDirectionPayload, execute_music_direction_command
-from uv_studio.api.music_map import SetMusicMapPayload, execute_music_map_command
-from uv_studio.api.music_video_review import MusicVideoReviewPayload, review_music_video
 from uv_studio.api.projects import get_project_store
 from uv_studio.api.recipes import get_recipe_registry
 from uv_studio.capabilities.authorization import OneShotAuthorizationStore
@@ -215,25 +211,6 @@ class RenderNarratedActionRequest(_StrictActionRequest):
     audio_id: str = Field(min_length=1, max_length=128)
 
 
-class MusicWorkflowActionRequest(_StrictActionRequest):
-    """Top-level Music envelope; existing domain payloads validate nested structures."""
-
-    song_reference_id: str | None = Field(default=None, min_length=1, max_length=128)
-    excerpt: dict[str, Any] | None = None
-    sections: list[dict[str, Any]] | None = None
-    markers: list[dict[str, Any]] | None = None
-    lyric_phrases: list[dict[str, Any]] | None = None
-    music_map_revision_sha256: str | None = Field(default=None, min_length=64, max_length=64)
-    shots: list[dict[str, Any]] | None = None
-    music_direction_revision_sha256: str | None = Field(default=None, min_length=64, max_length=64)
-    assignments: list[dict[str, Any]] | None = None
-    assembly_revision_sha256: str | None = Field(default=None, min_length=64, max_length=64)
-    artifact_id: str | None = Field(default=None, min_length=1, max_length=128)
-    verdict: Literal["approved", "needs_revision", "rejected"] | None = None
-    transition_outcome: Literal["pass", "fail", "uncertain"] | None = None
-    note: str | None = Field(default=None, max_length=4000)
-
-
 WorkflowActionRequest = (
     ComposePhotosActionRequest
     | RenderVisualizerActionRequest
@@ -250,7 +227,6 @@ WorkflowActionRequest = (
     | AcceptDubbingReviewActionRequest
     | RenderGeneralVideoActionRequest
     | RenderNarratedActionRequest
-    | MusicWorkflowActionRequest
 )
 
 
@@ -343,14 +319,6 @@ def _validated_action_input(
         return _request_payload(request, RenderGeneralVideoActionRequest, action_id=action_id)
     if state["recipe_id"] == "narrated_video" and action_id == "render_narrated":
         return _request_payload(request, RenderNarratedActionRequest, action_id=action_id)
-    if state["recipe_id"] == "music_video" and action_id in {
-        "save_music_map",
-        "save_music_direction",
-        "save_music_assembly",
-        "render_music_master",
-        "review_music_master",
-    }:
-        return _request_payload(request, MusicWorkflowActionRequest, action_id=action_id)
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Workflow action not found for this project",
@@ -526,54 +494,6 @@ def _execute_dubbing_domain_action(
     }
 
 
-def _execute_music_domain_action(
-    *,
-    project_id: str,
-    action_id: str,
-    input_payload: dict[str, Any],
-    store: ProjectStore,
-) -> dict[str, Any]:
-    """Reuse established Music API/domain contracts behind one Product Orchestrator action seam."""
-
-    try:
-        if action_id == "save_music_map":
-            payload = SetMusicMapPayload(command="set_music_map", **input_payload)
-            response = execute_music_map_command(project_id, payload, store)
-            result = response["payload"]
-        elif action_id == "save_music_direction":
-            payload = SetMusicDirectionPayload(command="set_music_direction", **input_payload)
-            response = execute_music_direction_command(project_id, payload, store)
-            result = response["payload"]
-        elif action_id == "save_music_assembly":
-            payload = SetMusicAssemblyPayload(command="set_music_assembly", **input_payload)
-            response = execute_music_assembly_command(project_id, payload, store)
-            result = response["payload"]
-        elif action_id == "review_music_master":
-            payload = MusicVideoReviewPayload(**input_payload)
-            response = review_music_video(project_id, payload, store)
-            result = response["music_video_review"]
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workflow domain action not found for this project",
-            )
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "code": "workflow_action_input_invalid",
-                "message": f"Workflow action input does not match {action_id} domain contract",
-                "errors": exc.errors(include_url=False),
-            },
-        ) from exc
-
-    return {
-        "schema_version": WORKFLOW_SCHEMA_VERSION,
-        "action_id": action_id,
-        "result": result,
-    }
-
-
 @router.get("/{project_id}/workflow")
 def get_project_workflow(
     project_id: str,
@@ -656,13 +576,6 @@ async def execute_project_workflow_action(
                 store=store,
                 local_ffmpeg=local_ffmpeg,
                 registry=registry,
-            )
-        if state["recipe_id"] == "music_video":
-            return _execute_music_domain_action(
-                project_id=project_id,
-                action_id=action_id,
-                input_payload=input_payload,
-                store=store,
             )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

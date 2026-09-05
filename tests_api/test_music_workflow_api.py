@@ -14,13 +14,21 @@ from uv_studio.server import app
 
 
 class MusicWorkflowApiTests(unittest.TestCase):
+    RETIRED_ACTIONS = (
+        "save_music_map",
+        "save_music_direction",
+        "save_music_assembly",
+        "render_music_master",
+        "review_music_master",
+    )
+
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.store = ProjectStore(Path(self.tmp.name) / "projects")
         app.dependency_overrides[get_project_store] = lambda: self.store
         self.client = TestClient(app)
         self.project_id = self.store.create_project(
-            title="Music Product Orchestrator",
+            title="Music read-only Product Workflow",
             recipe_id="music_video",
         ).project_id
         self._source("song", "audio", b"music-workflow-song", 10_000_000, ".wav")
@@ -61,20 +69,38 @@ class MusicWorkflowApiTests(unittest.TestCase):
         return response.json()
 
     @staticmethod
-    def _action(state: dict, action_id: str) -> dict:
-        return next(item for item in state["next_actions"] if item["action_id"] == action_id)
+    def _prerequisite(state: dict, prerequisite_id: str) -> dict:
+        return next(
+            item
+            for item in state["prerequisites"]
+            if item["prerequisite_id"] == prerequisite_id
+        )
 
-    def test_music_map_direction_and_assembly_use_product_orchestrator(self) -> None:
-        initial = self._workflow()
-        self.assertEqual(initial["recipe_id"], "music_video")
-        self.assertEqual(initial["relevant_workspaces"][0]["workspace_id"], "music_video")
-        save_map = self._action(initial, "save_music_map")
-        self.assertTrue(save_map["enabled"])
-        self.assertEqual(save_map["input_schema"]["properties"]["song_reference_id"]["enum"], ["song"])
+    def test_music_product_workflow_is_read_only_and_old_actions_fail_closed(self) -> None:
+        state = self._workflow()
+        self.assertEqual(state["recipe_id"], "music_video")
+        self.assertEqual(state["relevant_workspaces"][0]["workspace_id"], "music_video")
+        self.assertEqual(state["next_actions"], [])
+        self.assertTrue(self._prerequisite(state, "source.audio")["satisfied"])
+        self.assertFalse(self._prerequisite(state, "music.map")["satisfied"])
 
+        for action_id in self.RETIRED_ACTIONS:
+            with self.subTest(action_id=action_id):
+                response = self.client.post(
+                    f"/api/uv/projects/{self.project_id}/workflow/actions/{action_id}",
+                    json={"image_source_ids": ["clip_a"]},
+                )
+                self.assertEqual(response.status_code, 404, response.text)
+                self.assertEqual(
+                    response.json()["detail"],
+                    "Workflow action not found for this project",
+                )
+
+    def test_direct_music_domain_changes_remain_visible_in_read_projection(self) -> None:
         map_response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_map",
+            f"/api/uv/projects/{self.project_id}/music-map/commands",
             json={
+                "command": "set_music_map",
                 "song_reference_id": "song",
                 "excerpt": {"start_us": 0, "end_us": 10_000_000},
                 "sections": [
@@ -92,20 +118,17 @@ class MusicWorkflowApiTests(unittest.TestCase):
                 "lyric_phrases": [],
             },
         )
-        self.assertEqual(map_response.status_code, 200, map_response.text)
-        map_revision = map_response.json()["result"]["revision_sha256"]
+        self.assertEqual(map_response.status_code, 201, map_response.text)
+        map_revision = map_response.json()["payload"]["revision_sha256"]
 
         after_map = self._workflow()
-        save_direction = self._action(after_map, "save_music_direction")
-        self.assertTrue(save_direction["enabled"])
-        self.assertEqual(
-            save_direction["suggested_input"]["music_map_revision_sha256"],
-            map_revision,
-        )
+        self.assertEqual(after_map["next_actions"], [])
+        self.assertTrue(self._prerequisite(after_map, "music.map")["satisfied"])
 
         direction_response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_direction",
+            f"/api/uv/projects/{self.project_id}/music-direction/commands",
             json={
+                "command": "set_music_direction",
                 "music_map_revision_sha256": map_revision,
                 "shots": [
                     {
@@ -129,20 +152,20 @@ class MusicWorkflowApiTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertEqual(direction_response.status_code, 200, direction_response.text)
-        direction_revision = direction_response.json()["result"]["revision_sha256"]
+        self.assertEqual(direction_response.status_code, 201, direction_response.text)
+        direction_revision = direction_response.json()["payload"]["revision_sha256"]
 
         after_direction = self._workflow()
-        save_assembly = self._action(after_direction, "save_music_assembly")
-        self.assertTrue(save_assembly["enabled"])
-        self.assertEqual(
-            save_assembly["suggested_input"]["music_direction_revision_sha256"],
-            direction_revision,
+        self.assertEqual(after_direction["next_actions"], [])
+        self.assertTrue(self._prerequisite(after_direction, "music.direction")["satisfied"])
+        self.assertTrue(
+            self._prerequisite(after_direction, "music.rhythm_aligned")["satisfied"]
         )
 
         assembly_response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_assembly",
+            f"/api/uv/projects/{self.project_id}/music-assembly/commands",
             json={
+                "command": "set_music_assembly",
                 "music_direction_revision_sha256": direction_revision,
                 "assignments": [
                     {"shot_id": "shot_a", "source_id": "clip_a", "source_start_us": 0},
@@ -150,109 +173,28 @@ class MusicWorkflowApiTests(unittest.TestCase):
                 ],
             },
         )
-        self.assertEqual(assembly_response.status_code, 200, assembly_response.text)
-        assembly_revision = assembly_response.json()["result"]["revision_sha256"]
+        self.assertEqual(assembly_response.status_code, 201, assembly_response.text)
 
         after_assembly = self._workflow()
-        render = self._action(after_assembly, "render_music_master")
-        self.assertEqual(
-            render["suggested_input"].get("assembly_revision_sha256"),
-            assembly_revision,
-        )
-        self.assertTrue(
-            next(
-                item
-                for item in after_assembly["prerequisites"]
-                if item["prerequisite_id"] == "music.rhythm_aligned"
-            )["satisfied"]
-        )
+        self.assertEqual(after_assembly["next_actions"], [])
+        self.assertTrue(self._prerequisite(after_assembly, "music.assembly")["satisfied"])
 
-    def test_stale_revision_and_tampered_video_fail_closed(self) -> None:
-        map_response = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_map",
-            json={
-                "song_reference_id": "song",
-                "excerpt": {"start_us": 0, "end_us": 10_000_000},
-                "sections": [
-                    {
-                        "section_id": "whole",
-                        "kind": "other",
-                        "label": "Whole",
-                        "start_us": 0,
-                        "end_us": 10_000_000,
-                    }
-                ],
-                "markers": [],
-                "lyric_phrases": [],
-            },
+        clip = next(
+            item
+            for item in self.store.load_project(self.project_id).sources
+            if item.id == "clip_a"
         )
-        self.assertEqual(map_response.status_code, 200, map_response.text)
-        current_revision = map_response.json()["result"]["revision_sha256"]
-
-        stale = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_direction",
-            json={
-                "music_map_revision_sha256": "0" * 64,
-                "shots": [
-                    {
-                        "shot_id": "whole",
-                        "order": 0,
-                        "start_us": 0,
-                        "end_us": 10_000_000,
-                        "intent": "Whole excerpt",
-                        "sync_marker_ids": [],
-                        "transition_out": "fade",
-                    }
-                ],
-            },
-        )
-        self.assertEqual(stale.status_code, 422, stale.text)
-        self.assertEqual(stale.json()["detail"]["code"], "workflow_action_input_rejected")
-
-        direction = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_direction",
-            json={
-                "music_map_revision_sha256": current_revision,
-                "shots": [
-                    {
-                        "shot_id": "whole",
-                        "order": 0,
-                        "start_us": 0,
-                        "end_us": 10_000_000,
-                        "intent": "Whole excerpt",
-                        "sync_marker_ids": [],
-                        "transition_out": "fade",
-                    }
-                ],
-            },
-        )
-        self.assertEqual(direction.status_code, 200, direction.text)
-        direction_revision = direction.json()["result"]["revision_sha256"]
-
-        project = self.store.load_project(self.project_id)
-        clip = next(item for item in project.sources if item.id == "clip_a")
         (self.store.project_directory(self.project_id) / clip.path).write_bytes(b"tampered")
 
-        state = self._workflow()
-        source_prerequisite = next(
-            item for item in state["prerequisites"] if item["prerequisite_id"] == "source.video"
+        tampered = self._workflow()
+        self.assertEqual(tampered["next_actions"], [])
+        self.assertTrue(
+            any(
+                item["code"] == "music_video_source_unverified"
+                for item in tampered["diagnostics"]
+            )
         )
-        self.assertTrue(source_prerequisite["satisfied"])
-        self.assertTrue(any(item["code"] == "music_video_source_unverified" for item in state["diagnostics"]))
-
-        tampered_assembly = self.client.post(
-            f"/api/uv/projects/{self.project_id}/workflow/actions/save_music_assembly",
-            json={
-                "music_direction_revision_sha256": direction_revision,
-                "assignments": [
-                    {"shot_id": "whole", "source_id": "clip_a", "source_start_us": 0},
-                ],
-            },
-        )
-        self.assertEqual(tampered_assembly.status_code, 422, tampered_assembly.text)
-        detail = str(tampered_assembly.json()["detail"])
-        self.assertIn("registered media", detail)
-        self.assertIn("no longer matches metadata", detail)
+        self.assertFalse(self._prerequisite(tampered, "music.assembly")["satisfied"])
 
 
 if __name__ == "__main__":

@@ -1,30 +1,29 @@
 # Next Task
 
-<!-- uv-next-slice: legacy-direction-tool-migration -->
+<!-- uv-next-slice: legacy-music-action-envelope-retirement -->
 
 ## Target
 
-Bootstrap the first bounded D-070 legacy direction/tool migration slice from lifecycle-closed `main` after merged `execution-plan-retirement` PR #93 (`c8915e2aede2125136080156513ffc3bd4727038`).
+Complete frozen review acceptance for PR #95 after both confirmed Music render P2 findings were repaired.
 
-## Starting state
+## Frozen material evidence
 
-The repository is `idle`. Recipe public entrypoints and the recipe-derived execution-plan surface are retired. The accepted migration map still preserves Product Orchestrator, internal Recipe Registry, legacy `/projects/{id}` compatibility and Stage8 until their own bounded caller migrations are proven.
+Material head `1ccf2e4cf07231064c0ab10c16dd3e0eeafd4116` passed CI #4897 with all five permanent jobs SUCCESS. PR-event CI #4899 on the same bytes and current PR metadata also passed all five permanent jobs SUCCESS, including both Stage 4A real-media suites and both browser user-outcome suites.
 
-## Required next work
+The direct `video.render_music_video` boundary now enforces both parts of the retired Product Workflow render prerequisite:
 
-1. Freshly inspect lifecycle-closed `main` and the accepted D-070 inventory.
-2. Reconstruct exact live callers for legacy direction/tool composition paths; do not use zero GitHub Code Search results as absence proof.
-3. Select one bounded responsibility group for the next slice and record exact write scope before product changes.
-4. Preserve modern `Production Direction -> Studio Project`, canonical Project/Production/Timeline/Generation/Capability authorities, old/imported project recovery and Stage-18 mutation fences.
-5. Move useful domain responsibility/state to modern Studio/domain authorities rather than deleting it with legacy composition.
-6. Keep Product Orchestrator retirement, broad Stage8 retirement and the `micro_drama` golden vertical separate unless exact accepted evidence makes one independently ready.
+1. current rhythm audit must be fully aligned;
+2. the audit Direction/Map revisions must match the loaded Direction/Assembly/Map revisions being rendered.
 
-## Accepted sequence after PR #93
+Focused acceptance proves both fail closed before FFmpeg/FFprobe and create no render artifact.
 
-- bounded legacy direction/tool migration slices;
-- contextual-tool extraction slices for remaining dubbing, targeted-edit, continuity and music composition ownership;
-- `product-orchestrator-retirement` after supported callers move;
-- Stage8 runtime dependency migration / compatibility retirement after persisted-project proof;
-- `micro-drama-golden-vertical` when independently provable.
+## Review sequence
 
-The next concrete implementation slice ID must be chosen from fresh caller evidence, not guessed from the umbrella handoff name.
+1. Mark PR #95 Ready against this context-only review freeze.
+2. Require one exact review-head Ready CI run with all five permanent jobs SUCCESS. Ignore any event-race run created while context says `review` but the PR event still says Draft; only a later Ready run is authoritative.
+3. Reply to both confirmed P2 review threads with exact repair and CI evidence, then resolve them and verify zero unresolved threads.
+4. Perform a new genuinely fresh ordinary-ChatGPT semantic review using `.agents/skills/code-review/SKILL.md` v1.0 with immutable BASE `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47` and the exact frozen live review HEAD.
+5. Merge only if the fresh result is CURRENT/PASS with zero findings, live HEAD is unchanged, exact-head CI remains green and no unresolved review thread exists.
+6. After merge create the mandatory separate D-038 lifecycle closure to `idle` before selecting the next migration slice.
+
+Any material repair supersedes the review freeze and requires returning PR #95 to Draft first.

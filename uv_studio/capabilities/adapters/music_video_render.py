@@ -170,7 +170,8 @@ def render_music_video_state(
             raise InvalidCapabilityInput(
                 "video.render_music_video was requested for a stale Music Assembly revision"
             )
-        direction = MusicDirectionStore(adapter.store).load(project_id, validate_current=True)
+        direction_store = MusicDirectionStore(adapter.store)
+        direction = direction_store.load(project_id, validate_current=True)
         music_map = MusicMapStore(adapter.store).load(project_id, validate_current=True)
         if direction is None or music_map is None:
             raise InvalidCapabilityInput(
@@ -179,6 +180,20 @@ def render_music_video_state(
         if assembly.music_direction_revision_sha256 != direction.revision_sha256:
             raise InvalidCapabilityInput(
                 "Music Assembly Plan no longer matches current Music Director revision"
+            )
+        rhythm_audit = direction_store.rhythm_audit(project_id)
+        audit_direction_revision = rhythm_audit.get("music_direction_revision_sha256")
+        if (
+            audit_direction_revision != direction.revision_sha256
+            or audit_direction_revision != assembly.music_direction_revision_sha256
+            or rhythm_audit.get("music_map_revision_sha256") != music_map.revision_sha256
+        ):
+            raise InvalidCapabilityInput(
+                "video.render_music_video requires rhythm audit revisions to match the loaded Music Assembly state"
+            )
+        if rhythm_audit.get("summary", {}).get("all_aligned") is not True:
+            raise InvalidCapabilityInput(
+                "video.render_music_video requires current Music Director rhythm audit to be fully aligned"
             )
 
         sources = ProjectSourceMediaStore(adapter.store)

@@ -1,7 +1,5 @@
 'use client';
 
-import { executeProjectWorkflowAction } from '@/lib/productWorkflowApi';
-
 export type MusicVideoReviewVerdict = 'approved' | 'needs_revision' | 'rejected';
 export type MusicVideoReviewOutcome = 'pass' | 'fail' | 'uncertain';
 
@@ -48,11 +46,12 @@ export async function submitMusicVideoReview(
     note: string | null;
   },
 ): Promise<MusicVideoReviewState> {
-  const response = await executeProjectWorkflowAction<MusicVideoReviewState>(
-    projectId,
-    'review_music_master',
-    payload,
-  );
-  if (!('result' in response)) throw new Error('Music Review action returned an unexpected capability result');
-  return response.result;
+  const response = await fetch(`/api/uv/projects/${encodeURIComponent(projectId)}/music-video-review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await apiError(response, 'Не удалось сохранить финальную проверку');
+  const body = await response.json() as { music_video_review: MusicVideoReviewState };
+  return body.music_video_review;
 }

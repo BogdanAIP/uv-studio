@@ -7,7 +7,7 @@ Classifications: **KEEP**, **ADAPT**, **MOVE**, **LEGACY**, **DELETE LATER**.
 
 ## 1. Current diagnosis
 
-UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied. The separate `micro_drama` golden-vertical gate remains open. `donor-ui-retirement` merged through PR #82, `project-identity-v2-compat-reader` through PR #89 plus closure #90, and `recipe-entrypoint-retirement` through PR #91 plus closure #92. Lifecycle-closed `main` for the current slice is `af9ff888145661381caaacdec78244637058bce2`. Draft PR #93 is the bounded `execution-plan-retirement` candidate; after its acceptance/closure the migration map continues with bounded legacy direction/tool work rather than another recipe-like planner.
+UV Studio now has a concrete shared production/generation spine, four merged Agent-orchestration layers, and a merged Stage-16/17 adversarial-assurance pilot. Stage 18 bounded background Agent execution merged through PR #75. The exact D-070 architecture-compression inventory merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is accepted, so the architecture-compression gate is satisfied. The separate `micro_drama` golden-vertical gate remains open. `donor-ui-retirement` merged through PR #82, `project-identity-v2-compat-reader` through PR #89 plus closure #90, `recipe-entrypoint-retirement` through PR #91 plus closure #92, and `execution-plan-retirement` through PR #93 plus closure #94. Lifecycle-closed `main` for the current slice is `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`. Draft PR #95 is the first bounded legacy direction/tool migration candidate and retires only the duplicate Music Product Workflow mutation/action envelope while preserving its temporary read projection.
 
 ```text
 Project Store
@@ -305,11 +305,11 @@ Classification: **KEEP** as merged internal Agent infrastructure. It does not cl
 
 ## 10. D-070 product-first handoff before D-066 remaining order
 
-`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. `donor-ui-retirement` merged through PR #82. `project-identity-v2-compat-reader` merged through PR #89 and was lifecycle-closed through PR #90. `recipe-entrypoint-retirement` merged through PR #91 and was lifecycle-closed through PR #92, producing current lifecycle-closed base `af9ff888145661381caaacdec78244637058bce2`. Draft PR #93 is the current `execution-plan-retirement` candidate. The separate `micro_drama` golden-vertical gate remains open.
+`architecture-compression-inventory` merged through PR #77 as `c6831a36eb88289947eed1da65609654a2353524` and is the accepted exact caller/migration map. `donor-ui-retirement` merged through PR #82. `project-identity-v2-compat-reader` merged through PR #89 and was lifecycle-closed through PR #90. `recipe-entrypoint-retirement` merged through PR #91 and was lifecycle-closed through PR #92. `execution-plan-retirement` merged through PR #93 as `c8915e2aede2125136080156513ffc3bd4727038` and was lifecycle-closed through PR #94, producing current lifecycle-closed base `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`. Draft PR #95 is the current `legacy-music-action-envelope-retirement` candidate. The separate `micro_drama` golden-vertical gate remains open.
 
 The accepted behavior-preserving inventory maps exact live callers, compatibility-only paths, canonical replacements, durable migration requirements and deletion gates for Recipe Registry, `uv_studio/orchestration/**`, Product Orchestrator, Stage 6/8 product-composition surfaces, server compatibility routes, schema-v1 `recipe_id`, donor frontend/client/restoration paths and runtime dependencies.
 
-On the active PR #93 candidate head, the stale `projectsApi#getProjectExecutionPlan()` client, `api/execution.py`, `/api/uv/projects/{id}/execution-plan`, `uv_studio/recipes/execution.py` and its recipe execution projection exports are removed. Direct Product Orchestrator `/workflow`, internal Recipe Registry, Production Directions, Studio project creation, Project Store compatibility and Stage8 remain intentionally preserved for their separately bounded migrations. PR #93 is not accepted until exact-head CI, fresh independent semantic review, merge and D-038 closure complete.
+The stale `projectsApi#getProjectExecutionPlan()` client, `api/execution.py`, `/api/uv/projects/{id}/execution-plan`, `uv_studio/recipes/execution.py` and recipe execution projection exports are retired through PR #93/#94. On PR #95, Music Product Workflow remains a temporary read-only readiness/workspace projection, but its five duplicate mutation actions and Music-specific backend dispatch are removed. Exact browser CI #4858 exposed that `musicVideoApi.ts` and `musicVideoReviewApi.ts` still hid Product Workflow action calls; the scoped repair moves those client facades to the established direct Music Map/Direction/Assembly/Review APIs and `video.render_music_video` capability execution without changing Music UI components. Product Orchestrator GET/read state, internal Recipe Registry, Stage8 and the legacy route remain intentionally preserved for later bounded migrations.
 
 Further Agent autonomy resumes only after both D-070 gates are satisfied:
 
@@ -379,7 +379,8 @@ Targeted edit, ordinary dubbing/translation, slideshow/photo-to-video, visualize
 - Recipe Registry — **LEGACY**; compatibility/import vocabulary only and still required by Product Orchestrator.
 - Product Orchestrator / `uv_studio/orchestration/*` — **MOVE + LEGACY**; extract useful logic into modern authorities.
 - `api/project_workflow.py` — **LEGACY + EXTRACT**.
-- `/execution-plan` and recipe execution projection — **RETIREMENT CANDIDATE PR #93**; absent on the active candidate head, pending CI/review/merge/closure acceptance.
+- `/execution-plan` and recipe execution projection — **RETIRED PR #93**; accepted and lifecycle-closed through PR #94.
+- Music Product Workflow mutation actions and their specialized-client transport — **RETIREMENT CANDIDATE PR #95**; direct Music domain/capability authorities remain and read-only Music Product Workflow projection is preserved.
 - Stage 6/8 workspaces and specialized legacy project pages — **LEGACY RUNTIME / COMPATIBILITY**; Stage8 is still consumed by legacy UI/tests, Product Orchestrator projections and General/Narrated render adapters, so removal requires runtime-caller migration plus persisted-project proof.
 - donor-only Workflow/Pipeline/Sandbox/stage frontend roots — **RETIRED IN PR #82**.
 - `frontend/lib/workflowApi.ts` — **RETIRED / EXTRACTED IN PR #82**; the supported Settings `/api/models` seam now lives in focused `frontend/lib/modelsApi.ts` and `modelRegistry.ts` uses it directly.
@@ -414,27 +415,28 @@ Completed:
 16. **`donor-ui-retirement` — PR #82 merged.**
 17. **`actions-hardening` — PR #86 merged.**
 18. **`project-identity-v2-compat-reader` — PR #89 merged + D-038 closure PR #90.**
-19. **`recipe-entrypoint-retirement` — PR #91 merged as `050780d013276c3d3de9672244ad54da759f1ed3` + D-038 closure PR #92, producing `main` `af9ff888145661381caaacdec78244637058bce2`.**
+19. **`recipe-entrypoint-retirement` — PR #91 merged as `050780d013276c3d3de9672244ad54da759f1ed3` + D-038 closure PR #92.**
+20. **`execution-plan-retirement` — PR #93 merged as `c8915e2aede2125136080156513ffc3bd4727038` + D-038 closure PR #94, producing `main` `57bbbec41b2e82e556d620efb21f3b6cdf2a5a47`.**
 
 Current D-070 migration work:
 
-20. **`execution-plan-retirement` — Draft PR #93 candidate.** Retire the recipe-derived HTTP/client/projection layer while preserving Product Orchestrator and internal Recipe Registry until their own slices.
+21. **`legacy-music-action-envelope-retirement` — Draft PR #95 candidate.** Retire only the duplicate Music Product Workflow mutation/action envelope and move its confirmed specialized-client callers to established direct Music/capability endpoints while preserving the Music read projection.
 
-After PR #93 acceptance/closure:
+After PR #95 acceptance/closure:
 
-21. bounded legacy direction/tool migration slices;
-22. contextual-tool extraction where Product Orchestrator still composes preserved domain authorities;
-23. `product-orchestrator-retirement` after supported callers move;
-24. remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
-25. `micro-drama` golden vertical to project-to-export user-outcome proof where gaps remain.
+22. further bounded legacy direction/tool migration slices;
+23. contextual-tool extraction where Product Orchestrator still composes preserved domain authorities;
+24. `product-orchestrator-retirement` after supported callers move;
+25. remaining Stage8 runtime-caller migration and Stage8 compatibility retirement;
+26. `micro_drama` golden vertical to project-to-export user-outcome proof where gaps remain.
 
 Only after the remaining D-070 golden-vertical gate is satisfied, resume D-066:
 
-26. evaluation/dependency-aware repair;
-27. human takeover/edit/resume;
-28. long-form autonomous production;
-29. additional direction-domain growth as required;
-30. D-068 maintained desktop update implementation/release proof when selected as its own slice.
+27. evaluation/dependency-aware repair;
+28. human takeover/edit/resume;
+29. long-form autonomous production;
+30. additional direction-domain growth as required;
+31. D-068 maintained desktop update implementation/release proof when selected as its own slice.
 
 ## 17. Invariants
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from uv_studio.capabilities.models import CostClass, LocalityClass, OfferAvailability
 from uv_studio.capabilities.registry import CapabilityRegistry, UnknownCapability
 from uv_studio.capabilities.selection import NoEligibleOffer, SelectionPolicy, select_offer
@@ -23,7 +21,6 @@ from uv_studio.recipes.models import RecipeDefinition
 
 from .models import (
     ProjectWorkflowState,
-    WorkflowAction,
     WorkflowArtifact,
     WorkflowDiagnostic,
     WorkflowPrerequisite,
@@ -46,14 +43,6 @@ def _artifact(reference: ProjectReference) -> WorkflowArtifact:
         lifecycle=str(reference.metadata.get("lifecycle", "")),
         metadata=dict(reference.metadata),
     )
-
-
-def _enum_property(values: Iterable[str], *, maximum: int = 512) -> dict[str, object]:
-    values = tuple(values)
-    result: dict[str, object] = {"type": "string", "minLength": 1, "maxLength": maximum}
-    if values:
-        result["enum"] = values
-    return result
 
 
 def _local_free_status(
@@ -327,10 +316,6 @@ def music_workflow_state(
         if match is not None:
             current_outcome = _artifact(match)
 
-    audio_ids = tuple(item.id for item in verified_audio)
-    video_ids = tuple(item.id for item in verified_video)
-    render_ids = tuple(item.id for item in current_renders)
-
     prerequisites = (
         WorkflowPrerequisite(
             prerequisite_id="source.audio",
@@ -397,168 +382,6 @@ def music_workflow_state(
         ),
     )
 
-    save_map = WorkflowAction(
-        action_id="save_music_map",
-        title="Сохранить Music Map",
-        explanation="Создать или обновить канонический Music Map для точных текущих байтов master-песни.",
-        enabled=bool(audio_ids),
-        blocked_by=() if audio_ids else ("source.audio",),
-        prerequisite_ids=("source.audio",),
-        input_schema={
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["song_reference_id", "excerpt", "sections", "markers", "lyric_phrases"],
-            "properties": {
-                "song_reference_id": _enum_property(audio_ids, maximum=128),
-                "excerpt": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": ["start_us", "end_us"],
-                    "properties": {
-                        "start_us": {"type": "integer", "minimum": 0},
-                        "end_us": {"type": "integer", "minimum": 1},
-                    },
-                },
-                "sections": {"type": "array", "maxItems": 256},
-                "markers": {"type": "array", "maxItems": 4096},
-                "lyric_phrases": {"type": "array", "maxItems": 1024},
-            },
-        },
-        suggested_input={"song_reference_id": audio_ids[0]} if audio_ids else {},
-        execution_class="domain_command",
-        authorization_class="none",
-        capability_id=None,
-        expected_result="music_map",
-    )
-
-    map_revision = music_map.revision_sha256 if music_map is not None else None
-    save_direction = WorkflowAction(
-        action_id="save_music_direction",
-        title="Сохранить Music Director",
-        explanation="Сохранить план кадров только для точной текущей ревизии Music Map.",
-        enabled=music_map is not None,
-        blocked_by=() if music_map is not None else ("music.map",),
-        prerequisite_ids=("music.map",),
-        input_schema={
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["music_map_revision_sha256", "shots"],
-            "properties": {
-                "music_map_revision_sha256": _enum_property((map_revision,) if map_revision else (), maximum=64),
-                "shots": {"type": "array", "minItems": 1, "maxItems": 512},
-            },
-        },
-        suggested_input={"music_map_revision_sha256": map_revision} if map_revision else {},
-        execution_class="domain_command",
-        authorization_class="none",
-        capability_id=None,
-        expected_result="music_direction",
-    )
-
-    direction_revision = direction.revision_sha256 if direction is not None else None
-    save_assembly = WorkflowAction(
-        action_id="save_music_assembly",
-        title="Сохранить Music Assembly",
-        explanation="Связать каждый текущий кадр с проверенными project-owned video bytes.",
-        enabled=direction is not None and bool(video_ids),
-        blocked_by=tuple(
-            item
-            for item, ready in (("music.direction", direction is not None), ("source.video", bool(video_ids)))
-            if not ready
-        ),
-        prerequisite_ids=("music.direction", "source.video"),
-        input_schema={
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["music_direction_revision_sha256", "assignments"],
-            "properties": {
-                "music_direction_revision_sha256": _enum_property(
-                    (direction_revision,) if direction_revision else (), maximum=64
-                ),
-                "assignments": {"type": "array", "minItems": 1, "maxItems": 512},
-            },
-        },
-        suggested_input={"music_direction_revision_sha256": direction_revision} if direction_revision else {},
-        execution_class="domain_command",
-        authorization_class="none",
-        capability_id=None,
-        expected_result="music_assembly",
-    )
-
-    assembly_revision = assembly.revision_sha256 if assembly is not None else None
-    render_master = WorkflowAction(
-        action_id="render_music_master",
-        title="Собрать музыкальный клип",
-        explanation="Материализовать текущий Assembly через local/free video.render_music_video с единственной master-песней.",
-        enabled=assembly is not None and rhythm_aligned and render_ready,
-        blocked_by=tuple(
-            item
-            for item, ready in (
-                ("music.assembly", assembly is not None),
-                ("music.rhythm_aligned", rhythm_aligned),
-                ("capability.video.render_music_video", render_ready),
-            )
-            if not ready
-        ),
-        prerequisite_ids=(
-            "music.assembly",
-            "music.rhythm_aligned",
-            "capability.video.render_music_video",
-        ),
-        input_schema={
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["assembly_revision_sha256"],
-            "properties": {
-                "assembly_revision_sha256": _enum_property(
-                    (assembly_revision,) if assembly_revision else (), maximum=64
-                ),
-            },
-        },
-        suggested_input={"assembly_revision_sha256": assembly_revision} if assembly_revision else {},
-        execution_class="capability",
-        authorization_class="none",
-        capability_id=_RENDER_CAPABILITY_ID,
-        expected_result="music_video_render",
-    )
-
-    review_master = WorkflowAction(
-        action_id="review_music_master",
-        title="Сохранить финальный Review",
-        explanation="Проверить текущий canonical render и сохранить evidence-bound человеческий вердикт.",
-        enabled=bool(render_ids),
-        blocked_by=() if render_ids else ("music.render",),
-        prerequisite_ids=("music.render",),
-        input_schema={
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["artifact_id", "verdict", "transition_outcome"],
-            "properties": {
-                "artifact_id": _enum_property(render_ids, maximum=128),
-                "verdict": {
-                    "type": "string",
-                    "enum": ("approved", "needs_revision", "rejected"),
-                },
-                "transition_outcome": {
-                    "type": "string",
-                    "enum": ("pass", "fail", "uncertain"),
-                },
-                "note": {"type": "string", "maxLength": 4000},
-            },
-        },
-        suggested_input=(
-            {"artifact_id": render_ids[-1], "verdict": "approved", "transition_outcome": "pass"}
-            if render_ids
-            else {}
-        ),
-        execution_class="domain_command",
-        authorization_class="none",
-        capability_id=None,
-        expected_result="music_video_review",
-    )
-
-    actions = (save_map, save_direction, save_assembly, render_master, review_master)
-
     if current_outcome is not None:
         readiness = WorkflowReadiness.READY
         summary = "Текущий Music Video master подтверждён evidence-bound Review и соответствует каноническому состоянию проекта."
@@ -605,7 +428,7 @@ def music_workflow_state(
                 description="Music Map → Director → Assembly → Rhythm Audit → Review → master-render.",
             ),
         ),
-        next_actions=actions,
+        next_actions=(),
         active_jobs=(),
         user_decisions=(
             ({"kind": "music_video_review", **review.to_dict()},) if review is not None else ()

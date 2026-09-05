@@ -1,14 +1,38 @@
 {
   "schema_version": 2,
-  "lifecycle_state": "idle",
-  "active_slice": null,
+  "lifecycle_state": "review",
+  "active_slice": {
+    "id": "legacy-music-action-envelope-retirement",
+    "kind": "chore",
+    "roadmap_stage": "product-first-architecture-compression",
+    "goal": "Retire the duplicate Product Orchestrator mutation/action envelope for legacy music_video projects while preserving read-only Music workflow/readiness projection, direct Music domain APIs and project-owned Music state.",
+    "base_branch": "main",
+    "branch": "chore/legacy-music-action-envelope-retirement",
+    "pull_request": 95,
+    "write_scope": [
+      "project-context/ACTIVE_SLICE.json",
+      "project-context/PROJECT_STATE.md",
+      "project-context/NEXT_TASK.md",
+      "docs/architecture/CURRENT_ARCHITECTURE.md",
+      "docs/architecture/UV_STUDIO_V2_ARCHITECTURE_MAP.md",
+      "docs/architecture/LEGACY_SURFACE_INVENTORY.md",
+      "uv_studio/orchestration/music.py",
+      "uv_studio/api/project_workflow.py",
+      "tests_api/test_music_workflow_api.py",
+      "frontend/lib/musicVideoApi.ts",
+      "frontend/lib/musicVideoReviewApi.ts",
+      "e2e/test_music_video_outcome.py",
+      "uv_studio/capabilities/adapters/music_video_render.py",
+      "tests_real_media/test_music_video_render_real_media.py"
+    ]
+  },
   "last_completed": {
     "id": "execution-plan-retirement",
     "pull_request": 93,
     "merge_commit": "c8915e2aede2125136080156513ffc3bd4727038"
   },
   "handoff": {
-    "next_slice_id": "legacy-direction-tool-migration",
+    "next_slice_id": "legacy-music-action-envelope-retirement",
     "next_task_file": "project-context/NEXT_TASK.md"
   },
   "coordination": {
